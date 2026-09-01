@@ -1,7 +1,7 @@
 # PRD — Q-ai: Quran, Hadith, and Comparative Scripture Research Platform
 
 **Status:** Draft / Living Document  
-**Version:** 0.3.0  
+**Version:** 0.3.1  
 **Previous Version:** 0.2.0  
 **Primary Language:** Rust  
 **Primary Interfaces:** Web GUI + TUI + CLI + API  
@@ -18,7 +18,7 @@ Q-ai is a research platform for studying:
 - The Quran
 - Quranic vocabulary, morphology, roots, and linguistic relationships
 - Quran translations and tafsir
-- Sunni and Shia hadith collections
+- Shia hadith collections
 - Hadith chains of transmission
 - Hadith grading and scholarly commentary
 - Islamic history and theology
@@ -79,6 +79,7 @@ Q-ai must follow these principles:
 16. **Agents and tools use deny-by-default permissions**
 17. **Religious conclusions must not be falsely presented as scholarly consensus**
 18. **Q-ai assists research; it does not automatically claim religious authority or issue binding rulings**
+19. **Contradictory scholarly interpretations must be presented side-by-side with attribution rather than merged into a single system-endorsed conclusion**
 
 ---
 
@@ -92,20 +93,13 @@ Q-ai must follow these principles:
 - Support root, lemma, stem, token, phrase, and word-family exploration.
 - Support Quran graph browsing and graph search.
 - Support high-quality visual presentation of the Quran.
-- Import and index major Sunni and Shia hadith collections.
+- Import and index major Shia hadith collections.
 - Support works such as:
   - Al-Kafi
   - Bihar al-Anwar / Biḥār al-Anwār
   - Man La Yahduruhu al-Faqih
   - Tahdhib al-Ahkam
   - Al-Istibsar
-  - Sahih al-Bukhari
-  - Sahih Muslim
-  - Sunan Abi Dawud
-  - Jami` al-Tirmidhi
-  - Sunan al-Nasa'i
-  - Sunan Ibn Majah
-  - Musnad Ahmad
   - Other configurable collections
 - Support tafsir and Quranic commentary.
 - Support Torah, Bible, and other comparative scripture collections.
@@ -171,7 +165,6 @@ Q-ai Knowledge Domains
 │   ├── Recitation metadata
 │   └── Quran graph
 ├── Hadith
-│   ├── Sunni collections
 │   ├── Shia collections
 │   ├── Narration text
 │   ├── Isnads
@@ -642,6 +635,19 @@ Every graph result must expose:
 - Applied filters
 - Query duration
 
+## 10.6 Semi-Automated Graph Annotation
+
+Q-ai must provide a review-oriented annotation workflow to bootstrap the graph with human-verified edges.
+
+Requirements:
+
+- Researchers can manually create typed edges such as `CITES`, `CONTRASTS_WITH`, `PARALLELS`, and `EXPLAINS` between existing nodes.
+- Manually created edges are attributed to the creating user and classified as `Scholar-Authored` or `User-Created` per the edge provenance rules of Section 10.3.
+- Algorithmically suggested edges can be queued for human review, then accepted, rejected, or corrected.
+- Accepted suggestions record the reviewer, decision, and timestamp.
+- Review tools must show the evidence supporting a suggested edge before acceptance.
+- No computational suggestion becomes a verified edge without an explicit human decision.
+
 ---
 
 # 11. Quran Research Tools
@@ -877,6 +883,24 @@ A Quran quotation must include:
 
 The system must never construct Quran quotations from model memory when canonical retrieval is available.
 
+## 12.1 Research Checksum
+
+Every research query, tool plan, and research report must produce a reproducibility checksum computed over:
+
+```text
+query text and parameters
+tool plan and tool versions
+selected source IDs and source versions
+edition IDs and edition versions
+normalization rules
+retrieval and reranking configuration
+model provider, model name, and prompt version
+```
+
+The checksum allows a user to re-run identical research later and detect whether results changed because of corpus updates, index changes, or model updates.
+
+Re-running with the same checksum must produce identical output for deterministic tools. Nondeterministic or model-generated parts must be labeled separately.
+
 ---
 
 # 13. Quran Display Requirements
@@ -1018,21 +1042,7 @@ Bihar al-Anwar must retain volume, chapter, page, edition, and cited earlier-sou
 
 Al-Kafi must preserve its major divisions and chapter hierarchy.
 
-## 14.4 Sunni Collections
-
-The architecture must support major collections including:
-
-- Sahih al-Bukhari
-- Sahih Muslim
-- Sunan Abi Dawud
-- Jami` al-Tirmidhi
-- Sunan al-Nasa'i
-- Sunan Ibn Majah
-- Muwatta Malik
-- Musnad Ahmad
-- Other configured collections
-
-## 14.5 Grading Model
+## 14.4 Grading Model
 
 A hadith must not have one universal `authentic` Boolean.
 
@@ -1061,7 +1071,7 @@ The UI must display:
 - Other known gradings
 - Whether views differ
 
-## 14.6 Hadith Tools
+## 14.5 Hadith Tools
 
 Required tools include:
 
@@ -1216,7 +1226,6 @@ Example:
 RAG Manager
 ├── Quran Tafsir RAG
 ├── Shia Hadith RAG
-├── Sunni Hadith RAG
 ├── Rijal RAG
 ├── Islamic History RAG
 ├── Torah and Bible RAG
@@ -1442,6 +1451,8 @@ When sources disagree, Q-ai must:
 - Provide separate citations.
 - Avoid declaring consensus without evidence.
 - Allow filtering by school, scholar, era, or methodology.
+- Present contradictory tafsir or grading views side-by-side with explicit labels instead of synthesizing one blended position.
+- Never present an AI synthesis of conflicting views as the resolution of the disagreement.
 
 ---
 
@@ -1560,6 +1571,24 @@ Updates must support:
 - Difference reports
 - Rollback
 - Audit logs
+
+## 22.6 Source Genealogy
+
+A source may be a translation, summary, abridgment, or edition of another work.
+
+The catalog must support recording lineage per source:
+
+```text
+derives_from_source_id
+derivation_type (translation | summary | edition | abridgment | commentary | original)
+derivation_language
+derivation_date
+derivation_note
+```
+
+Lineage must be transitive and displayable, for example: "This text is an English translation (2024) of an Arabic summary (1990) of the original manuscript (1200)."
+
+Retrieval and citation must distinguish which lineage member is actually quoted. A translation must never be presented as the original work.
 
 ---
 
@@ -1916,10 +1945,24 @@ Side-effect classes:
 
 ```text
 ReadOnly
+ComputationalAnnotation
 LocalWrite
 ExternalWrite
 CommandExecution
 Privileged
+```
+
+`ComputationalAnnotation` covers tools that produce machine-generated linguistic, graph, or cross-reference annotations. Their outputs must carry the Layer D computational-annotation metadata of Section 6.4 and must never be written into canonical data.
+
+Risk tiers and default approval behavior:
+
+```text
+ReadOnly                -> freely callable by authorized agents, no approval
+ComputationalAnnotation -> callable, outputs flagged "Needs Review" until verified
+LocalWrite              -> explicit permission required
+ExternalWrite           -> explicit permission plus human approval
+CommandExecution        -> disabled by default, always require human approval
+Privileged              -> architecturally isolated from agent tool paths
 ```
 
 Quran and hadith research tools should normally be `ReadOnly`.
@@ -2535,7 +2578,6 @@ Retrieval filters must be applied before results reach an LLM or agent.
 
 - Structured hadith model
 - Initial Shia collection adapter
-- Initial Sunni collection adapter
 - Al-Kafi support
 - Bihar al-Anwar support
 - Hadith search
@@ -2806,7 +2848,6 @@ The following require Architecture Decision Records:
 - Arabic normalization standard
 - Preferred transliteration standard
 - Initial Shia hadith data sources
-- Initial Sunni hadith data sources
 - Tafsir source licensing
 - Quran graph storage implementation
 - Full-text engine
@@ -2876,7 +2917,6 @@ Each ADR must record:
 - [ ] Hadith collection model
 - [ ] Al-Kafi adapter
 - [ ] Bihar al-Anwar adapter
-- [ ] Sunni collection adapter
 - [ ] Hadith search
 - [ ] Grading attribution
 - [ ] Tafsir indexing
@@ -2932,6 +2972,20 @@ Whenever requirements change:
 
 # 51. Change Log
 
+## Version 0.3.1
+
+Added:
+
+- Interpretive-conflict presentation requirements (side-by-side attributed views)
+- Semi-automated graph annotation and human review workflow (Section 10.6)
+- Source genealogy and derivation lineage in the source catalog (Section 22.6)
+- Risk-based tool execution tiers and the `ComputationalAnnotation` side-effect class
+- Research checksums for reproducible research runs (Section 12.1)
+
+Fixed:
+
+- Section 14 subsection numbering (Grading Model renumbered, Hadith Tools now 14.5)
+
 ## Version 0.3.0
 
 Renamed and refocused the project as **Q-ai**.
@@ -2951,7 +3005,7 @@ Added:
 - Graph search and graph visualization
 - Quran rhetorical and structural discovery tools
 - Rich Quran reading interface
-- Structured Sunni and Shia hadith support
+- Structured Shia hadith support
 - Al-Kafi and Bihar al-Anwar requirements
 - Isnad and narrator graph
 - Attributed hadith grading
