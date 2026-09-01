@@ -1,8 +1,8 @@
 # PRD — Q-ai: Quran, Hadith, and Comparative Scripture Research Platform
 
 **Status:** Draft / Living Document  
-**Version:** 0.3.1  
-**Previous Version:** 0.2.0  
+**Version:** 0.3.2  
+**Previous Version:** 0.3.1  
 **Primary Language:** Rust  
 **Primary Interfaces:** Web GUI + TUI + CLI + API  
 **Deployment:** Local-first + Server  
@@ -57,6 +57,8 @@ The same core engine must power:
 
 ---
 
+
+
 # 2. Product Principles
 
 Q-ai must follow these principles:
@@ -82,6 +84,8 @@ Q-ai must follow these principles:
 19. **Contradictory scholarly interpretations must be presented side-by-side with attribution rather than merged into a single system-endorsed conclusion**
 
 ---
+
+
 
 # 3. Goals
 
@@ -126,6 +130,8 @@ Q-ai must follow these principles:
 
 ---
 
+
+
 # 4. Non-Goals
 
 The initial releases will not:
@@ -146,6 +152,8 @@ The initial releases will not:
 - Resolve all copyright and licensing issues through technical mechanisms alone.
 
 ---
+
+
 
 # 5. Supported Knowledge Domains
 
@@ -197,6 +205,8 @@ Q-ai Knowledge Domains
 Every result must identify its domain.
 
 ---
+
+
 
 # 6. Authoritative Data Separation
 
@@ -266,6 +276,8 @@ Computational annotations must include:
 AI-generated material must never be visually or structurally confused with canonical source text or verified scholarly annotation.
 
 ---
+
+
 
 # 7. Canonical Quran Corpus Requirements
 
@@ -364,6 +376,8 @@ The system must support:
 
 ---
 
+
+
 # 8. Quran Text Normalization
 
 Normalization is required for searching but must never replace displayed canonical text.
@@ -426,6 +440,8 @@ Example use cases:
 Matches must include an explanation of the normalization and segmentation used.
 
 ---
+
+
 
 # 9. Quran Linguistic Model
 
@@ -503,6 +519,8 @@ Users must be able to distinguish:
 - Scholar-verified relation
 
 ---
+
+
 
 # 10. Quran Knowledge Graph
 
@@ -642,13 +660,15 @@ Q-ai must provide a review-oriented annotation workflow to bootstrap the graph w
 Requirements:
 
 - Researchers can manually create typed edges such as `CITES`, `CONTRASTS_WITH`, `PARALLELS`, and `EXPLAINS` between existing nodes.
-- Manually created edges are attributed to the creating user and classified as `Scholar-Authored` or `User-Created` per the edge provenance rules of Section 10.3.
+- Manually created edges are attributed to the creating user and classified as `Scholar-Authored` or `User-Created` per the edge provenance rules of section 10.3.
 - Algorithmically suggested edges can be queued for human review, then accepted, rejected, or corrected.
 - Accepted suggestions record the reviewer, decision, and timestamp.
 - Review tools must show the evidence supporting a suggested edge before acceptance.
 - No computational suggestion becomes a verified edge without an explicit human decision.
 
 ---
+
+
 
 # 11. Quran Research Tools
 
@@ -852,6 +872,8 @@ Save queries, evidence, notes, graph views, and source versions as a reproducibl
 
 ---
 
+
+
 # 12. Quran Tool Result Contract
 
 Every Quran tool result must include:
@@ -902,6 +924,8 @@ The checksum allows a user to re-run identical research later and detect whether
 Re-running with the same checksum must produce identical output for deterministic tools. Nondeterministic or model-generated parts must be labeled separately.
 
 ---
+
+
 
 # 13. Quran Display Requirements
 
@@ -979,6 +1003,8 @@ The interface must visually distinguish:
 - User note
 
 ---
+
+
 
 # 14. Hadith Corpus Requirements
 
@@ -1095,6 +1121,8 @@ Required tools include:
 
 ---
 
+
+
 # 15. Isnad and Narrator Graph
 
 ## 15.1 Node Types
@@ -1148,6 +1176,8 @@ Automated identity matching must never silently merge narrator records.
 
 ---
 
+
+
 # 16. Tafsir and Commentary
 
 Tafsir must be indexed by:
@@ -1177,6 +1207,8 @@ The platform must support:
 Tafsir passages must not be presented as Quran text.
 
 ---
+
+
 
 # 17. Comparative Scripture
 
@@ -1216,6 +1248,8 @@ Computationally discovered parallels must be labeled as suggestions unless suppo
 
 ---
 
+
+
 # 18. Multi-RAG Architecture
 
 Q-ai must support multiple independently configured RAG systems.
@@ -1253,6 +1287,8 @@ Each RAG may configure:
 - Access controls
 
 ---
+
+
 
 # 19. Structure-Aware Ingestion and Chunking
 
@@ -1310,6 +1346,8 @@ General book chunking should preserve:
 Every chunk must retain a reversible link to its source location.
 
 ---
+
+
 
 # 20. Smart Retrieval and Tool Selection
 
@@ -1398,6 +1436,8 @@ The user must be able to inspect:
 
 ---
 
+
+
 # 21. Research Answer Contract
 
 Answers should use a structured evidence model.
@@ -1455,6 +1495,8 @@ When sources disagree, Q-ai must:
 - Never present an AI synthesis of conflicting views as the resolution of the disagreement.
 
 ---
+
+
 
 # 22. Book and Source Catalog
 
@@ -1592,6 +1634,8 @@ Retrieval and citation must distinguish which lineage member is actually quoted.
 
 ---
 
+
+
 # 23. Source Quality and Trust
 
 Every source must have a configurable trust profile.
@@ -1618,6 +1662,8 @@ Trust level must influence:
 Popularity or vector similarity must not be treated as authority.
 
 ---
+
+
 
 # 24. User Experience
 
@@ -1690,6 +1736,8 @@ Supported exports should include:
 
 ---
 
+
+
 # 25. TUI Requirements
 
 The TUI should use:
@@ -1738,6 +1786,1096 @@ The TUI must support Arabic and right-to-left text as far as terminal capabiliti
 
 ---
 
+# 25.1 TUI Detailed Screen Inventory
+
+The TUI is the operational cockpit for local and remote use. Every section of Q-ai must be reachable from the TUI without dropping to a terminal escape.
+
+## Core Screens
+
+```text
+Dashboard
+
+Quran
+├── Read
+│   ├── Surah navigator
+│   ├── Ayah navigator
+│   ├── Juz / Hizb / Rubʿ / Page navigator
+│   ├── Translation panels
+│   ├── Tafsir panel
+│   ├── Word inspector
+│   ├── Bookmark manager
+│   └── Reading notes
+├── Search
+│   ├── Exact
+│   ├── Normalized
+│   ├── Concatenated
+│   ├── Phrase
+│   ├── Regex
+│   └── Result inspector
+├── Roots
+│   ├── Root index
+│   ├── All occurrences
+│   └── Word family
+├── Morphology
+│   ├── Token morphology
+│   ├── Compare datasets
+│   └── Multiple analyses
+├── Word Families
+└── Graph
+    ├── Neighbor explorer
+    ├── Path explorer
+    ├── Subgraph view
+    └── Pattern query
+
+Hadith
+├── Collections
+├── Search
+├── Hadith View
+├── Gradings
+├── Narrators
+└── Isnad Graph
+
+Tafsir
+├── Works
+├── Compare
+└── Verse lookup
+
+Comparative Scripture
+├── Editions
+├── Parallel search
+└── Translation compare
+
+Research Chat
+├── Modes
+├── Sources
+├── Tool plan
+├── Trace
+├── Citations
+└── Export
+
+Knowledge Bases
+├── List
+├── Create
+├── Documents
+└── Search
+
+Sources
+├── Catalog
+├── Discovered
+├── Staged
+├── Active
+├── Versions
+├── Diff
+└── Quarantine
+
+Imports and Updates
+├── Discover
+├── Preview
+├── Approve
+└── Rollback
+
+RAG Systems
+├── List
+├── Create
+├── Edit
+├── Run
+└── Inspect
+
+Agents
+├── List
+├── Create
+├── Edit
+├── Clone
+├── Run
+├── Permissions
+├── Knowledge
+├── Tools
+├── Memory
+└── Versions
+
+Agencies
+├── List
+├── Create
+├── Members
+├── Routing
+├── Budgets
+└── Run
+
+Tools
+├── Installed
+├── Quran Tools
+├── Hadith Tools
+├── Create
+├── Generated Drafts
+├── Validate
+├── Test
+├── Approvals
+├── Permissions
+├── Versions
+└── Revoke
+
+Runs
+├── Active
+├── Awaiting Approval
+├── Completed
+├── Failed
+└── Trace
+
+Jobs
+├── Active
+├── Queued
+├── History
+└── Logs
+
+Logs
+├── Stream
+├── Filter
+└── Export
+
+Connections
+├── List
+├── Create
+├── Edit
+├── Test
+└── Capabilities
+
+Configuration
+├── Server
+├── Database
+├── Providers
+├── RAG Defaults
+├── Tools
+└── Security
+
+Doctor
+```
+
+## Required TUI Capabilities
+
+- Interactive dashboards
+- Tables with sorting and filtering
+- Lists with virtualized scrolling
+- Form editors with validation
+- Tabbed views
+- Tree navigation
+- Progress bars for long-running jobs
+- Live log tailing
+- Search fields with incremental filter
+- Command palette
+- Configuration editors with diff against saved state
+- RAG pipeline visualization
+- Job monitoring with cancel
+- Server monitoring with connection counts
+- Keyboard shortcuts with help overlay
+- Mouse support where the terminal supports it
+- Resizable panels
+
+The TUI must feel like a professional developer tool. Ascii art and emoji are not acceptable as primary UI; UTF-8 box-drawing characters are acceptable.
+
+The TUI must support Arabic and right-to-left text as far as terminal capabilities allow. The Web GUI is the authoritative rich Quran reading experience when terminal rendering is insufficient.
+
+---
+
+# 25.2 Command Palette
+
+The TUI must provide a command palette as the single entry point for navigation and action.
+
+```text
+> Search commands...
+
+Quran
+  Open reader at 2:255
+  Search exact
+  Search normalized
+  Open word family for root رحم
+  Open graph around ayah 21:107
+
+Hadith
+  Search hadith
+  Get hadith
+  Compare variants
+  Show isnad
+
+Tools
+  List tools
+  Open tool builder
+  Validate tool
+
+Agents
+  List agents
+  Run agent
+  Inspect agent
+
+Connections
+  Test connection
+  Discover models
+
+System
+  Start server
+  Stop server
+  Open dashboard
+  View logs
+  Open configuration
+  Open doctor
+```
+
+Commands must be searchable by name, alias, category, or fuzzy text.
+
+---
+
+# 25.3 RAG Debugging View
+
+A major feature must be transparent RAG execution. Users must be able to inspect what happened at every step.
+
+```text
+Query
+ ↓
+Classified intent
+ ↓
+Selected tools and tool versions
+ ↓
+Selected sources and source versions
+ ↓
+Normalization rules applied
+ ↓
+Filters applied
+ ↓
+Retrieval results with scores
+ ↓
+Graph paths traversed
+ ↓
+Reranking scores
+ ↓
+Context builder output
+ ↓
+Prompt sent to model
+ ↓
+Model response with citations
+ ↓
+Citation validation result
+```
+
+This view must be available in TUI and GUI for the same run.
+
+The view must show:
+
+- Each tool call, its arguments, and the resulting observations
+- The Quran canonical reference, edition, and version for every Quran quote
+- The hadith collection, edition, and number for every hadith quote
+- Vector and BM25 scores
+- Reranker adjustments
+- Time spent at each step
+- Total tokens used
+- Estimated cost
+- Any rejected claims
+- The full prompt actually sent
+
+Users must be able to copy any step into a reproducible report.
+
+---
+
+# 25.4 CLI Design
+
+The CLI must be consistent across all commands. The executable should be named `qai` or `q-ai`.
+
+## Command Tree
+
+```bash
+qai serve
+qai doctor
+qai version
+
+qai quran get <reference>
+qai quran search <text> [--ignore-diacritics] [--root <root>]
+qai quran root <root>
+qai quran family <word>
+qai quran morphology <reference:position>
+qai quran graph path <start> <end>
+qai quran graph neighbors <node>
+
+qai hadith search <text>
+qai hadith get <collection>:<volume>:<book>:<hadith>
+qai hadith narrator search <name>
+qai hadith isnad show <hadith-id>
+qai hadith grading <hadith-id>
+
+qai source list
+qai source discover <catalog-url>
+qai source import <manifest>
+qai source update <source-id>
+qai source diff <source-id> --from v1 --to v2
+qai source approve <staged-version>
+qai source rollback <source-id> --to <version>
+
+qai rag list
+qai rag create <name>
+qai rag delete <name>
+qai rag query <name> <text>
+qai rag inspect <name> <query>
+
+qai kb list
+qai kb create <name>
+qai kb delete <name>
+
+qai document import <path>
+qai document list
+qai document inspect <id>
+qai document delete <id>
+
+qai agent list
+qai agent run <agent> <text>
+qai agent inspect <run-id>
+
+qai tool list
+qai tool inspect <id>
+qai tool revoke <id>
+
+qai server start
+qai server stop
+qai server status
+
+qai config get <key>
+qai config set <key> <value>
+qai config show
+
+qai research export <workspace-id>
+qai workspace list
+qai workspace create <name>
+qai workspace delete <name>
+```
+
+## Global Flags
+
+```text
+--config <path>      Use a specific config file
+--data-dir <path>    Use a specific data directory
+--log-level <level>  trace | debug | info | warn | error
+--no-color           Disable colored output
+--json               Emit machine-readable JSON
+--quiet              Suppress non-essential output
+--yes                Assume yes for confirmations
+```
+
+## Conventions
+
+- All commands are verbs first, nouns second.
+- Identifiers are passed positionally only when unambiguous.
+- Long flags use double dashes.
+- Output is human-readable by default; `--json` is always supported.
+- Errors include a short code, a human message, and a suggested action.
+- Destructive commands ask for confirmation unless `--yes` is provided.
+
+---
+
+# 25.5 Generic Document Processing
+
+General book and research material ingestion must follow the same disciplined pipeline as canonical corpora, but with configurable chunking, formatting, and trust.
+
+## Supported Document Formats
+
+Initial formats:
+
+- Markdown
+- Plain text
+- PDF
+- HTML
+- JSON
+- CSV
+- DOCX
+
+Future formats:
+
+- EPUB
+- XLSX
+- PPTX
+- Images
+- Audio
+- Video
+
+## Document Metadata
+
+Every document must record:
+
+```text
+id
+name
+path
+source
+type
+size
+created_at
+updated_at
+hash
+metadata
+status
+ingestion_version
+```
+
+## Document Pipeline
+
+```text
+Import
+  ↓
+Validate
+  ↓
+Parse
+  ↓
+Normalize
+  ↓
+Chunk
+  ↓
+Embed
+  ↓
+Index
+  ↓
+Ready
+```
+
+The UI must show processing progress in real time.
+
+```text
+Document: architecture.pdf
+
+Parsing       ████████████████ 100%
+Chunking      ████████████████ 100%
+Embedding     ███████████░░░░░  72%
+Indexing      ░░░░░░░░░░░░░░░░   0%
+
+Status: Processing
+```
+
+---
+
+# 25.6 Chunking System
+
+Chunking must be modular and corpus-aware.
+
+## Strategies
+
+- Fixed-size chunks
+- Token-based chunks
+- Sentence chunks
+- Paragraph chunks
+- Markdown-aware chunks
+- Recursive chunks
+- Parent-child chunks
+- Hadith-aware chunks (isnad and matn preserved)
+- Tafsir-aware chunks (verse-aligned)
+- Scripture-aware chunks (verse-aligned)
+- Semantic chunks
+
+## Configuration
+
+```text
+chunk_size
+chunk_overlap
+separator
+max_tokens
+min_tokens
+strategy
+preserve_boundaries
+```
+
+When corpus structure exists (Quran ayah, hadith record, Bible verse), the chunker must respect it and never split across structural boundaries unless explicitly configured.
+
+## Metadata per Chunk
+
+Every chunk must support:
+
+```json
+{
+  "document_id": "...",
+  "source": "...",
+  "edition": "...",
+  "title": "...",
+  "page": 12,
+  "section": "Architecture",
+  "language": "en",
+  "created_at": "...",
+  "canonical_reference": "...",
+  "custom": {}
+}
+```
+
+Metadata is used for filtering, display, debugging, citations, retrieval, and evaluation.
+
+---
+
+# 25.7 RAG Projects
+
+A user must be able to create reusable, portable RAG projects.
+
+```text
+my-rag/
+├── project.toml
+├── documents/
+├── prompts/
+├── data/
+├── cache/
+└── exports/
+```
+
+A project should be exportable and portable. A project record must record its corpus, embedding model, vector store, retriever, reranker, LLM, and prompt template versions.
+
+---
+
+# 25.8 RAG Configuration Schema
+
+A RAG configuration describes the complete pipeline declaratively.
+
+```toml
+[rag]
+name = "Programming Knowledge"
+version = "1.0.0"
+
+[loader]
+type = "filesystem"
+path = "./documents"
+
+[chunking]
+strategy = "recursive"
+size = 800
+overlap = 100
+
+[embedding]
+provider = "openai-compatible"
+model = "text-embedding-3-small"
+dimensions = 1536
+
+[vector_store]
+type = "qdrant"
+collection = "programming"
+
+[full_text]
+enabled = true
+language = "en"
+
+[retrieval]
+strategy = "hybrid"
+top_k = 10
+bm25_weight = 0.4
+vector_weight = 0.6
+
+[reranker]
+enabled = true
+model = "bge-reranker-v2-m3"
+top_n = 5
+
+[llm]
+provider = "openai-compatible"
+model = "gpt-4o"
+temperature = 0.1
+max_tokens = 4000
+
+[prompt]
+template = "default"
+include_citations = true
+
+[citation]
+policy = "claim_level"
+validation = "strict"
+```
+
+This format is the input to the `qai rag create` and `qai rag import` commands.
+
+---
+
+# 25.9 Multiple RAG Composition
+
+The system should support querying multiple RAG systems and merging their evidence.
+
+```text
+User Query
+     │
+     ├── Quran Tafsir RAG
+     │
+     ├── Shia Hadith RAG
+     │
+     └── Comparative Scripture RAG
+              │
+              ▼
+       Result Aggregator
+              │
+              ▼
+            LLM
+```
+
+Supported strategies:
+
+- Parallel retrieval
+- Weighted retrieval
+- Result merging
+- Cross-RAG reranking
+- RAG routing
+- Query classification
+- School or edition filtering
+- Citation merging with attribution preserved
+
+---
+
+# 25.10 Import Sources
+
+Beyond the canonical Quran pipeline, users may import additional research material.
+
+Initial sources:
+
+- Filesystem
+- Git repositories
+- GitHub
+- URLs and websites
+- RSS feeds
+- S3
+- MinIO
+- Google Drive
+- Notion
+- Telegram
+- Email
+- Databases
+- APIs
+
+Each source must use an adapter model with a typed manifest.
+
+All imported content must be marked `ImportedUnverified` until reviewed.
+
+---
+
+# 25.11 Generic Web GUI Navigation
+
+Beyond the Quran-specific Web GUI of section 24.1, the Web GUI must also support the platform-level views below.
+
+```text
+Home
+├── System Dashboard
+├── Sources
+├── RAG Systems
+├── Knowledge Bases
+├── Documents
+├── Connections
+├── Agents
+├── Tools
+├── Workflows
+├── Runs and Approvals
+├── Jobs
+├── Logs
+├── Metrics
+├── Settings
+└── Administration
+```
+
+## RAG Query UI
+
+```text
+┌─────────────────────────────────────────┐
+│ Select RAG: [Programming Knowledge ▼]  │
+├─────────────────────────────────────────┤
+│                                         │
+│ Ask a question...                       │
+│                                         │
+│                              [Search]   │
+└─────────────────────────────────────────┘
+```
+
+Results show:
+
+- Answer
+- Sources
+- Retrieved chunks
+- Scores
+- Execution time
+- Token usage
+- Estimated cost
+- Pipeline step trace
+
+## Server Dashboard
+
+```text
+SYSTEM
+
+Status       ● Running
+Version      0.3.0
+Uptime       2h 31m
+Mode         Local
+
+CORPORA
+Quran Editions          1
+Translations            8
+Tafsir Works            12
+Hadith Collections      7
+Other Scriptures        5
+Research Books          146
+
+INDEXES
+Quran Tokens            ...
+Hadith Records          ...
+Graph Nodes             ...
+Graph Edges             ...
+Vector Records          ...
+Full-Text Documents     ...
+
+RESEARCH
+Active Conversations    4
+Saved Workspaces        19
+Active Runs             2
+Awaiting Approvals      1
+
+HEALTH
+Corpus Integrity        ✓
+Citation Resolver       ✓
+Graph Store             ✓
+Vector Store            ✓
+Source Updates          3 available
+
+PERFORMANCE
+Requests                1,294
+Average Search Latency  84 ms
+Average Research Latency 2.1 s
+```
+
+---
+
+# 25.12 Storage Architecture for Generic Content
+
+Beyond the Quran and hadith stores, Q-ai requires a metadata layer for generic content.
+
+## Document and Chunk Storage
+
+- SQLite (initial)
+- PostgreSQL (server)
+- Optional S3-compatible object store for original files
+
+## Vector Store
+
+Initial options:
+
+- Local embedded vector store
+- Qdrant
+
+Future adapters:
+
+- PostgreSQL with pgvector
+- OpenSearch
+- Milvus
+- Weaviate
+- Other providers
+
+## Full-Text Store
+
+- Tantivy (initial) for Arabic and Latin text
+- BM25 and phrase search
+- Metadata filtering
+
+## Graph Store
+
+The graph layer must use an abstraction with multiple backends:
+
+- Relational adjacency tables for the initial local release
+- Embedded graph-oriented storage
+- PostgreSQL-based graph representation
+- Dedicated graph database in later releases
+
+A dedicated graph database must not be required for the local MVP.
+
+---
+
+# 25.13 Performance, Error Handling, and Engineering Baseline
+
+This section records engineering standards that apply across all of Q-ai.
+
+## Performance
+
+- Async architecture
+- Non-blocking I/O
+- Streaming responses
+- Concurrent document processing
+- Configurable worker pools
+- Efficient memory usage
+- Efficient serialization
+- Cancellation support
+- Cached canonical lookups
+- Cached morphology and root queries
+- Incremental graph updates
+- Incremental embedding updates
+- Memory-bounded result sets
+- Bounded graph traversal
+- Query timeouts
+- Canonical Quran lookup and exact verse navigation must not require an LLM or vector database
+
+CPU-heavy workloads must not block the async runtime.
+
+## Error Handling
+
+Use typed Rust errors. Prefer:
+
+- `thiserror` for library errors
+- `anyhow` at application boundaries where appropriate
+
+Errors must provide:
+
+```text
+What happened
+Why it happened
+Where it happened
+How the user can fix it
+Suggested next command
+```
+
+## Secrets
+
+API keys and credentials must be handled securely.
+
+Possible mechanisms:
+
+- Environment variables
+- OS keychain
+- Encrypted local storage
+- Secret manager integration
+
+Never expose secrets through:
+
+- Logs
+- API responses
+- TUI output
+- Browser HTML
+- Error messages
+- Audit records
+
+## Configuration
+
+Configuration should support:
+
+```text
+TOML
+Environment Variables
+CLI arguments
+```
+
+Configuration precedence:
+
+```text
+CLI
+  >
+Environment
+  >
+Config File
+  >
+Defaults
+```
+
+Configuration must be validated at load time and on every change.
+
+## Observability
+
+The application must use structured logging. Support:
+
+- Logs
+- Metrics
+- Traces
+- Request timing
+- Retrieval timing
+- Token usage
+- Error tracking
+
+Prefer Rust ecosystem standards:
+
+- `tracing`
+- `tracing-subscriber`
+- OpenTelemetry where appropriate
+
+## Dependency Principles
+
+Dependencies must be selected based on:
+
+1. Project maturity
+2. Maintenance activity
+3. Rust ecosystem adoption
+4. API quality
+5. Performance
+6. Security
+7. License compatibility
+8. Cross-platform support
+
+Avoid unnecessary dependencies. Do not introduce a dependency merely because it is convenient if a small internal abstraction is preferable.
+
+## Security Baseline
+
+- Validate all external input
+- Protect API keys
+- Avoid command injection
+- Avoid arbitrary filesystem access
+- Sanitize uploaded documents where appropriate
+- Enforce configurable file-size limits
+- Enforce request limits
+- Use secure HTTP configuration
+- Avoid leaking sensitive information through logs
+- Provide authentication for exposed server deployments
+- Bind to localhost by default
+- Require TLS in production
+- Read-only database credentials by default
+
+## Testing Strategy
+
+Unit tests cover:
+
+- Chunkers
+- Parsers
+- Retrievers
+- Prompt builders
+- Configuration
+- Domain logic
+
+Integration tests cover:
+
+- Vector stores
+- LLM providers
+- Embedding providers
+- API
+- Database
+- Source importers
+- Tool sandboxes
+
+End-to-end tests cover the full pipeline:
+
+```text
+Import document
+     ↓
+Index document
+     ↓
+Query RAG
+     ↓
+Retrieve context
+     ↓
+Generate answer
+     ↓
+Return citations
+```
+
+Corpus-specific tests cover:
+
+- Canonical integrity
+- Arabic normalization round-trip
+- Token order preservation
+- Citation resolution
+- Edition switching
+
+## Developer Experience
+
+The project must provide:
+
+```bash
+cargo build
+cargo test
+cargo clippy
+cargo fmt
+```
+
+Plus:
+
+- `.env.example`
+- Example configurations
+- Example RAG projects
+- Docker configuration
+- Development documentation
+- A `qai doctor --json` mode for CI
+
+## Plugin Architecture (Generic Adapters)
+
+The architecture should allow future plugins.
+
+Potential plugin types:
+
+```text
+LLM Plugin
+Embedding Plugin
+Vector Store Plugin
+Document Loader Plugin
+Retriever Plugin
+Reranker Plugin
+Authentication Plugin
+Storage Plugin
+UI Plugin
+```
+
+Plugins should be introduced only when the architecture genuinely benefits from them. Avoid premature dynamic plugin complexity.
+
+## Docker
+
+The server should be deployable with Docker.
+
+```text
+docker run ...
+```
+
+Potential Docker Compose stack:
+
+```text
+app
+├── Rust Q-ai Server
+├── PostgreSQL
+├── Qdrant
+└── Optional monitoring
+```
+
+The application must also work without Docker.
+
+## Local-First Design
+
+The application must work locally without requiring a cloud service.
+
+```text
+Q-ai
+  ├── SQLite
+  ├── Local filesystem
+  ├── Local embeddings
+  ├── Ollama
+  ├── Local full-text engine
+  ├── Local vector store
+  └── Local graph store
+```
+
+Cloud services are optional. The `doctor` command must report any local-only fallback paths.
+
+---
+
+# 25.14 Non-Goals (Generic)
+
+In addition to the Quran-specific non-goals of section 4, the generic platform will not initially:
+
+- Build its own foundation model
+- Implement every vector database natively
+- Implement every document parser from scratch
+- Become a full enterprise data warehouse
+- Replace general-purpose databases
+- Support distributed clusters in the first release
+
+These can be added later through adapters and plugins.
+
+---
+
+# 25.15 Open Technical Decisions (Generic)
+
+These decisions must be evaluated during implementation:
+
+- Web GUI framework
+- Primary database
+- Vector database default
+- Local embedding engine
+- Plugin architecture mechanism
+- Authentication framework
+- API framework
+- Job queue implementation
+- WebSocket versus Server-Sent Events
+- Configuration format extensions
+- Local model runtime
+- RTL terminal strategy
+- WASM runtime
+- Tool signing method
+
+Technology decisions should favor mature Rust ecosystem solutions. Each decision must be recorded as an ADR per Section 60.
+
+---
+
+
+
 # 26. CLI Requirements
 
 The executable should be named `q-ai` or `qai`.
@@ -1775,6 +2913,8 @@ qai research export <workspace-id>
 ```
 
 ---
+
+
 
 # 27. API Requirements
 
@@ -1848,6 +2988,8 @@ Streaming may use WebSocket or Server-Sent Events.
 
 ---
 
+
+
 # 28. Agentic Runtime
 
 Agents are first-class but controlled.
@@ -1904,6 +3046,8 @@ Agents must not modify canonical corpora.
 
 ---
 
+
+
 # 29. Tool Runtime and Security
 
 Tools must use typed manifests.
@@ -1952,7 +3096,7 @@ CommandExecution
 Privileged
 ```
 
-`ComputationalAnnotation` covers tools that produce machine-generated linguistic, graph, or cross-reference annotations. Their outputs must carry the Layer D computational-annotation metadata of Section 6.4 and must never be written into canonical data.
+`ComputationalAnnotation` covers tools that produce machine-generated linguistic, graph, or cross-reference annotations. Their outputs must carry the Layer D computational-annotation metadata of section 6.4 and must never be written into canonical data.
 
 Risk tiers and default approval behavior:
 
@@ -1970,6 +3114,8 @@ Quran and hadith research tools should normally be `ReadOnly`.
 Write-capable tools require explicit permission and, where necessary, human approval.
 
 ---
+
+
 
 # 30. AI-Assisted Tool Creation
 
@@ -2010,6 +3156,8 @@ Generated tools must never:
 
 ---
 
+
+
 # 31. Model and Provider Support
 
 Q-ai must support abstractions for:
@@ -2048,6 +3196,8 @@ Model routing must consider:
 - Provider health
 
 ---
+
+
 
 # 32. Storage Architecture
 
@@ -2131,6 +3281,8 @@ Used for:
 
 ---
 
+
+
 # 33. Suggested Rust Workspace
 
 ```text
@@ -2193,6 +3345,8 @@ Core domain crates must not depend on the Web GUI, TUI, or concrete external pro
 
 ---
 
+
+
 # 34. Data Ingestion Pipeline
 
 ```text
@@ -2245,6 +3399,8 @@ The pipeline must be:
 
 ---
 
+
+
 # 35. Validation Requirements
 
 ## 35.1 Quran Validation
@@ -2280,6 +3436,8 @@ The pipeline must be:
 - Hash and version are available
 
 ---
+
+
 
 # 36. Evaluation
 
@@ -2332,6 +3490,8 @@ Datasets, expected outputs, and results must be versioned.
 
 ---
 
+
+
 # 37. Security
 
 Required controls:
@@ -2356,6 +3516,8 @@ Required controls:
 - Fail closed if sandbox policy cannot be enforced.
 
 ---
+
+
 
 # 38. Copyright and Licensing
 
@@ -2384,6 +3546,8 @@ The product must:
 Technical availability does not imply legal permission to redistribute.
 
 ---
+
+
 
 # 39. Observability and Provenance
 
@@ -2424,6 +3588,8 @@ No private research content may be collected as external telemetry without expli
 
 ---
 
+
+
 # 40. Performance
 
 The system should provide:
@@ -2445,6 +3611,8 @@ The system should provide:
 Canonical Quran lookup and exact verse navigation should not require an LLM or vector database.
 
 ---
+
+
 
 # 41. Reliability and Backups
 
@@ -2475,6 +3643,8 @@ Backups must include:
 Indexes and embeddings should be rebuildable from source versions and manifests.
 
 ---
+
+
 
 # 42. Authentication and Access Control
 
@@ -2509,8 +3679,9 @@ Retrieval filters must be applied before results reach an LLM or agent.
 
 ---
 
-# 43. Development Phases
 
+
+# 43. Development Phases
 ## Phase 0 — Foundations
 
 - Rust workspace
@@ -2661,769 +3832,6 @@ Retrieval filters must be applied before results reach an LLM or agent.
 
 ---
 
-# 44. MVP Definition
-
-The first Q-ai MVP must be intentionally focused on trustworthy Quran research.
-
-## 44.1 MVP Includes
-
-- Local-first Rust application
-- Web GUI
-- CLI
-- Basic TUI
-- SQLite metadata database
-- One validated Quran edition
-- Surah and ayah navigation
-- Exact Arabic search
-- Search without diacritics
-- Concatenated phrase search
-- Root search
-- Lemma search
-- Word-family explorer
-- Morphological token display
-- Frequency and distribution tools
-- Basic Quran graph
-- One or more translations with clear attribution
-- Citation links
-- Research chat using Quran tools
-- OpenAI-compatible provider
-- Ollama provider
-- Tool-call inspection
-- Run traces
-- Corpus integrity tests
-- Manual source import
-- Versioned source manifests
-
-## 44.2 MVP Excludes
-
-- Full autonomous internet updates
-- Every hadith collection
-- Every Quran qira'ah
-- Definitive automated narrator identity resolution
-- Unrestricted generated tools
-- Arbitrary shell execution
-- Full multi-user collaboration
-- Claims of authoritative religious rulings
-- Unreviewed AI changes to canonical corpora
-
-## 44.3 MVP Acceptance Workflow
-
-```text
-Install Q-ai
-   ↓
-Open the Quran reader
-   ↓
-Navigate to a surah and ayah
-   ↓
-Verify exact canonical Arabic text
-   ↓
-Search an Arabic phrase without diacritics
-   ↓
-Search the same phrase without spaces
-   ↓
-Select a Quran word
-   ↓
-Inspect its lemma, root, morphology, and word family
-   ↓
-View all related occurrences
-   ↓
-Open a Quran graph around the word or verse
-   ↓
-Ask Q-ai a research question
-   ↓
-Inspect selected tools and retrieved evidence
-   ↓
-Receive an answer with exact verse citations
-   ↓
-Open every citation at the correct source location
-   ↓
-Export the query and evidence
-```
-
----
-
-# 45. Post-MVP Acceptance Workflow
-
-```text
-Select Quran, Al-Kafi, Bihar al-Anwar, and tafsir sources
-   ↓
-Ask a cross-source research question
-   ↓
-Smart router selects Quran, hadith, and tafsir tools
-   ↓
-Q-ai performs structured and hybrid retrieval
-   ↓
-Q-ai retrieves hadith with edition-aware references
-   ↓
-Q-ai displays attributed gradings
-   ↓
-Q-ai shows graph links between verses and narrations
-   ↓
-Citation verifier checks every source
-   ↓
-Answer distinguishes source quotation from AI analysis
-   ↓
-User opens exact verse, hadith, volume, page, and tafsir references
-   ↓
-User saves and exports a reproducible research report
-```
-
----
-
-# 46. Quality Gates
-
-A Quran feature is complete only when:
-
-- It cannot modify canonical text accidentally.
-- It has corpus-integrity tests.
-- It has Unicode and Arabic normalization tests.
-- It preserves exact source addressing.
-- Its outputs contain source versions.
-- Generated analysis is clearly labeled.
-- It works without requiring an LLM where deterministic processing is sufficient.
-- It has performance limits.
-- It has API, UI, and domain tests.
-
-A hadith feature is complete only when:
-
-- It identifies collection and edition.
-- It preserves source numbering.
-- It distinguishes isnad and matn where supported.
-- It attributes gradings.
-- It represents disagreement.
-- It resolves citations to exact locations.
-- It avoids presenting computational identity matching as certainty.
-
-An agent feature is complete only when:
-
-- Tool permissions are enforced.
-- Inputs and outputs are schema-validated.
-- Cancellation and timeout work.
-- Resource limits are enforced.
-- Tool and model versions are recorded.
-- Citations are validated.
-- Retrieved content is treated as untrusted.
-- The user can inspect what happened.
-
----
-
-# 47. Product Success Metrics
-
-Initial metrics:
-
-- Canonical Quran integrity test pass rate
-- Exact verse retrieval accuracy
-- Normalized Arabic search recall
-- Concatenated phrase search accuracy
-- Root and lemma search accuracy
-- Citation resolution success rate
-- Unsupported citation rate
-- Percentage of claims with valid citations
-- Search latency
-- Graph-query latency
-- Time to first successful Quran search
-- Time to first cited research answer
-- Hadith source-resolution accuracy
-- Grading-attribution accuracy
-- Smart-router tool-selection accuracy
-- Agent invalid-tool-call rate
-- Index consistency error rate
-- Crash-free run rate
-
-Target integrity requirements:
-
-- Canonical Quran text corruption tolerance: **zero**
-- Fabricated verse references: **zero in validated deterministic lookup**
-- Silent source-version changes: **zero**
-- Unattributed hadith grading presented as universal: **zero**
-
----
-
-# 48. Open Technical Decisions
-
-The following require Architecture Decision Records:
-
-- Initial Quran source dataset and license
-- Initial Quran morphology dataset
-- Arabic normalization standard
-- Preferred transliteration standard
-- Initial Shia hadith data sources
-- Tafsir source licensing
-- Quran graph storage implementation
-- Full-text engine
-- Local vector store
-- Arabic embedding model
-- Arabic reranker
-- Narrator identity model
-- Hadith numbering reconciliation
-- Web frontend framework
-- RTL terminal strategy
-- WebSocket versus Server-Sent Events
-- Source-manifest signing method
-- Catalog trust model
-- Graph export formats
-- Citation-support verification method
-- Public API rate limits
-
-Each ADR must record:
-
-- Context
-- Options
-- Decision
-- Accuracy implications
-- Religious-source implications
-- Licensing implications
-- Security implications
-- Migration strategy
-- Reversal cost
-
----
-
-# 49. Current Project Status
-
-## Foundations
-
-- [ ] Rust workspace
-- [ ] Core domain
-- [ ] Configuration
-- [ ] Persistence
-- [ ] Jobs
-- [ ] Logging
-- [ ] CLI
-- [ ] Web server
-- [ ] Web GUI
-- [ ] TUI
-
-## Quran
-
-- [ ] Quran edition model
-- [ ] Canonical importer
-- [ ] Corpus validator
-- [ ] Quran navigation
-- [ ] Exact search
-- [ ] Normalized search
-- [ ] Concatenated search
-- [ ] Root index
-- [ ] Lemma index
-- [ ] Morphology
-- [ ] Word families
-- [ ] Frequency tools
-- [ ] Quran graph
-- [ ] Graph explorer
-- [ ] Rich Quran reader
-
-## Hadith and Tafsir
-
-- [ ] Hadith collection model
-- [ ] Al-Kafi adapter
-- [ ] Bihar al-Anwar adapter
-- [ ] Hadith search
-- [ ] Grading attribution
-- [ ] Tafsir indexing
-- [ ] Isnad parser
-- [ ] Narrator graph
-- [ ] Rijal integration
-
-## RAG and Agents
-
-- [ ] Full-text retrieval
-- [ ] Vector retrieval
-- [ ] Hybrid retrieval
-- [ ] Graph RAG
-- [ ] Smart router
-- [ ] Tool registry
-- [ ] Agent runtime
-- [ ] Citation verifier
-- [ ] Research agency
-- [ ] Evaluation framework
-
-## Sources
-
-- [ ] Source catalog
-- [ ] Manifest format
-- [ ] License tracking
-- [ ] Internet discovery
-- [ ] Quarantine
-- [ ] Validation
-- [ ] Update diff
-- [ ] Approval
-- [ ] Rollback
-
----
-
-# 50. Living PRD Rules
-
-This document is the authoritative product specification for Q-ai.
-
-Whenever requirements change:
-
-1. Update this PRD.
-2. Increment the version.
-3. Preserve completed requirements.
-4. Mark obsolete requirements explicitly.
-5. Do not silently remove security or provenance requirements.
-6. Keep the roadmap synchronized with implementation.
-7. Record major technical decisions as ADRs.
-8. Record source and corpus decisions separately from software decisions.
-9. Update acceptance criteria when scope changes.
-10. Return the complete updated PRD when a full replacement is requested.
-
----
-
-# 51. Change Log
-
-## Version 0.3.1
-
-Added:
-
-- Interpretive-conflict presentation requirements (side-by-side attributed views)
-- Semi-automated graph annotation and human review workflow (Section 10.6)
-- Source genealogy and derivation lineage in the source catalog (Section 22.6)
-- Risk-based tool execution tiers and the `ComputationalAnnotation` side-effect class
-- Research checksums for reproducible research runs (Section 12.1)
-
-Fixed:
-
-- Section 14 subsection numbering (Grading Model renumbered, Hadith Tools now 14.5)
-
-## Version 0.3.0
-
-Renamed and refocused the project as **Q-ai**.
-
-Added:
-
-- Quran-first product vision
-- Canonical Quran corpus engine
-- Immutable and versioned Quran editions
-- Arabic normalization
-- Diacritic-free search
-- Concatenated-word and phrase search
-- Root, lemma, stem, and word-family research
-- Quran morphology comparison
-- Frequency, distribution, and co-occurrence tools
-- Quran knowledge graph
-- Graph search and graph visualization
-- Quran rhetorical and structural discovery tools
-- Rich Quran reading interface
-- Structured Shia hadith support
-- Al-Kafi and Bihar al-Anwar requirements
-- Isnad and narrator graph
-- Attributed hadith grading
-- Tafsir comparison
-- Torah and Bible support
-- Comparative scripture tools
-- Structure-aware ingestion and chunking
-- Smart RAG and tool selection
-- Claim-level citation validation
-- Source trust levels
-- Internet book catalog discovery and updates
-- Signed/checksummed source manifests
-- Source staging, approval, rollback, and licensing
-- Research workspaces
-- Quran-specific APIs and CLI commands
-- Quran-first MVP and acceptance criteria
-- Religious-source integrity and disagreement-handling requirements
-
-Preserved and integrated from Version 0.2.0:
-
-- Rust architecture
-- Local and server modes
-- CLI, TUI, Web GUI, and API
-- Multi-RAG
-- LLM and embedding provider abstractions
-- Vector stores
-- Background jobs
-- Agent runtime
-- Multi-agent agencies
-- Tool calling
-- Tool sandbox
-- Human approvals
-- MCP
-- Workflows
-- Observability
-- Security
-- Authentication
-- Access-control-aware retrieval
-- Audit trails
-- Versioning
-- Evaluation
-- Docker and production deployment
-- Local-first operation
-## Versioning clarification
-
-The updated Q-ai PRD should **replace Version 0.2.0**, not be maintained beside it.
-
-However, my previous response should **not yet be treated as the final replacement**, because:
-
-- It stopped at Section 51.
-- It did not fully preserve Sections 50–101 from Version 0.2.0.
-- It included collections outside your requested scope.
-
-The correct process is:
-
-1. Use Version 0.2.0 as the historical baseline.
-2. Merge Sections 1–49 from the Q-ai rewrite.
-3. Remove all unwanted collections and related requirements from Sections 1–49.
-4. Replace the previously generated Sections 50–51 with Sections 50–101 below.
-5. Publish the result as **Q-ai PRD Version 0.3.0**, which completely supersedes Version 0.2.0.
-6. Keep Version 0.2.0 only in version history or Git—not as an active companion specification.
-
-The supported Islamic hadith scope should be **Shia collections only**, while the Quran, tafsir, Torah, Bible, and configurable comparative or research books remain supported.
-
----
-
-# 50. Doctor and Corpus Diagnostics
-
-Q-ai must provide a diagnostic command:
-
-```bash
-qai doctor
-```
-
-The command must diagnose:
-
-- Application configuration
-- Metadata database
-- Full-text search index
-- Vector store
-- Graph store
-- Quran corpus integrity
-- Quran edition checksums
-- Quran verse and token counts
-- Quran morphology datasets
-- Hadith collection integrity
-- Tafsir collection integrity
-- Comparative scripture integrity
-- Citation resolver
-- Source manifests
-- Orphaned source versions
-- Missing files
-- Index consistency
-- LLM connectivity
-- Embedding connectivity
-- Reranker connectivity
-- Model capabilities
-- Filesystem permissions
-- Network connectivity
-- Source-catalog connectivity
-- Job-worker health
-- Tool sandbox
-- Required dependencies
-
-Example:
-
-```text
-Q-ai Doctor
-
-CORE
-✓ Configuration valid
-✓ SQLite database reachable
-✓ Migration version current
-✓ Background workers running
-
-QURAN
-✓ Canonical edition: hafs-uthmani-1.0.0
-✓ Surahs: 114
-✓ Verse structure valid
-✓ Canonical checksum valid
-✓ Token order valid
-✓ Normalized search index current
-✓ Root index current
-✗ Morphology index differs from source version
-
-HADITH
-✓ Al-Kafi source files available
-✓ Bihar al-Anwar source files available
-✓ Hadith indexes reconciled
-! 42 narrator identities awaiting review
-
-MODELS
-✓ Local embedding provider
-✓ Ollama reachable
-✗ Remote LLM connection unavailable
-
-Suggested action:
-Run `qai quran morphology reindex`.
-```
-
-Diagnostic commands must never modify canonical data automatically.
-
-Repair actions must be shown separately and require confirmation when they may modify indexes, metadata, source activation, or user data.
-
-Additional commands should include:
-
-```bash
-qai doctor --json
-qai doctor --quran
-qai doctor --sources
-qai doctor --indexes
-qai doctor --models
-qai doctor --tools
-qai doctor --repair-preview
-```
-
----
-
-# 51. Server Dashboard
-
-The Web GUI must provide an operational and research dashboard.
-
-Example:
-
-```text
-Q-AI SYSTEM
-
-Status                    ● Running
-Version                   0.3.0
-Uptime                    2h 31m
-Mode                      Local
-Canonical Quran Edition   Hafs Uthmani 1.0.0
-
-CORPORA
-
-Quran Editions            1
-Translations              8
-Tafsir Works              12
-Hadith Collections        7
-Other Scriptures          5
-Research Books            146
-
-INDEXES
-
-Quran Tokens              ...
-Hadith Records            ...
-Graph Nodes               ...
-Graph Edges               ...
-Vector Records            ...
-Full-Text Documents       ...
-
-RESEARCH
-
-Active Conversations      4
-Saved Workspaces          19
-Active Runs               2
-Awaiting Approvals        1
-
-HEALTH
-
-Corpus Integrity          ✓
-Citation Resolver         ✓
-Graph Store               ✓
-Vector Store              ✓
-Source Updates            3 available
-
-PERFORMANCE
-
-Requests                  1,294
-Average Search Latency    84 ms
-Average Research Latency  2.1 s
-```
-
-The dashboard must provide direct access to:
-
-- Quran reader
-- Quran search
-- Root and word-family research
-- Quran graph
-- Hadith collections
-- Narrators and isnads
-- Tafsir
-- Comparative scripture
-- Ask Q-ai
-- Research workspaces
-- Source updates
-- Jobs
-- Runs
-- Approvals
-- Logs
-- Metrics
-- System health
-
----
-
-# 52. Research Query Interface
-
-The browser query interface must support multiple research modes.
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│ Mode: [Smart Research ▼]                                   │
-│ Sources: [Quran] [Hadith] [Tafsir] [Scripture] [Books]    │
-│ Edition policy: [Approved editions only ▼]                 │
-├─────────────────────────────────────────────────────────────┤
-│ Ask a question or enter Arabic text...                     │
-│                                                             │
-│                                            [Research]       │
-└─────────────────────────────────────────────────────────────┘
-```
-
-Supported modes:
-
-- Quran reading
-- Quran exact search
-- Quran normalized search
-- Root search
-- Lemma search
-- Word-family exploration
-- Morphological analysis
-- Quran graph search
-- Hadith lookup
-- Hadith research
-- Isnad research
-- Narrator research
-- Tafsir comparison
-- Comparative scripture
-- General book research
-- Smart automatic routing
-- Advanced query builder
-
-Results should display:
-
-- Direct answer
-- Canonical Quran quotations
-- Hadith evidence
-- Tafsir evidence
-- Comparative passages
-- Disagreements or alternative analyses
-- Claim-level citations
-- Retrieved source passages
-- Graph paths
-- Full-text retrieval scores
-- Vector scores
-- Reranking scores
-- Selected tools
-- Selected sources
-- Edition and source versions
-- Normalization rules
-- Execution time
-- Token usage
-- Estimated cost
-- Research trace
-
-Users must be able to disable generative answers and request search results only.
-
----
-
-# 53. Streaming
-
-Q-ai must support streaming for:
-
-- LLM responses
-- Research progress
-- Retrieval progress
-- Tool calls
-- Graph traversal progress
-- Source imports
-- Indexing jobs
-- Corpus validation
-- Evaluation runs
-- Export generation
-
-Example:
-
-```text
-Researching...
-
-✓ Query classified: Quran linguistic research
-✓ Exact Quran search completed
-✓ Root search completed
-✓ Word-family graph completed
-✓ Tafsir retrieval completed
-• Validating citations...
-• Generating cited summary...
-```
-
-Streaming events must use normalized event schemas and must be available through:
-
-- TUI
-- Web GUI
-- WebSocket or Server-Sent Events
-- Internal event bus
-- Structured logs where appropriate
-
-Canonical quotations must be retrieved and validated before being streamed as final evidence.
-
-Partial model output must not be mistaken for a validated final answer.
-
----
-
-# 54. Cancellation
-
-Long-running operations must be cancellable.
-
-Users must be able to cancel:
-
-- Research queries
-- Agent runs
-- Agency runs
-- Workflow runs
-- Tool calls where the tool supports cancellation
-- Document imports
-- Internet downloads
-- Parsing
-- Embedding generation
-- Graph construction
-- Full-text indexing
-- Re-indexing
-- Corpus validation
-- Evaluation
-- Exports
-
-Cancellation must propagate through the pipeline.
-
-A cancelled operation must:
-
-- Stop new work from being scheduled.
-- Attempt to interrupt active cancellable work.
-- Preserve valid completed stages.
-- Remove or quarantine incomplete output.
-- Avoid activating partial indexes.
-- Record the cancellation in the run trace.
-- Leave canonical source versions unchanged.
-- support safe resumption where applicable.
-
----
-
-# 55. Architecture Principles
-
-The following principles are mandatory:
-
-1. Separation of concerns
-2. Dependency inversion
-3. Explicit interfaces
-4. Strong typing
-5. Async-first I/O
-6. Testability
-7. Provider abstraction
-8. Storage abstraction
-9. UI independence
-10. Configuration-driven behavior
-11. Local-first operation
-12. Observability
-13. Secure defaults
-14. Canonical text immutability
-15. Exact source provenance
-16. Edition-aware retrieval
-17. Structure-aware ingestion
-18. Quran tools before generic RAG when appropriate
-19. Graph and lexical search as first-class retrieval methods
-20. Generated analysis must be distinguishable from source text
-21. Scholarly disagreement must remain attributable
-22. Deterministic operations must not depend unnecessarily on an LLM
-23. Search normalization must not alter display text
-24. Every citation must resolve to an exact source location
-25. Imported internet content is untrusted until approved
-26. Corpus updates are versioned and reversible
-27. Tools use deny-by-default permissions
-28. Authorization is enforced outside the model
-29. Every run has explicit resource limits
-30. Every agent action is attributable and auditable
-31. Local data is not sent remotely without explicit configuration
-32. Security boundaries must never depend solely on prompts
-
----
-
-# 56. Development Phases
 
 ## Phase 0 — Foundations
 
@@ -3607,7 +4015,86 @@ The following principles are mandatory:
 
 ---
 
-# 57. MVP Definition
+# 44. MVP Definition
+The first Q-ai MVP must be intentionally focused on trustworthy Quran research.
+
+## 44.1 MVP Includes
+
+- Local-first Rust application
+- Web GUI
+- CLI
+- Basic TUI
+- SQLite metadata database
+- One validated Quran edition
+- Surah and ayah navigation
+- Exact Arabic search
+- Search without diacritics
+- Concatenated phrase search
+- Root search
+- Lemma search
+- Word-family explorer
+- Morphological token display
+- Frequency and distribution tools
+- Basic Quran graph
+- One or more translations with clear attribution
+- Citation links
+- Research chat using Quran tools
+- OpenAI-compatible provider
+- Ollama provider
+- Tool-call inspection
+- Run traces
+- Corpus integrity tests
+- Manual source import
+- Versioned source manifests
+
+## 44.2 MVP Excludes
+
+- Full autonomous internet updates
+- Every hadith collection
+- Every Quran qira'ah
+- Definitive automated narrator identity resolution
+- Unrestricted generated tools
+- Arbitrary shell execution
+- Full multi-user collaboration
+- Claims of authoritative religious rulings
+- Unreviewed AI changes to canonical corpora
+
+## 44.3 MVP Acceptance Workflow
+
+```text
+Install Q-ai
+   ↓
+Open the Quran reader
+   ↓
+Navigate to a surah and ayah
+   ↓
+Verify exact canonical Arabic text
+   ↓
+Search an Arabic phrase without diacritics
+   ↓
+Search the same phrase without spaces
+   ↓
+Select a Quran word
+   ↓
+Inspect its lemma, root, morphology, and word family
+   ↓
+View all related occurrences
+   ↓
+Open a Quran graph around the word or verse
+   ↓
+Ask Q-ai a research question
+   ↓
+Inspect selected tools and retrieved evidence
+   ↓
+Receive an answer with exact verse citations
+   ↓
+Open every citation at the correct source location
+   ↓
+Export the query and evidence
+```
+
+---
+
 
 The MVP is complete when the following workflow succeeds:
 
@@ -3679,113 +4166,176 @@ The MVP must include:
 
 ---
 
-# 58. Quality Requirements
+# 45. Post-MVP Acceptance Workflow
 
-## Correctness
-
-- Canonical Quran text must match the approved source version exactly.
-- Deterministic searches must be reproducible.
-- Citations must resolve correctly.
-- Hadith metadata must retain collection and edition identity.
-- Generated analysis must never overwrite source data.
-
-## Performance
-
-- Exact Quran lookup should not require an LLM.
-- Search indexes must support interactive response times.
-- Graph queries must be bounded.
-- CPU-intensive work must not block the async runtime.
-- Bulk ingestion must use configurable worker pools.
-
-## Reliability
-
-- Provider failures must not crash Q-ai.
-- Partial imports must not become active.
-- Indexes must be reconstructable.
-- Interrupted jobs must be detectable.
-- Source updates must support rollback.
-
-## Maintainability
-
-- Core functionality must remain independent from interfaces.
-- Corpus-specific logic must live in dedicated modules.
-- Provider adapters must not leak into domain models.
-- All important schemas must be versioned.
-
-## Extensibility
-
-Adding a new:
-
-- Quran edition
-- Translation
-- Tafsir
-- Hadith collection
-- Scripture edition
-- Model provider
-- Retriever
-- Vector store
-- Graph store
-- Source catalog
-- Tool
-
-must normally require an adapter or manifest, not changes throughout the core.
-
-## User Experience
-
-Users must be able to:
-
-- Read the Quran comfortably.
-- Understand what type of content they are viewing.
-- Inspect sources without technical knowledge.
-- Distinguish source text from AI output.
-- Inspect advanced execution details when desired.
+```text
+Select Quran, Al-Kafi, Bihar al-Anwar, and tafsir sources
+   ↓
+Ask a cross-source research question
+   ↓
+Smart router selects Quran, hadith, and tafsir tools
+   ↓
+Q-ai performs structured and hybrid retrieval
+   ↓
+Q-ai retrieves hadith with edition-aware references
+   ↓
+Q-ai displays attributed gradings
+   ↓
+Q-ai shows graph links between verses and narrations
+   ↓
+Citation verifier checks every source
+   ↓
+Answer distinguishes source quotation from AI analysis
+   ↓
+User opens exact verse, hadith, volume, page, and tafsir references
+   ↓
+User saves and exports a reproducible research report
+```
 
 ---
 
-# 59. Future Features
 
-Potential future roadmap:
 
-- Additional Quran editions and recognized recitation metadata
-- More detailed orthographic analysis
-- Advanced Arabic syntax graphs
-- Quran dependency trees
-- Rhetorical structure research
-- Audio recitation synchronization
-- Tajwid visualization
-- Pronunciation tools
-- Handwritten manuscript research
-- OCR for historical Arabic and Persian books
-- Scan-to-text alignment
-- Page-image citation overlays
-- Advanced isnad comparison
-- Narrator identity review collaboration
-- Historical maps
-- Entity timelines
-- Visual research canvases
-- Visual RAG pipeline editor
-- Visual workflow editor
-- Graph-based research notebooks
-- Collaborative annotation
-- Research peer review
-- Dataset publishing
-- Plugin ecosystem
-- Tool marketplace with signed packages
-- Distributed workers
-- GPU acceleration
-- Cluster mode
-- Cloud deployment
-- Automated RAG benchmarking
-- AI-assisted retrieval configuration
-- Multilingual query translation
-- Speech input
-- Recitation-based Quran navigation
+# 46. Quality Gates
 
-Future additions must preserve canonical integrity, provenance, attribution, and user control.
+A Quran feature is complete only when:
+
+- It cannot modify canonical text accidentally.
+- It has corpus-integrity tests.
+- It has Unicode and Arabic normalization tests.
+- It preserves exact source addressing.
+- Its outputs contain source versions.
+- Generated analysis is clearly labeled.
+- It works without requiring an LLM where deterministic processing is sufficient.
+- It has performance limits.
+- It has API, UI, and domain tests.
+
+A hadith feature is complete only when:
+
+- It identifies collection and edition.
+- It preserves source numbering.
+- It distinguishes isnad and matn where supported.
+- It attributes gradings.
+- It represents disagreement.
+- It resolves citations to exact locations.
+- It avoids presenting computational identity matching as certainty.
+
+An agent feature is complete only when:
+
+- Tool permissions are enforced.
+- Inputs and outputs are schema-validated.
+- Cancellation and timeout work.
+- Resource limits are enforced.
+- Tool and model versions are recorded.
+- Citations are validated.
+- Retrieved content is treated as untrusted.
+- The user can inspect what happened.
 
 ---
 
-# 60. Open Technical Decisions
+
+
+# 47. Product Success Metrics
+Initial metrics:
+
+- Canonical Quran integrity test pass rate
+- Exact verse retrieval accuracy
+- Normalized Arabic search recall
+- Concatenated phrase search accuracy
+- Root and lemma search accuracy
+- Citation resolution success rate
+- Unsupported citation rate
+- Percentage of claims with valid citations
+- Search latency
+- Graph-query latency
+- Time to first successful Quran search
+- Time to first cited research answer
+- Hadith source-resolution accuracy
+- Grading-attribution accuracy
+- Smart-router tool-selection accuracy
+- Agent invalid-tool-call rate
+- Index consistency error rate
+- Crash-free run rate
+
+Target integrity requirements:
+
+- Canonical Quran text corruption tolerance: **zero**
+- Fabricated verse references: **zero in validated deterministic lookup**
+- Silent source-version changes: **zero**
+- Unattributed hadith grading presented as universal: **zero**
+
+---
+
+
+Metrics include:
+
+- Time to first Quran lookup
+- Time to first normalized search
+- Time to first cited research answer
+- Canonical integrity pass rate
+- Search accuracy
+- Root and lemma accuracy
+- Concatenated phrase accuracy
+- Citation resolution rate
+- Citation-support rate
+- Unsupported citation rate
+- Retrieval latency
+- Graph latency
+- End-to-end latency
+- Connection success rate
+- Agent completion rate
+- Tool-call success rate
+- Invalid call rate
+- Approval rate
+- Cancellation success rate
+- Index consistency error rate
+- Prevented policy violations
+- Crash-free run rate
+- Cost per successful task
+
+No prompts, documents, research questions, or model responses may be collected as telemetry without explicit opt-in.
+
+---
+
+# 48. Open Technical Decisions
+The following require Architecture Decision Records:
+
+- Initial Quran source dataset and license
+- Initial Quran morphology dataset
+- Arabic normalization standard
+- Preferred transliteration standard
+- Initial Shia hadith data sources
+- Tafsir source licensing
+- Quran graph storage implementation
+- Full-text engine
+- Local vector store
+- Arabic embedding model
+- Arabic reranker
+- Narrator identity model
+- Hadith numbering reconciliation
+- Web frontend framework
+- RTL terminal strategy
+- WebSocket versus Server-Sent Events
+- Source-manifest signing method
+- Catalog trust model
+- Graph export formats
+- Citation-support verification method
+- Public API rate limits
+
+Each ADR must record:
+
+- Context
+- Options
+- Decision
+- Accuracy implications
+- Religious-source implications
+- Licensing implications
+- Security implications
+- Migration strategy
+- Reversal cost
+
+---
+
 
 The following must be resolved through Architecture Decision Records:
 
@@ -3840,43 +4390,90 @@ Every ADR must document:
 
 ---
 
-# 61. Definition of Done
+# 49. Current Project Status
+## Foundations
 
-A feature is complete only when:
+- [ ] Rust workspace
+- [ ] Core domain
+- [ ] Configuration
+- [ ] Persistence
+- [ ] Jobs
+- [ ] Logging
+- [ ] CLI
+- [ ] Web server
+- [ ] Web GUI
+- [ ] TUI
 
-- It is implemented.
-- It has appropriate unit tests.
-- It has integration tests where required.
-- It has typed error handling.
-- It is observable.
-- It is documented.
-- It works through intended interfaces.
-- It does not unnecessarily couple layers.
-- Configuration is validated.
-- Cancellation works where applicable.
-- Timeouts are enforced.
-- Sensitive information is redacted.
-- Provenance is recorded.
-- Version compatibility is handled.
-- Access controls are enforced.
-- Failure recovery is tested.
-- `cargo fmt` succeeds.
-- `cargo clippy` succeeds.
-- `cargo test` succeeds.
+## Generic RAG Platform
 
-Corpus-related features additionally require:
+- [ ] Document processing pipeline
+- [ ] Chunking system
+- [ ] Embedding abstraction
+- [ ] LLM abstraction
+- [ ] Vector store abstraction
+- [ ] Full-text index
+- [ ] Multi-RAG
+- [ ] RAG debugging view
+- [ ] RAG projects
+- [ ] Generic document import sources
 
-- Source-version tracking
-- Checksum validation
-- Round-trip tests
-- Citation resolution tests
-- No silent canonical changes
-- Rebuild tests for derived indexes
-- Difference reports for updates
+## Quran
+
+- [ ] Quran edition model
+- [ ] Canonical importer
+- [ ] Corpus validator
+- [ ] Quran navigation
+- [ ] Exact search
+- [ ] Normalized search
+- [ ] Concatenated search
+- [ ] Root index
+- [ ] Lemma index
+- [ ] Morphology
+- [ ] Word families
+- [ ] Frequency tools
+- [ ] Quran graph
+- [ ] Graph explorer
+- [ ] Rich Quran reader
+
+## Hadith and Tafsir
+
+- [ ] Hadith collection model
+- [ ] Al-Kafi adapter
+- [ ] Bihar al-Anwar adapter
+- [ ] Hadith search
+- [ ] Grading attribution
+- [ ] Tafsir indexing
+- [ ] Isnad parser
+- [ ] Narrator graph
+- [ ] Rijal integration
+
+## RAG and Agents
+
+- [ ] Full-text retrieval
+- [ ] Vector retrieval
+- [ ] Hybrid retrieval
+- [ ] Graph RAG
+- [ ] Smart router
+- [ ] Tool registry
+- [ ] Agent runtime
+- [ ] Citation verifier
+- [ ] Research agency
+- [ ] Evaluation framework
+
+## Sources
+
+- [ ] Source catalog
+- [ ] Manifest format
+- [ ] License tracking
+- [ ] Internet discovery
+- [ ] Quarantine
+- [ ] Validation
+- [ ] Update diff
+- [ ] Approval
+- [ ] Rollback
 
 ---
 
-# 62. Current Project Status
 
 ## Foundations
 
@@ -3988,95 +4585,518 @@ Corpus-related features additionally require:
 
 ---
 
-# 63. Living PRD Rules
+# 50. Doctor and Corpus Diagnostics
 
-This document is the authoritative Q-ai product specification.
+Q-ai must provide a diagnostic command:
 
-Whenever project requirements change:
+```bash
+qai doctor
+```
 
-1. Update this PRD.
-2. Increment the version when appropriate.
-3. Preserve completed requirements.
-4. Mark obsolete requirements explicitly.
-5. Keep architecture decisions documented.
-6. Keep source and licensing decisions documented.
-7. Keep the roadmap synchronized with implementation.
-8. Do not silently remove previously agreed requirements.
-9. Do not silently broaden the supported religious corpus.
-10. Do not weaken corpus integrity or citation requirements.
-11. Record major changes in the change log.
-12. Return a complete consolidated PRD when replacement is requested.
+The command must diagnose:
 
-Version 0.3.0 supersedes Version 0.2.0 after all sections are merged and reviewed.
+- Application configuration
+- Metadata database
+- Full-text search index
+- Vector store
+- Graph store
+- Quran corpus integrity
+- Quran edition checksums
+- Quran verse and token counts
+- Quran morphology datasets
+- Hadith collection integrity
+- Tafsir collection integrity
+- Comparative scripture integrity
+- Citation resolver
+- Source manifests
+- Orphaned source versions
+- Missing files
+- Index consistency
+- LLM connectivity
+- Embedding connectivity
+- Reranker connectivity
+- Model capabilities
+- Filesystem permissions
+- Network connectivity
+- Source-catalog connectivity
+- Job-worker health
+- Tool sandbox
+- Required dependencies
+
+Example:
+
+```text
+Q-ai Doctor
+
+CORE
+✓ Configuration valid
+✓ SQLite database reachable
+✓ Migration version current
+✓ Background workers running
+
+QURAN
+✓ Canonical edition: hafs-uthmani-1.0.0
+✓ Surahs: 114
+✓ Verse structure valid
+✓ Canonical checksum valid
+✓ Token order valid
+✓ Normalized search index current
+✓ Root index current
+✗ Morphology index differs from source version
+
+HADITH
+✓ Al-Kafi source files available
+✓ Bihar al-Anwar source files available
+✓ Hadith indexes reconciled
+! 42 narrator identities awaiting review
+
+MODELS
+✓ Local embedding provider
+✓ Ollama reachable
+✗ Remote LLM connection unavailable
+
+Suggested action:
+Run `qai quran morphology reindex`.
+```
+
+Diagnostic commands must never modify canonical data automatically.
+
+Repair actions must be shown separately and require confirmation when they may modify indexes, metadata, source activation, or user data.
+
+Additional commands should include:
+
+```bash
+qai doctor --json
+qai doctor --quran
+qai doctor --sources
+qai doctor --indexes
+qai doctor --models
+qai doctor --tools
+qai doctor --repair-preview
+```
 
 ---
 
-# 64. Terminology
 
-## Canonical Text
 
-The exact source text belonging to a specific approved edition and version.
+# 51. Server Dashboard
 
-## Edition
+The Web GUI must provide an operational and research dashboard.
 
-A separately identified publication or dataset with its own text, numbering, publisher, license, and version.
+Example:
 
-## Quran Tool
+```text
+Q-AI SYSTEM
 
-A deterministic or computational operation designed for Quran structure, text, language, or graph research.
+Status                    ● Running
+Version                   0.3.0
+Uptime                    2h 31m
+Mode                      Local
+Canonical Quran Edition   Hafs Uthmani 1.0.0
 
-## Model
+CORPORA
 
-An LLM, embedding model, reranker, morphology model, OCR model, speech model, or other inference model.
+Quran Editions            1
+Translations              8
+Tafsir Works              12
+Hadith Collections        7
+Other Scriptures          5
+Research Books            146
 
-## RAG
+INDEXES
 
-A retrieval pipeline that supplies external source material to a model. The canonical Quran engine is richer than and independent from generic RAG.
+Quran Tokens              ...
+Hadith Records            ...
+Graph Nodes               ...
+Graph Edges               ...
+Vector Records            ...
+Full-Text Documents       ...
 
-## Graph
+RESEARCH
 
-A typed collection of nodes and edges with provenance, confidence, and source-version information.
+Active Conversations      4
+Saved Workspaces          19
+Active Runs               2
+Awaiting Approvals        1
 
-## Agent
+HEALTH
 
-An AI runtime configured with:
+Corpus Integrity          ✓
+Citation Resolver         ✓
+Graph Store               ✓
+Vector Store              ✓
+Source Updates            3 available
 
-- Models
-- Instructions
-- Tools
-- Knowledge sources
-- Memory
-- Permissions
-- Budgets
-- Output requirements
+PERFORMANCE
 
-## Agency
+Requests                  1,294
+Average Search Latency    84 ms
+Average Research Latency  2.1 s
+```
 
-A group of collaborating agents with defined roles, routing, permissions, and budgets.
+The dashboard must provide direct access to:
 
-## Tool
-
-A typed capability that an agent, workflow, UI, CLI, or API can invoke.
-
-## Tool Creation
-
-Generating, validating, testing, approving, signing, and publishing a tool.
-
-## Workflow
-
-A versioned deterministic or agent-driven graph of steps, tools, models, conditions, and approval gates.
-
-## Research Claim
-
-A statement connected to evidence, provenance, authorship, confidence, and possible disagreement.
-
-## Computational Suggestion
-
-A machine-generated relation or analysis that has not necessarily received scholarly verification.
+- Quran reader
+- Quran search
+- Root and word-family research
+- Quran graph
+- Hadith collections
+- Narrators and isnads
+- Tafsir
+- Comparative scripture
+- Ask Q-ai
+- Research workspaces
+- Source updates
+- Jobs
+- Runs
+- Approvals
+- Logs
+- Metrics
+- System health
 
 ---
 
-# 65. Updated Product Scope
+
+
+# 52. Research Query Interface
+
+The browser query interface must support multiple research modes.
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ Mode: [Smart Research ▼]                                   │
+│ Sources: [Quran] [Hadith] [Tafsir] [Scripture] [Books]    │
+│ Edition policy: [Approved editions only ▼]                 │
+├─────────────────────────────────────────────────────────────┤
+│ Ask a question or enter Arabic text...                     │
+│                                                             │
+│                                            [Research]       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+Supported modes:
+
+- Quran reading
+- Quran exact search
+- Quran normalized search
+- Root search
+- Lemma search
+- Word-family exploration
+- Morphological analysis
+- Quran graph search
+- Hadith lookup
+- Hadith research
+- Isnad research
+- Narrator research
+- Tafsir comparison
+- Comparative scripture
+- General book research
+- Smart automatic routing
+- Advanced query builder
+
+Results should display:
+
+- Direct answer
+- Canonical Quran quotations
+- Hadith evidence
+- Tafsir evidence
+- Comparative passages
+- Disagreements or alternative analyses
+- Claim-level citations
+- Retrieved source passages
+- Graph paths
+- Full-text retrieval scores
+- Vector scores
+- Reranking scores
+- Selected tools
+- Selected sources
+- Edition and source versions
+- Normalization rules
+- Execution time
+- Token usage
+- Estimated cost
+- Research trace
+
+Users must be able to disable generative answers and request search results only.
+
+---
+
+
+
+# 53. Streaming
+
+Q-ai must support streaming for:
+
+- LLM responses
+- Research progress
+- Retrieval progress
+- Tool calls
+- Graph traversal progress
+- Source imports
+- Indexing jobs
+- Corpus validation
+- Evaluation runs
+- Export generation
+
+Example:
+
+```text
+Researching...
+
+✓ Query classified: Quran linguistic research
+✓ Exact Quran search completed
+✓ Root search completed
+✓ Word-family graph completed
+✓ Tafsir retrieval completed
+• Validating citations...
+• Generating cited summary...
+```
+
+Streaming events must use normalized event schemas and must be available through:
+
+- TUI
+- Web GUI
+- WebSocket or Server-Sent Events
+- Internal event bus
+- Structured logs where appropriate
+
+Canonical quotations must be retrieved and validated before being streamed as final evidence.
+
+Partial model output must not be mistaken for a validated final answer.
+
+---
+
+
+
+# 54. Cancellation
+
+Long-running operations must be cancellable.
+
+Users must be able to cancel:
+
+- Research queries
+- Agent runs
+- Agency runs
+- Workflow runs
+- Tool calls where the tool supports cancellation
+- Document imports
+- Internet downloads
+- Parsing
+- Embedding generation
+- Graph construction
+- Full-text indexing
+- Re-indexing
+- Corpus validation
+- Evaluation
+- Exports
+
+Cancellation must propagate through the pipeline.
+
+A cancelled operation must:
+
+- Stop new work from being scheduled.
+- Attempt to interrupt active cancellable work.
+- Preserve valid completed stages.
+- Remove or quarantine incomplete output.
+- Avoid activating partial indexes.
+- Record the cancellation in the run trace.
+- Leave canonical source versions unchanged.
+- support safe resumption where applicable.
+
+---
+
+
+
+# 55. Architecture Principles
+
+The following principles are mandatory:
+
+1. Separation of concerns
+2. Dependency inversion
+3. Explicit interfaces
+4. Strong typing
+5. Async-first I/O
+6. Testability
+7. Provider abstraction
+8. Storage abstraction
+9. UI independence
+10. Configuration-driven behavior
+11. Local-first operation
+12. Observability
+13. Secure defaults
+14. Canonical text immutability
+15. Exact source provenance
+16. Edition-aware retrieval
+17. Structure-aware ingestion
+18. Quran tools before generic RAG when appropriate
+19. Graph and lexical search as first-class retrieval methods
+20. Generated analysis must be distinguishable from source text
+21. Scholarly disagreement must remain attributable
+22. Deterministic operations must not depend unnecessarily on an LLM
+23. Search normalization must not alter display text
+24. Every citation must resolve to an exact source location
+25. Imported internet content is untrusted until approved
+26. Corpus updates are versioned and reversible
+27. Tools use deny-by-default permissions
+28. Authorization is enforced outside the model
+29. Every run has explicit resource limits
+30. Every agent action is attributable and auditable
+31. Local data is not sent remotely without explicit configuration
+32. Security boundaries must never depend solely on prompts
+
+---
+
+
+
+# 56. Quality Requirements
+
+## Correctness
+
+- Canonical Quran text must match the approved source version exactly.
+- Deterministic searches must be reproducible.
+- Citations must resolve correctly.
+- Hadith metadata must retain collection and edition identity.
+- Generated analysis must never overwrite source data.
+
+## Performance
+
+- Exact Quran lookup should not require an LLM.
+- Search indexes must support interactive response times.
+- Graph queries must be bounded.
+- CPU-intensive work must not block the async runtime.
+- Bulk ingestion must use configurable worker pools.
+
+## Reliability
+
+- Provider failures must not crash Q-ai.
+- Partial imports must not become active.
+- Indexes must be reconstructable.
+- Interrupted jobs must be detectable.
+- Source updates must support rollback.
+
+## Maintainability
+
+- Core functionality must remain independent from interfaces.
+- Corpus-specific logic must live in dedicated modules.
+- Provider adapters must not leak into domain models.
+- All important schemas must be versioned.
+
+## Extensibility
+
+Adding a new:
+
+- Quran edition
+- Translation
+- Tafsir
+- Hadith collection
+- Scripture edition
+- Model provider
+- Retriever
+- Vector store
+- Graph store
+- Source catalog
+- Tool
+
+must normally require an adapter or manifest, not changes throughout the core.
+
+## User Experience
+
+Users must be able to:
+
+- Read the Quran comfortably.
+- Understand what type of content they are viewing.
+- Inspect sources without technical knowledge.
+- Distinguish source text from AI output.
+- Inspect advanced execution details when desired.
+
+---
+
+
+
+# 57. Future Features
+
+Potential future roadmap:
+
+- Additional Quran editions and recognized recitation metadata
+- More detailed orthographic analysis
+- Advanced Arabic syntax graphs
+- Quran dependency trees
+- Rhetorical structure research
+- Audio recitation synchronization
+- Tajwid visualization
+- Pronunciation tools
+- Handwritten manuscript research
+- OCR for historical Arabic and Persian books
+- Scan-to-text alignment
+- Page-image citation overlays
+- Advanced isnad comparison
+- Narrator identity review collaboration
+- Historical maps
+- Entity timelines
+- Visual research canvases
+- Visual RAG pipeline editor
+- Visual workflow editor
+- Graph-based research notebooks
+- Collaborative annotation
+- Research peer review
+- Dataset publishing
+- Plugin ecosystem
+- Tool marketplace with signed packages
+- Distributed workers
+- GPU acceleration
+- Cluster mode
+- Cloud deployment
+- Automated RAG benchmarking
+- AI-assisted retrieval configuration
+- Multilingual query translation
+- Speech input
+- Recitation-based Quran navigation
+
+Future additions must preserve canonical integrity, provenance, attribution, and user control.
+
+---
+
+
+
+# 58. Definition of Done
+
+A feature is complete only when:
+
+- It is implemented.
+- It has appropriate unit tests.
+- It has integration tests where required.
+- It has typed error handling.
+- It is observable.
+- It is documented.
+- It works through intended interfaces.
+- It does not unnecessarily couple layers.
+- Configuration is validated.
+- Cancellation works where applicable.
+- Timeouts are enforced.
+- Sensitive information is redacted.
+- Provenance is recorded.
+- Version compatibility is handled.
+- Access controls are enforced.
+- Failure recovery is tested.
+- `cargo fmt` succeeds.
+- `cargo clippy` succeeds.
+- `cargo test` succeeds.
+
+Corpus-related features additionally require:
+
+- Source-version tracking
+- Checksum validation
+- Round-trip tests
+- Citation resolution tests
+- No silent canonical changes
+- Rebuild tests for derived indexes
+- Difference reports for updates
+
+---
+
+
+
+# 59. Updated Product Scope
 
 Q-ai supports five first-class workloads:
 
@@ -4120,7 +5140,9 @@ Definitions must be versioned and portable across all interfaces.
 
 ---
 
-# 66. TUI Model Connection Manager
+
+
+# 60. TUI Model Connection Manager
 
 The TUI must provide complete connection management.
 
@@ -4203,7 +5225,9 @@ API keys must never appear in output or logs.
 
 ---
 
-# 67. Unified Model Capability Interface
+
+
+# 61. Unified Model Capability Interface
 
 Provider adapters must expose capabilities.
 
@@ -4249,7 +5273,9 @@ Capabilities must be discovered or configured explicitly, not guessed by the age
 
 ---
 
-# 68. Model Routing and Fallback
+
+
+# 62. Model Routing and Fallback
 
 Suggested aliases:
 
@@ -4294,7 +5320,9 @@ The trace must record which model was selected and why.
 
 ---
 
-# 69. Agent Definition
+
+
+# 63. Agent Definition
 
 Agents must use portable, versioned definitions.
 
@@ -4355,7 +5383,9 @@ Configuration changes create a new revision.
 
 ---
 
-# 70. Agent Runtime
+
+
+# 64. Agent Runtime
 
 Agents must execute as observable and cancellable state machines.
 
@@ -4407,7 +5437,9 @@ Every run receives a unique run ID.
 
 ---
 
-# 71. Agent Run Events
+
+
+# 65. Agent Run Events
 
 Normalized events include:
 
@@ -4455,7 +5487,9 @@ Sensitive content must be redacted according to policy.
 
 ---
 
-# 72. Multi-Agent Research Agencies
+
+
+# 66. Multi-Agent Research Agencies
 
 Supported roles:
 
@@ -4506,7 +5540,9 @@ Agencies must define:
 
 ---
 
-# 73. Tool System
+
+
+# 67. Tool System
 
 Initial built-in tools should include:
 
@@ -4581,7 +5617,9 @@ Write and command tools must be optional and disabled by default.
 
 ---
 
-# 74. Agent-Created Tools
+
+
+# 68. Agent-Created Tools
 
 Lifecycle:
 
@@ -4655,7 +5693,9 @@ They must not:
 
 ---
 
-# 75. Tool Sandbox
+
+
+# 69. Tool Sandbox
 
 Untrusted tools must execute outside the main application process.
 
@@ -4691,7 +5731,9 @@ Q-ai must fail closed when a sandbox policy cannot be enforced.
 
 ---
 
-# 76. Tool Permissions and Human Approval
+
+
+# 70. Tool Permissions and Human Approval
 
 Before every tool call, evaluate:
 
@@ -4736,7 +5778,9 @@ Canonical source modification must not be available as a normal agent permission
 
 ---
 
-# 77. MCP Integration
+
+
+# 71. MCP Integration
 
 MCP support should include:
 
@@ -4766,7 +5810,9 @@ A locally installed MCP server is not automatically trusted.
 
 ---
 
-# 78. Agent Memory
+
+
+# 72. Agent Memory
 
 Memory types:
 
@@ -4809,7 +5855,9 @@ Canonical corpora are knowledge sources, not agent memory.
 
 ---
 
-# 79. Agent, Quran, Graph, and RAG Integration
+
+
+# 73. Agent, Quran, Graph, and RAG Integration
 
 Agents may access research through:
 
@@ -4851,7 +5899,9 @@ ingestion_version
 
 ---
 
-# 80. Prompt-Injection Defense
+
+
+# 74. Prompt-Injection Defense
 
 Retrieved books, web pages, source manifests, tool output, and imported documents are untrusted data.
 
@@ -4887,7 +5937,9 @@ Detection may support security but cannot replace authorization.
 
 ---
 
-# 81. Access-Control-Aware Retrieval
+
+
+# 75. Access-Control-Aware Retrieval
 
 All retrieval must apply authorization before returning results.
 
@@ -4916,7 +5968,9 @@ Local single-user mode may use a simplified policy while preserving the same dat
 
 ---
 
-# 82. Data Lifecycle and Index Consistency
+
+
+# 76. Data Lifecycle and Index Consistency
 
 Ingestion must be idempotent and version-aware.
 
@@ -4952,7 +6006,9 @@ Canonical versions should normally be deprecated or deactivated rather than dest
 
 ---
 
-# 83. Conversation and Session Management
+
+
+# 77. Conversation and Session Management
 
 A conversation includes:
 
@@ -5005,7 +6061,9 @@ Users can:
 
 ---
 
-# 84. TUI Agent Experience
+
+
+# 78. TUI Agent Experience
 
 Additional screens:
 
@@ -5068,7 +6126,9 @@ Keyboard actions:
 
 ---
 
-# 85. Tool Builder UI
+
+
+# 79. Tool Builder UI
 
 Steps:
 
@@ -5104,7 +6164,9 @@ The UI must show differences between tool revisions.
 
 ---
 
-# 86. Workflow Engine
+
+
+# 80. Workflow Engine
 
 Initial nodes:
 
@@ -5139,7 +6201,9 @@ Cycles require an explicit maximum iteration count.
 
 ---
 
-# 87. Budgets and Resource Governance
+
+
+# 81. Budgets and Resource Governance
 
 Budget types:
 
@@ -5166,7 +6230,9 @@ Cost values must be labeled as estimates unless provider billing confirms them.
 
 ---
 
-# 88. Audit Trail and Provenance
+
+
+# 82. Audit Trail and Provenance
 
 Audited actions include:
 
@@ -5211,7 +6277,9 @@ Audit logs must not store plaintext secrets.
 
 ---
 
-# 89. API Additions
+
+
+# 83. API Additions
 
 Add endpoints such as:
 
@@ -5257,7 +6325,9 @@ Run creation, publication, source activation, updates, rollback, and external si
 
 ---
 
-# 90. Additional Security Requirements
+
+
+# 84. Additional Security Requirements
 
 - Bind to localhost by default.
 - Require explicit configuration for remote access.
@@ -5283,7 +6353,9 @@ Run creation, publication, source activation, updates, rollback, and external si
 
 ---
 
-# 91. Reliability Requirements
+
+
+# 85. Reliability Requirements
 
 Provider and tool calls must use:
 
@@ -5310,7 +6382,9 @@ A partially built Quran, hadith, graph, full-text, or vector index must never re
 
 ---
 
-# 92. Evaluation Requirements
+
+
+# 86. Evaluation Requirements
 
 ## Quran
 
@@ -5382,7 +6456,9 @@ Datasets and results must be versioned.
 
 ---
 
-# 93. Updated Project Structure
+
+
+# 87. Updated Project Structure
 
 ```text
 crates/
@@ -5438,7 +6514,9 @@ Domain crates must not depend on the TUI, Web GUI, or concrete providers.
 
 ---
 
-# 94. Updated Development Phases
+
+
+# 88. Updated Development Phases
 
 The authoritative implementation order is:
 
@@ -5462,7 +6540,9 @@ Each phase must include tests, documentation, migrations, observability, and acc
 
 ---
 
-# 95. Revised MVP
+
+
+# 89. Revised MVP
 
 ## Includes
 
@@ -5510,7 +6590,9 @@ Each phase must include tests, documentation, migrations, observability, and acc
 
 ---
 
-# 96. Tool-Creation Release Acceptance Criteria
+
+
+# 90. Tool-Creation Release Acceptance Criteria
 
 Tool creation is complete only when a user can:
 
@@ -5533,39 +6615,9 @@ Unpublished tools must not be available to production agents.
 
 ---
 
-# 97. Product Success Metrics
 
-Metrics include:
 
-- Time to first Quran lookup
-- Time to first normalized search
-- Time to first cited research answer
-- Canonical integrity pass rate
-- Search accuracy
-- Root and lemma accuracy
-- Concatenated phrase accuracy
-- Citation resolution rate
-- Citation-support rate
-- Unsupported citation rate
-- Retrieval latency
-- Graph latency
-- End-to-end latency
-- Connection success rate
-- Agent completion rate
-- Tool-call success rate
-- Invalid call rate
-- Approval rate
-- Cancellation success rate
-- Index consistency error rate
-- Prevented policy violations
-- Crash-free run rate
-- Cost per successful task
-
-No prompts, documents, research questions, or model responses may be collected as telemetry without explicit opt-in.
-
----
-
-# 98. Additional Open Technical Decisions
+# 91. Additional Open Technical Decisions
 
 Additional ADRs are required for:
 
@@ -5594,7 +6646,9 @@ Each decision must document context, options, security, operations, migration, a
 
 ---
 
-# 99. Updated Architecture Principles
+
+
+# 92. Updated Architecture Principles
 
 Additional mandatory principles:
 
@@ -5621,7 +6675,9 @@ Additional mandatory principles:
 
 ---
 
-# 100. Updated Definition of Done
+
+
+# 93. Updated Definition of Done
 
 An agent, tool, corpus, or retrieval feature is complete only when:
 
@@ -5648,7 +6704,242 @@ An agent, tool, corpus, or retrieval feature is complete only when:
 
 ---
 
-# 101. PRD Change Log
+
+
+# 94. Living PRD Rules
+This document is the authoritative product specification for Q-ai.
+
+Whenever requirements change:
+
+1. Update this PRD.
+2. Increment the version.
+3. Preserve completed requirements.
+4. Mark obsolete requirements explicitly.
+5. Do not silently remove security or provenance requirements.
+6. Keep the roadmap synchronized with implementation.
+7. Record major technical decisions as ADRs.
+8. Record source and corpus decisions separately from software decisions.
+9. Update acceptance criteria when scope changes.
+10. Return the complete updated PRD when a full replacement is requested.
+
+---
+
+
+This document is the authoritative Q-ai product specification.
+
+Whenever project requirements change:
+
+1. Update this PRD.
+2. Increment the version when appropriate.
+3. Preserve completed requirements.
+4. Mark obsolete requirements explicitly.
+5. Keep architecture decisions documented.
+6. Keep source and licensing decisions documented.
+7. Keep the roadmap synchronized with implementation.
+8. Do not silently remove previously agreed requirements.
+9. Do not silently broaden the supported religious corpus.
+10. Do not weaken corpus integrity or citation requirements.
+11. Record major changes in the change log.
+12. Return a complete consolidated PRD when replacement is requested.
+
+Version 0.3.0 supersedes Version 0.2.0 after all sections are merged and reviewed.
+
+---
+
+# 95. Change Log
+
+## Version 0.3.2
+
+Added:
+
+- Detailed TUI screen inventory and required terminal capabilities (section 25.1)
+- Command palette requirements (section 25.2)
+- RAG debugging view requirements (section 25.3)
+- Full CLI command tree and conventions (section 25.4)
+- Generic document processing pipeline and formats (section 25.5)
+- Chunking system strategies and boundaries (section 25.6)
+- RAG projects structure (section 25.7)
+- Declarative RAG configuration schema (section 25.8)
+- Multiple RAG composition strategies (section 25.9)
+- Generic import sources list (section 25.10)
+- Generic Web GUI navigation, RAG query UI, and server dashboard (section 25.11)
+- Generic storage architecture for documents and vectors (section 25.12)
+- Performance, error handling, secrets, config, observability, security, testing, developer-experience, plugin, Docker, and local-first engineering baseline (section 25.13)
+- Generic platform non-goals (section 25.14)
+- Generic open technical decisions (section 25.15)
+
+These restore generic Rust Multi-RAG platform engineering requirements from Version 0.2.0 that were under-specified in Version 0.3.0.
+
+## Version 0.3.1
+
+Added:
+
+- Interpretive-conflict presentation requirements (side-by-side attributed views)
+- Semi-automated graph annotation and human review workflow (section 10.6)
+- Source genealogy and derivation lineage in the source catalog (section 22.6)
+- Risk-based tool execution tiers and the `ComputationalAnnotation` side-effect class
+- Research checksums for reproducible research runs (section 12.1)
+
+Fixed:
+
+- section 14 subsection numbering (Grading Model renumbered, Hadith Tools now 14.5)
+
+## Version 0.3.0
+
+Renamed and refocused the project as **Q-ai**.
+
+Added:
+
+- Quran-first product vision
+- Canonical Quran corpus engine
+- Immutable and versioned Quran editions
+- Arabic normalization
+- Diacritic-free search
+- Concatenated-word and phrase search
+- Root, lemma, stem, and word-family research
+- Quran morphology comparison
+- Frequency, distribution, and co-occurrence tools
+- Quran knowledge graph
+- Graph search and graph visualization
+- Quran rhetorical and structural discovery tools
+- Rich Quran reading interface
+- Structured Shia hadith support
+- Al-Kafi and Bihar al-Anwar requirements
+- Isnad and narrator graph
+- Attributed hadith grading
+- Tafsir comparison
+- Torah and Bible support
+- Comparative scripture tools
+- Structure-aware ingestion and chunking
+- Smart RAG and tool selection
+- Claim-level citation validation
+- Source trust levels
+- Internet book catalog discovery and updates
+- Signed/checksummed source manifests
+- Source staging, approval, rollback, and licensing
+- Research workspaces
+- Quran-specific APIs and CLI commands
+- Quran-first MVP and acceptance criteria
+- Religious-source integrity and disagreement-handling requirements
+
+Preserved and integrated from Version 0.2.0:
+
+- Rust architecture
+- Local and server modes
+- CLI, TUI, Web GUI, and API
+- Multi-RAG
+- LLM and embedding provider abstractions
+- Vector stores
+- Background jobs
+- Agent runtime
+- Multi-agent agencies
+- Tool calling
+- Tool sandbox
+- Human approvals
+- MCP
+- Workflows
+- Observability
+- Security
+- Authentication
+- Access-control-aware retrieval
+- Audit trails
+- Versioning
+- Evaluation
+- Docker and production deployment
+- Local-first operation
+## Versioning clarification
+
+The updated Q-ai PRD should **replace Version 0.2.0**, not be maintained beside it.
+
+However, my previous response should **not yet be treated as the final replacement**, because:
+
+- It stopped at section 89.
+- It did not fully preserve Sections 50–101 from Version 0.2.0.
+- It included collections outside your requested scope.
+
+The correct process is:
+
+1. Use Version 0.2.0 as the historical baseline.
+2. Merge Sections 1–49 from the Q-ai rewrite.
+3. Remove all unwanted collections and related requirements from Sections 1–49.
+4. Replace the previously generated Sections 50–51 with Sections 50–101 below.
+5. Publish the result as **Q-ai PRD Version 0.3.0**, which completely supersedes Version 0.2.0.
+6. Keep Version 0.2.0 only in version history or Git—not as an active companion specification.
+
+The supported Islamic hadith scope should be **Shia collections only**, while the Quran, tafsir, Torah, Bible, and configurable comparative or research books remain supported.
+
+---
+
+
+
+# 96. Terminology
+
+## Canonical Text
+
+The exact source text belonging to a specific approved edition and version.
+
+## Edition
+
+A separately identified publication or dataset with its own text, numbering, publisher, license, and version.
+
+## Quran Tool
+
+A deterministic or computational operation designed for Quran structure, text, language, or graph research.
+
+## Model
+
+An LLM, embedding model, reranker, morphology model, OCR model, speech model, or other inference model.
+
+## RAG
+
+A retrieval pipeline that supplies external source material to a model. The canonical Quran engine is richer than and independent from generic RAG.
+
+## Graph
+
+A typed collection of nodes and edges with provenance, confidence, and source-version information.
+
+## Agent
+
+An AI runtime configured with:
+
+- Models
+- Instructions
+- Tools
+- Knowledge sources
+- Memory
+- Permissions
+- Budgets
+- Output requirements
+
+## Agency
+
+A group of collaborating agents with defined roles, routing, permissions, and budgets.
+
+## Tool
+
+A typed capability that an agent, workflow, UI, CLI, or API can invoke.
+
+## Tool Creation
+
+Generating, validating, testing, approving, signing, and publishing a tool.
+
+## Workflow
+
+A versioned deterministic or agent-driven graph of steps, tools, models, conditions, and approval gates.
+
+## Research Claim
+
+A statement connected to evidence, provenance, authorship, confidence, and possible disagreement.
+
+## Computational Suggestion
+
+A machine-generated relation or analysis that has not necessarily received scholarly verification.
+
+---
+
+
+
+# 97. PRD Change Log
 
 ## Version 0.3.0 — Q-ai Consolidated Replacement
 
@@ -5737,3 +7028,4 @@ Scope correction:
 Version 0.2.0 introduced the general Rust Multi-RAG, agent, agency, tool, workflow, sandbox, model-routing, security, and evaluation architecture.
 
 It remains historical and must not be used beside Version 0.3.0 as a second active PRD.
+
