@@ -146,7 +146,7 @@ The system should follow a layered architecture.
 
 Primary language:
 
-* Rust
+- Rust
 
 Minimum supported Rust version should be defined once implementation begins.
 
@@ -164,28 +164,28 @@ The TUI should use a mature Rust terminal UI ecosystem.
 
 Preferred stack:
 
-* `ratatui`
-* `crossterm`
+- `ratatui`
+- `crossterm`
 
 The TUI should support:
 
-* Interactive dashboards
-* Tables
-* Lists
-* Forms
-* Tabs
-* Trees
-* Progress bars
-* Logs
-* Search
-* Command palette
-* Configuration editors
-* RAG pipeline visualization
-* Job monitoring
-* Server monitoring
-* Keyboard shortcuts
-* Mouse support where possible
-* Resizable panels
+- Interactive dashboards
+- Tables
+- Lists
+- Forms
+- Tabs
+- Trees
+- Progress bars
+- Logs
+- Search
+- Command palette
+- Configuration editors
+- RAG pipeline visualization
+- Job monitoring
+- Server monitoring
+- Keyboard shortcuts
+- Mouse support where possible
+- Resizable panels
 
 The TUI should feel like a professional developer tool.
 
@@ -203,21 +203,21 @@ serve mode
 
 The browser interface should allow management of:
 
-* RAG systems
-* Knowledge bases
-* Documents
-* Collections
-* Embedding models
-* LLM providers
-* Vector databases
-* Retrieval settings
-* RAG pipelines
-* Jobs
-* Server configuration
-* Users/authentication
-* Logs
-* Metrics
-* System health
+- RAG systems
+- Knowledge bases
+- Documents
+- Collections
+- Embedding models
+- LLM providers
+- Vector databases
+- Retrieval settings
+- RAG pipelines
+- Jobs
+- Server configuration
+- Users/authentication
+- Logs
+- Metrics
+- System health
 
 The Web GUI should communicate with the Rust backend through the API.
 
@@ -247,11 +247,11 @@ The frontend technology may be selected during implementation based on the best 
 
 Potential approaches include:
 
-* Rust/WASM frontend
-* Leptos
-* Dioxus
-* Yew
-* Separate TypeScript frontend
+- Rust/WASM frontend
+- Leptos
+- Dioxus
+- Yew
+- Separate TypeScript frontend
 
 The final choice must prioritize:
 
@@ -318,13 +318,13 @@ Rust Server
 
 The server must expose:
 
-* REST API
-* WebSocket API where required
-* Web GUI
-* Health endpoints
-* Metrics endpoints
-* Authentication
-* Background job management
+- REST API
+- WebSocket API where required
+- Web GUI
+- Health endpoints
+- Metrics endpoints
+- Authentication
+- Background job management
 
 ---
 
@@ -382,20 +382,20 @@ Each RAG system should be independently configurable.
 
 Each RAG system can have:
 
-* Name
-* Description
-* Documents
-* Collections
-* Chunking strategy
-* Embedding model
-* Vector database
-* Retriever
-* Reranker
-* LLM
-* Prompt templates
-* Search parameters
-* Metadata filters
-* Pipeline configuration
+- Name
+- Description
+- Documents
+- Collections
+- Chunking strategy
+- Embedding model
+- Vector database
+- Retriever
+- Reranker
+- LLM
+- Prompt templates
+- Search parameters
+- Metadata filters
+- Pipeline configuration
 
 ---
 
@@ -465,23 +465,23 @@ The system should support multiple retrieval strategies.
 
 Initial strategies:
 
-* Vector similarity search
-* Keyword search
-* Full-text search
-* Hybrid search
-* Metadata filtering
-* Multi-query retrieval
-* Contextual retrieval
-* Reranking
+- Vector similarity search
+- Keyword search
+- Full-text search
+- Hybrid search
+- Metadata filtering
+- Multi-query retrieval
+- Contextual retrieval
+- Reranking
 
 Future strategies:
 
-* Graph retrieval
-* Knowledge graph RAG
-* Agentic retrieval
-* Recursive retrieval
-* Parent-child retrieval
-* Hierarchical retrieval
+- Graph retrieval
+- Knowledge graph RAG
+- Agentic retrieval
+- Recursive retrieval
+- Parent-child retrieval
+- Hierarchical retrieval
 
 ---
 
@@ -503,13 +503,13 @@ trait VectorStore {
 
 Potential adapters:
 
-* Qdrant
-* PostgreSQL + pgvector
-* SQLite-based local storage
-* Elasticsearch/OpenSearch
-* Weaviate
-* Milvus
-* Pinecone
+- Qdrant
+- PostgreSQL + pgvector
+- SQLite-based local storage
+- Elasticsearch/OpenSearch
+- Weaviate
+- Milvus
+- Pinecone
 
 The first implementation should prioritize a small number of high-quality adapters rather than implementing everything.
 
@@ -529,12 +529,12 @@ trait EmbeddingProvider {
 
 Potential providers:
 
-* OpenAI-compatible APIs
-* OpenAI
-* Ollama
-* Hugging Face
-* Local embedding models
-* Custom HTTP providers
+- OpenAI-compatible APIs
+- OpenAI
+- Ollama
+- Hugging Face
+- Local embedding models
+- Custom HTTP providers
 
 The system must support OpenAI-compatible endpoints with configurable:
 
@@ -562,12 +562,12 @@ trait LlmProvider {
 
 Support:
 
-* OpenAI-compatible APIs
-* OpenAI
-* Anthropic
-* Ollama
-* Local models
-* Custom HTTP endpoints
+- OpenAI-compatible APIs
+- OpenAI
+- Anthropic
+- Ollama
+- Local models
+- Custom HTTP endpoints
 
 Provider configuration should support:
 
@@ -589,22 +589,22 @@ The system must support importing documents into knowledge bases.
 
 Initial formats:
 
-* Markdown
-* Plain text
-* PDF
-* HTML
-* JSON
-* CSV
-* DOCX
+- Markdown
+- Plain text
+- PDF
+- HTML
+- JSON
+- CSV
+- DOCX
 
 Potential future formats:
 
-* EPUB
-* XLSX
-* PPTX
-* Images
-* Audio
-* Video
+- EPUB
+- XLSX
+- PPTX
+- Images
+- Audio
+- Video
 
 Documents should have metadata:
 
@@ -671,13 +671,13 @@ Chunking must be modular.
 
 Support:
 
-* Fixed-size chunks
-* Token-based chunks
-* Sentence chunks
-* Paragraph chunks
-* Markdown-aware chunks
-* Recursive chunks
-* Parent-child chunks
+- Fixed-size chunks
+- Token-based chunks
+- Sentence chunks
+- Paragraph chunks
+- Markdown-aware chunks
+- Recursive chunks
+- Parent-child chunks
 
 Configuration:
 
@@ -713,12 +713,12 @@ Example:
 
 Metadata must be available for:
 
-* Filtering
-* Display
-* Debugging
-* Citations
-* Retrieval
-* Evaluation
+- Filtering
+- Display
+- Debugging
+- Citations
+- Retrieval
+- Evaluation
 
 ---
 
@@ -747,14 +747,14 @@ The system should eventually support evaluation of RAG pipelines.
 
 Metrics may include:
 
-* Retrieval precision
-* Retrieval recall
-* Context relevance
-* Faithfulness
-* Answer relevance
-* Latency
-* Token usage
-* Cost
+- Retrieval precision
+- Retrieval recall
+- Context relevance
+- Faithfulness
+- Answer relevance
+- Latency
+- Token usage
+- Cost
 
 Users should be able to compare different RAG configurations.
 
@@ -780,12 +780,12 @@ Long-running tasks must run as background jobs.
 
 Examples:
 
-* Document indexing
-* Re-indexing
-* Embedding generation
-* Bulk imports
-* Evaluation
-* Data migration
+- Document indexing
+- Re-indexing
+- Embedding generation
+- Bulk imports
+- Evaluation
+- Data migration
 
 Job states:
 
@@ -799,14 +799,14 @@ Cancelled
 
 Jobs must expose:
 
-* ID
-* Type
-* Status
-* Progress
-* Started time
-* Finished time
-* Error
-* Logs
+- ID
+- Type
+- Status
+- Progress
+- Started time
+- Finished time
+- Error
+- Logs
 
 ---
 
@@ -818,22 +818,22 @@ The storage layer must be abstracted.
 
 Possible initial database:
 
-* SQLite
+- SQLite
 
 Potential future databases:
 
-* PostgreSQL
+- PostgreSQL
 
 Persist:
 
-* RAG configurations
-* Knowledge bases
-* Documents
-* Provider configurations
-* Pipelines
-* Jobs
-* Users
-* Settings
+- RAG configurations
+- Knowledge bases
+- Documents
+- Provider configurations
+- Pipelines
+- Jobs
+- Users
+- Settings
 
 Secrets must never be stored in plaintext unless explicitly configured by the user.
 
@@ -892,18 +892,18 @@ API keys and credentials must be handled securely.
 
 Possible mechanisms:
 
-* Environment variables
-* OS keychain
-* Encrypted local storage
-* Secret manager integration
+- Environment variables
+- OS keychain
+- Encrypted local storage
+- Secret manager integration
 
 Never expose secrets through:
 
-* Logs
-* API responses
-* TUI output
-* Browser HTML
-* Error messages
+- Logs
+- API responses
+- TUI output
+- Browser HTML
+- Error messages
 
 ---
 
@@ -954,11 +954,11 @@ WebSockets should be used where real-time communication improves UX.
 
 Examples:
 
-* Job progress
-* Streaming LLM responses
-* Server logs
-* System metrics
-* RAG execution events
+- Job progress
+- Streaming LLM responses
+- Server logs
+- System metrics
+- RAG execution events
 
 ---
 
@@ -968,16 +968,16 @@ Server mode should support authentication.
 
 Initial requirements:
 
-* Local single-user mode
-* Optional authentication
-* API tokens
+- Local single-user mode
+- Optional authentication
+- API tokens
 
 Future:
 
-* Multiple users
-* Roles
-* Permissions
-* OAuth/OIDC
+- Multiple users
+- Roles
+- Permissions
+- OAuth/OIDC
 
 ---
 
@@ -1087,19 +1087,19 @@ The application should use structured logging.
 
 Support:
 
-* Logs
-* Metrics
-* Traces
-* Request timing
-* RAG execution timing
-* Token usage
-* Error tracking
+- Logs
+- Metrics
+- Traces
+- Request timing
+- RAG execution timing
+- Token usage
+- Error tracking
 
 Prefer Rust ecosystem standards such as:
 
-* `tracing`
-* `tracing-subscriber`
-* OpenTelemetry where appropriate
+- `tracing`
+- `tracing-subscriber`
+- OpenTelemetry where appropriate
 
 ---
 
@@ -1107,14 +1107,14 @@ Prefer Rust ecosystem standards such as:
 
 Performance requirements:
 
-* Async architecture
-* Non-blocking I/O
-* Streaming responses
-* Concurrent document processing
-* Configurable worker pools
-* Efficient memory usage
-* Efficient serialization
-* Cancellation support
+- Async architecture
+- Non-blocking I/O
+- Streaming responses
+- Concurrent document processing
+- Configurable worker pools
+- Efficient memory usage
+- Efficient serialization
+- Cancellation support
 
 CPU-heavy workloads should not block the async runtime.
 
@@ -1126,8 +1126,8 @@ Use typed Rust errors.
 
 Prefer:
 
-* `thiserror`
-* `anyhow` at application boundaries where appropriate
+- `thiserror`
+- `anyhow` at application boundaries where appropriate
 
 Errors should provide:
 
@@ -1207,16 +1207,16 @@ Do not introduce a dependency merely because it is convenient if a small interna
 
 Security requirements:
 
-* Validate all external input.
-* Protect API keys.
-* Avoid command injection.
-* Avoid arbitrary filesystem access.
-* Sanitize uploaded documents where appropriate.
-* Enforce configurable file-size limits.
-* Enforce request limits.
-* Use secure HTTP configuration.
-* Avoid leaking sensitive information through logs.
-* Provide authentication for exposed server deployments.
+- Validate all external input.
+- Protect API keys.
+- Avoid command injection.
+- Avoid arbitrary filesystem access.
+- Sanitize uploaded documents where appropriate.
+- Enforce configurable file-size limits.
+- Enforce request limits.
+- Use secure HTTP configuration.
+- Avoid leaking sensitive information through logs.
+- Provide authentication for exposed server deployments.
 
 ---
 
@@ -1228,22 +1228,22 @@ Testing levels:
 
 Test:
 
-* Chunkers
-* Parsers
-* Retrievers
-* Prompt builders
-* Configuration
-* Domain logic
+- Chunkers
+- Parsers
+- Retrievers
+- Prompt builders
+- Configuration
+- Domain logic
 
 ## Integration Tests
 
 Test:
 
-* Vector stores
-* LLM providers
-* Embedding providers
-* API
-* Database
+- Vector stores
+- LLM providers
+- Embedding providers
+- API
+- Database
 
 ## End-to-End Tests
 
@@ -1280,11 +1280,11 @@ Development commands should be documented.
 
 Provide:
 
-* `.env.example`
-* Example configurations
-* Example RAG projects
-* Docker configuration
-* Development documentation
+- `.env.example`
+- Example configurations
+- Example RAG projects
+- Docker configuration
+- Development documentation
 
 ---
 
@@ -1466,12 +1466,12 @@ User Query
 
 Possible strategies:
 
-* Parallel retrieval
-* Weighted retrieval
-* Result merging
-* Reranking
-* RAG routing
-* Query classification
+- Parallel retrieval
+- Weighted retrieval
+- Result merging
+- Reranking
+- RAG routing
+- Query classification
 
 ---
 
@@ -1537,14 +1537,14 @@ app doctor
 
 It should diagnose:
 
-* Configuration
-* Database
-* Vector store
-* LLM connectivity
-* Embedding connectivity
-* File permissions
-* Network connectivity
-* Required dependencies
+- Configuration
+- Database
+- Vector store
+- LLM connectivity
+- Embedding connectivity
+- File permissions
+- Network connectivity
+- Required dependencies
 
 Example:
 
@@ -1615,13 +1615,13 @@ The browser query interface should provide:
 
 Results should show:
 
-* Answer
-* Sources
-* Retrieved chunks
-* Scores
-* Execution time
-* Token usage
-* RAG pipeline details
+- Answer
+- Sources
+- Retrieved chunks
+- Scores
+- Execution time
+- Token usage
+- RAG pipeline details
 
 ---
 
@@ -1654,11 +1654,11 @@ Long-running operations must be cancellable.
 
 Users should be able to cancel:
 
-* RAG query
-* Document indexing
-* Embedding jobs
-* Bulk imports
-* Evaluations
+- RAG query
+- Document indexing
+- Embedding jobs
+- Bulk imports
+- Evaluations
 
 Cancellation must propagate through the pipeline.
 
@@ -1688,84 +1688,84 @@ The following principles are mandatory:
 
 ## Phase 0 — Architecture
 
-* Workspace setup
-* Core domain model
-* Error handling
-* Configuration
-* Logging
-* Basic CLI
+- Workspace setup
+- Core domain model
+- Error handling
+- Configuration
+- Logging
+- Basic CLI
 
 ## Phase 1 — Core RAG
 
-* Documents
-* Chunking
-* Embeddings
-* Vector store
-* Retrieval
-* LLM
-* Basic RAG pipeline
+- Documents
+- Chunking
+- Embeddings
+- Vector store
+- Retrieval
+- LLM
+- Basic RAG pipeline
 
 ## Phase 2 — Multi-RAG
 
-* RAG manager
-* Multiple knowledge bases
-* Multiple pipelines
-* RAG configuration
-* RAG selection
+- RAG manager
+- Multiple knowledge bases
+- Multiple pipelines
+- RAG configuration
+- RAG selection
 
 ## Phase 3 — TUI
 
-* Ratatui application
-* Dashboard
-* RAG management
-* Document management
-* Jobs
-* Logs
-* Configuration
+- Ratatui application
+- Dashboard
+- RAG management
+- Document management
+- Jobs
+- Logs
+- Configuration
 
 ## Phase 4 — Server
 
-* HTTP API
-* WebSocket
-* Authentication
-* Background jobs
-* Server lifecycle
+- HTTP API
+- WebSocket
+- Authentication
+- Background jobs
+- Server lifecycle
 
 ## Phase 5 — Web GUI
 
-* Dashboard
-* RAG management
-* Knowledge bases
-* Documents
-* Query interface
-* Logs
-* Metrics
+- Dashboard
+- RAG management
+- Knowledge bases
+- Documents
+- Query interface
+- Logs
+- Metrics
 
 ## Phase 6 — Advanced RAG
 
-* Hybrid search
-* Reranking
-* Multi-query
-* Query rewriting
-* Multi-RAG routing
-* Evaluation
+- Hybrid search
+- Reranking
+- Multi-query
+- Query rewriting
+- Multi-RAG routing
+- Evaluation
 
 ## Phase 7 - Agentic features
 
-* Agentic RAG
-* MCP integration
-* Tool calling
-* Workflow builder
-* AI-assisted tool creation
+- Agentic RAG
+- MCP integration
+- Tool calling
+- Workflow builder
+- AI-assisted tool creation
 
 ## Phase 8 — Production
 
-* Docker
-* PostgreSQL
-* Security hardening
-* Observability
-* Performance optimization
-* Documentation
+- Docker
+- PostgreSQL
+- Security hardening
+- Observability
+- Performance optimization
+- Documentation
 
 ---
 
@@ -1846,21 +1846,21 @@ Both TUI and GUI must be usable by developers without reading documentation for 
 
 Potential future roadmap:
 
-* Knowledge graphs
-* Graph RAG
-* Visual RAG pipeline editor
-* RAG marketplace
-* Plugin marketplace
-* Multi-user collaboration
-* RBAC
-* OAuth/OIDC
-* Distributed workers
-* GPU acceleration
-* Cluster mode
-* Cloud deployment
-* RAG benchmarking
-* Automated pipeline optimization
-* AI-assisted RAG configuration
+- Knowledge graphs
+- Graph RAG
+- Visual RAG pipeline editor
+- RAG marketplace
+- Plugin marketplace
+- Multi-user collaboration
+- RBAC
+- OAuth/OIDC
+- Distributed workers
+- GPU acceleration
+- Cluster mode
+- Cloud deployment
+- RAG benchmarking
+- Automated pipeline optimization
+- AI-assisted RAG configuration
 
 ---
 
@@ -1868,17 +1868,17 @@ Potential future roadmap:
 
 These decisions must be evaluated during implementation rather than assumed permanently:
 
-* Web GUI framework
-* Primary database
-* Vector database default
-* Local embedding engine
-* Plugin architecture mechanism
-* Authentication framework
-* API framework
-* Job queue implementation
-* WebSocket architecture
-* Configuration format extensions
-* Local model runtime
+- Web GUI framework
+- Primary database
+- Vector database default
+- Local embedding engine
+- Plugin architecture mechanism
+- Authentication framework
+- API framework
+- Job queue implementation
+- WebSocket architecture
+- Configuration format extensions
+- Local model runtime
 
 Technology decisions should favor mature Rust ecosystem solutions.
 
@@ -1888,16 +1888,16 @@ Technology decisions should favor mature Rust ecosystem solutions.
 
 A feature is considered complete only when:
 
-* It is implemented.
-* It has appropriate tests.
-* It has error handling.
-* It is observable through logs where appropriate.
-* It is documented.
-* It works through the intended interface(s).
-* It does not unnecessarily couple layers.
-* `cargo fmt` succeeds.
-* `cargo clippy` succeeds.
-* `cargo test` succeeds.
+- It is implemented.
+- It has appropriate tests.
+- It has error handling.
+- It is observable through logs where appropriate.
+- It is documented.
+- It works through the intended interface(s).
+- It does not unnecessarily couple layers.
+- `cargo fmt` succeeds.
+- `cargo clippy` succeeds.
+- `cargo test` succeeds.
 
 ---
 
@@ -1905,26 +1905,27 @@ A feature is considered complete only when:
 
 ## Completed
 
-* [ ] Project architecture
-* [ ] Cargo workspace
-* [ ] Core domain
-* [ ] Configuration
-* [ ] CLI
-* [ ] RAG engine
-* [ ] Document processing
-* [ ] Embedding abstraction
-* [ ] LLM abstraction
-* [ ] Vector store abstraction
-* [ ] Multi-RAG
-* [ ] TUI
-* [ ] API
-* [ ] Server mode
-* [ ] Web GUI
-* [ ] Background jobs
-* [ ] Authentication
-* [ ] Observability
-* [ ] Docker
-* [ ] Documentation
+- [ ] Project architecture
+- [ ] Cargo workspace
+- [ ] Core domain
+- [ ] Configuration
+- [ ] CLI
+- [ ] RAG engine
+- [ ] Document processing
+- [ ] Embedding abstraction
+- [ ] LLM abstraction
+- [ ] Vector store abstraction
+- [ ] Multi-RAG
+- [ ] TUI
+- [ ] API
+- [ ] Server mode
+- [ ] Web GUI
+- [ ] Background jobs
+- [ ] Authentication
+- [ ] Observability
+- [ ] Docker
+- [ ] Documentation
+
 - [ ] LLM connection manager
 - [ ] Model capability discovery
 - [ ] Model router
@@ -1961,7 +1962,6 @@ Whenever the project requirements change:
 When requesting an update to this PRD, the complete updated PRD should be returned so it can replace the previous version.
 
 ---
-
 
 # 64. Terminology
 
@@ -3722,4 +3722,3 @@ Added:
 - Agent, tool, and agency evaluation
 - Revised implementation phases
 - Revised MVP and acceptance criteria
-
