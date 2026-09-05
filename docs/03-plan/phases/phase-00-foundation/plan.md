@@ -25,6 +25,29 @@ storage, provenance, jobs, config, secrets, audit, CLI, and CI. If Phase 0 is we
 every integrity guarantee in §46/§56/§93 becomes unenforceable later.
 
 ---
+> ## ⚠️ Cross-Phase Critical-Path Note — Read Before Scheduling
+>
+> Three decisions gate downstream phases and are **not on Phase 0's own critical path**, which
+> means they are easy to silently deprioritize. Each has a long external lead time (licensing,
+> legal review, or scarce-specialist scheduling) that engineering effort cannot compress later.
+> **Kick these off in parallel with Phase 0 Sprint 0.1, regardless of Phase 0's own sequencing.**
+>
+> | Decision | ADR | Needed by | Lead time driver | Action to take now |
+> |---|---|---|---|---|
+> | Quran text dataset selection & licensing | ADR-0101 | End of Phase 0 | Licensing review, source verification, attribution terms | Open the ADR *this week*; start vendor/license correspondence in parallel with T01–T05 |
+> | Morphology dataset selection & licensing | ADR-0203 | Start of Phase 2 | Same as above, plus dataset-shape evaluation | Open the ADR as a *draft* during Phase 0; do not wait for Phase 1 to finish |
+> | Normalization rule catalog + linguist engagement | ADR-0204 | Start of Phase 2 | Sourcing a qualified Arabic linguist (contract or hire) is the true bottleneck, not the writing | Begin linguist sourcing/booking **immediately**; target 0.4 FTE engagement starting Sprint 2.0 |
+>
+> **Why this matters:** engineering delay is recoverable (add people, extend a sprint).
+> A late *decision* on any of these three is not — it stalls an entire phase's start, and for
+> the linguist in particular, qualified people are scarce and calendars book out weeks in advance.
+>
+> **Owner action:** whoever runs Phase 0 execution should, in the first standup, explicitly
+> assign an owner and a "decision-open" date for each row above — independent of whether that
+> owner is doing any other Phase 0 task. Track these three as their own swimlane on the board,
+> not as line items inside Sprint 0.1–0.5.
+
+---
 
 ## 1. Phase Objective
 
