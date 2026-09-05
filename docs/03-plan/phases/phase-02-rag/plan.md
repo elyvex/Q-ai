@@ -318,7 +318,266 @@ canonical text (immutable, Phase 1)
 Each rule has a stable `RuleId`, a version, a pure implementation, and a documented character
 mapping table. Rules are **composable and order-significant**; the ordered list *is* the profile.
 
-| RuleId | Name | Effect |
+
+````markdown
+| RuleId | Name | Effect | Notes |
+|---|---|---|---|
+| `N01` | `whitespace_collapse` | Runs of whitespace → single U+0020; trim ends | Always first. Idempotent |
+| `N02` | `strip_tatweel` | Remove U+0640 (ـ) | Pure deletion |
+| `N03` | `strip_harakat` | Remove U+064B–U+0652 (fathatan, dammatan, kasratan, fatha, damma, kasra, shadda, sukun) + U+0656, U+0657, U+0658, U+0659, U+065A–U+065F | The core "ignore diacritics" rule |
+| `N04` | `strip_quranic_marks` | Remove U+06D6–U+06ED (small high signs, sajdah sign, rub-el-hizb, waqf marks), U+06DD (end of ayah), U+0615, U+0617–U+061A, U+06E5, U+06E6 | Uthmani-specific annotation marks |
+| `N05` | `strip_superscript_alef` | Remove U+0670 (ٰ) | Separated from N03 because it changes reading, not just vowelling |
+| `N06` | `normalize_hamza_forms` | أ(U+0623) إ(U+0625) آ(U+0622) → ا(U+0627); ؤ(U+0624) → و; ئ(U+0626) → ي; ء(U+0621) → ∅ or ا (sub-option) | Configurable sub-flags; documented mapping table |
+| `N07` | `normalize_wasla` | ٱ(U+0671) → ا(U+0627) | Very common in Uthmani text |
+| `N08` | `normalize_alif_maqsura` | ى(U+0649) → ي(U+064A) | Direction fixed by ADR-0204 |
+| `N09` | `normalize_ta_marbuta` | ة(U+0629) → ه(U+0647) | Optional per §8.1 |
+| `N10` | `normalize_persian_codepoints` | ک(U+06A9)→ك; ی(U+06CC)→ي; ه(U+06C1/U+06C0)→ه; گ ژ چ پ preserved but flagged; Persian ي/ك variants folded | Critical for Persian-keyboard users |
+| `N11` | `strip_zero_width_and_bidi` | Remove U+200B–U+200F, U+202A–U+202E, U+2066–U+2069, U+FEFF | Security + correctness |
+| `N12` | `strip_punctuation` | Remove Arabic and Latin punctuation | Off in exact profiles |
+| `N13` | `fold_digits` | ٠–٩ (U+0660–0669), ۰–۹ (U+06F0–06F9) → ASCII 0–9 | For reference/number queries |
+| `N14` | `strip_pause_marks` | Remove waqf letters ۖ ۗ ۘ ۙ ۚ ۛ (subset of N04, separately addressable) | Allows "keep marks but drop waqf" |
+| `N15` | `expand_presentation_forms` | ﻻ and Arabic Presentation Forms A/B → base sequences (limited NFKC) | Never applied to canonical text |
+| `N16` | `nfc` | Canonical composition | Asserted, not silently applied, on canonical (Phase 1); applied to *queries* |
+| `N17` | `remove_spaces` | Delete all U+0020 → space-insensitive skeleton | Enables §8.3 concatenated search |
+| `N18` | `strip_definite_article` | Leading ال / لل when followed by ≥2 letters | **Heuristic**, labeled `Heuristic` in the trace |
+| `N19` | `strip_conjunction_prefix` | Leading و / ف | Heuristic |
+| `N20` | `strip_preposition_prefix` | Leading ب / ل / ك | Heuristic |
+| `N21` | `strip_pronoun_suffix` | Trailing ه، ها، هم، هن، هما، ك، كم، كن، نا، ي، ني | Heuristic |
+| `N22` | `dedupe_repeated_letters` | Collapse ≥3 identical letters to 2 | Experimental, off by default |
+| `N23` | `transliterate` | Arabic → Latin per configured standard | **Reserved, Phase 4** (ADR-0206) |
+| `N24` | `phonetic_key` | Arabic → phonetic approximation key | **Reserved, experimental**, off by default (§8.1 "where explicitly enabled") |
+
+**Rule implementation contract**
+
+```rust
+pub trait NormalizationRule: Send + Sync {
+    fn id(&self) -> RuleId;
+    fn version(&self) -> SemVer;
+    fn description(&self) -> &'static str;
+    fn kind(&self) -> RuleKind; // Deterministic | Heuristic
+
+    /// Pure. Must produce a SpanMap so offsets remain reversible (I10).
+    fn apply(&self, input: &NormalizedText) -> NormalizedText;
+
+    /// True if applying twice equals applying once. Property-tested.
+    fn is_idempotent(&self) -> bool;
+}
+
+pub enum RuleKind {
+    /// Pure code-point/whitespace transformation with a published mapping table.
+    Deterministic,
+    /// Pattern-based approximation of morphology. MUST be surfaced to the user
+    /// as a heuristic in the NormalizationTrace (§8.3 "explanation of the
+    /// normalization and segmentation used").
+    Heuristic,
+}
+```
+
+### 3.3 Normalization profiles (PRD §8.2 strictness ladder)
+
+A **profile** is an ordered, versioned rule list with a stable id. Profiles — not individual
+rules — are what users select, what indexes are built from, and what appears in
+`reproducibility.normalization_rule_set`.
+
+| Profile id | §8.2 label | Rules (in order) | Indexed? |
+|---|---|---|---|
+| `L0.exact` | Exact canonical | — (identity) | ✅ field `text_exact` |
+| `L1.ws` | Exact after whitespace normalization | N01, N11, N16 | ✅ `text_ws` |
+| `L2.marks` | Ignore Quranic marks | L1 + N04, N14 | ✅ `text_marks` |
+| `L3.diacritics` | Ignore diacritics | L2 + N03, N05, N02 | ✅ `text_bare` (primary search field) |
+| `L4.hamza` | Normalize hamza/alif | L3 + N07, N06, N08 | ✅ `text_hamza` |
+| `L5.codepoints` | Normalize Arabic/Persian code points | L4 + N10, N13, N09, N15 | ✅ `text_folded` (most permissive indexed) |
+| `L6.skeleton` | Space-insensitive skeleton | L5 + N12, N17 | ✅ separate skeleton store + n-gram index |
+| `L7.affix` | Morphological (heuristic affix) search | L5 + N18, N19, N20, N21 | ✅ `text_affix` (token-level only) |
+| `L8.fuzzy` | Fuzzy spelling search | L5 + Levenshtein at query time (N22 optional) | ⚠️ query-time only, **experimental, off by default** |
+
+Rules:
+
+- **Profiles are append-only.** Changing a profile's rule list requires a **new version**
+  (`L3.diacritics@2.0.0`), a full index rebuild, and a `doctor` drift report. Never edited in place.
+- `L7` and `L8` results are always tagged `contains_heuristic_rules = true`, and the UI/CLI must
+  render "matched using heuristic affix stripping" (§8.3).
+- A **true** morphological search (root/lemma) is *not* `L7`; it is §7's lexicon path. `L7` exists
+  only for users who type a surface word with attached particles and have no morphology dataset.
+
+### 3.4 Offset mapping (`SpanMap`)
+
+```rust
+/// Bidirectional, composable offset map. Every rule emits one; the pipeline composes them.
+pub struct SpanMap {
+    /// Monotonic segments: (derived_range, canonical_range, provenance_rule)
+    segments: Vec<SpanSegment>,
+}
+
+impl SpanMap {
+    /// Map a match in derived space back to canonical char + byte offsets (I10).
+    pub fn to_canonical(&self, derived: Range<u32>) -> CanonicalSpan;
+    pub fn to_derived(&self, canonical: Range<u32>) -> Option<Range<u32>>;
+    pub fn compose(self, next: SpanMap) -> SpanMap;
+}
+
+pub struct CanonicalSpan {
+    pub char_range: Range<u32>,   // grapheme-cluster indices into ayah.text
+    pub byte_range: Range<u32>,
+    pub token_range: Range<u16>,  // inclusive token positions touched
+    pub exact: bool,              // false if the match straddles a deleted region ambiguously
+}
+```
+
+**Why this matters:** without `SpanMap`, a "found it" result cannot be highlighted in the
+canonical Uthmani text, cannot be cited to a character range, and cannot be re-verified by the
+citation resolver. `SpanMap` is the single most heavily property-tested component of Phase 2.
+
+**Property tests (all must hold for every ayah × every profile):**
+
+1. `to_canonical(to_derived(r)) ⊇ r` for every canonical range `r` that survives normalization.
+2. `to_canonical` output ranges are within `0..ayah.text.len()` and land on grapheme boundaries.
+3. Composition is associative: `(a∘b)∘c == a∘(b∘c)`.
+4. For identity profile `L0`, `to_canonical` is the identity map.
+5. Every derived match's canonical span, when sliced from canonical text and re-normalized with
+   the same profile, contains the matched derived substring.
+
+### 3.5 Derived forms (PRD §8.1)
+
+Stored per **token** and per **ayah**. Surah-level forms are computed on demand (concatenating
+ayah forms) to keep storage bounded.
+
+| Form | Level | Profile | Storage |
+|---|---|---|---|
+| `surface_uthmani` | token, ayah | `L0` (canonical, Phase 1) | already in Phase 1 tables |
+| `simple` | token, ayah | `L2.marks` | `quran_*_forms` |
+| `bare` | token, ayah | `L3.diacritics` | `quran_*_forms` |
+| `hamza_folded` | token, ayah | `L4.hamza` | `quran_*_forms` |
+| `folded` | token, ayah | `L5.codepoints` | `quran_*_forms` |
+| `skeleton` | ayah, surah(virtual) | `L6.skeleton` | `quran_skeletons` + n-gram index |
+| `affix_stripped` | token | `L7.affix` | `quran_token_forms` |
+| `lemma_form` | token | — (lexicon, §7) | `quran_token_analyses` |
+| `root_form` | token | — (lexicon, §7) | `quran_token_analyses` |
+| `stem_form` | token | — (lexicon, §7) | `quran_token_analyses` |
+| `transliteration` | token, ayah | `L23` reserved | column reserved, NULL in Phase 2 |
+| `phonetic` | token | `L24` reserved | column reserved, NULL in Phase 2 |
+
+Every derived-form row records `rule_set_id`, `rule_set_version`, `corpus_generation`, and a
+`provenance_id` at Layer D (§6.4) with `Attribution::Computational { algorithm: "normalizer",
+version, parameters_hash }`.
+
+---
+
+## 4. Full-Text Index Architecture
+
+### 4.1 Abstraction
+
+```rust
+#[async_trait]
+pub trait FullTextIndex: Send + Sync {
+    fn backend(&self) -> FtsBackend;                 // Tantivy | Fts5 | OpenSearch
+    fn manifest(&self) -> IndexManifest;             // generation + versions (I14)
+
+    async fn create(&self, schema: &FtsSchema) -> Result<()>;
+    async fn add_batch(&self, docs: Vec<FtsDoc>) -> Result<()>;
+    async fn commit(&self) -> Result<CommitStamp>;
+    async fn search(&self, q: &FtsQuery, opts: &SearchOpts) -> Result<FtsResults>;
+    async fn count(&self, q: &FtsQuery) -> Result<u64>;
+    async fn delete_by_generation(&self, gen: u64) -> Result<u64>;
+    async fn stats(&self) -> Result<FtsStats>;
+    async fn verify(&self) -> Result<FtsIntegrityReport>;
+}
+
+pub struct IndexManifest {
+    pub index_id: String,                    // "quran.ayah.v1"
+    pub schema_version: u32,
+    pub corpus_generation: u64,              // from Phase 1
+    pub edition_id: EditionId,
+    pub edition_version: SemVer,
+    pub rule_set_versions: BTreeMap<ProfileId, SemVer>,
+    pub tokenizer_version: SemVer,
+    pub morphology_dataset_versions: BTreeMap<SourceId, SemVer>,
+    pub built_at: Timestamp,
+    pub doc_count: u64,
+    pub content_hash: ContentHash,           // over the index manifest, for drift detection
+}
+```
+
+### 4.2 Tantivy implementation (ADR-0201)
+
+**Two indexes** (deliberately not one):
+
+| Index | Doc granularity | Purpose |
 |---|---|---|
-| `N01` | `whitespace_collapse` | Collapse runs of whitespace to a single U+0020; trim |
-| `N02` | `strip
+| `quran.ayah.v1` | one doc per ayah | phrase, proximity, BM25, regex, ayah-level retrieval |
+| `quran.token.v1` | one doc per token | affix/root/lemma joins, exact form counting, word-level highlight |
+
+**`quran.ayah.v1` schema**
+
+```rust
+// Stored fields
+field!("edition_id",  STRING | STORED);
+field!("surah",       U64    | STORED | INDEXED | FAST);
+field!("ayah",        U64    | STORED | INDEXED | FAST);
+field!("global_index",U64    | STORED | INDEXED | FAST);
+field!("juz",         U64    | INDEXED | FAST);
+field!("page",        U64    | INDEXED | FAST);
+field!("revelation",  STRING | INDEXED);          // makki|madani
+field!("generation",  U64    | INDEXED | FAST);   // corpus_generation, for atomic swap
+
+// Text fields — one per indexed profile, each with positions for phrase queries
+field!("text_exact",  text_opts("ar_exact",  IndexRecordOption::WithFreqsAndPositions) | STORED);
+field!("text_ws",     text_opts("ar_ws",     …));
+field!("text_marks",  text_opts("ar_marks",  …));
+field!("text_bare",   text_opts("ar_bare",   …));   // primary
+field!("text_hamza",  text_opts("ar_hamza",  …));
+field!("text_folded", text_opts("ar_folded", …));
+field!("text_affix",  text_opts("ar_affix",  …));
+
+// Lexicon fields (populated from §7 when a morphology dataset is active)
+field!("roots",       text_opts("keyword", WithFreqsAndPositions));
+field!("lemmas",      text_opts("keyword", WithFreqsAndPositions));
+field!("stems",       text_opts("keyword", WithFreqsAndPositions));
+field!("pos_tags",    text_opts("keyword", WithFreqs));
+field!("patterns",    text_opts("keyword", WithFreqs));
+```
+
+**Custom tokenizers** (`quran-search::tokenizer`): each `ar_*` tokenizer is
+`WhitespaceSplitter → ProfileNormalizer(profile) → TokenEmitter(with byte offsets)`.
+Critically, the tokenizer **reuses the same `NormalizationPipeline`** as the query path, so a
+query and a document can never disagree. This is enforced by a test that normalizes 5,000
+random ayah substrings through both paths and asserts equality.
+
+**Atomic index activation (mirrors Phase 1 §D1.3):**
+
+```text
+build into  <data_dir>/index/quran.ayah.v1/gen-<N>/     (staging dir)
+verify      doc_count, sampled round-trip, manifest hash
+flip        write index_pointers row (index_id -> gen-N) in ONE SQLite tx
+retain      previous generation until the next successful build (single-step rollback)
+GC          `qai index gc` removes generations older than the retained one
+```
+
+A partially built index can never serve queries (I5 extended to indexes).
+
+### 4.3 Query model
+
+```rust
+pub enum FtsQuery {
+    Term      { field: FieldId, term: String },
+    Phrase    { field: FieldId, terms: Vec<String>, slop: u32, ordered: bool },
+    Boolean   { must: Vec<FtsQuery>, should: Vec<FtsQuery>, must_not: Vec<FtsQuery> },
+    Range     { field: FieldId, lo: Option<i64>, hi: Option<i64> },
+    Regex     { field: FieldId, pattern: String },   // bounded; see I16
+    All,
+}
+
+pub struct SearchOpts {
+    pub limit: u32,                 // hard cap 1000 (§40 memory-bounded)
+    pub offset: u32,
+    pub filters: Vec<Filter>,       // surah, juz, page, revelation place, range
+    pub order: ResultOrder,         // CanonicalOrder | Relevance | Frequency
+    pub highlight: bool,
+    pub timeout: Duration,          // default 2 s, hard ceiling 10 s
+    pub explain: bool,              // include per-hit scoring breakdown
+}
+```
+
+**Regex safety (I16):** patterns are compiled with the `regex-automata` DFA engine (no
+backtracking ⇒ no catastrophic blowup), with `size_limit` = 1 MiB, `dfa_size_limit` = 4 MiB,
+max pattern length 512 chars, and a wall-clock bud
