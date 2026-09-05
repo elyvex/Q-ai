@@ -581,3 +581,926 @@ pub struct SearchOpts {
 **Regex safety (I16):** patterns are compiled with the `regex-automata` DFA engine (no
 backtracking ⇒ no catastrophic blowup), with `size_limit` = 1 MiB, `dfa_size_limit` = 4 MiB,
 max pattern length 512 chars, and a wall-clock bud
+Continuing `docs/plans/PHASE-2-QURAN-SEARCH-AND-LINGUISTICS.md` from §4.3.
+
+````markdown
+**Regex safety (I16):** patterns compile with the `regex-automata` DFA engine (no backtracking
+⇒ no catastrophic blowup), with `size_limit = 1 MiB`, `dfa_size_limit = 4 MiB`, max pattern
+length 512 chars, and a wall-clock budget of 3 s enforced by a cancellation token checked every
+4,096 documents. Additional guards:
+
+- Patterns are only allowed against **indexed normalized fields**, never against a raw scan of
+  canonical text.
+- `.*` / `.+` at pattern start is rejected with an actionable error suggesting an anchored
+  alternative (prevents full-index term-dictionary walks).
+- Every regex search records `terms_examined` and `documents_scanned` in the result trace, and a
+  soft warning is emitted above configurable thresholds.
+- Regex search is rate-limited per principal (default 10/min) and is denied for agent tool
+  calls unless the agent's policy explicitly grants `quran.search_regex`.
+
+### 4.4 Concatenated / space-insensitive search (PRD §8.3)
+
+The single most distinctive Phase-2 feature and the one with the worst naive complexity.
+Design: **skeleton + trigram candidate generation + verified substring match**.
+
+```text
+Query "بسمالله"
+   │
+   ├─ normalize with L6.skeleton  →  "بسمالله"   (already spaceless)
+   │
+   ├─ generate character trigrams → [بسم, سما, مال, الل, لله]
+   │
+   ├─ probe skeleton trigram index (ayah-level, then surah-window level)
+   │      → candidate set of ayah ids (and cross-ayah windows)
+   │
+   ├─ for each candidate: exact substring search in its skeleton string
+   │      (memchr/two-way; skeletons are short)
+   │
+   └─ for each hit: SpanMap → canonical char range → token range
+          → verify by re-normalizing the canonical slice
+          → emit match with NormalizationTrace + segmentation explanation
+```
+
+**Cross-token and cross-ayah matching**
+
+Per §8.3 ("Search across token boundaries"), the skeleton store holds three levels:
+
+| Level | Unit | Purpose |
+|---|---|---|
+| `ayah` | one skeleton per ayah | most queries |
+| `window` | sliding window of 3 consecutive ayahs, stride 1 | phrases straddling an ayah boundary |
+| `surah` | virtual, built on demand from ayah skeletons | rare very long queries |
+
+Window matches are **deduplicated** against ayah matches and are labeled
+`spans_ayah_boundary = true` so the UI can show the reader that a match crosses a verse break —
+never silently presenting a cross-verse fragment as one verse (principle 1, §13.4).
+
+**Segmentation explanation (required by §8.3)**
+
+Every concatenated match returns:
+
+```json
+{
+  "reference": "quran:hafs-uthmani@1.0.0:1:1",
+  "canonical_text": "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ",
+  "matched_canonical_char_range": [0, 12],
+  "matched_tokens": [1, 2],
+  "match_explanation": {
+    "profile": "L6.skeleton@1.0.0",
+    "rules_applied": ["N01","N11","N16","N04","N14","N03","N05","N02","N07","N06","N08","N10","N13","N09","N15","N12","N17"],
+    "contains_heuristic_rules": false,
+    "query_skeleton": "بسمالله",
+    "matched_skeleton": "بسمالله",
+    "segmentation": [
+      { "query_part": "بسم",  "canonical_token": 1, "canonical_surface": "بِسْمِ" },
+      { "query_part": "الله", "canonical_token": 2, "canonical_surface": "ٱللَّهِ" }
+    ],
+    "spans_ayah_boundary": false,
+    "spans_token_boundary": true
+  }
+}
+```
+
+**Performance target:** p99 < 150 ms for a 3–20 char query over the full corpus, cold cache.
+Achieved because the ayah skeleton corpus is ~350 KB of text total; the trigram index is a
+compact posting list held in `redb` or a Tantivy keyword field.
+
+---
+
+## 5. Search Tools (PRD §11.1)
+
+All five are `side_effect_class = ReadOnly` (§29), conform to the Phase-1 `ToolResult` contract
+(§12), and finally populate the `normalization_rules` field that Phase 1 left empty.
+
+### 5.1 `quran.search_exact`
+
+```jsonc
+// input
+{
+  "text": "ٱلرَّحْمَٰنِ",
+  "edition": "hafs-uthmani@1.0.0",     // optional; defaults to Active
+  "field": "text_exact",               // text_exact | text_ws
+  "match": "substring",                // substring | whole_token | ayah_prefix
+  "filters": { "surah": [1,2,3], "juz": null, "revelation_place": null },
+  "limit": 100, "offset": 0,
+  "order": "canonical"                 // canonical | relevance
+}
+```
+
+Searches canonical surface text with **no linguistic expansion** (§11.1). Zero normalization
+beyond the explicitly requested `L0`/`L1` profile. If the query contains characters absent from
+the edition (e.g. a Persian `ک`), the tool returns zero results **plus a warning** suggesting
+`quran.search_normalized` with `L5.codepoints` — it never silently folds.
+
+### 5.2 `quran.search_normalized`
+
+```jsonc
+{
+  "text": "الرحمن",
+  "profile": "L3.diacritics",          // or explicit rules[] for full control
+  "rules": null,                       // e.g. ["N01","N03","N06"] overrides profile
+  "match": "whole_token",
+  "filters": {...}, "limit": 100,
+  "explain": true
+}
+```
+
+- Either `profile` **or** `rules` (never both). If `rules` are given, the effective set is
+  hashed into an ad-hoc profile id `adhoc:<sha256[..12]>` and the query is served by
+  normalizing candidates at query time from the closest superset index, then verifying.
+- `explain: true` returns the full `NormalizationTrace` (§3.4) plus per-hit BM25 breakdown.
+
+### 5.3 `quran.search_concatenated`
+
+```jsonc
+{
+  "text": "بسمالله",
+  "allow_cross_ayah": true,
+  "max_ayah_span": 3,
+  "filters": {...}, "limit": 50
+}
+```
+
+Per §4.4. Always returns `segmentation` and `spans_*` flags.
+
+### 5.4 `quran.search_phrase`
+
+```jsonc
+{
+  "text": "الحمد لله رب العالمين",
+  "profile": "L3.diacritics",
+  "mode": "ordered_exact",   // ordered_exact | ordered_near | unordered_near
+  "slop": 0,                 // max intervening tokens for *_near
+  "filters": {...}
+}
+```
+
+Backed by Tantivy positional phrase queries. `unordered_near` becomes a boolean-AND with a
+post-filter enforcing a token-distance window computed from stored positions (§11.1).
+
+### 5.5 `quran.search_regex`
+
+```jsonc
+{
+  "pattern": "^ا?ل?رحم",
+  "field": "text_bare",
+  "limit": 100,
+  "timeout_ms": 3000
+}
+```
+
+Guarded per I16. Result includes `terms_examined`, `documents_scanned`, `truncated: bool`.
+
+### 5.6 Unified result shape
+
+```rust
+pub struct SearchHit {
+    pub reference: String,                 // pinned canonical reference
+    pub deep_link: String,
+    pub quotation: QuranQuotation,         // from Phase 1; carries edition + hash
+    pub canonical_span: CanonicalSpan,     // I10
+    pub matched_tokens: Vec<u16>,
+    pub score: Option<f32>,                // BM25; None for canonical-order tools
+    pub score_explain: Option<ScoreExplain>,
+    pub explanation: NormalizationTrace,   // I9 — no constructor without it
+    pub warnings: Vec<Warning>,
+}
+```
+
+`ToolResult<Vec<SearchHit>>` additionally carries `total_matches` (exact count, computed by a
+separate `count` call — never estimated), `truncated`, and the §12 reproducibility block whose
+`normalization_rule_set` is now populated.
+
+---
+
+## 6. Lexicon & Morphology (PRD §9.1, §9.2, §11.2)
+
+### 6.1 Multi-dataset, multi-analysis model (I11)
+
+```rust
+pub struct MorphologyDataset {
+    pub source_id: SourceId,
+    pub slug: String,                  // "quranic-corpus", "camel-morph", …
+    pub name: String,
+    pub version: SemVer,
+    pub source_version_id: SourceVersionId,
+    pub license: LicenseRecord,
+    pub trust_level: TrustLevel,        // typically ScholarReviewed or PublisherVerified
+    pub attribution_display: String,    // exact string shown in the UI (ADR-0203)
+    pub aligned_edition_id: EditionId,
+    pub alignment_method: AlignmentMethod,
+    pub coverage: Coverage,             // tokens_covered / tokens_total, per-surah breakdown
+    pub root_convention: RootConvention,
+    pub provides_multiple_analyses: bool,
+    pub status: DatasetStatus,
+}
+
+pub enum AlignmentMethod {
+    /// Dataset uses the same (surah, ayah, position) keys — verified 1:1.
+    DirectKey,
+    /// Dataset tokenization differs; an explicit, auditable alignment table maps
+    /// dataset tokens -> Phase-1 token positions. NEVER re-tokenizes canonical text.
+    AlignmentTable { table_source_version: SourceVersionId, unmatched_count: u64 },
+}
+
+pub struct MorphologicalAnalysis {
+    pub id: AnalysisId,
+    pub edition_id: EditionId,
+    pub surah: SurahNumber, pub ayah: AyahNumber, pub position: u16,
+    pub dataset_id: SourceId,
+    pub analysis_index: u16,           // 0..n for multiple competing analyses
+    pub segments: Vec<Morpheme>,       // prefixes + stem + suffixes, in order
+    pub lemma_id: Option<LemmaId>,
+    pub root_id: Option<RootId>,
+    pub stem: Option<String>,
+    pub pattern: Option<String>,       // e.g. فَعَلَ / فَاعِل
+    pub features: MorphFeatures,       // POS, person, gender, number, case, mood, voice,
+                                       // aspect, state, definiteness, verb_form (I–X)
+    pub dependency: Option<DependencyRelation>,
+    pub confidence: Option<Confidence>,
+    pub verification_status: VerificationStatus,
+    pub provenance_id: ProvenanceId,   // Layer B if dataset-supplied, D if computed
+}
+
+pub struct Morpheme {
+    pub index: u16,
+    pub kind: MorphemeKind,            // Prefix | Stem | Suffix
+    pub surface: String,               // as it appears in the canonical token
+    pub tag: String,                   // dataset-native tag, preserved verbatim
+    pub normalized_tag: Option<UnifiedTag>, // mapped to Q-ai's unified tagset (Layer D)
+    pub char_range: Option<Range<u32>>,     // within the token surface, when supplied
+}
+```
+
+**There is no `is_correct`, `is_primary`, or `selected` column** (I11). Selection is a *query-time
+policy*:
+
+```rust
+pub enum AnalysisPolicy {
+    /// Return every analysis from every active dataset (default for research views).
+    All,
+    /// Prefer a configured dataset, but always report that others exist.
+    PreferDataset { dataset: SourceId },
+    /// Only analyses from a specific dataset.
+    OnlyDataset { dataset: SourceId },
+    /// Only human-verified analyses.
+    VerifiedOnly,
+}
+```
+
+Every response containing analyses includes
+`analysis_sources: [{dataset, version, attribution_display, analyses_returned, analyses_suppressed}]`
+so suppression is always visible (§9.2 "avoid silently selecting one as unquestionably correct").
+
+### 6.2 Root, lemma, stem lexicons
+
+```rust
+pub struct Root {
+    pub id: RootId,
+    pub letters: String,               // normalized per RootConvention, e.g. "رحم"
+    pub letters_spaced: String,        // display form "ر ح م"
+    pub letter_count: u8,
+    pub dataset_id: SourceId,          // roots are dataset-scoped; same letters across
+                                       // datasets are linked, not merged
+    pub canonical_root_id: Option<RootId>, // cross-dataset unification (Layer D, reviewable)
+    pub token_count: u32,              // occurrences in this edition
+    pub lemma_count: u32,
+    pub provenance_id: ProvenanceId,
+}
+
+pub struct Lemma {
+    pub id: LemmaId,
+    pub form: String,
+    pub form_bare: String,
+    pub root_id: Option<RootId>,
+    pub pos: Option<UnifiedTag>,
+    pub gloss: Option<String>,         // attributed, optional
+    pub dataset_id: SourceId,
+    pub token_count: u32,
+    pub provenance_id: ProvenanceId,
+}
+```
+
+**Cross-dataset root unification is a Layer D suggestion, queued for review** (§10.6 pattern
+from Phase 0's `review_queue`). Two datasets that spell a root differently are *linked with a
+confidence*, never merged. This prevents the exact failure mode PRD §9.2 warns about.
+
+### 6.3 Import pipeline (`quran.morphology.import` job)
+
+```text
+ 1  claim source version (Downloaded|Staged)               [checkpoint: claimed]
+ 2  verify hashes                                          [checkpoint: hashed]
+ 3  detect format, select adapter                          [checkpoint: adapter]
+ 4  parse → intermediate morphology format                 [checkpoint: parsed]
+ 5  ALIGN to Phase-1 tokens (DirectKey or AlignmentTable)   [checkpoint: aligned]
+ 6  validate (MV-001 … MV-018, §6.4)                        [checkpoint: validated]
+ 7  build root / lemma / stem lexicons                      [checkpoint: lexicons]
+ 8  write Layer B/D provenance rows                         [checkpoint: provenance]
+ 9  stage into morph_stg_* tables                           [checkpoint: staged]
+10  coverage report + unmatched-token report                [checkpoint: coverage]
+11  diff vs previous dataset version                        [checkpoint: diffed]
+12  → Staged; approval request                              [terminal]
+```
+
+Activation (`qai quran morphology activate <dataset>@<v>`) is a separate human-approved,
+single-transaction pointer flip that also **enqueues** an FTS rebuild for the `roots`, `lemmas`,
+`stems`, `pos_tags`, `patterns` fields — never mutating them in place.
+
+**Alignment is the highest-risk step.** Rules:
+
+- `DirectKey` requires a 100 % key match; any mismatch is `Fatal`.
+- `AlignmentTable` requires the table to be a declared source file with its own hash; unmatched
+  tokens are reported per surah and gate approval above a configurable threshold (default 0.5 %).
+- Under **no circumstance** may alignment modify `quran_tokens` (I8, Phase-1 I1).
+
+### 6.4 Morphology validation rules
+
+| Rule | Check | Severity |
+|---|---|---|
+| MV-001 | Every analysis references an existing `(edition, surah, ayah, position)` | Fatal |
+| MV-002 | No analysis references a token outside the active edition | Fatal |
+| MV-003 | `analysis_index` values per token are dense `0..n` | Fatal |
+| MV-004 | Morpheme surfaces concatenate to the token surface (modulo declared normalization) | Error |
+| MV-005 | Exactly one `Stem` morpheme per analysis (or documented exception list) | Error |
+| MV-006 | Morpheme `char_range`s, when supplied, are non-overlapping and within the token | Error |
+| MV-007 | Every `root_id` / `lemma_id` resolves within the same dataset | Fatal |
+| MV-008 | Root letters conform to the declared `RootConvention` | Error |
+| MV-009 | POS tags map to the unified tagset, or are recorded as unmapped with a warning | Warning |
+| MV-010 | Feature combinations are internally consistent (e.g. no `mood` on a noun) | Warning |
+| MV-011 | Coverage ≥ declared threshold; per-surah gaps reported | Error |
+| MV-012 | Dataset version, license, and attribution string are all present and non-empty | Fatal |
+| MV-013 | Every analysis row has a provenance row at Layer B or D (never A) | Fatal |
+| MV-014 | Computationally derived analyses carry algorithm + version + confidence | Fatal |
+| MV-015 | No analysis is `human_verified` without a reviewer | Fatal |
+| MV-016 | Alignment unmatched-token ratio ≤ threshold | Error |
+| MV-017 | Round-trip: staged rows re-serialize to a hash-stable intermediate document | Fatal |
+| MV-018 | **Canonical tables are byte-identical before and after the import** (QV-028 re-run) | Fatal |
+
+MV-018 is the mechanical guarantee of I8 and is re-run after *every* index or lexicon build.
+
+### 6.5 Morphology tools
+
+**`quran.morphology`** — token segmentation and all analyses.
+
+```jsonc
+// input
+{ "reference": "1:1:1", "policy": "all", "include_features": true, "include_dependency": false }
+```
+
+Returns, per analysis: dataset attribution, segmentation with per-morpheme surfaces and ranges,
+lemma, root, pattern, features, confidence, verification status. Plus a top-level
+`analyses_by_dataset` summary and `disagreements` array listing fields where datasets differ
+(§9.2 comparison support).
+
+**`quran.morphology_compare`** — explicit side-by-side comparison (§11.2).
+
+```jsonc
+{ "reference": "2:255:5", "datasets": ["quranic-corpus","camel-morph"], "fields": ["root","lemma","pos","pattern"] }
+```
+
+Output is a matrix with an `agreement` verdict per field
+(`Identical | CompatibleVariant | Conflicting | OnlyInOne`), **never a resolution**. Per PRD
+§21.4 and §92:21, conflicting analyses are presented side-by-side with attribution; the tool has
+no "winner" field and no synthesis mode.
+
+**`quran.root_search`** (§11.2)
+
+```jsonc
+{ "root": "ر ح م", "dataset": null, "group_by": "lemma",
+  "include_tokens": true, "filters": {...}, "limit": 500 }
+```
+
+Accepts spaced, unspaced, or partially normalized root input; resolves through the dataset's
+`RootConvention` and reports which convention/dataset matched. Returns occurrence counts, the
+lemma breakdown, and (optionally) every token occurrence with canonical references.
+
+**`quran.lemma_search`** — all inflections of a lemma, grouped by surface form with counts.
+
+**`quran.pattern_search`** (§11.2) — search morphological patterns / verb forms
+(`فَعَّلَ`, form II, active participle, etc.). Requires a dataset supplying `pattern` or
+`verb_form`; otherwise returns a typed "capability unavailable" error naming the missing field —
+never a guess.
+
+**`quran.affix_search`** (§11.2) — search by prefix, suffix, attached pronoun, conjunction,
+article, or preposition. Two backends, and the result always says which was used:
+
+| Backend | Condition | Label |
+|---|---|---|
+| Dataset morphemes | a morphology dataset is active | `Attested (dataset: …)` |
+| `L7.affix` heuristic | no dataset, or user requests it | `Heuristic (pattern-based)` |
+
+---
+
+## 7. Word Family Engine (PRD §9.3, §11.2)
+
+### 7.1 Relation taxonomy (I13)
+
+```rust
+pub enum FamilyRelation {
+    /// Identical canonical surface form.
+    SameExactForm,
+    /// Same normalized form under a stated profile.
+    SameNormalizedForm { profile: ProfileId },
+    /// Same lemma per a named dataset.
+    SameLemma { dataset: SourceId },
+    /// Same stem per a named dataset.
+    SameStem { dataset: SourceId },
+    /// Same root per a named dataset.
+    SameRoot { dataset: SourceId },
+    /// Derivational relation supplied by a dataset (e.g. verbal noun of a verb).
+    DerivedForm { dataset: SourceId, derivation: DerivationKind },
+    /// Inflectional variant (number, gender, case, person, tense).
+    InflectionalVariant { dataset: SourceId, differing_features: Vec<FeatureName> },
+    /// Affix-only difference (prefix/suffix attachment).
+    AffixVariant { added: Vec<String>, removed: Vec<String> },
+    /// Algorithmically suggested; requires confidence; Layer D.
+    ComputationalSuggestion { algorithm: String, version: SemVer, confidence: Confidence },
+    /// A human reviewer explicitly affirmed this relation.
+    ScholarVerified { reviewer: PrincipalId, note: Option<String>, reviewed_at: Timestamp },
+}
+
+pub enum DerivationKind {
+    VerbalNoun, ActiveParticiple, PassiveParticiple, Nomen, Adjective,
+    Diminutive, Elative, PlaceNoun, TimeNoun, InstrumentNoun, Other(String),
+}
+```
+
+Additional axes required by §9.3 and surfaced as flags on each family member:
+`singular_plural_relation`, `masculine_feminine_relation`, `verb_form` (I–X),
+`active_passive_relation`.
+
+**Hard rule:** the UI/CLI must group members **by relation class**, and every
+`ComputationalSuggestion` renders with an explicit "computationally suggested — not verified
+scholarship" label (§6.5, §13.4, §30). A `ComputationalSuggestion` becomes `ScholarVerified`
+only through the Phase-0 `review_queue` with evidence displayed (§10.6).
+
+### 7.2 `quran.word_family`
+
+```jsonc
+// input
+{
+  "input": "رحمة",                    // surface word, or {"root":"رحم"}
+  Continuing `docs/plans/PHASE-2-QURAN-SEARCH-AND-LINGUISTICS.md` from §7.2.
+
+````markdown
+```jsonc
+// input
+{
+  "input": "رحمة",                       // surface word, OR {"root":"رحم"}, OR {"reference":"1:1:3"}
+  "resolve_via": "auto",                 // auto | surface | lemma | root | reference
+  "dataset": null,                       // null = all active datasets
+  "include_relations": [
+    "same_exact_form","same_lemma","same_stem","same_root",
+    "derived_form","inflectional_variant","affix_variant"
+  ],
+  "include_computational_suggestions": false,   // default FALSE (opt-in, §6.5)
+  "min_confidence": 0.7,                 // applies to suggestions only
+  "include_occurrences": true,
+  "max_members": 500,
+  "group_by": "relation"                 // relation | lemma | form | frequency
+}
+```
+
+**Resolution algorithm (fully deterministic, no LLM):**
+
+```text
+input
+  │
+  ├─ if reference → look up token → analyses (per AnalysisPolicy)
+  ├─ if root      → resolve root through RootConvention of each active dataset
+  └─ if surface   → normalize with L5.codepoints → exact-form lookup
+                     ├─ found → collect its analyses
+                     └─ not found → try L7.affix → report "resolved via heuristic affix stripping"
+                                    └─ still not found → typed error listing near-miss candidates
+  │
+  ▼
+for each resolved (root_id, lemma_id, stem) per dataset:
+  ├─ SameRoot        : SELECT tokens WHERE root_id = ?
+  ├─ SameLemma       : SELECT tokens WHERE lemma_id = ?
+  ├─ SameStem        : SELECT tokens WHERE stem = ?
+  ├─ SameExactForm   : SELECT tokens WHERE surface = ?
+  ├─ DerivedForm     : dataset-supplied derivation edges (Layer B)
+  ├─ InflectionalVariant : same lemma, differing feature vector → diff features
+  └─ AffixVariant    : same stem, differing prefix/suffix morphemes
+  │
+  ▼
+group, dedupe by (surface, dataset-agnostic), attach counts + first/last occurrence
+  │
+  ▼
+FamilyResult with per-member relation, dataset attribution, provenance, confidence
+```
+
+**Output shape**
+
+```jsonc
+{
+  "query": { "input": "رحمة", "resolved_as": { "surface": "رَحْمَة", "reference": "2:64:12" } },
+  "resolution": {
+    "method": "surface_exact",
+    "normalization_profile": "L5.codepoints@1.0.0",
+    "used_heuristic": false
+  },
+  "roots": [
+    { "letters": "رحم", "letters_spaced": "ر ح م",
+      "dataset": "quranic-corpus@1.0.0", "token_count": 339, "lemma_count": 12 }
+  ],
+  "groups": [
+    {
+      "relation": "same_root",
+      "relation_label": "Same root (dataset: Quranic Corpus 1.0.0)",
+      "evidence_class": "dataset_supplied",
+      "members": [
+        { "surface": "الرَّحْمَٰن", "surface_bare": "الرحمن", "lemma": "رَحْمَٰن",
+          "count": 57, "first": "quran:hafs-uthmani@1.0.0:1:1",
+          "last": "quran:hafs-uthmani@1.0.0:78:38",
+          "verb_form": null, "derivation": "adjective",
+          "provenance_id": "…", "verification_status": "unverified" }
+      ]
+    },
+    {
+      "relation": "computational_suggestion",
+      "relation_label": "Computationally suggested — not verified scholarship",
+      "evidence_class": "computational",
+      "display_warning": "These relations were generated algorithmically and have not been reviewed by a scholar.",
+      "members": [ /* only present when include_computational_suggestions = true */ ]
+    }
+  ],
+  "analysis_sources": [
+    { "dataset": "quranic-corpus", "version": "1.0.0",
+      "attribution_display": "Quranic Arabic Corpus (v1.0.0)",
+      "analyses_returned": 4, "analyses_suppressed": 0 }
+  ],
+  "disagreements": [
+    { "field": "root", "reference": "2:64:12",
+      "values": [ { "dataset": "quranic-corpus", "value": "رحم" },
+                  { "dataset": "camel-morph",    "value": "رحم" } ],
+      "verdict": "identical" }
+  ],
+  "warnings": []
+}
+```
+
+**Explainability requirement (§9.3):** every member carries an `explanation` string built from
+the relation type + dataset + differing features, e.g.
+*"Same lemma رَحِمَ (Quranic Corpus 1.0.0); differs in person (3rd → 1st) and number (sg → pl)."*
+No member may be returned without one — enforced by the type having no default constructor.
+
+---
+
+## 8. Frequency, Distribution & Discovery Tools (PRD §11.3, §11.7)
+
+All tools in this section are **deterministic, LLM-free, and reproducible**. Each returns an
+explicit `CountingRules` block (I15) so a number can never be misread.
+
+### 8.1 `CountingRules` (required in every numeric output)
+
+```rust
+pub struct CountingRules {
+    pub unit: CountUnit,                  // Token | Form | Lemma | Root | Ayah | Surah | Character
+    pub normalization_profile: Option<ProfileId>,
+    pub dataset: Option<SourceId>,        // when counting lemmas/roots
+    pub analysis_policy: AnalysisPolicy,  // how multi-analysis tokens were counted
+    pub multi_analysis_handling: MultiAnalysisHandling,
+    pub includes_pause_marks: bool,
+    pub includes_basmala: BasmalaCounting, // Always | Never | PerEditionPolicy
+    pub scope: CountScope,                // WholeEdition | Surahs(..) | Juz(..) | Range(..)
+    pub edition: EditionRef,
+    pub corpus_generation: u64,
+    pub definition_note: String,          // human-readable exact definition
+}
+
+pub enum MultiAnalysisHandling {
+    /// A token with 2 analyses whose roots differ contributes 1 to EACH root. Reported.
+    CountOncePerAnalysis,
+    /// Token counted once; ambiguous tokens listed separately.
+    CountOncePreferredDataset { dataset: SourceId, ambiguous_tokens: u32 },
+    /// Only tokens with a single unambiguous analysis are counted.
+    UnambiguousOnly { excluded_tokens: u32 },
+}
+```
+
+**This is the guard against numerology (§11.6).** Two "counts of the word X" that differ are
+almost always different `CountingRules`; Q-ai makes that visible instead of arguing.
+
+### 8.2 `quran.frequency`
+
+```jsonc
+{ "target": { "kind": "root", "value": "رحم" },     // form | lemma | root | phrase | pattern
+  "profile": "L3.diacritics",
+  "dataset": "quranic-corpus",
+  "multi_analysis": "count_once_per_analysis",
+  "scope": { "kind": "whole_edition" },
+  "breakdown": ["surah"] }
+```
+
+Returns total, per-breakdown counts, `counting_rules`, and `ambiguous_tokens` detail.
+Counts are **exact** (never estimated) and computed by SQL aggregation over the lexicon join,
+not from FTS term frequencies (which can drift with tokenizer versions).
+
+### 8.3 `quran.distribution`
+
+Distribution by surah, revelation place (Makki/Madani — **Layer B/C metadata, attributed**), juz,
+hizb, page, or a custom ayah-range partition. Returns absolute counts, normalized rates
+(per 1,000 tokens), and the metadata provenance for the partition scheme.
+
+Per §6.2/§9 the revelation-place classification is *not canonical*; the output carries
+`partition_provenance` naming the dataset/scholar for that classification, and a warning when
+sources disagree.
+
+### 8.4 `quran.cooccurrence`
+
+```jsonc
+{ "a": { "kind": "root", "value": "رحم" },
+  "b": { "kind": "root", "value": "غفر" },
+  "window": { "unit": "token", "size": 10 },   // token | ayah | segment
+  "ordered": false,
+  "scope": {...} }
+```
+
+Windows are computed over `global_token_index` / `global_ayah_index` from Phase 1 — which is
+exactly why those columns exist. Cross-ayah windows are allowed and flagged.
+
+### 8.5 `quran.collocation`
+
+Ranks statistically significant neighbours using **PMI, log-likelihood ratio, and t-score**,
+reporting all three plus raw counts. The tool **never** claims significance without stating the
+measure, the window, and the counting rules. A minimum-frequency floor (default 3) prevents
+rank-1 artifacts, and the floor is reported.
+
+### 8.6 `quran.first_last_occurrence`
+
+Returns first, last, and the full ordered occurrence list in canonical order, each with pinned
+references and `global_ayah_index` — enabling reproducible ordering across editions.
+
+### 8.7 `quran.interval_analysis`
+
+Distances between consecutive occurrences, measured in ayahs, tokens, or global indices, with
+min/max/mean/median/stddev. Output includes a fixed disclaimer:
+
+> *These are mechanical distance measurements under the stated counting rules. They do not
+> constitute a claim of intentional numeric structure.*
+
+### 8.8 `quran.numeric_report` (§11.6)
+
+Produces a reproducible, exportable count report combining several targets under **one** stated
+rule set, with a checksum. Hard requirements:
+
+- Every number is accompanied by its `CountingRules`.
+- The report includes a `reproducibility.checksum` (§12.1) that a third party can re-run.
+- The report **must not** include any interpretive commentary. A `notes` field exists for the
+  *user's* own annotation and is labeled as a user note (Layer E).
+- If a user requests a target whose count depends on an ambiguous analysis, the report lists the
+  ambiguity rather than picking a value.
+
+### 8.9 Discovery tools (§11.7)
+
+| Tool | Definition | Notes |
+|---|---|---|
+| `quran.unusual_usage` | Rare lemmas/roots/forms/constructions below a frequency threshold, or forms whose POS is atypical for their root | Threshold is an input, reported in output |
+| `quran.hapax_search` | Forms or lemmas occurring exactly once **under the stated normalization profile and dataset** | Result count changes with profile — this is stated prominently |
+| `quran.near_duplicate_passages` | Passage pairs with high lexical overlap | Uses shingled skeleton hashing (MinHash over 4-grams) + exact verification; returns Jaccard + aligned token spans |
+| `quran.missing_expected_form` | Given a root/pattern, list attested vs. unattested forms | Output carries a mandatory disclaimer: *"Absence of a form in this edition is a lexical observation, not a theological conclusion"* (§11.7) |
+
+`quran.near_duplicate_passages` is the only Phase-2 tool with a tunable similarity threshold; it
+is labeled `ComputationalAnnotation` in spirit but remains `ReadOnly` because it writes nothing.
+Its suggested pairs may be **promoted** to graph `PARALLELS` edges in Phase 3 — only through the
+`review_queue`.
+
+### 8.10 Deferred to Phase 3
+
+`quran.semantic_field`, `quran.repetition_analysis`, `quran.parallel_structure`,
+`quran.rhyme_analysis`, `quran.address_shift`, `quran.discourse_links`,
+`quran.pronoun_reference`, `quran.contrastive_search`, `quran.parallel_verses`.
+Rationale: each requires concept/entity nodes, rhetorical annotations, or graph traversal.
+Phase 2 ships their *data prerequisites* (roots, lemmas, patterns, positions, skeletons).
+
+---
+
+## 9. Index Lifecycle & Consistency (PRD §76, §41, §50)
+
+### 9.1 Index inventory
+
+| Index id | Backend | Built from | Rebuild cost (target) |
+|---|---|---|---|
+| `quran.ayah.v1` | Tantivy | canonical ayahs + profiles | < 60 s |
+| `quran.token.v1` | Tantivy | canonical tokens + profiles + lexicons | < 120 s |
+| `quran.skeleton.v1` | trigram postings (`redb`/Tantivy keyword) | ayah + window skeletons | < 30 s |
+| `quran.forms.v1` | SQLite tables | canonical tokens/ayahs × profiles | < 45 s |
+| `quran.lexicon.v1` | SQLite tables | morphology dataset | < 90 s |
+
+**Total cold rebuild target: < 6 minutes** for the reference edition on a 4-core laptop.
+This is a CI-gated benchmark, because "rebuildable from source" (§41) is meaningless if it takes
+hours.
+
+### 9.2 Jobs
+
+```text
+quran.index.build      {index_id, generation}      idempotent on (index_id, generation, versions)
+quran.index.rebuild    {index_id | "all", force}
+quran.index.verify     {index_id}
+quran.index.gc         {retain_generations}
+quran.morphology.import {source_version_id}
+quran.morphology.activate {dataset, version}       (human-approved)
+quran.lexicon.rebuild  {dataset}
+quran.forms.rebuild    {profiles[]}
+```
+
+All follow the Phase-0 job contract: checkpointed, cancellable, resumable, progress-reporting,
+dead-lettering. Cancellation deletes the staging generation directory and never touches the
+active pointer.
+
+### 9.3 Generation stamping & drift detection (I14)
+
+```sql
+CREATE TABLE index_pointers (
+  index_id            TEXT PRIMARY KEY,
+  active_generation   INTEGER NOT NULL,
+  previous_generation INTEGER,
+  manifest_json       TEXT NOT NULL,
+  manifest_hash       TEXT NOT NULL,
+  activated_at        TEXT NOT NULL,
+  activated_by        TEXT NOT NULL REFERENCES principals(id)
+);
+```
+
+`qai doctor --indexes` compares, for each index, the manifest's
+`(corpus_generation, edition_version, rule_set_versions, morphology_dataset_versions,
+tokenizer_version)` against current live values, and reports precisely which input drifted —
+reproducing the PRD §50 example line:
+
+```text
+✗ Morphology index differs from source version
+    expected morphology dataset: quranic-corpus@1.1.0
+    index built from:            quranic-corpus@1.0.0
+Suggested action:
+  qai quran morphology reindex
+```
+
+Drift is a **warning, never an auto-repair** (§50). Queries against a drifted index still work
+but every `ToolResult` carries `warnings: [{code: "QAI-IDX-0101", message: "index is stale…"}]`
+so a research answer can never silently rest on a stale index.
+
+### 9.4 Reconciliation
+
+A nightly `quran.index.verify` job checks:
+
+- FTS `doc_count` equals the relational count for the active generation.
+- A random 1 % sample of FTS docs round-trips to the correct canonical reference and text hash.
+- No orphan generations on disk without an `index_pointers` row (and vice versa).
+- Lexicon foreign keys all resolve; no dangling `root_id`/`lemma_id`.
+- **MV-018 re-run**: canonical tables are byte-identical to their Phase-1 activation hashes.
+
+---
+
+## 10. API Additions (PRD §27.1)
+
+```text
+POST /api/v1/quran/search/exact
+POST /api/v1/quran/search/normalized
+POST /api/v1/quran/search/concatenated
+POST /api/v1/quran/search/phrase
+POST /api/v1/quran/search/regex
+POST /api/v1/quran/search/root
+POST /api/v1/quran/search/lemma
+POST /api/v1/quran/word-family
+POST /api/v1/quran/morphology
+POST /api/v1/quran/morphology/compare
+POST /api/v1/quran/pattern-search
+POST /api/v1/quran/affix-search
+POST /api/v1/quran/frequency
+POST /api/v1/quran/distribution
+POST /api/v1/quran/cooccurrence
+POST /api/v1/quran/collocation
+POST /api/v1/quran/occurrences
+POST /api/v1/quran/interval-analysis
+POST /api/v1/quran/numeric-report
+POST /api/v1/quran/hapax
+POST /api/v1/quran/unusual-usage
+POST /api/v1/quran/near-duplicates
+POST /api/v1/quran/missing-forms
+
+GET  /api/v1/quran/roots?dataset=&prefix=&limit=        # root index browsing
+GET  /api/v1/quran/roots/:letters
+GET  /api/v1/quran/lemmas?dataset=&prefix=
+GET  /api/v1/quran/normalization/profiles               # list profiles + rule lists
+POST /api/v1/quran/normalization/preview                # show what a rule set does to input
+GET  /api/v1/quran/morphology/datasets
+GET  /api/v1/quran/indexes                              # manifests + drift status
+```
+
+`POST /api/v1/quran/normalization/preview` deserves emphasis: it renders the rule-by-rule
+transformation of a user's input with the `SpanMap` at each step. It is the single best
+debugging and trust-building endpoint in the phase, and it is what the Phase-4 UI will use to
+explain "why did this match?".
+
+Streaming: search endpoints support `Accept: text/event-stream` to stream hits as they are
+found (§53), with a terminal event carrying totals and the reproducibility block.
+
+---
+
+## 11. CLI Additions (PRD §26, §25.4)
+
+```bash
+# Search
+qai quran search "الرحمن"                              # defaults to L3.diacritics
+qai quran search "ٱلرَّحْمَٰنِ" --exact
+qai quran search "الرحمن" --profile L5.codepoints --explain
+qai quran search "بسمالله" --concatenated [--cross-ayah]
+qai quran search "الحمد لله" --phrase --slop 2 --unordered
+qai quran search --regex "^ا?ل?رحم" --field text_bare
+qai quran search "الرحمن" --surah 1,2,3 --json
+
+# Linguistics
+qai quran root "ر ح م" [--dataset quranic-corpus] [--group-by lemma]
+qai quran root list --prefix ر --limit 50
+qai quran lemma "رَحِمَ"
+qai quran family "رحمة" [--include-suggestions] [--min-confidence 0.8]
+qai quran morphology 1:1:1 [--policy all]
+qai quran morphology compare 2:255:5 --datasets quranic-corpus,camel-morph
+qai quran pattern "فَعَّلَ"
+qai quran affix --prefix و --suffix هم
+
+# Counting
+qai quran freq --root رحم --breakdown surah
+qai quran dist --root رحم --by revelation-place
+qai quran cooc --root رحم --root غفر --window 10
+qai quran colloc --lemma رَحِمَ --measure llr --min-count 3
+qai quran occurrences --root رحم --first --last
+qai quran intervals --root رحم
+qai quran numeric-report --config report.toml --out report.json
+qai quran hapax [--profile L3.diacritics]
+qai quran unusual --threshold 2
+qai quran near-duplicates --min-jaccard 0.8
+qai quran missing-forms --root رحم
+
+# Normalization introspection
+qai quran normalize "بِسْمِ ٱللَّهِ" --profile L3.diacritics --explain
+qai quran normalize --list-profiles
+qai quran normalize --show-rule N06
+
+# Morphology datasets
+qai quran morphology dataset list
+qai quran morphology import <manifest>
+qai quran morphology validate <dataset>@<v>
+qai quran morphology activate <dataset>@<v>
+qai quran morphology coverage <dataset>@<v>
+qai quran morphology diff <dataset> --from 1.0.0 --to 1.1.0
+
+# Indexes
+qai quran index list
+qai quran index build <index-id>
+qai quran index rebuild --all [--force]
+qai quran index verify <index-id>
+qai quran index gc --retain 1
+qai doctor --indexes [--json]
+```
+
+`qai quran normalize … --explain` output (human mode) is deliberately a teaching tool:
+
+```text
+Input:  بِسْمِ ٱللَّهِ
+Profile: L3.diacritics@1.0.0
+
+  N01 whitespace_collapse   بِسْمِ ٱللَّهِ            (no change)
+  N11 strip_zero_width      بِسْمِ ٱللَّهِ            (no change)
+  N16 nfc                   بِسْمِ ٱللَّهِ            (no change)
+  N04 strip_quranic_marks   بِسْمِ ٱللَّهِ            (no change)
+  N14 strip_pause_marks     بِسْمِ ٱللَّهِ            (no change)
+  N03 strip_harakat         بسم ٱلله                 (removed 6 marks)
+  N05 strip_superscript_alef بسم ٱلله                (no change)
+  N02 strip_tatweel         بسم ٱلله                 (no change)
+
+Result: بسم ٱلله
+Offset map: [0..3]→[0..6]  [4..8]→[7..14]
+Heuristic rules used: none
+```
+
+---
+
+## 12. `qai doctor` Additions (PRD §50)
+
+```text
+QURAN LINGUISTICS
+  quran.normalization.profiles_loaded     All declared profiles resolve to known rules
+  quran.normalization.idempotency         Idempotent rules verified idempotent
+  quran.normalization.spanmap_sanity      Sampled offset round-trips succeed
+  quran.forms.current                     Derived forms match corpus_generation + rule versions
+  quran.forms.coverage                    Every token/ayah has every indexed form
+  quran.canonical_unchanged               MV-018: canonical hashes match Phase-1 activation
+  quran.fts.ayah_index                    Present, active generation, doc_count matches
+  quran.fts.token_index                   Present, active generation, doc_count matches
+  quran.skeleton.index                    Present, trigram postings consistent
+  quran.index.drift                       Per-index input-version comparison
+  quran.index.orphans                     No on-disk generations without pointers
+  quran.morphology.dataset_active         At least one active dataset (or explicit none)
+  quran.morphology.alignment              Unmatched-token ratio within threshold
+  quran.morphology.coverage               Coverage ≥ declared threshold
+  quran.morphology.provenance             Every analysis has Layer B/D provenance
+  quran.morphology.unverified_layer_d     Count of Layer D rows awaiting review
+  quran.lexicon.integrity                 No dangling root_id/lemma_id
+  quran.lexicon.root_unification_queue    Pending cross-dataset root suggestions
+  quran.search.smoke                      12 canned queries return expected known hits
+```
+
+`quran.search.smoke` is a genuinely valuable check: it runs a dozen fixed queries with known
+expected references (e.g. `الرحمن`
