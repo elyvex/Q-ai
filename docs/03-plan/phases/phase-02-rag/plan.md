@@ -4,7 +4,7 @@ Continuing. First the tail of **File 2** (Phase 1) that got cut off, then the co
 
 ## File 2 (continued) — `docs/plans/PHASE-1-CANONICAL-QURAN-CORE.md`
 
-````markdown
+
 ## 9. Acceptance Criteria (Phase 1 Exit Gate) — continued
 
 | ID | Criterion | Verification |
@@ -90,13 +90,9 @@ In addition to the Phase-0 DoD, every Phase-1 deliverable requires (§58, §46, 
 **Handoff document:** `docs/plans/handoff-p1-to-p2.md` (task P1-T60), including the frozen
 Unicode policy, tokenization contract, and a list of every place Phase 2 must record
 `normalization_rule_set_version`.
-````
 
----
 
-## File 3 — `docs/plans/PHASE-2-QURAN-SEARCH-AND-LINGUISTICS.md`
 
-````markdown
 # Q-ai — Phase 2 Development Plan: Quran Search, Normalization & Linguistics
 
 **Plan Version:** 1.0.0
@@ -224,9 +220,6 @@ Rules that make polyglot persistence safe (this is the part most projects get wr
 
 # Part B — Phase 2 plan (continuation)
 
-This continues `docs/plans/PHASE-2-QURAN-SEARCH-AND-LINGUISTICS.md` from §2.1 item 10.
-
-````markdown
 | 10 | Frequency, distribution, co-occurrence, collocation, interval, first/last-occurrence tools | §11.3 |
 | 11 | Discovery tools: `unusual_usage`, `hapax_search`, `near_duplicate_passages`, `missing_expected_form` | §11.7 |
 | 12 | Numeric report tool with explicit counting rules | §11.6 |
@@ -1500,7 +1493,583 @@ QURAN LINGUISTICS
   quran.lexicon.integrity                 No dangling root_id/lemma_id
   quran.lexicon.root_unification_queue    Pending cross-dataset root suggestions
   quran.search.smoke                      12 canned queries return expected known hits
+
+
+markdown
+`quran.search.smoke` is a genuinely valuable check: it runs a dozen fixed queries with known
+expected references (e.g. `الرحمن` → must include 1:1, 1:3, 2:163; `بسمالله` concatenated → must
+include 1:1; root `رحم` → must return the known total) and fails loudly if any regress. It is the
+cheapest possible early-warning system for tokenizer or profile drift.
+
+---
+
+## 13. Database Schema (Phase 2 Migrations)
+
+### `0020_quran_normalization.up.sql`
+
+```sql
+CREATE TABLE normalization_rules (
+  rule_id       TEXT PRIMARY KEY,          -- 'N03'
+  name          TEXT NOT NULL,
+  version       TEXT NOT NULL,
+  kind          TEXT NOT NULL CHECK (kind IN ('deterministic','heuristic')),
+  description   TEXT NOT NULL,
+  mapping_hash  TEXT NOT NULL,             -- hash of the code-point mapping table
+  idempotent    INTEGER NOT NULL CHECK (idempotent IN (0,1))
+);
+
+CREATE TABLE normalization_profiles (
+  profile_id    TEXT NOT NULL,             -- 'L3.diacritics'
+  version       TEXT NOT NULL,
+  label         TEXT NOT NULL,
+  rule_list     TEXT NOT NULL,             -- ordered JSON array of rule_ids
+  rule_list_hash TEXT NOT NULL,
+  indexed       INTEGER NOT NULL CHECK (indexed IN (0,1)),
+  contains_heuristic INTEGER NOT NULL CHECK (contains_heuristic IN (0,1)),
+  created_at    TEXT NOT NULL,
+  PRIMARY KEY (profile_id, version)
+);
+
+-- Profiles are append-only: a changed rule list requires a NEW version (§3.3).
+CREATE TRIGGER trg_profile_immutable
+BEFORE UPDATE OF rule_list, rule_list_hash ON normalization_profiles
+BEGIN SELECT RAISE(ABORT, 'QAI-NORM-0001: profiles are immutable; publish a new version'); END;
 ```
 
-`quran.search.smoke` is a genuinely valuable check: it runs a dozen fixed queries with known
-expected references (e.g. `الرحمن`
+### `0021_quran_forms.up.sql`
+
+```sql
+CREATE TABLE quran_token_forms (
+  edition_id        TEXT    NOT NULL,
+  surah             INTEGER NOT NULL,
+  ayah              INTEGER NOT NULL,
+  position          INTEGER NOT NULL,
+  profile_id        TEXT    NOT NULL,
+  profile_version   TEXT    NOT NULL,
+  form              TEXT    NOT NULL,
+  form_hash         TEXT    NOT NULL,
+  span_map_json     TEXT    NOT NULL,      -- SpanMap back to canonical token offsets
+  corpus_generation INTEGER NOT NULL,
+  provenance_id     TEXT    NOT NULL REFERENCES provenance_records(id),
+  PRIMARY KEY (edition_id, surah, ayah, position, profile_id, profile_version),
+  FOREIGN KEY (edition_id, surah, ayah, position)
+    REFERENCES quran_tokens(edition_id, surah, ayah, position),
+  FOREIGN KEY (profile_id, profile_version)
+    REFERENCES normalization_profiles(profile_id, version)
+);
+
+CREATE INDEX ix_tokform_lookup ON quran_token_forms(edition_id, profile_id, form);
+
+CREATE TABLE quran_ayah_forms (
+  edition_id        TEXT    NOT NULL,
+  surah             INTEGER NOT NULL,
+  ayah              INTEGER NOT NULL,
+  profile_id        TEXT    NOT NULL,
+  profile_version   TEXT    NOT NULL,
+  form              TEXT    NOT NULL,
+  form_hash         TEXT    NOT NULL,
+  span_map_json     TEXT    NOT NULL,
+  corpus_generation INTEGER NOT NULL,
+  provenance_id     TEXT    NOT NULL REFERENCES provenance_records(id),
+  PRIMARY KEY (edition_id, surah, ayah, profile_id, profile_version)
+);
+
+CREATE TABLE quran_skeletons (
+  edition_id        TEXT    NOT NULL,
+  level             TEXT    NOT NULL CHECK (level IN ('ayah','window')),
+  key_start_global  INTEGER NOT NULL,      -- global_ayah_index of first ayah
+  key_end_global    INTEGER NOT NULL,
+  skeleton          TEXT    NOT NULL,
+  skeleton_hash     TEXT    NOT NULL,
+  span_map_json     TEXT    NOT NULL,
+  corpus_generation INTEGER NOT NULL,
+  PRIMARY KEY (edition_id, level, key_start_global, key_end_global)
+);
+
+CREATE INDEX ix_skeleton_lookup ON quran_skeletons(edition_id, level, skeleton);
+```
+
+### `0022_quran_lexicon.up.sql`
+
+```sql
+CREATE TABLE morphology_datasets (
+  id                    TEXT PRIMARY KEY,
+  slug                  TEXT NOT NULL,
+  version               TEXT NOT NULL,
+  name                  TEXT NOT NULL,
+  source_version_id     TEXT NOT NULL REFERENCES source_versions(id),
+  aligned_edition_id    TEXT NOT NULL REFERENCES quran_editions(id),
+  alignment_method      TEXT NOT NULL CHECK (alignment_method IN ('direct_key','alignment_table')),
+  alignment_source_ver  TEXT REFERENCES source_versions(id),
+  unmatched_token_count INTEGER NOT NULL DEFAULT 0,
+  root_convention       TEXT NOT NULL,
+  provides_multiple     INTEGER NOT NULL CHECK (provides_multiple IN (0,1)),
+  attribution_display   TEXT NOT NULL CHECK (length(trim(attribution_display)) > 0),
+  license_json          TEXT NOT NULL,
+  trust_level           TEXT NOT NULL,
+  coverage_json         TEXT NOT NULL,
+  status                TEXT NOT NULL CHECK (status IN
+                          ('Staged','Approved','Active','Deprecated','Quarantined')),
+  imported_at           TEXT NOT NULL,
+  activated_at          TEXT,
+  approval_id           TEXT REFERENCES approvals(id),
+  UNIQUE (slug, version),
+  CHECK (status NOT IN ('Approved','Active') OR approval_id IS NOT NULL)
+);
+
+CREATE TABLE quran_roots (
+  id                TEXT PRIMARY KEY,
+  dataset_id        TEXT NOT NULL REFERENCES morphology_datasets(id) ON DELETE RESTRICT,
+  letters           TEXT NOT NULL,
+  letters_spaced    TEXT NOT NULL,
+  letter_count      INTEGER NOT NULL,
+  token_count       INTEGER NOT NULL DEFAULT 0,
+  lemma_count       INTEGER NOT NULL DEFAULT 0,
+  canonical_root_id TEXT REFERENCES quran_roots(id),   -- cross-dataset link (Layer D)
+  provenance_id     TEXT NOT NULL REFERENCES provenance_records(id),
+  UNIQUE (dataset_id, letters)
+);
+
+CREATE INDEX ix_roots_letters ON quran_roots(letters);
+
+CREATE TABLE quran_lemmas (
+  id            TEXT PRIMARY KEY,
+  dataset_id    TEXT NOT NULL REFERENCES morphology_datasets(id) ON DELETE RESTRICT,
+  form          TEXT NOT NULL,
+  form_bare     TEXT NOT NULL,
+  root_id       TEXT REFERENCES quran_roots(id),
+  pos           TEXT,
+  gloss         TEXT,
+  token_count   INTEGER NOT NULL DEFAULT 0,
+  provenance_id TEXT NOT NULL REFERENCES provenance_records(id),
+  UNIQUE (dataset_id, form, pos)
+);
+
+CREATE INDEX ix_lemmas_bare ON quran_lemmas(form_bare);
+
+CREATE TABLE quran_token_analyses (
+  id                  TEXT PRIMARY KEY,
+  edition_id          TEXT    NOT NULL,
+  surah               INTEGER NOT NULL,
+  ayah                INTEGER NOT NULL,
+  position            INTEGER NOT NULL,
+  dataset_id          TEXT    NOT NULL REFERENCES morphology_datasets(id) ON DELETE RESTRICT,
+  analysis_index      INTEGER NOT NULL,
+  lemma_id            TEXT REFERENCES quran_lemmas(id),
+  root_id             TEXT REFERENCES quran_roots(id),
+  stem                TEXT,
+  pattern             TEXT,
+  verb_form           TEXT,
+  features_json       TEXT NOT NULL,
+  dependency_json     TEXT,
+  confidence          REAL CHECK (confidence IS NULL OR (confidence BETWEEN 0.0 AND 1.0)),
+  verification_status TEXT NOT NULL,
+  provenance_id       TEXT NOT NULL REFERENCES provenance_records(id),
+  FOREIGN KEY (edition_id, surah, ayah, position)
+    REFERENCES quran_tokens(edition_id, surah, ayah, position),
+  UNIQUE (edition_id, surah, ayah, position, dataset_id, analysis_index)
+);
+
+CREATE INDEX ix_analyses_root  ON quran_token_analyses(root_id);
+CREATE INDEX ix_analyses_lemma ON quran_token_analyses(lemma_id);
+CREATE INDEX ix_analyses_token ON quran_token_analyses(edition_id, surah, ayah, position);
+
+CREATE TABLE quran_morphemes (
+  analysis_id     TEXT    NOT NULL REFERENCES quran_token_analyses(id) ON DELETE CASCADE,
+  morpheme_index  INTEGER NOT NULL,
+  kind            TEXT    NOT NULL CHECK (kind IN ('prefix','stem','suffix')),
+  surface         TEXT    NOT NULL,
+  tag             TEXT    NOT NULL,
+  normalized_tag  TEXT,
+  char_start      INTEGER,
+  char_end        INTEGER,
+  PRIMARY KEY (analysis_id, morpheme_index)
+);
+
+-- Dataset-supplied derivation edges (Layer B); Phase 3 promotes these to graph edges.
+CREATE TABLE quran_derivations (
+  id             TEXT PRIMARY KEY,
+  dataset_id     TEXT NOT NULL REFERENCES morphology_datasets(id),
+  from_lemma_id  TEXT NOT NULL REFERENCES quran_lemmas(id),
+  to_lemma_id    TEXT NOT NULL REFERENCES quran_lemmas(id),
+  derivation     TEXT NOT NULL,
+  confidence     REAL,
+  provenance_id  TEXT NOT NULL REFERENCES provenance_records(id),
+  UNIQUE (dataset_id, from_lemma_id, to_lemma_id, derivation)
+);
+
+-- Human-verified family relations (Layer C), created via review_queue (§10.6).
+CREATE TABLE word_family_relations (
+  id              TEXT PRIMARY KEY,
+  relation        TEXT NOT NULL,
+  left_urn        TEXT NOT NULL,
+  right_urn       TEXT NOT NULL,
+  dataset_id      TEXT REFERENCES morphology_datasets(id),
+  evidence_json   TEXT NOT NULL,
+  confidence      REAL,
+  provenance_id   TEXT NOT NULL REFERENCES provenance_records(id),
+  UNIQUE (relation, left_urn, right_urn, dataset_id)
+);
+```
+
+### `0023_quran_indexes.up.sql`
+
+```sql
+CREATE TABLE index_pointers (
+  index_id            TEXT PRIMARY KEY,
+  active_generation   INTEGER NOT NULL,
+  previous_generation INTEGER,
+  manifest_json       TEXT NOT NULL,
+  manifest_hash       TEXT NOT NULL,
+  doc_count           INTEGER NOT NULL,
+  activated_at        TEXT NOT NULL,
+  activated_by        TEXT NOT NULL REFERENCES principals(id)
+);
+
+CREATE TABLE index_build_runs (
+  id            TEXT PRIMARY KEY,
+  index_id      TEXT NOT NULL,
+  generation    INTEGER NOT NULL,
+  job_id        TEXT REFERENCES jobs(id),
+  state         TEXT NOT NULL CHECK (state IN
+                  ('building','verifying','verified','activated','failed','cancelled')),
+  manifest_json TEXT,
+  doc_count     INTEGER,
+  duration_ms   INTEGER,
+  error_json    TEXT,
+  started_at    TEXT NOT NULL,
+  finished_at   TEXT,
+  UNIQUE (index_id, generation)
+);
+```
+
+### `0024_quran_morphology_staging.up.sql`
+
+`morph_stg_*` mirrors of `quran_roots`, `quran_lemmas`, `quran_token_analyses`,
+`quran_morphemes`, `quran_derivations`, each with `import_run_id`, no immutability triggers, and
+`ON DELETE CASCADE` from `morphology_import_runs` — identical pattern to Phase-1 staging.
+
+### `0025_quran_search_cache.up.sql`
+
+```sql
+CREATE TABLE search_result_cache (
+  cache_key         TEXT PRIMARY KEY,   -- H(tool, input, profiles, generation, dataset versions)
+  tool_name         TEXT NOT NULL,
+  corpus_generation INTEGER NOT NULL,
+  result_json       TEXT NOT NULL,
+  hit_count         INTEGER NOT NULL DEFAULT 0,
+  created_at        TEXT NOT NULL,
+  last_used_at      TEXT NOT NULL,
+  bytes             INTEGER NOT NULL
+);
+
+CREATE INDEX ix_cache_gen ON search_result_cache(corpus_generation);
+CREATE INDEX ix_cache_lru ON search_result_cache(last_used_at);
+```
+
+Cache is invalidated wholesale on `corpus_generation` or any index-manifest change, and is
+size-capped (default 128 MiB) with LRU eviction.
+
+---
+
+## 14. ADRs Required In Phase 2
+
+| ADR | Title | Blocking | Key trade-off |
+|---|---|---|---|
+| ADR-0201 | Full-text engine: Tantivy + custom Arabic tokenizers | §4 | Rust-native, offline, positional phrase support vs. writing tokenizers ourselves |
+| ADR-0202 | *(reserved for Phase 3 graph store — not written here)* | — | — |
+| ADR-0203 | Initial Quran morphology dataset, license, alignment strategy, attribution string | §6 | Coverage/quality vs. redistribution rights; bundled vs. user-supplied |
+| ADR-0204 | Arabic normalization rule catalog, mapping tables, and rule ordering | §3.2 | Recall vs. precision; each fold loses a distinction permanently |
+| ADR-0205 | Normalization profile ladder, versioning, and immutability policy | §3.3 | Simplicity vs. user control; profile explosion risk |
+| ADR-0206 | Transliteration standard (reserved; decision recorded, implementation Phase 4) | §3.2 (N23) | ALA-LC vs. DIN vs. Buckwalter vs. IJMES |
+| ADR-0207 | Concatenated-search architecture: skeleton + trigram candidates + verification | §4.4 | Index size and window duplication vs. recall across boundaries |
+| ADR-0208 | Offset-mapping representation (`SpanMap`) and storage format | §3.4 | Storage cost vs. exact highlight/citation fidelity |
+| ADR-0209 | Multi-analysis morphology representation; no authoritative flag | §6.1 | UI complexity vs. §9.2 compliance (non-negotiable) |
+| ADR-0210 | Root convention normalization and cross-dataset root unification as reviewable suggestions | §6.2 | Convenience of merging vs. never silently merging |
+| ADR-0211 | Counting rules, multi-analysis counting semantics, and numeric-report policy | §8.1 | Multiple defensible counts vs. one "official" number (we choose transparency) |
+| ADR-0212 | Regex and pattern-search resource limits and engine choice | §4.3 | Expressiveness vs. DoS safety |
+| ADR-0213 | Index generation stamping, atomic activation, retention, and drift policy | §9.3 | Disk usage vs. instant rollback |
+| ADR-0214 | Search result caching and invalidation keying | §13 | Latency vs. staleness risk (correctness wins) |
+| ADR-0215 | Unified morphological tagset and mapping from dataset-native tags | §6.1 | Interoperability vs. information loss (native tags always preserved verbatim) |
+| ADR-0216 | Fuzzy-search policy: experimental, off by default, explicit labeling | §3.3 (L8) | Discoverability vs. false confidence |
+
+---
+
+## 15. Work Breakdown Structure
+
+Total ≈ **112 ed** ⇒ ~8 weeks with 3 engineers + 0.4 FTE Arabic linguist.
+Roles: **BE** backend, **SRCH** search/index specialist, **LING** Arabic linguist,
+**DATA** data engineering, **QA**, **DOC**.
+
+### Sprint 2.0 — Dataset & Linguistic Decisions (parallel with Phase 1 Sprint 1.5)
+
+| ID | Task | Deliv. | Dep | Est | Role |
+|---|---|---|---|---|---|
+| P2-T01 | Survey morphology datasets: coverage, depth, tokenization, license | ADR-0203 | — | 3.0 | DATA |
+| P2-T02 | Legal review of morphology dataset redistribution | ADR-0203 | T01 | 1.5 | DOC |
+| P2-T03 | Define alignment strategy + write alignment spec | ADR-0203 | T01 | 2.0 | DATA |
+| P2-T04 | Author normalization rule catalog with full code-point mapping tables | ADR-0204 | — | 4.0 | LING |
+| P2-T05 | Review each rule for linguistic correctness + document losses | ADR-0204 | T04 | 2.5 | LING |
+| P2-T06 | Define profile ladder L0–L8 and versioning policy | ADR-0205 | T04 | 1.5 | LING+BE |
+| P2-T07 | Define unified tagset + dataset tag mapping | ADR-0215 | T01 | 2.5 | LING |
+| P2-T08 | Define root convention + unification policy | ADR-0210 | T01 | 1.5 | LING |
+| P2-T09 | Define counting-rule semantics + numeric-report policy | ADR-0211 | T04 | 2.0 | LING+BE |
+| P2-T10 | Write ADR-0203/0204/0205/0210/0211/0215; record ADR-0206 as reserved | ADR | T02–T09 | 3.0 | DOC |
+| P2-T11 | Build normalization golden set (2,000 input→output pairs per profile) | §16 | T05 | 4.0 | LING+QA |
+| P2-T12 | Build root/lemma golden set (500 curated cases) | §16 | T08 | 3.0 | LING+QA |
+
+### Sprint 2.1 — Normalization Engine (Week 1–2)
+
+| ID | Task | Deliv. | Dep | Est | Role |
+|---|---|---|---|---|---|
+| P2-T13 | `quran-normalization` crate skeleton, `RuleId`, `NormalizationRule` trait | §3.2 | P1 done | 1.5 | BE |
+| P2-T14 | `SpanMap`: segments, compose, to_canonical, to_derived | §3.4 | T13 | 3.5 | BE |
+| P2-T15 | `SpanMap` property tests (5 properties × all ayahs × all profiles) | §3.4 | T14 | 3.0 | QA |
+| P2-T16 | Implement deterministic rules N01–N17 | §3.2 | T14 | 5.0 | BE |
+| P2-T17 | Implement heuristic rules N18–N22 with `RuleKind::Heuristic` tagging | §3.2 | T16 | 2.5 | BE |
+| P2-T18 | `NormalizationPipeline` + profile registry + immutability enforcement | §3.3 | T16 | 2.5 | BE |
+| P2-T19 | Migration `0020_quran_normalization` + profile/rule seeding | §13 | T18 | 1.5 | BE |
+| P2-T20 | `NormalizationTrace` type + no-default-constructor guard | I9 | T18 | 1.0 | BE |
+| P2-T21 | Golden-set test harness; all 2,000 pairs green | §16 | T11,T18 | 2.5 | QA |
+| P2-T22 | Idempotency + associativity + fuzz (no panic on any Unicode input) | §16 | T18 | 2.0 | QA |
+| P2-T23 | `qai quran normalize --explain` + `--list-profiles` + `--show-rule` | §11 | T18 | 2.0 | BE |
+| P2-T24 | `POST /normalization/preview` + `GET /normalization/profiles` | §10 | T23 | 1.5 | BE |
+
+### Sprint 2.2 — Derived Forms & FTS Foundation (Week 2–3)
+
+| ID | Task | Deliv. | Dep | Est | Role |
+|---|---|---|---|---|---|
+| P2-T25 | Migration `0021_quran_forms` | §13 | T19 | 1.5 | BE |
+| P2-T26 | `quran.forms.rebuild` job: token + ayah forms, all indexed profiles | §9.2 | T25,T18 | 3.0 | BE |
+| P2-T27 | Skeleton builder (ayah + 3-ayah windows) + span maps | §4.4 | T26 | 2.5 | BE |
+| P2-T28 | MV-018 canonical-unchanged verifier wired into every build job | I8 | T26 | 1.5 | BE |
+| P2-T29 | `FullTextIndex` trait + `IndexManifest` + `FtsQuery`/`SearchOpts` types | §4.1 | T13 | 2.5 | SRCH |
+| P2-T30 | Tantivy backend: schema, writer, reader, commit stamps | §4.2 | T29 | 3.5 | SRCH |
+| P2-T31 | Custom `ar_*` tokenizers wired to `NormalizationPipeline` (shared query/index path) | §4.2 | T30,T18 | 3.0 | SRCH |
+| P2-T32 | Query/index tokenizer-parity test (5,000 random substrings) | §16 | T31 | 1.5 | QA |
+| P2-T33 | Migration `0023_quran_indexes` + `index_pointers` + build-run tracking | §13 | T25 | 1.5 | BE |
+| P2-T34 | `quran.index.build` job: staging dir → verify → atomic pointer flip | §9 | T30,T33 | 3.0 | SRCH |
+| P2-T35 | Index generation retention, `gc`, single-step rollback | §9.3 | T34 | 1.5 | SRCH |
+| P2-T36 | Trigram skeleton posting index + build job | §4.4 | T27 | 3.0 | SRCH |
+| P2-T37 | Index build crash/cancel matrix (kill at each stage; active pointer unchanged) | §16 | T34 | 2.0 | QA |
+| P2-T38 | Cold-rebuild benchmark + CI threshold gate (< 6 min total) | §9.1 | T34,T36 | 1.5 | QA |
+| P2-T39 | ADR-0201/0208/0213 | ADR | T31,T34 | 2.0 | DOC |
+
+### Sprint 2.3 — Search Tools (Week 3–4)
+
+| ID | Task | Deliv. | Dep | Est | Role |
+|---|---|---|---|---|---|
+| P2-T40 | `SearchHit`, `ScoreExplain`, unified result assembly + canonical-span attach | §5.6 | T14,T30 | 2.5 | BE |
+| P2-T41 | `quran.search_exact` (+ zero-result normalization hint) | §5.1 | T40 | 2.0 | SRCH |
+| P2-T42 | `quran.search_normalized` incl. ad-hoc rule sets + `explain` | §5.2 | T41 | 3.0 | SRCH |
+| P2-T43 | `quran.search_phrase` (ordered/near/unordered, slop) | §5.4 | T41 | 2.5 | SRCH |
+| P2-T44 | `quran.search_concatenated`: candidate gen → verify → segmentation explanation | §5.3 | T36,T40 | 4.5 | SRCH |
+| P2-T45 | Cross-ayah window dedup + `spans_ayah_boundary` labeling | §4.4 | T44 | 2.0 | SRCH |
+| P2-T46 | `quran.search_regex` with DFA engine + all I16 guards + rate limit | §5.5 | T41 | 3.0 | SRCH |
+| P2-T47 | Exact `total_matches` counting path (separate from ranked search) | §5.6 | T41 | 1.5 | SRCH |
+| P2-T48 | Filters: surah/juz/page/revelation-place/global-range | §4.3 | T41 | 2.0 | BE |
+| P2-T49 | Highlighting: canonical char ranges → display markers | I10 | T40 | 2.0 | BE |
+| P2-T50 | Result cache (`0025`) + generation invalidation + LRU cap | §13 | T40 | 2.0 | BE |
+| P2-T51 | Search API endpoints + SSE streaming variant | §10 | T41–T46 | 3.0 | BE |
+| P2-T52 | CLI search command group with all flags + `--json` | §11 | T41–T46 | 2.5 | BE |
+| P2-T53 | Search golden-set suite (400 queries × expected reference sets) | §16 | T44,T46 | 4.0 | QA |
+| P2-T54 | Regex/DoS abuse suite (pathological patterns, timeout, limits) | §16 | T46 | 2.0 | QA |
+| P2-T55 | Search latency benchmarks + CI gates (table §17.1) | §17 | T44 | 2.0 | QA |
+| P2-T56 | ADR-0207/0212/0214 | ADR | T44,T46,T50 | 1.5 | DOC |
+
+### Sprint 2.4 — Morphology Import & Lexicons (Week 5–6)
+
+| ID | Task | Deliv. | Dep | Est | Role |
+|---|---|---|---|---|---|
+| P2-T57 | Migrations `0022_quran_lexicon`, `0024_morphology_staging` | §13 | T25 | 2.0 | BE |
+| P2-T58 | Intermediate morphology format + JSON Schema + serde types | §6.3 | T57 | 2.0 | DATA |
+| P2-T59 | Adapter for the chosen dataset (per ADR-0203) | §6.3 | T58 | 4.0 | DATA |
+| P2-T60 | Second adapter (different shape) proving extensibility | §6.3 | T59 | 2.0 | DATA |
+| P2-T61 | Alignment engine: `DirectKey` + `AlignmentTable` + unmatched reporting | §6.3 | T59 | 4.0 | DATA |
+| P2-T62 | Unified tagset mapper (native tags preserved verbatim) | §6.1 | T58,T07 | 2.5 | BE |
+| P2-T63 | Validation rules MV-001…MV-018 | §6.4 | T61,T62 | 4.0 | BE |
+| P2-T64 | Lexicon builder: roots, lemmas, stems, counts | §6.2 | T63 | 3.0 | BE |
+| P2-T65 | Cross-dataset root unification as `review_queue` suggestions (never merge) | §6.2 | T64 | 2.5 | BE |
+| P2-T66 | `quran.morphology.import` job (12 checkpoints, cancel, resume) | §6.3 | T63,T64 | 3.5 | BE |
+| P2-T67 | `quran.morphology.activate` (approval + pointer flip + enqueue FTS rebuild) | §6.3 | T66 | 2.0 | BE |
+| P2-T68 | Coverage + unmatched-token reports; approval threshold gate | §6.3 | T61 | 2.0 | BE |
+| P2-T69 | Dataset version differ (`morphology diff`) | §11 | T66 | 2.0 | BE |
+| P2-T70 | Layer B/D provenance writing for every analysis/root/lemma row | I12 | T63 | 2.0 | BE |
+| P2-T71 | Adversarial morphology fixtures (18 faults → correct MV rule ids) | §16 | T63 | 3.0 | QA |
+| P2-T72 | Import crash/cancel matrix (12 checkpoints) | §16 | T66 | 2.0 | QA |
+| P2-T73 | Populate FTS lexicon fields (roots/lemmas/stems/pos/patterns) | §4.2 | T67 | 2.0 | SRCH |
+| P2-T74 | ADR-0209 | ADR | T63 | 0.5 | DOC |
+
+### Sprint 2.5 — Morphology & Family Tools (Week 6–7)
+
+| ID | Task | Deliv. | Dep | Est | Role |
+|---|---|---|---|---|---|
+| P2-T75 | `AnalysisPolicy` + `analysis_sources` + suppression reporting | §6.1 | T64 | 2.0 | BE |
+| P2-T76 | `quran.morphology` tool | §6.5 | T75 | 2.5 | BE |
+| P2-T77 | `quran.morphology_compare` with agreement verdicts, no resolution field | §6.5 | T76 | 2.5 | BE |
+| P2-T78 | `quran.root_search` (convention resolution, grouping, occurrences) | §6.5 | T64 | 3.0 | BE |
+| P2-T79 | `quran.lemma_search` | §6.5 | T64 | 1.5 | BE |
+| P2-T80 | `quran.pattern_search` + capability-unavailable error path | §6.5 | T64 | 2.0 | BE |
+| P2-T81 | `quran.affix_search` (dataset backend + `L7` heuristic backend, labeled) | §6.5 | T17,T64 | 2.5 | BE |
+| P2-T82 | Root/lemma browse endpoints + CLI `root list` | §10,§11 | T78 | 1.5 | BE |
+| P2-T83 | `FamilyRelation` taxonomy + `word_family_relations` table wiring | §7.1 | T57 | 2.0 | BE |
+| P2-T84 | Family resolution algorithm (all 5 input paths) | §7.2 | T78,T83 | 3.5 | BE |
+| P2-T85 | Relation builders: same-form/lemma/stem/root, derived, inflectional, affix | §7.2 | T84 | 3.5 | BE |
+| P2-T86 | Per-member `explanation` generator (differing-feature diffing) | §7.2 | T85 | 2.5 | BE |
+| P2-T87 | Computational-suggestion path: opt-in, confidence floor, mandatory labels | §7.1 | T85 | 2.0 | BE |
+| P2-T88 | `review_queue` promotion flow: suggestion → `ScholarVerified` with evidence | §7.1 | T87,T65 | 2.5 | BE |
+| P2-T89 | Morphology/family API endpoints | §10 | T76–T87 | 2.5 | BE |
+| P2-T90 | CLI morphology/root/lemma/family/pattern/affix commands | §11 | T76–T87 | 3.0 | BE |
+| P2-T91 | Root/lemma golden-set suite (500 cases) | §16 | T12,T78 | 3.0 | QA |
+| P2-T92 | Family-relation golden suite (120 curated families, reviewed by LING) | §16 | T85 | 3.5 | LING+QA |
+| P2-T93 | Multi-analysis non-merge tests (no authoritative flag; suppression visible) | §16 | T77 | 2.0 | QA |
+
+### Sprint 2.6 — Counting, Discovery, Doctor, Evaluation (Week 7–8)
+
+| ID | Task | Deliv. | Dep | Est | Role |
+|---|---|---|---|---|---|
+| P2-T94 | `CountingRules` type + serialization + mandatory-field enforcement | §8.1 | T75 | 2.0 | BE |
+| P2-T95 | `quran.frequency` (exact SQL aggregation, all multi-analysis modes) | §8.2 | T94 | 2.5 | BE |
+| P2-T96 | `quran.distribution` + partition provenance + disagreement warnings | §8.3 | T95 | 2.5 | BE |
+| P2-T97 | `quran.cooccurrence` (token/ayah/segment windows, cross-ayah flags) | §8.4 | T95 | 2.5 | BE |
+| P2-T98 | `quran.collocation` (PMI + LLR + t-score, min-count floor) | §8.5 | T97 | 2.5 | BE |
+| P2-T99 | `quran.first_last_occurrence`, `quran.interval_analysis` + disclaimer | §8.6–8.7 | T95 | 2.0 | BE |
+| P2-T100 | `quran.numeric_report` + checksum + no-interpretation policy | §8.8 | T94 | 2.5 | BE |
+| P2-T101 | `quran.hapax_search`, `quran.unusual_usage` | §8.9 | T95 | 2.0 | BE |
+| P2-T102 | `quran.near_duplicate_passages` (MinHash + exact verify + aligned spans) | §8.9 | T27 | 3.0 | SRCH |
+| P2-T103 | `quran.missing_expected_form` + mandatory disclaimer | §8.9 | T85 | 2.0 | BE |
+| P2-T104 | Counting/discovery API endpoints + CLI commands | §10,§11 | T95–T103 | 3.0 | BE |
+| P2-T105 | `doctor` Phase-2 checks (19 checks) incl. `quran.search.smoke` | §12 | T34,T67 | 3.5 | BE |
+| P2-T106 | Index-drift reporting with precise input diff + `QAI-IDX-0101` warnings | §9.3 | T105 | 2.0 | BE |
+| P2-T107 | Nightly reconciliation job (`quran.index.verify`, 1 % sample, MV-018) | §9.4 | T105 | 2.5 | BE |
+| P2-T108 | Evaluation harness: metric definitions, versioned datasets, gates | §17.2 | T53,T91 | 3.5 | QA |
+| P2-T109 | Counting-rules determinism tests (same rules ⇒ same number, always) | §16 | T95 | 1.5 | QA |
+| P2-T110 | Tool-contract conformance for all 22 Phase-2 tools | §16 | T104 | 2.5 | QA |
+| P2-T111 | Full soak: rebuild all indexes → 50k randomized queries → doctor → reconcile | §16 | all | 2.5 | QA |
+| P2-T112 | ADR-0216 + ADR index update | ADR | T18 | 0.5 | DOC |
+| P2-T113 | Docs: normalization spec, profile catalog, search cookbook, morphology adapter guide, counting-rules explainer, reindex runbook | §18 | all | 4.0 | DOC |
+| P2-T114 | Phase-2 exit-gate review + handoff to Phase 3 | — | all | 2.0 | all |
+
+---
+
+## 16. Testing Strategy
+
+### 16.1 Golden sets (versioned, in `fixtures/quran/`)
+
+| Set | Size | Content |
+|---|---|---|
+| `normalization/pairs.jsonl` | 2,000 | `{input, profile, expected_output, expected_rules_applied}` |
+| `normalization/spanmaps.jsonl` | 300 | `{ayah_ref, profile, derived_range, expected_canonical_range}` |
+| `search/queries.jsonl` | 400 | `{tool, input, expected_references[], expected_total, must_not_contain[]}` |
+| `search/concatenated.jsonl` | 120 | Space-free queries incl. cross-ayah and Persian-codepoint cases |
+| `search/regex.jsonl` | 60 | Patterns incl. 15 pathological ones expected to be rejected/bounded |
+| `lexicon/roots.jsonl` | 300 | `{root, dataset, expected_token_count, expected_lemmas[]}` |
+| `lexicon/lemmas.jsonl` | 200 | `{lemma, expected_forms[], expected_count}` |
+| `morphology/analyses.jsonl` | 400 | `{reference, dataset, expected_segments[], expected_features}` |
+| `families/curated.jsonl` | 120 | Linguist-reviewed families with expected relation classes |
+| `counting/reports.jsonl` | 80 | `{target, counting_rules, expected_count}` — the anti-numerology set |
+| `adversarial/morphology/*` | 18 | Faulty datasets → expected MV rule id |
+
+**Governance:** golden sets are reviewed and signed off by the Arabic linguist (P2-T11, T12, T92)
+and stored with a `reviewed_by` + `reviewed_at` header. Changing an expected value requires a
+linguist review recorded in the PR — the same discipline as canonical text changes.
+
+### 16.2 Property tests
+
+| Property | Scope |
+|---|---|
+| `SpanMap` round-trip containment | every ayah × every profile |
+| `SpanMap` composition associativity | random rule chains |
+| Rule idempotency (for rules declaring it) | random Unicode strings |
+| No rule panics on arbitrary Unicode | fuzz, 10⁶ inputs |
+| Normalized-search recall ⊇ exact-search results | every golden query |
+| Profile monotonicity: results(Lₙ) ⊆ results(Lₙ₊₁) for the same query | all indexed profiles |
+| Concatenated search finds every exact-search hit for space-free queries | golden set |
+| Frequency counts equal `COUNT(*)` over the occurrence list from the same rules | all targets |
+| Family membership is symmetric for symmetric relations | all families |
+| Index doc_count equals relational count | after every build |
+| Canonical text hashes unchanged after every build/import | MV-018, every job |
+
+### 16.3 Integrity & safety suites
+
+| Suite | Proves |
+|---|---|
+| `tests/integrity/canonical_untouched.rs` | Building every index and importing every dataset leaves Phase-1 hashes identical (I8) |
+| `tests/integrity/no_authoritative_analysis.rs` | Schema has no `is_correct`/`is_primary`; suppression is always reported (I11) |
+| `tests/integrity/layer_d_labeling.rs` | Every computational row has algorithm+version+confidence and cannot be `human_verified` without a reviewer (I12) |
+| `tests/integrity/no_llm_dependency.rs` | `quran-normalization`, `quran-search`, `quran-morphology` do not depend on `llm`/`embeddings` |
+| `tests/integrity/trace_required.rs` | No `SearchHit` can be constructed without a `NormalizationTrace` (I9) |
+| `tests/security/regex_dos.rs` | 15 pathological patterns bounded within limits (I16) |
+| `tests/security/rate_limits.rs` | Regex and heavy-scan tools rate-limited per principal |
+| `tests/recovery/index_build.rs` | Crash/cancel at each build stage never activates a partial index |
+| `tests/recovery/morphology_import.rs` | Crash/cancel at each of 12 checkpoints; resume correctness |
+| `tests/consistency/drift.rs` | Bumping any input version produces the exact expected doctor drift report |
+| `tests/consistency/cache.rs` | No stale cached result served across a generation bump |
+
+### 16.4 Coverage gates
+
+`quran-normalization` **≥ 92 %** (it is the highest-risk pure-logic crate);
+`quran-search` **≥ 85 %**; `quran-morphology` **≥ 85 %**; tools layer **≥ 80 %**.
+
+---
+
+## 17. Performance & Evaluation Targets
+
+### 17.1 Latency (reference: 4-core laptop, cold OS cache, warm index)
+
+| Operation | p50 | p99 | Cap |
+|---|---|---|---|
+| `search_exact` (single token) | < 5 ms | < 25 ms | 2 s timeout |
+| `search_normalized` (indexed profile) | < 8 ms | < 40 ms | 2 s |
+| `search_normalized` (ad-hoc rules) | < 60 ms | < 250 ms | 5 s |
+| `search_phrase` (3 tokens, slop 0) | < 12 ms | < 60 ms | 2 s |
+| `search_concatenated` (3–20 chars) | < 35 ms | < 150 ms | 3 s |
+| `search_regex` (anchored) | < 80 ms | < 500 ms | 3 s hard |
+| `root_search` (frequent root, 339 hits) | < 20 ms | < 90 ms | 2 s |
+| `word_family` (large root, no suggestions) | < 60 ms | < 250 ms | 5 s |
+| `morphology` (single token, all datasets) | < 6 ms | < 30 ms | 2 s |
+| `frequency` (root, breakdown by surah) | < 40 ms | < 180 ms | 5 s |
+| `collocation` (lemma, window 10) | < 250 ms | < 1.2 s | 10 s |
+| `near_duplicate_passages` (full corpus) | < 2.5 s | < 8 s | 30 s |
+| `normalize --explain` (single string) | < 1 ms | < 5 ms | — |
+| Full index rebuild (all indexes) | < 4 min | < 6 min | — |
+
+All are CI-gated benchmarks with a 20 % regression tolerance; exceeding it fails the build.
+
+### 17.2 Accuracy gates (PRD §36.1, §47) — versioned evaluation datasets
+
+| Metric | Target | Gate |
+|---|---|---|
+| Exact search precision / recall | 1.00 / 1.00 | **Hard** — any failure blocks release |
+| Diacritic-insensitive search recall (`L3`) | ≥ 0.99 | Hard |
+| Diacritic-insensitive search precision | ≥ 0.95 | Soft (warn) |
+| Concatenated phrase search accuracy | ≥ 0.97 | Hard |
+| Cross-ayah concatenated recall | ≥ 0.90 | Soft |
+| Root-search precision (vs. dataset ground truth) | 1.00 | Hard |
+| Root-search recall | ≥ 0.99 | Hard |
+| Lemma-search accuracy | ≥ 0.99 | Hard |
+| Morphological segmentation accuracy (vs. dataset) | ≥ 0.995 | Hard (this is a faithfulness-of-import metric, not an NLP metric) |
+| Word-family explanation correctness (linguist-rated) | ≥ 0.95 | Hard on the 120-family curated set |
+| Offset-mapping fidelity | 1.00 | Hard |
+| Frequency-count reproducibility | 1.00 | Hard |
+| Canonical-text integrity after all builds | 1.00 | Hard, zero tolerance |
+| Citation resolution for search hits | 1.00 | Hard |
+
+Evaluation runs are stored with `dataset_version`, `code_version`, `index_manifest_hash`, and
+results are diffed against the previous run in CI; a regression on any hard gate blocks merge.
+
+---
+
+## 18. Acceptance Criteria (Phase 2 Exit Gate)
+
+| ID | Criterion | Verification |
+|---|---|---|
+| AC-P2-01 | ADR-0203 accepted; a licensed morphology dataset is active, **or** the documented user-supplied fallback works end-to-end with the public-domain test lexicon | ADR + scripted run |
+| AC-P2-02 | ADR-0204/0205 accepted with complete code-point mapping tables; every rule's linguistic loss is documented | ADR review by linguist |
+| AC-P2-03 | All 2,000 normalization golden pairs pass for all indexed profiles | golden suite |
+| AC-P2-04 | `SpanMap` satisfies all 5 properties across every ayah × every profile; offset fidelity is 1.00 | property suite |
+| AC-P2-05 | **Canonical text is byte-identical** (all Phase-1 hashes match) after building every index and importing every dataset — verified by MV-018 in every job and by `doctor` | integrity suite + doctor |
+| AC-P2-06 | No `SearchHit` can exist without a `NormalizationTrace`; every trace lists the ordered rule ids and flags heuristics | type test + snapshot |
+| AC-P2-07 | Searching `الرحمن` (no diacritics) returns 1:1, 1:3, 2:163 and the full expected reference set; searching the exact Uthmani form returns the same set | golden query |
+| AC-P2-08 | Searching `بسمالله` (no spaces, no diacritics) returns 1:1 with a segmentation explanation mapping each query part to canonical tokens 1 and 2 | golden query |
+| AC-P2-09 | A Persian-keyboard query (`ک`/`ی`
