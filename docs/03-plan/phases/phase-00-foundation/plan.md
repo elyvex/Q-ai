@@ -4,7 +4,7 @@
 **PRD Baseline:** Q-ai PRD v0.3.2
 **Phase ID:** P0
 **Phase Name:** Foundations and Provenance
-**PRD Traceability:** §43 (Phase 0), §88 (item 1), §6, §22, §25.13, §32, §33, §37, §39, §41, §50, §55, §58, §82, §84, §87
+**PRD Traceability:** §43 (Phase 0), §88 (item 1), §6, §22, §25.13, §32, §33, §34, §37, §39, §41, §50, §54, §55, §58, §73, §75–76, §82, §84, §85, §87
 **Depends On:** — (first phase)
 **Blocks:** Phase 1 (Canonical Quran Core), and all later phases
 **Target Duration:** 5 calendar weeks (≈ 12–14 engineer-weeks, 2–3 engineers)
@@ -94,6 +94,7 @@ is imported.*
 | 15 | Security baseline (localhost bind, SSRF guard, zip-slip guard, path guard) | §37, §84 |
 | 16 | Test harness, fixtures, CI pipeline, coverage gates | §25.13, §58 |
 | 17 | ADR process, docs skeleton, `.env.example`, Dockerfile stub | §25.13, §48, §60 |
+| 18 | Outbox, corpus-generation stamping & tombstone primitives (foundation only) | §34, §39, §54, §73, §75–76, §82 |
 
 ### 2.2 Explicitly Out of Scope (Phase 0)
 
@@ -359,6 +360,9 @@ pub struct DerivationVersions {
     pub chunker_version: Option<SemVer>,
     pub embedding_model_version: Option<String>,
     pub graph_builder_version: Option<SemVer>,
+    /// Placeholder in Phase 0; Phase 1/2 populate it. Exists now so the type is
+    /// not reworked later (D0.18, ADR-0702 §2).
+    pub dependency_snapshot_id: Option<DependencySnapshotId>,
     pub schema_version: u32,
 }
 ```
@@ -583,6 +587,25 @@ pub trait Database: Send + Sync {
 }
 ```
 
+**Storage error taxonomy** (fixed now so later phases don't invent divergent names; aligns
+1:1 with ADR-0001 §2; each implements `Diagnostic` with a remedy + next command):
+
+```rust
+// crates/storage/src/error.rs
+#[derive(thiserror::Error, Debug)]
+pub enum StorageError {
+    Conflict,                       // unique/constraint clash on an expected-insert
+    NotFound { urn: String },
+    ImmutableSourceVersion,         // attempted write to a canonical/frozen row
+    ConstraintViolation { message: String }, // integrity rule in SQL or Rust
+    StorageBusy,                    // lock/timeout on the write pool
+    MigrationRequired { at_schema: u32, required: u32 },
+    MigrationChecksumMismatch { version: u32 },
+    IdempotencyKeyReplay,
+    StorageUnavailable,             // I/O, pool exhaustion, backend down
+}
+```
+
 **SQLite specifics**
 
 - `sqlx` with compile-time-checked queries; WAL; `synchronous=FULL`; `foreign_keys=ON`;
@@ -614,6 +637,11 @@ dialect-specific SQL lives behind `#[cfg]`-free trait impls per backend crate.
   migration fails CI.
 - **Reversibility policy:** `.down.sql` is required for all non-canonical tables. Canonical
   tables (created in Phase 1) may be forward-only; deactivation is used instead of deletion (§76).
+- **Backup/restore must use the SQLite online backup API (or `VACUUM INTO`), never a raw
+  `cp` / `fs::copy` of the live file** (ADR-0001 §7 rules this out because copying the file while
+  its WAL is active can produce a torn/inconsistent snapshot). `qai db backup` therefore opens the
+  source with a read connection and streams a validated snapshot; `qai db restore` verifies the
+  checksums and schema version before swapping it in.
 
 ---
 
@@ -1131,6 +1159,122 @@ job: msrv           -> build with pinned MSRV
 
 ---
 
+### D0.18 — Outbox, Generation Stamping & Tombstone Foundation
+
+**PRD:** §34, §39, §41, §54, §73, §75–76, §82, §85
+**ADR:** ADR-0702 §§2–4, 9 (foundational subset); ADR-0001 §6
+**Note:** this is **not** "build full multi-store consistency now". It builds the three
+relational primitives every later phase depends on (ADR-0702 was written after the rest of the
+Phase 0 plan; it retroactively imposes these), so Phase 2/3/7 only write *consumers* and never
+invent the pattern. The multi-store publish / reconcile / doctor-repair behavior stays Phase 7.
+
+#### 1.1 Domain additions (`domain` crate)
+
+```rust
+// crates/domain/src/generation.rs
+typed_id!(CorpusGenerationId);
+typed_id!(DependencySnapshotId);   // placeholder — no snapshot content until Phase 1/2
+typed_id!(OutboxEventId);
+typed_id!(TombstoneId);
+
+/// A scope over which generation numbers are monotonic (PRD §76, ADR-0702 §2).
+/// e.g. "quran:hafs-uthmani", "hadith:al-kafi", "global".
+pub struct CorpusScope(pub String);
+
+pub struct CorpusGeneration {
+    pub id: CorpusGenerationId,
+    pub scope: CorpusScope,
+    pub number: u64,           // monotonic within scope, never regresses
+    pub reason: String,        // what authoritative change caused this
+    pub created_at: Timestamp,
+}
+```
+
+- Allocation happens **inside the same write transaction** as the authoritative change that
+  requires it. In SQLite the single write pool already serializes this; document the equivalent
+  PostgreSQL `SELECT … FOR UPDATE` locking clause now so Phase 1/2 don't relearn it.
+- `DependencySnapshotId` is a placeholder type in Phase 0 (no real snapshot content yet; Phase 1/2
+  populate `dependency_snapshot_hash`). It exists now so `DerivationVersions` (D0.2) can reference
+  it instead of being reworked later.
+
+#### 1.2 Outbox
+
+```rust
+// crates/storage/src/outbox.rs
+pub trait OutboxRepository: Send {
+    fn enqueue(&mut self, event: NewOutboxEvent) -> Result<OutboxEventId, StorageError>;
+    // Dispatch/claim API mirrors JobRepository's lease semantics (D0.9) —
+    // reuse the same lease/heartbeat/ack code path, don't reinvent it.
+}
+
+pub struct NewOutboxEvent {
+    pub scope: CorpusScope,
+    pub target_generation: CorpusGenerationId,
+    pub operation: OutboxOperation,      // enum, closed set, extended per phase
+    pub subject_urn: String,
+    pub idempotency_key: String,
+    pub payload: serde_json::Value,
+}
+```
+
+- Every write that changes projection-relevant authoritative state (source activation,
+  provenance write, canonical-change session commit) **must** insert an outbox row in the same
+  transaction (ADR-0001 §6). D0.18 enforces this by wiring `OutboxRepository` into
+  `UnitOfWork` — i.e. `sources()`, `provenance()`, and future repos participate through the same
+  unit-of-work, so committing the change durably implies committing its outbox row.
+- Phase 0 ships a **generic relay job** (`system.outbox_relay`) that claims events with the
+  existing job-lease mechanism (D0.9) and marks them `Dispatched`. It has **no consumers yet**
+  (no FTS/vector/graph exist) — that is expected. What matters is that the contract, table, and
+  "commit implies durable outbox row" guarantee exist before Phase 2 needs it.
+
+#### 1.3 Tombstones
+
+```rust
+pub struct Tombstone {
+    pub id: TombstoneId,
+    pub subject_urn: String,
+    pub reason: TombstoneReason,   // Deactivated | LicenseRevoked | UserDeleted | Superseded
+    pub effective_at: Timestamp,
+    pub created_by: PrincipalId,
+    pub propagation_state: PropagationState, // Pending | Propagated | PartiallyFailed
+}
+```
+
+- Wired into `sources`: deactivation/rollback (which already exist in the source state machine)
+  must now **write a tombstone row + outbox event**, not only flip `state`.
+- Retrieval-layer consumers don't exist yet, but the **rule** — "current policy blocks retrieval
+  immediately even while physical cleanup is pending" (ADR-0702 §9) — needs the tombstone table
+  to exist so nothing in Phase 1+ bolts it on as an afterthought.
+
+#### 1.4 Migration
+
+`0006_outbox_generations_tombstones.up.sql` — see §5. Append-only triggers included so the core
+facts (scope/number/reason for generations; subject/reason/effective_at for tombstones) cannot be
+mutated after insert; only `outbox_events.state/lease_owner/lease_expires_at/attempts` are writable.
+
+#### 1.5 Tasks
+
+Fits in **Sprint 0.3**, alongside provenance/sources (they share transactions).
+
+| ID | Task | Depends | Est | Role |
+|---|---|---|---|---|
+| P0-T61 | Migration `0006_outbox_generations_tombstones` | T20 | 1.0 | BE |
+| P0-T62 | `CorpusGeneration` allocator with transactional monotonicity guarantee + concurrency test | T61 | 1.5 | BE |
+| P0-T63 | `OutboxRepository` + wiring into `sources`/`provenance` write paths (every relevant commit inserts an event) | T61, T23, T31 | 2.0 | BE |
+| P0-T64 | Generic outbox-relay job (`system.outbox_relay`) reusing job lease/heartbeat/backoff | T61, T37 | 1.0 | BE |
+| P0-T65 | `Tombstone` model + wiring into source deactivation/rollback | T61, T31 | 1.5 | BE |
+| P0-T66 | Doctor checks: `outbox.backlog_age`, `outbox.dead_letter_count`, `generations.monotonicity`, `tombstones.unpropagated_count` | T52, T63, T65 | 1.5 | BE |
+| P0-T67 | Cross-store consistency test suite subset (§8.3) | T63, T62 | 2.0 | BE |
+
+*(+9.5 ed to the Phase 0 total — still fits within slack if D0.17 doc depth is trimmed, as R1's
+mitigation already allows.)*
+
+#### 1.6 Acceptance Criteria
+
+See §9 — AC-P0-23 through AC-P0-26.
+
+---
+
 ## 5. Database Schema (Phase 0 Migrations)
 
 ### `0001_core.up.sql`
@@ -1450,6 +1594,59 @@ CREATE TRIGGER trg_audit_no_delete BEFORE DELETE ON audit_events
 BEGIN SELECT RAISE(ABORT, 'QAI-AUD-0002: audit log is append-only'); END;
 ```
 
+### `0006_outbox_generations_tombstones.up.sql`
+
+```sql
+CREATE TABLE corpus_generations (
+  id            TEXT PRIMARY KEY,
+  scope         TEXT NOT NULL,
+  number        INTEGER NOT NULL,
+  reason        TEXT NOT NULL,
+  created_at    TEXT NOT NULL,
+  UNIQUE (scope, number)
+);
+CREATE INDEX ix_corpus_generations_scope ON corpus_generations(scope, number DESC);
+
+CREATE TABLE outbox_events (
+  id                  TEXT PRIMARY KEY,
+  scope               TEXT NOT NULL,
+  target_generation   TEXT NOT NULL REFERENCES corpus_generations(id),
+  operation           TEXT NOT NULL,
+  subject_urn         TEXT NOT NULL,
+  idempotency_key     TEXT NOT NULL,
+  payload_json        TEXT NOT NULL,
+  state               TEXT NOT NULL CHECK (state IN ('Pending','Claimed','Dispatched','Failed')),
+  lease_owner         TEXT,
+  lease_expires_at    TEXT,
+  attempts            INTEGER NOT NULL DEFAULT 0,
+  created_at          TEXT NOT NULL,
+  dispatched_at       TEXT,
+  UNIQUE (operation, idempotency_key)
+);
+CREATE INDEX ix_outbox_claim ON outbox_events(state, created_at);
+
+CREATE TABLE tombstones (
+  id                 TEXT PRIMARY KEY,
+  subject_urn        TEXT NOT NULL,
+  reason             TEXT NOT NULL,
+  effective_at       TEXT NOT NULL,
+  created_by         TEXT REFERENCES principals(id),
+  propagation_state  TEXT NOT NULL CHECK (propagation_state IN ('Pending','Propagated','PartiallyFailed')),
+  UNIQUE (subject_urn, effective_at)
+);
+CREATE INDEX ix_tombstones_subject ON tombstones(subject_urn);
+
+-- Generations and tombstones are append-only for their core facts
+-- (outbox_events.state/lease/attempts are the only writable columns on that table).
+CREATE TRIGGER trg_corpus_generations_immutable
+BEFORE UPDATE ON corpus_generations
+BEGIN SELECT RAISE(ABORT, 'QAI-DB-0010: generations are append-only'); END;
+
+CREATE TRIGGER trg_tombstones_immutable
+BEFORE UPDATE ON tombstones
+BEGIN SELECT RAISE(ABORT, 'QAI-DB-0011: tombstones are append-only'); END;
+```
+
 ---
 
 ## 6. ADRs Required In Phase 0
@@ -1468,6 +1665,37 @@ BEGIN SELECT RAISE(ABORT, 'QAI-AUD-0002: audit log is append-only'); END;
 | ADR-0010 | Error taxonomy & CLI exit codes | D0.3, D0.13 | granularity vs. stability |
 | ADR-0011 | Observability stack: `tracing` + `metrics` + optional OTLP; telemetry opt-in | D0.8 | insight vs. privacy (§39) |
 | ADR-0012 | Workspace/crate boundaries & dependency-direction enforcement | D0.1 | many small crates vs. build time |
+| ADR-0702 (adopted early) | Cross-store consistency, generation stamping, reconciliation | D0.18 | Phase 0 scope split vs. Phase 7 depth |
+
+---
+
+> **⚠️ ADR numbering collision — resolve before writing more ADRs (task P0-T59b).**
+>
+> Two numbering schemes are currently in flight. The Phase 0 ADR table above numbers
+> `ADR-0001 … ADR-0012` (the **sequential** scheme), but the ADR files on disk already use a
+> **phase-coded** scheme for later phases (`ADR-0201`, `ADR-0202`, `ADR-0701`, `ADR-0702`). Three
+> concrete discrepancies need reconciling once, before Phase 2/3/7 ADRs multiply the ambiguity:
+>
+> 1. The Phase 0 relational-store ADR is titled "ADR-0001" *inside* a file named
+>    `ADR-0004-relational-store.md`.
+> 2. `ADR-0002-database.md` is actually a **survey/recommendation memo** ("Part A — Database engine
+>    recommendation"), not the plan's ADR-0002 "Migration strategy: append-only checksummed SQL".
+> 3. The plan table itself uses `ADR-nnn` sequential IDs for Phase 0 while every other phase uses
+>    `ADR-0Xnn`.
+>
+> **Decision (adopt now):** use the phase-coded scheme everywhere (`ADR-00nn` for Phase 0,
+> `ADR-02nn` for Phase 2, `ADR-07nn` for Phase 7). Actions executed by P0-T59b and its ADR-index
+> sibling P0-T59:
+> - Rename `ADR-0004-relational-store.md` → `ADR-0001-relational-store.md` (its content already says
+>   ADR-0001, only the filename is wrong).
+> - Retitle `ADR-0002-database.md` as a non-ADR doc (e.g. `docs/architecture/database-engine-survey.md`)
+>   **and** write the real "ADR-0002 — Migration Strategy" the plan already defines; or, if simpler,
+>   renumber the survey doc out of the ADR sequence entirely.
+> - Update the Phase 0 table map to the phase-coded IDs and re-run the ADR lint (AC-P0-19).
+>
+> ADR-0702's own status note records the **scope split** this plan applies: Phase 0 implements only
+> §§2–4 and §9 (outbox, generations, tombstones, immediate-retrieval-blocking rule); §§5–8, 10–11
+> (multi-store publish/reconcile/doctor-repair) remain Phase 7 scope.
 
 Each uses the §48 template, including the *Religious-source implications* section
 (for Phase 0 ADRs this is usually "none directly, but constrains Phase 1 canonical integrity" —
@@ -1478,7 +1706,8 @@ and that reasoning must be written down, not omitted).
 ## 7. Work Breakdown Structure
 
 Estimates are engineer-days (ed). Roles: **BE** backend/Rust, **INF** infra/CI, **SEC** security,
-**DOC** docs. Total ≈ **68 ed** ⇒ ~5 weeks with 3 engineers including review and slack.
+**DOC** docs. Total ≈ **77.5 ed** (68 + 9.5 from D0.18 outbox/generations/tombstones) ⇒ ~5 weeks
+with 3 engineers including review and slack, still within the R1 slack if D0.17 depth is trimmed.
 
 ### Sprint 0.1 — Skeleton & Contracts (Week 1)
 
@@ -1528,6 +1757,13 @@ Estimates are engineer-days (ed). Roles: **BE** backend/Rust, **INF** infra/CI, 
 | P0-T32 | `sources`: genealogy resolver, cycle detection, lineage rendering | D0.10 | T28 | 1.5 | BE |
 | P0-T33 | `sources`: `StructureValidator` registry + `DifferenceReport` framework | D0.10 | T31 | 1.5 | BE |
 | P0-T34 | ADR-0007/0008/0009 | ADR | T30,T23,T26 | 1.5 | DOC |
+| P0-T61 | Migration `0006_outbox_generations_tombstones` | D0.18 | T20 | 1.0 | BE |
+| P0-T62 | `CorpusGeneration` allocator: transactional monotonicity + concurrency test | D0.18 | T61 | 1.5 | BE |
+| P0-T63 | `OutboxRepository` + wiring into `sources`/`provenance` write paths | D0.18 | T61,T23,T31 | 2.0 | BE |
+| P0-T64 | Generic outbox-relay job (`system.outbox_relay`) reusing job lease/heartbeat | D0.18 | T61,T37 | 1.0 | BE |
+| P0-T65 | `Tombstone` model + wiring into source deactivation/rollback | D0.18 | T61,T31 | 1.5 | BE |
+| P0-T66 | Doctor checks: `outbox.backlog_age`, `outbox.dead_letter_count`, `generations.monotonicity`, `tombstones.unpropagated_count` | D0.14 | T52,T63,T65 | 1.5 | BE |
+| P0-T67 | Cross-store consistency test suite subset (§8.3) | D0.16 | T63,T62 | 2.0 | BE |
 
 ### Sprint 0.4 — Jobs, Security Guards, Observability (Week 4)
 
@@ -1563,6 +1799,7 @@ Estimates are engineer-days (ed). Roles: **BE** backend/Rust, **INF** infra/CI, 
 | P0-T57 | `testkit` crate finalization + fixtures + deterministic clock/UUID | D0.16 | T18 | 2.0 | BE |
 | P0-T58 | Architecture docs, runbooks, CONTRIBUTING/DoD PR template | D0.17 | all | 2.5 | DOC |
 | P0-T59 | ADR-0010 + ADR index + template lint (all §48 fields present) | ADR | T09 | 1.0 | DOC |
+| P0-T59b | Reconcile ADR numbering scheme + rename ADR files (see §6 note) | ADR | T59 | 0.5 | DOC |
 | P0-T60 | Phase-0 exit-gate review, AC verification, Phase-1 handoff doc | — | all | 1.5 | all |
 
 ---
@@ -1593,6 +1830,18 @@ Estimates are engineer-days (ed). Roles: **BE** backend/Rust, **INF** infra/CI, 
 - `config`, `jobs`, `storage-sqlite`: **≥ 75%**.
 - CLI/server: smoke + snapshot coverage, no numeric gate.
 
+### 8.3 Cross-store consistency suite (D0.18, task P0-T67)
+
+| Suite | What it proves |
+|---|---|
+| `tests/consistency/commit_bounds_outbox.rs` | A fault-injection test proves a commit-without-outbox-row is **impossible by construction**: the outbox insert is in the same SQLite transaction as the authoritative change (not fixed by retry). Simulated crash between the two writes rolls back together. |
+| `tests/consistency/outbox_idempotency.rs` | Duplicate enqueue with the same `(operation, idempotency_key)` yields exactly one event. |
+| `tests/consistency/generation_monotonicity.rs` | `corpus_generations.number` never regresses under 50 concurrent writers targeting the same scope. |
+| `tests/consistency/tombstone_before_visibility.rs` | Deactivating/rolling back a source writes a tombstone before the state-machine transition is visible to readers. |
+
+These are the Phase-0 subset; each later phase (FTS/graph/vector builders) adds its own
+consumer-level cross-store test on top of these primitives.
+
 ---
 
 ## 9. Acceptance Criteria (Phase 0 Exit Gate)
@@ -1621,6 +1870,10 @@ Estimates are engineer-days (ed). Roles: **BE** backend/Rust, **INF** infra/CI, 
 | AC-P0-20 | Docs complete: crate map, data-layer spec, source lifecycle, hashing spec, error codes, 5 runbooks, `.env.example`, example configs | doc review checklist |
 | AC-P0-21 | `qai db backup` / `qai db restore` round-trip a populated database with byte-identical audit chain verification afterwards | scripted test |
 | AC-P0-22 | Coverage gates met (§8.2) | CI coverage report |
+| AC-P0-23 | Every commit to `sources` or `provenance_records` that PRD/ADR-0702 classifies as "projection-relevant" produces exactly one durable outbox row in the same transaction; a fault-injection test proves a crash between the two is impossible by construction, not by retry | §8.3 suite |
+| AC-P0-24 | `corpus_generations.number` never regresses under 50 concurrent writers targeting the same scope | concurrency stress test |
+| AC-P0-25 | Deactivating/rolling back a source writes a tombstone before the state-machine transition is visible to readers | consistency suite |
+| AC-P0-26 | `qai doctor` reports outbox backlog age and undispatched-event count without mutating data | read-only + JSON test |
 
 **Exit gate ritual:** a recorded walkthrough where a reviewer performs `AC-P0-03`, `05`, `06`,
 `08`, `11`, `14`, `16` live on a clean machine.
@@ -1683,6 +1936,7 @@ Phase 1 receives and must not re-invent:
 | `Untrusted<T>`, path/archive/SSRF guards | `security` | importing a downloaded edition archive |
 | `testkit` fixtures | `crates/testkit` | Quran corpus golden-file harness |
 | Error-code namespace `QAI-QUR-*` | `domain::error` | reserved and ready |
+| `CorpusGeneration`, `OutboxRepository`, `Tombstone` | `storage`, `domain::generation` | Quran import allocates the first generation for scope `quran:<edition>`; FTS/graph/vector builders in later phases consume outbox events instead of polling |
 
 **Handoff document:** `docs/plans/handoff-p0-to-p1.md`, produced by task P0-T60, listing the
 above plus known limitations and any deferred items with owners.
