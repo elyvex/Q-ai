@@ -2072,4 +2072,141 @@ results are diffed against the previous run in CI; a regression on any hard gate
 | AC-P2-06 | No `SearchHit` can exist without a `NormalizationTrace`; every trace lists the ordered rule ids and flags heuristics | type test + snapshot |
 | AC-P2-07 | Searching `الرحمن` (no diacritics) returns 1:1, 1:3, 2:163 and the full expected reference set; searching the exact Uthmani form returns the same set | golden query |
 | AC-P2-08 | Searching `بسمالله` (no spaces, no diacritics) returns 1:1 with a segmentation explanation mapping each query part to canonical tokens 1 and 2 | golden query |
-| AC-P2-09 | A Persian-keyboard query (`ک`/`ی`
+| AC-P2-09 | A Persian-keyboard query (`ک`/`ی`/`ه` variants) matches the correct Arabic text under `L5.codepoints`, and returns zero results under `L0.exact` **with a warning naming the profile to use** — never a silent fold | golden query pair |
+| AC-P2-10 | Profile monotonicity holds: for every golden query, `results(Lₙ) ⊆ results(Lₙ₊₁)` across all indexed profiles | property suite |
+| AC-P2-11 | Every search hit maps to exact canonical character and token ranges; slicing the canonical text at that range and re-normalizing reproduces the matched derived substring | property suite |
+| AC-P2-12 | The citation resolver validates every search hit; a hit whose quotation fails verification is never returned | citation suite |
+| AC-P2-13 | `quran.search_regex` rejects or bounds all 15 pathological patterns within limits; `terms_examined` and `documents_scanned` are reported; the rate limit is enforced | DoS suite |
+| AC-P2-14 | All 400 search golden queries pass, including `must_not_contain` assertions (no false positives) | golden suite |
+| AC-P2-15 | Morphology import: all 18 adversarial fixtures are rejected with the **specific** expected MV rule id | adversarial suite |
+| AC-P2-16 | Alignment never modifies `quran_tokens`; `AlignmentTable` unmatched ratio is reported per surah and gates approval above threshold | integrity + import test |
+| AC-P2-17 | The schema contains **no** `is_correct`, `is_primary`, or `selected` column on analyses; a token with competing analyses returns all of them with attribution | schema test + golden case |
+| AC-P2-18 | `quran.morphology_compare` returns per-field verdicts (`identical`/`compatible_variant`/`conflicting`/`only_in_one`) and has **no** resolution or synthesis field | contract test + code review |
+| AC-P2-19 | `analysis_sources` always reports `analyses_returned` and `analyses_suppressed`; suppression is never silent under any `AnalysisPolicy` | policy matrix test |
+| AC-P2-20 | Every root, lemma, analysis, and derived form row has a provenance record at Layer B or D — never Layer A | doctor `quran.morphology.provenance` |
+| AC-P2-21 | Every Layer D row carries algorithm, version, and confidence, and cannot reach `human_verified` without a reviewer id | DB CHECK tests |
+| AC-P2-22 | Cross-dataset roots with differing spellings are **linked as reviewable suggestions**, never merged; the review queue shows the evidence before acceptance | non-merge test + queue test |
+| AC-P2-23 | All 300 root and 200 lemma golden cases pass with precision 1.00 and recall ≥ 0.99 against dataset ground truth | evaluation harness |
+| AC-P2-24 | Morphological segmentation matches the source dataset at ≥ 0.995 (import faithfulness) | evaluation harness |
+| AC-P2-25 | `quran.word_family` returns members grouped by relation class; every member carries a human-readable explanation; the 120-family curated set scores ≥ 0.95 on linguist review | family suite + linguist sign-off |
+| AC-P2-26 | Computational suggestions are **off by default**, require opt-in, carry confidence, and render with the mandatory "not verified scholarship" label in CLI, API, and tool output | default-behavior test + snapshot |
+| AC-P2-27 | A suggestion becomes `ScholarVerified` only through the review queue with a recorded reviewer, timestamp, and displayed evidence | promotion-flow test |
+| AC-P2-28 | Every numeric output carries a complete `CountingRules` block; two runs with identical rules produce identical numbers; changing `multi_analysis_handling` visibly changes the reported count and the rules block | determinism suite |
+| AC-P2-29 | `quran.numeric_report` contains no interpretive commentary; `quran.interval_analysis` and `quran.missing_expected_form` emit their mandatory disclaimers verbatim | snapshot tests |
+| AC-P2-30 | `quran.hapax_search` results change with profile and the output states the profile prominently — proving counts are rule-relative, not absolute | golden case |
+| AC-P2-31 | Index builds are atomic: killing the build at any stage never activates a partial index; the previous generation continues serving | crash matrix |
+| AC-P2-32 | `qai quran index rebuild --all` reconstructs every index from canonical sources + manifests, and a full cold rebuild completes in < 6 minutes | timed run |
+| AC-P2-33 | Bumping any input version (corpus generation, profile version, dataset version, tokenizer version) produces the exact expected drift report from `doctor --indexes`, and every affected tool result carries a `QAI-IDX-0101` staleness warning | drift suite |
+| AC-P2-34 | Drift is never auto-repaired; `doctor` remains read-only and only suggests `qai quran morphology reindex` | read-only test |
+| AC-P2-35 | No stale cached result is served across a generation bump | cache-consistency test |
+| AC-P2-36 | `quran-normalization`, `quran-search`, and `quran-morphology` have no dependency on `llm`, `embeddings`, `retrieval`, or any vector store crate | architecture test |
+| AC-P2-37 | All 22 Phase-2 tools conform to the §12 contract, are `ReadOnly`, populate `normalization_rules`, and produce identical `reproducibility.checksum` for identical inputs on the same generation | tool conformance suite |
+| AC-P2-38 | `qai quran normalize --explain` shows the rule-by-rule transformation with offset maps and flags heuristic rules | snapshot test |
+| AC-P2-39 | `POST /api/v1/quran/normalization/preview` returns the same step-by-step trace as the CLI, from the same code path | parity test |
+| AC-P2-40 | The query tokenizer and index tokenizer produce identical output for 5,000 random ayah substrings | parity test |
+| AC-P2-41 | All 19 Phase-2 `doctor` checks are implemented; `quran.search.smoke` fails loudly on any tokenizer or profile regression | doctor run + mutation test |
+| AC-P2-42 | Nightly reconciliation verifies doc counts, a 1 % sampled round-trip, lexicon foreign keys, orphan generations, and MV-018 | nightly job |
+| AC-P2-43 | All latency targets in §17.1 are met and gated in CI with ≤ 20 % regression tolerance | benchmark suite |
+| AC-P2-44 | All hard accuracy gates in §17.2 pass; evaluation results are versioned and diffed against the previous run | evaluation harness |
+| AC-P2-45 | Two morphology adapters exist for structurally different dataset shapes, proving a new dataset needs only an adapter + manifest | adapter tests |
+| AC-P2-46 | The linguist has signed off on the normalization golden set, root/lemma golden set, and family curated set; sign-off records are stored in `docs/reviews/` | signed review records |
+| AC-P2-47 | ADRs 0201, 0203–0216 are `Accepted` with all §48 fields; ADR-0206 is recorded as `Reserved` with the decision deferred to Phase 4 | ADR lint |
+| AC-P2-48 | Docs complete: normalization spec with mapping tables, profile catalog, search cookbook, morphology adapter guide, counting-rules explainer, reindex runbook | doc review checklist |
+| AC-P2-49 | Full soak passes: rebuild all indexes → 50,000 randomized queries across all tools → `doctor` → reconciliation, with zero integrity findings, zero panics, and zero canonical-hash changes | nightly soak |
+| AC-P2-50 | The MVP linguistic workflow (§44.3) succeeds end-to-end via CLI **and** API: search without diacritics → search without spaces → select a word → inspect lemma/root/morphology/word-family → view all occurrences | scripted acceptance run |
+
+**Exit gate ritual:** a live walkthrough on a clean machine performing AC-P2-05, 07, 08, 09, 17,
+22, 26, 28, 31, 33, 50 in sequence, witnessed by the Arabic linguist and the editorial reviewer
+from Phase 1.
+
+---
+
+## 19. Risks & Mitigations
+
+| # | Risk | L | I | Mitigation |
+|---|---|---|---|---|
+| R1 | No licensable morphology dataset; root/lemma/family features become empty shells | Medium | Critical | Sprint 2.0 starts during Phase 1; ADR-0203 pre-commits to the user-supplied fallback with a public-domain test lexicon; tools return typed "dataset unavailable" errors that name the missing capability — never guessed data; the search half of Phase 2 ships regardless |
+| R2 | Normalization rules are linguistically wrong, silently degrading recall or precision forever | High | Critical | A qualified Arabic linguist authors and reviews the rule catalog (P2-T04/T05) *before* implementation; every rule has a published mapping table and a documented loss statement; 2,000-pair golden set with linguist sign-off; profile monotonicity property test catches inconsistent ordering |
+| R3 | Dataset tokenization disagrees with Phase-1 surface tokenization; alignment becomes guesswork | High | Critical | Alignment is an explicit, hashed, auditable source file (`AlignmentTable`), never inferred; unmatched ratio is reported per surah and gates approval; re-tokenizing canonical text is architecturally impossible (Phase-1 triggers) |
+| R4 | `SpanMap` bugs produce wrong highlights and unverifiable citations | High | High | 5 properties tested across every ayah × every profile; the citation resolver independently re-verifies every hit; `--explain` output makes maps human-inspectable; 92 % coverage gate on the normalization crate |
+| R5 | Concatenated search either misses cross-boundary matches or explodes combinatorially | High | High | Skeleton + trigram candidate generation with exact verification bounds the work; the 3-ayah window level is a fixed cost (not combinatorial); dedup + `spans_ayah_boundary` labeling; 120-case golden set including cross-ayah cases; p99 gated at 150 ms |
+| R6 | Tokenizer drift between query path and index path produces unexplainable misses | Medium | High | Both paths call the same `NormalizationPipeline` instance (T31); a 5,000-substring parity test is a hard CI gate; `search.smoke` catches regressions at runtime |
+| R7 | Users treat frequency counts as absolute, then dispute them (numerology pressure) | High | Medium | `CountingRules` is a required, prominently rendered field; `multi_analysis_handling` is explicit; `numeric_report` forbids interpretive commentary; `interval_analysis` carries a fixed disclaimer; `hapax_search` demonstrates rule-relativity by design |
+| R8 | Pressure to pick "the correct" morphological analysis for a cleaner UI | High | Critical | I11 is enforced at the schema level (no such column exists); `AnalysisPolicy` is a *query-time* choice always echoed in output with suppression counts; AC-P2-17/18/19 make regression detectable; ADR-0209 records why |
+| R9 | Cross-dataset root unification quietly merges distinct roots | Medium | High | Unification is only ever a `review_queue` suggestion with confidence; `canonical_root_id` is nullable and Layer D; non-merge test in the integrity suite |
+| R10 | Index rebuild time grows until "rebuildable from source" becomes theoretical | Medium | Medium | < 6 min cold-rebuild is a CI-gated benchmark from Sprint 2.2 onward; batch writers, parallel per-profile builds, and staging directories keep it flat |
+| R11 | Regex or collocation tools become a local DoS vector | Medium | Medium | DFA engine (no backtracking), size/step/time budgets, anchor requirement, rate limits, per-principal quotas, agent-policy gating; 15-pattern abuse suite |
+| R12 | Result cache serves stale data after a corpus or index change | Medium | High | Cache key includes corpus generation and every index manifest hash; wholesale invalidation on any bump; dedicated cache-consistency test |
+| R13 | Scope creep into semantic/vector search or graph features | High | Medium | §2.2 fence is explicit and lists each deferred tool with its target phase; architecture test forbids the embedding/vector dependencies outright |
+| R14 | Heuristic affix rules (N18–N21) are mistaken for real morphology | High | High | `RuleKind::Heuristic` is a first-class flag; `contains_heuristic_rules` appears on every trace; `affix_search` labels which backend answered; UI/CLI copy is fixed and snapshot-tested |
+| R15 | Linguist unavailable, blocking golden-set sign-off | Medium | High | Linguist engaged at 0.4 FTE from Sprint 2.0; golden-set authoring is front-loaded into Sprint 2.0; sized at ≈ 14 linguist-days total across the phase |
+| R16 | Tantivy custom tokenizer complexity underestimated | Medium | Medium | Tokenizers are thin wrappers over the already-tested `NormalizationPipeline`; the parity test de-risks the integration; ADR-0201 records the FTS5 fallback and its cost |
+
+---
+
+## 20. Definition of Done (Phase 2)
+
+In addition to the Phase-0 and Phase-1 DoD, every Phase-2 deliverable requires:
+
+- [ ] Canonical text provably unchanged (MV-018 runs in the same job that produced the artifact)
+- [ ] Derived data written only to derived tables/indexes, at Layer B or D, with provenance
+- [ ] Every user-visible result carries the ordered normalization rule set actually applied
+- [ ] Every match maps back to exact canonical character, byte, and token ranges
+- [ ] Heuristic and computational outputs are labeled as such in CLI, API, and tool payloads
+- [ ] Competing analyses are preserved and attributed; suppression is counted and reported
+- [ ] Every numeric output carries complete, reproducible counting rules
+- [ ] Deterministic operations require no LLM (architecture test proves the absence of the dep)
+- [ ] Resource limits enforced: result caps, timeouts, regex budgets, rate limits
+- [ ] Derived artifacts record `corpus_generation` + all input versions; drift is detectable
+- [ ] Index/dataset activation is atomic, approved, audited, and single-step reversible
+- [ ] Golden-set and property tests exist and are linguist-reviewed where linguistic judgment applies
+- [ ] Latency benchmarks gated in CI
+- [ ] `qai doctor` can detect the failure mode this deliverable introduces
+
+---
+
+## 21. Handoff To Phase 3
+
+| Asset | Location | Phase-3 usage |
+|---|---|---|
+| `quran_roots`, `quran_lemmas` rows | `quran-morphology` | promoted to `Root` / `Lemma` graph nodes (§10.1) |
+| `quran_token_analyses`, `quran_morphemes` | `quran-morphology` | `HAS_LEMMA`, `HAS_ROOT`, `HAS_STEM`, `HAS_PREFIX`, `HAS_SUFFIX`, `HAS_ANALYSIS` edges |
+| `quran_derivations` (Layer B) | `quran-morphology` | `DERIVED_FROM` edges with dataset provenance |
+| `word_family_relations` (Layer C) | `quran-morphology` | `SAME_ROOT_AS`, `SAME_LEMMA_AS` scholar-verified edges |
+| `near_duplicate_passages` output | `quran-search` | candidate `PARALLELS` / `SIMILAR_TO` edges → `review_queue` |
+| Collocation / co-occurrence stats | `quran-search` | weights and candidate generation for `RELATED_TO` suggestions |
+| `NormalizationPipeline` + profiles | `quran-normalization` | node key normalization; graph-query text matching |
+| `SpanMap` | `quran-normalization` | mapping graph annotations to canonical spans |
+| `FullTextIndex` trait + Tantivy backend | `quran-search` | reused verbatim in Phase 5 (hadith) and Phase 7 (multi-RAG lexical leg) |
+| Index generation stamping + drift detection | `quran-search` | graph store adopts the identical manifest pattern |
+| `review_queue` promotion flow | `application` | the mechanism for §10.6 semi-automated graph annotation |
+| `CountingRules` | `application::tools` | graph metrics and path counts inherit the same discipline |
+| Tool contract with populated `normalization_rules` | `application::tools` | graph tools complete the contract with `graph_version` |
+| Error namespaces `QAI-NORM-*`, `QAI-IDX-*` | `domain::error` | `QAI-GRAPH-*` reserved next |
+| Golden sets + evaluation harness | `fixtures/`, `tests/` | extended with graph path-correctness sets (§36.1) |
+
+**Handoff document:** `docs/plans/handoff-p2-to-p3.md` (task P2-T114), containing the frozen
+profile catalog with versions, the active morphology dataset and its attribution string, the
+list of Layer D rows awaiting review, the deferred-tool list from §2.2 with target phases, and
+every place Phase 3 must record `graph_version` alongside the existing version stamps.
+
+---
+
+## 22. Summary
+
+Phase 2 converts a verified corpus into a research instrument without weakening a single
+integrity guarantee. Its defining choices:
+
+1. **Normalization is a versioned, inspectable, reversible transformation** — never an edit.
+   Canonical text is read-only input to every index build, and that is mechanically re-verified
+   after every job.
+2. **Every match explains itself.** The rule set, the segmentation, the offsets, and the score
+   are all part of the result, because a search hit a user cannot verify is not research.
+3. **Competing scholarship stays competing.** There is no column in which a "correct" analysis
+   could be stored, so no future feature can accidentally introduce one.
+4. **Machine output is permanently distinguishable from dataset-supplied and scholar-verified
+   data**, and can only cross that line through an explicit human decision with displayed
+   evidence.
+5. **Numbers carry their rules.** This single discipline defuses the most common category of
+   dispute in Quranic word-counting.
+6. **Nothing here needs an LLM**, and the build system proves it.
