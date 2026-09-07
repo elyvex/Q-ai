@@ -100,6 +100,15 @@ _No tasks completed yet._
 - **DoD:** ⚠️ items 4,9,10,11,12,13 not applicable — policy/CI only; deny itself not executable on host (no `cargo-deny`), enforced in CI.
 - **Notes:** The `deny` CI job runs `cargo deny check --all-features advisories bans licenses sources` via `embarkstudios/cargo-deny-action@v2`. Lint + arch jobs added as scaffold for T11; full test-3os/schemas/doctor/coverage land in T11.
 
+### P0-T04 — Placeholder crates for all PRD §87 crates with `//! Phase N` doc comments
+- **Deliverable:** D0.1
+- **Completed:** 2026-09-06
+- **Owner:** implementing engineer (BE)
+- **PR / commit:** `main` (worktree-local)
+- **Evidence:** `python3 /tmp/check_crates.py` — all 46 PRD §87 crates present (0 missing); 4 infra crates (`observability`, `storage-sqlite`, `testkit`, `xtask`) added; every `crates/*/src/lib.rs` verified as a pure `//! Phase N` placeholder (no logic/fns/impls). `cargo check --workspace` agrees (50 crates build with no code).
+- **DoD:** ⚠️ items 2,4,7,9,10,11,12,13 not applicable — placeholders contain only doc comments.
+- **Notes:** Phase tags per §88 domain mapping: P1 quran-core/corpus/citations; P2 normalization/morphology/search; P3 graph/rag/embeddings/reranking; P4 ingestion/retrieval; P5 hadith/isnad/tafsir/scripture; P7 tools/agents/policy/etc.; P9 server/tui. Flagged: `rag`(P3)/`ingestion`(P4)/`retrieval`(P4) tag vs PRD §88 "Multi-RAG(9), source catalogs(13)" — minor, for orchestrator to confirm.
+
 ---
 
 ## 3. Verified Acceptance Criteria
