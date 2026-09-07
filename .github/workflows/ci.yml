@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ---------------------------------------------------------------- deny
+  # cargo-deny: advisories, bans, licenses, sources (AC-P0-01/03; plan §8.7).
+  deny:
+    name: Deny (advisories / bans / licenses / sources)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: embarkstudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --all-features advisories bans licenses sources
+          log-level: warn
+
+  # ---------------------------------------------------------------- fmt + clippy
+  lint:
+    name: Lint (fmt + clippy -D warnings)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: fmt
+        run: cargo fmt --all -- --check
+
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  # ---------------------------------------------------------------- arch-check + migrate-check
+  arch:
+    name: Arch (arch-check + migrate-check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: arch-check
+        run: cargo run -p xtask -- arch-check
+
+      - name: migrate-check
+        run: cargo run -p xtask -- migrate-check

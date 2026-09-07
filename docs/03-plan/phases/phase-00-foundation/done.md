@@ -91,6 +91,15 @@ _No tasks completed yet._
 - **DoD:** ⚠️ items 4,9,11,12 not applicable for pure build-tooling (no domain logic / provenance / config yet); deny gate executed via CI (not host).
 - **Notes:** `arch-check` reads `xtask/allowlist.toml` (readme §6 faithful). `cargo-deny` absent on host → CI-only. `[workspace.lints.clippy]` left empty to avoid flooding placeholders (R1).
 
+### P0-T03 — `deny.toml` license/advisory policy + CI job
+- **Deliverable:** D0.1
+- **Completed:** 2026-09-06
+- **Owner:** implementing engineer (INF)
+- **PR / commit:** `main` (worktree-local)
+- **Evidence:** deny job definition in `.github/workflows/ci.yml` (validated YAML via PyYAML). `deny.toml` authored in T01: license allowlist (MIT/Apache-2.0/BSD/ISC/Unicode-Dfs/Zlib/MPL-2.0), GPL/AGPL/LGPL denied, registry allowlist, advisory DB.
+- **DoD:** ⚠️ items 4,9,10,11,12,13 not applicable — policy/CI only; deny itself not executable on host (no `cargo-deny`), enforced in CI.
+- **Notes:** The `deny` CI job runs `cargo deny check --all-features advisories bans licenses sources` via `embarkstudios/cargo-deny-action@v2`. Lint + arch jobs added as scaffold for T11; full test-3os/schemas/doctor/coverage land in T11.
+
 ---
 
 ## 3. Verified Acceptance Criteria
