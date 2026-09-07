@@ -1,0 +1,48 @@
+# Q-ai dependency-direction allowlist for `cargo xtask arch-check`.
+# Enforced in CI (AC-P0-02). Source of truth: docs/03-plan/phases/phase-00-foundation/readme.md §6.
+#
+# Semantics:
+#   workspace.allow   = workspace crates whose EDGE to this crate is legal.
+#   external.allow    = (reserved) external crates permitted; unused for now.
+#   workspace.deny    = workspace crates that MUST NOT be depended on (fail-closed even if allow empty).
+#
+# A crate NOT listed here is treated as "allow = []", i.e. it must have no workspace
+# dependencies at all (this catches accidental coupling from newly-added crates).
+[domain]
+workspace = { allow = [] }
+
+[application]
+workspace = { allow = ["domain", "storage", "provenance", "audit", "jobs", "sources", "config"] }
+
+[storage]
+workspace = { allow = ["domain"] }
+
+[storage-sqlite]
+workspace = { allow = ["storage", "domain"] }
+
+[provenance]
+workspace = { allow = ["domain", "storage"] }
+
+[audit]
+workspace = { allow = ["domain", "storage"] }
+
+[jobs]
+workspace = { allow = ["domain", "storage", "observability"] }
+
+[sources]
+workspace = { allow = ["domain", "storage", "provenance"] }
+
+[cli]
+workspace = { allow = ["application", "config", "observability"] }
+
+[server]
+workspace = { allow = ["application", "config", "observability"] }
+
+[observability]
+workspace = { allow = [] }
+
+[testkit]
+workspace = { allow = [] }
+
+[xtask]
+workspace = { allow = [] }

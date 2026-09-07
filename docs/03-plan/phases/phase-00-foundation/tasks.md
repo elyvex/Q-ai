@@ -36,7 +36,7 @@ retrospective with any cell reading `_unassigned_`.
 | ID | Task | Deliv. | Depends | Est | Role | Status |
 |---|---|---|---|---|---|---|
 | P0-T01 | Create workspace, toolchain pin, lint config, `[workspace.dependencies]` | D0.1 | — | 1.5 | INF | ☑ |
-| P0-T02 | `xtask` with `arch-check`, `ci`, `migrate-check`, `gen-schema` | D0.1 | T01 | 2.0 | INF | ☐ |
+| P0-T02 | `xtask` with `arch-check`, `ci`, `migrate-check`, `gen-schema` | D0.1 | T01 | 2.0 | INF | ☑ |
 | P0-T03 | `deny.toml` license/advisory policy + CI job | D0.1 | T01 | 0.5 | INF | ☐ |
 | P0-T04 | Placeholder crates for all PRD §87 crates with `//! Phase N` doc comments | D0.1 | T01 | 0.5 | BE | ☐ |
 | P0-T05 | `domain`: typed IDs, `SemVer`, `Timestamp`, `Language`, `Confidence` | D0.2 | T01 | 1.5 | BE | ☐ |

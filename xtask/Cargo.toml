@@ -5,6 +5,9 @@ edition = "2024"
 publish = false
 
 [dependencies]
-# xtask is deliberately dependency-light: it must never pull workspace deps
-# into a circular build (cargo-deny / arch-check need a buildable graph).
 anyhow = "1"
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+sha2 = { workspace = true }

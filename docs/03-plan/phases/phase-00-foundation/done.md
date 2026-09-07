@@ -82,17 +82,14 @@ _No tasks completed yet._
 - **DoD:** ⚠️ items 2,4,7,9,10,13 deferred — placeholder crates have no domain logic yet; arch-check/migrate-check land in T02.
 - **Notes:** ADR file renames performed under P0-T01 but pending orchestrator approval of the mapping proposal — see flags.
 
-<!--
-Append entries below in sprint order, using the format in "How To Use This File".
-Keep sprint headings so the ledger stays readable as it grows past 60 entries.
-
-### Sprint 0.1 — Skeleton & Contracts
-### Sprint 0.2 — Config, Secrets, Storage, Migrations
-### Sprint 0.3 — Provenance, Audit, Sources, Outbox
-### Sprint 0.4 — Jobs, Security Guards, Observability
-### Sprint 0.5 — CLI, Doctor, Hardening, Docs
-### Swimlane X — Cross-Phase Decisions
--->
+### P0-T02 — `xtask` with `arch-check`, `ci`, `migrate-check`, `gen-schema`
+- **Deliverable:** D0.1
+- **Completed:** 2026-09-06
+- **Owner:** implementing engineer (INF)
+- **PR / commit:** `main` (worktree-local)
+- **Evidence:** `cargo test -p xtask` → 7 passed (incl. AC-P0-02 mutation `forbidden_edge_is_detected`, migrate drift, schema idempotency); `cargo clippy --workspace --all-targets -- -D warnings` clean; live `cargo run -p xtask -- arch-check|migrate-check|gen-schema` OK.
+- **DoD:** ⚠️ items 4,9,11,12 not applicable for pure build-tooling (no domain logic / provenance / config yet); deny gate executed via CI (not host).
+- **Notes:** `arch-check` reads `xtask/allowlist.toml` (readme §6 faithful). `cargo-deny` absent on host → CI-only. `[workspace.lints.clippy]` left empty to avoid flooding placeholders (R1).
 
 ---
 
