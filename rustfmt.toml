@@ -1,13 +1,9 @@
 # Rust 1.97 edition, style aligned with the toolchain component above.
+# Only stable rustfmt options are used. Nightly-only options are avoided
+# so `cargo fmt --check` on stable is clean in CI.
 edition = "2024"
 tab_spaces = 4
 use_small_heuristics = "Max"
-condense_wildcard_suffixes = true
-imports_granularity = "Crate"
-group_imports = "StdExternalCrate"
 reorder_imports = true
 newline_style = "Unix"
-trailing_comma = "Vertical"
-match_arm_blocks = true
-match_arm_leading_pipes = "Never"
 use_try_shorthand = true

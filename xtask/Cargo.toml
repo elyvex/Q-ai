@@ -1,0 +1,10 @@
+[package]
+name = "xtask"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+# xtask is deliberately dependency-light: it must never pull workspace deps
+# into a circular build (cargo-deny / arch-check need a buildable graph).
+anyhow = "1"

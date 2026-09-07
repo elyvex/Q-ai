@@ -62,11 +62,10 @@ members = [
 # with a justified narrow lints override. Phase 0 has ZERO allowlisted unsafe exceptions.
 [workspace.lints.rust]
 unsafe_code = "forbid"
-# Enable by default at the workspace so editions can't silently weaken them.
+# Keep the default clippy set explicit. pedantic/nursery are NOT enabled yet:
+# they would over-noise placeholder crates; enable them selectively after the
+# real crate bodies land (T11 CI). This is a deliberate scope cut, per risk R1.
 [workspace.lints.clippy]
-all = "warn"
-pedantic = { level = "warn", priority = -1 }  # pedantic lowered until already-green; revisit T11
-nursery = "warn"
 
 # Centralized dependency versions — single source of truth.
 [workspace.dependencies]

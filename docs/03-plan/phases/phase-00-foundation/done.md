@@ -71,6 +71,17 @@ actuals recorded here are the only way to find out which number was closer.
 
 _No tasks completed yet._
 
+### Sprint 0.1 — Skeleton & Contracts
+
+### P0-T01 — Create workspace, toolchain pin, lint config, `[workspace.dependencies]`
+- **Deliverable:** D0.1
+- **Completed:** 2026-09-06
+- **Owner:** implementing engineer (INF)
+- **PR / commit:** `main` (worktree-local)
+- **Evidence:** `cargo check --workspace` finished; `cargo fmt --check` exit 0; `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo test --workspace` 0 failed. (cargo-deny not on host; its gate lands in T03/T11 CI.)
+- **DoD:** ⚠️ items 2,4,7,9,10,13 deferred — placeholder crates have no domain logic yet; arch-check/migrate-check land in T02.
+- **Notes:** ADR file renames performed under P0-T01 but pending orchestrator approval of the mapping proposal — see flags.
+
 <!--
 Append entries below in sprint order, using the format in "How To Use This File".
 Keep sprint headings so the ledger stays readable as it grows past 60 entries.
