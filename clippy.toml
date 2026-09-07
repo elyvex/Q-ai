@@ -1,0 +1,18 @@
+# Phase 0 clippy configuration. Tighten over time; never loosen without an ADR.
+# Phase 0 rule: zero tolerance for `unsafe_code` workspace-wide.
+
+avoid-breaking-exported-api = false
+disallowed-types = []
+doc-valid-idents = ["Quran", "Hadith", "Tafsir", "Sunni", "Shia", "Uthmani", "Hafs", "Warsh", "Qiraat"]
+missing-docs-in-crate-items = false
+missing-docs-in-private-items = false
+
+# Numeric/clarity lints that catch a class of integrity bugs we care about:
+#   * float_cmp on content hashes or confidence values
+#   * lossy casts on hash bytes / offsets
+#   * unchecked duration arithmetic on lease / retry timing
+#
+# We *warn* on them now; T11 (CI pipeline) will escalate to deny.
+disallowed-methods = [
+  { path = "std::process::Command::new", reason = "Wrap in qai::process; never use std::process directly in a crate that hits §37 deny-by-default" },
+]
