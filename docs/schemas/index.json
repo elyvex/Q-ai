@@ -1,0 +1,22 @@
+{
+  "description": "Index of JSON Schemas published by qai during Phase 0.",
+  "schema": "https://json-schema.org/draft/2020-12/schema",
+  "schemas": [
+    {
+      "file": "config.v1.schema.json",
+      "name": "config.v1"
+    },
+    {
+      "file": "source-manifest.v1.schema.json",
+      "name": "source-manifest.v1"
+    },
+    {
+      "file": "doctor.v1.schema.json",
+      "name": "doctor.v1"
+    },
+    {
+      "file": "error.v1.schema.json",
+      "name": "error.v1"
+    }
+  ]
+}
