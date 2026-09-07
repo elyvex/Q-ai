@@ -1,0 +1,91 @@
+# Q-ai workspace manifest.
+# resolver = "2" (edition-2021+ unions) — mandatory for Rust 1.97 / edition 2024.
+[workspace]
+resolver = "2"
+members = [
+    "xtask",
+    # Phase 0 implemented crates
+    "crates/domain",
+    "crates/application",
+    "crates/config",
+    "crates/observability",
+    "crates/storage",
+    "crates/storage-sqlite",
+    "crates/jobs",
+    "crates/provenance",
+    "crates/audit",
+    "crates/sources",
+    "crates/cli",
+    "crates/server",
+    # Dev-only fixtures (D0.16)
+    "crates/testkit",
+    # Placeholder crates — see PRD §87. Empty; `//! Phase N` doc only. (D0.1 / P0-T04)
+    "crates/quran-core",
+    "crates/quran-corpus",
+    "crates/quran-normalization",
+    "crates/quran-morphology",
+    "crates/quran-search",
+    "crates/quran-graph",
+    "crates/hadith-core",
+    "crates/hadith-ingestion",
+    "crates/isnad-graph",
+    "crates/tafsir",
+    "crates/scripture",
+    "crates/ingestion",
+    "crates/retrieval",
+    "crates/rag",
+    "crates/graph",
+    "crates/embeddings",
+    "crates/reranking",
+    "crates/llm",
+    "crates/model-router",
+    "crates/agent-domain",
+    "crates/agent-runtime",
+    "crates/agency",
+    "crates/conversations",
+    "crates/tools",
+    "crates/tool-sdk",
+    "crates/tool-registry",
+    "crates/tool-sandbox",
+    "crates/policy",
+    "crates/approvals",
+    "crates/workflows",
+    "crates/memory",
+    "crates/mcp",
+    "crates/citations",
+    "crates/evaluation",
+    "crates/api",
+    "crates/tui",
+]
+
+# Workspace-level lints. Every crate inherits these unless a crate explicitly overrides
+# with a justified narrow lints override. Phase 0 has ZERO allowlisted unsafe exceptions.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+# Enable by default at the workspace so editions can't silently weaken them.
+[workspace.lints.clippy]
+all = "warn"
+pedantic = { level = "warn", priority = -1 }  # pedantic lowered until already-green; revisit T11
+nursery = "warn"
+
+# Centralized dependency versions — single source of truth.
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+time = { version = "0.3", features = ["serde", "formatting", "parsing", "macros"] }
+reqwest = { version = "0.12", features = ["json"], default-features = false }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "fs", "sync", "signal"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"] }
+metrics = "0.24"
+clap = { version = "4", features = ["derive", "env", "wrap_help"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite"] }
+zeroize = { version = "1", features = ["zeroize_derive"] }
+async-trait = "0.1"
+proptest = "1"
+tempfile = "3"
+insta = "1"
+trycmd = "0.15"

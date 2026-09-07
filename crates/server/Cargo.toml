@@ -1,0 +1,10 @@
+[package]
+name = "server"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+application = { path = "../application" }
+config = { path = "../config" }
+observability = { path = "../observability" }
