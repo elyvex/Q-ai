@@ -236,10 +236,11 @@ mod tests {
             vec!["#domain@0.0.0", "#cli@0.0.0"],
             vec![
                 package("#domain@0.0.0", "domain", vec![("cli", None)]), // forbidden path edge
-                package("#cli@0.0.0", "cli", vec![(
-                    "serde",
-                    Some("registry+https://github.com/rust-lang/crates.io-index"),
-                )]),
+                package(
+                    "#cli@0.0.0",
+                    "cli",
+                    vec![("serde", Some("registry+https://github.com/rust-lang/crates.io-index"))],
+                ),
             ],
         )
     }
@@ -254,10 +255,11 @@ mod tests {
                     "domain",
                     vec![("serde", Some("registry+https://github.com/rust-lang/crates.io-index"))],
                 ),
-                package("#cli@0.0.0", "cli", vec![(
-                    "serde",
-                    Some("registry+https://github.com/rust-lang/crates.io-index"),
-                )]),
+                package(
+                    "#cli@0.0.0",
+                    "cli",
+                    vec![("serde", Some("registry+https://github.com/rust-lang/crates.io-index"))],
+                ),
             ],
         )
     }

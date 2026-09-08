@@ -3,7 +3,7 @@
 //! Runs, in order: fmt check, clippy -D warnings, test workspace, deny (if installed),
 //! arch-check, migrate-check, gen-schema diff. Any non-zero exit stops the gate.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::process::Command;
 
 fn run_cmd(cmd: &mut Command) -> Result<()> {
@@ -19,9 +19,11 @@ pub fn run() -> Result<()> {
     run_cmd(Command::new("cargo").args(["fmt", "--all", "--", "--check"]).current_dir(&root))?;
 
     println!("── qai ci 2/7 · clippy ──");
-    run_cmd(Command::new("cargo")
-        .args(["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"])
-        .current_dir(&root))?;
+    run_cmd(
+        Command::new("cargo")
+            .args(["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"])
+            .current_dir(&root),
+    )?;
 
     println!("── qai ci 3/7 · test ──");
     run_cmd(Command::new("cargo").args(["test", "--workspace"]).current_dir(&root))?;
@@ -41,19 +43,21 @@ pub fn run() -> Result<()> {
     }
 
     println!("── qai ci 5/7 · arch-check ──");
-    run_cmd(Command::new("cargo")
-        .args(["run", "-p", "xtask", "--", "arch-check"])
-        .current_dir(&root))?;
+    run_cmd(
+        Command::new("cargo").args(["run", "-p", "xtask", "--", "arch-check"]).current_dir(&root),
+    )?;
 
     println!("── qai ci 6/7 · migrate-check ──");
-    run_cmd(Command::new("cargo")
-        .args(["run", "-p", "xtask", "--", "migrate-check"])
-        .current_dir(&root))?;
+    run_cmd(
+        Command::new("cargo")
+            .args(["run", "-p", "xtask", "--", "migrate-check"])
+            .current_dir(&root),
+    )?;
 
     println!("── qai ci 7/7 · gen-schema diff ──");
-    run_cmd(Command::new("cargo")
-        .args(["run", "-p", "xtask", "--", "gen-schema"])
-        .current_dir(&root))?;
+    run_cmd(
+        Command::new("cargo").args(["run", "-p", "xtask", "--", "gen-schema"]).current_dir(&root),
+    )?;
     run_cmd(Command::new("git").args(["diff", "--exit-code", "docs/schemas/"]).current_dir(&root))?;
 
     println!("── qai ci: OK ──");

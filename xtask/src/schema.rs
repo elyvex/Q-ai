@@ -9,12 +9,7 @@
 use anyhow::{Context, Result};
 
 /// The schemas we commit to publishing this phase.
-const SCHEMAS: &[&str] = &[
-    "config.v1",
-    "source-manifest.v1",
-    "doctor.v1",
-    "error.v1",
-];
+const SCHEMAS: &[&str] = &["config.v1", "source-manifest.v1", "doctor.v1", "error.v1"];
 
 pub const SCHEMAS_SUBDIR: &str = "docs/schemas";
 

@@ -9,7 +9,7 @@
 //!    already-recorded file is a hard failure (`QAI-DB-0003` is raised at runtime by the
 //!    migration runner; this xtask is the CI gate that blocks the edit before merge).
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -138,10 +138,7 @@ pub fn run(dir: Option<&Path>) -> Result<()> {
         }
     }
 
-    println!(
-        "migrate-check: OK — {} migration(s) ordered; checksums stable.",
-        discovered.len()
-    );
+    println!("migrate-check: OK — {} migration(s) ordered; checksums stable.", discovered.len());
     Ok(())
 }
 
@@ -182,11 +179,8 @@ mod tests {
         let digest = sha256_file(&dir.join("0001_core.up.sql")).unwrap();
         let mut manifest: BTreeMap<String, String> = BTreeMap::new();
         manifest.insert(key.to_string(), digest);
-        std::fs::write(
-            dir.join(CHECKSUMS_FILE),
-            serde_json::to_string(&manifest).unwrap(),
-        )
-        .unwrap();
+        std::fs::write(dir.join(CHECKSUMS_FILE), serde_json::to_string(&manifest).unwrap())
+            .unwrap();
         assert!(run(Some(&dir)).is_ok(), "clean manifest must pass");
 
         std::fs::write(dir.join("0001_core.up.sql"), "-- edited after record").unwrap();
