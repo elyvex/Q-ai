@@ -138,7 +138,7 @@ where
         + PartialEq
         + FromStr
         + serde::Serialize
-        + serde::Deserialize<'static>,
+        + serde::de::DeserializeOwned,
     T::Err: std::fmt::Debug,
 {
     // A valid UUID string must parse back to an equal, display-able value.
@@ -146,7 +146,8 @@ where
     let t: T = s.parse().unwrap();
     assert_eq!(t.to_string(), s);
     assert_eq!(serde_json::to_string(&t).unwrap(), format!("\"{s}\""));
-    let back: T = serde_json::from_str(&format!("\"{s}\"")).unwrap();
+    let json = format!("\"{s}\"");
+    let back: T = serde_json::from_str(&json).unwrap();
     assert_eq!(back, t);
 }
 
@@ -165,8 +166,17 @@ mod tests {
     #[test]
     fn all_ids_roundtrip() {
         assert_id_roundtrip!(
-            SourceId, SourceVersionId, EditionId, DocumentId, JobId, RunId,
-            WorkspaceId, PrincipalId, ProvenanceId, AuditEventId, ApprovalId,
+            SourceId,
+            SourceVersionId,
+            EditionId,
+            DocumentId,
+            JobId,
+            RunId,
+            WorkspaceId,
+            PrincipalId,
+            ProvenanceId,
+            AuditEventId,
+            ApprovalId,
             ActivationApprovalId,
         );
     }

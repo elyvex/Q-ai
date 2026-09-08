@@ -39,7 +39,7 @@ retrospective with any cell reading `_unassigned_`.
 | P0-T02 | `xtask` with `arch-check`, `ci`, `migrate-check`, `gen-schema` | D0.1 | T01 | 2.0 | INF | ☑ |
 | P0-T03 | `deny.toml` license/advisory policy + CI job | D0.1 | T01 | 0.5 | INF | ☑ |
 | P0-T04 | Placeholder crates for all PRD §87 crates with `//! Phase N` doc comments | D0.1 | T01 | 0.5 | BE | ☑ |
-| P0-T05 | `domain`: typed IDs, `SemVer`, `Timestamp`, `Language`, `Confidence` | D0.2 | T01 | 1.5 | BE | ☐ |
+| P0-T05 | `domain`: typed IDs, `SemVer`, `Timestamp`, `Language`, `Confidence` | D0.2 | T01 | 1.5 | BE | ☑ |
 | P0-T06 | `domain`: `DataLayer`, `TrustLevel`, `VerificationStatus`, `SideEffectClass` | D0.2 | T05 | 1.0 | BE | ☐ |
 | P0-T07 | `domain`: `ContentHash`, `canonical_json_bytes`, hashing spec + prop tests | D0.2 | T05 | 1.5 | BE | ☐ |
 | P0-T08 | `domain`: `LicenseRecord`, `DerivationVersions`, `SubjectRef` URN grammar | D0.2 | T05 | 1.0 | BE | ☐ |

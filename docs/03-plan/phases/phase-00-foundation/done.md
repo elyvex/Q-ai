@@ -109,6 +109,19 @@ _No tasks completed yet._
 - **DoD:** ⚠️ items 2,4,7,9,10,11,12,13 not applicable — placeholders contain only doc comments.
 - **Notes:** Phase tags per §88 domain mapping: P1 quran-core/corpus/citations; P2 normalization/morphology/search; P3 graph/rag/embeddings/reranking; P4 ingestion/retrieval; P5 hadith/isnad/tafsir/scripture; P7 tools/agents/policy/etc.; P9 server/tui. Flagged: `rag`(P3)/`ingestion`(P4)/`retrieval`(P4) tag vs PRD §88 "Multi-RAG(9), source catalogs(13)" — minor, for orchestrator to confirm.
 
+### Sprint 0.2 — Config, Secrets, Storage, Migrations
+
+### Sprint 0.1 — Skeleton & Contracts (continued)
+
+### P0-T05 — `domain`: typed IDs, `SemVer`, `Timestamp`, `Language`, `Confidence`
+- **Deliverable:** D0.2
+- **Completed:** 2026-09-07
+- **Owner:** implementing engineer (BE)
+- **PR / commit:** `main` (worktree-local)
+- **Evidence:** `cargo test -p domain` → 9 unit + 6 proptest passed; `cargo clippy -p domain --all-targets -- -D warnings` clean; `cargo fmt -p domain --check` exit 0; `cargo run -q -p xtask -- arch-check` → `OK`.
+- **DoD:** ⚠️ items 1,4,5,7,9,10,11,12,13 N/A — pure, dependency-light types (no I/O, no mutation, no config, no provenance yet). Items 2 & 6 satisfied: proptest suite + inner `//!` docs referencing constraints.
+- **Notes:** Created `crates/domain/src/ids.rs` (12 `typed_id!` newtypes) and `primitives.rs` (SemVer, Timestamp RFC7333-UTC, Language BCP-47, Confidence 0..1, plus parse-error types with `QAI-DOM-*` codes). `domain` deps limited to serde/serde_json/thiserror/time/uuid (+ proptest dev) per §33 — arch-check green proves no forbidden provider deps.
+
 ---
 
 ## 3. Verified Acceptance Criteria

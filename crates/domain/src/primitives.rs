@@ -87,9 +87,7 @@ impl FromStr for SemVer {
 
 fn parse_numeric(s: Option<&str>) -> Result<u64, SemVerParseError> {
     match s {
-        Some(digits) if !digits.is_empty() => digits
-            .parse()
-            .map_err(|_| SemVerParseError),
+        Some(digits) if !digits.is_empty() => digits.parse().map_err(|_| SemVerParseError),
         _ => Err(SemVerParseError),
     }
 }
@@ -121,10 +119,7 @@ pub struct TimestampParseError;
 
 impl fmt::Display for TimestampParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "QAI-DOM-0003: expected RFC 3339 UTC timestamp (e.g. 2026-01-01T00:00:00Z)"
-        )
+        write!(f, "QAI-DOM-0003: expected RFC 3339 UTC timestamp (e.g. 2026-01-01T00:00:00Z)")
     }
 }
 
@@ -134,9 +129,7 @@ impl Timestamp {
     /// The current UTC time with microsecond precision.
     pub fn now() -> Self {
         let now = time::OffsetDateTime::now_utc();
-        Self(now.replace_nanosecond(
-            now.nanosecond() / 1_000 * 1_000,
-        ).unwrap_or(now))
+        Self(now.replace_nanosecond(now.nanosecond() / 1_000 * 1_000).unwrap_or(now))
     }
 
     /// Construct from explicit date/time parts.
@@ -148,11 +141,15 @@ impl Timestamp {
         minute: u8,
         second: u8,
     ) -> Result<Self, TimestampParseError> {
-        let dt = time::Date::from_calendar_date(year, month.try_into().map_err(|_| TimestampParseError)?, day)
-            .map_err(|_| TimestampParseError)?
-            .with_hms(hour, minute, second)
-            .map_err(|_| TimestampParseError)?
-            .assume_utc();
+        let dt = time::Date::from_calendar_date(
+            year,
+            month.try_into().map_err(|_| TimestampParseError)?,
+            day,
+        )
+        .map_err(|_| TimestampParseError)?
+        .with_hms(hour, minute, second)
+        .map_err(|_| TimestampParseError)?
+        .assume_utc();
         Ok(Self(dt))
     }
 
@@ -170,7 +167,13 @@ impl Timestamp {
 impl fmt::Display for Timestamp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // RFC 3339 with microseconds; if nanosecond precision exists it is truncated earlier.
-        write!(f, "{}", self.0.format(&time::format_description::well_known::Rfc3339).map_err(|_| fmt::Error)?)
+        write!(
+            f,
+            "{}",
+            self.0
+                .format(&time::format_description::well_known::Rfc3339)
+                .map_err(|_| fmt::Error)?
+        )
     }
 }
 
@@ -237,11 +240,7 @@ impl FromStr for Language {
             && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
             && s.as_bytes()[0] != b'-'
             && s.ends_with(|c: char| c.is_ascii_alphanumeric());
-        if valid {
-            Ok(Self(s.to_owned()))
-        } else {
-            Err(LanguageParseError)
-        }
+        if valid { Ok(Self(s.to_owned())) } else { Err(LanguageParseError) }
     }
 }
 
@@ -282,11 +281,7 @@ impl std::error::Error for ConfidenceOutOfRange {}
 impl Confidence {
     /// Validate a raw `f32` into a `Confidence`, rejecting out-of-range / NaN.
     pub fn new(value: f32) -> Result<Self, ConfidenceOutOfRange> {
-        if (0.0..=1.0).contains(&value) {
-            Ok(Self(value))
-        } else {
-            Err(ConfidenceOutOfRange)
-        }
+        if (0.0..=1.0).contains(&value) { Ok(Self(value)) } else { Err(ConfidenceOutOfRange) }
     }
 
     /// The value as `f32`.
