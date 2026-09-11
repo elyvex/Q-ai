@@ -19,9 +19,11 @@
 
 pub mod ids;
 pub mod primitives;
+pub mod types;
 
 pub use ids::{
     ApprovalId, AuditEventId, DocumentId, EditionId, JobId, PrincipalId, ProvenanceId, RunId,
     SourceId, SourceVersionId, WorkspaceId,
 };
 pub use primitives::{Confidence, Language, SemVer, Timestamp};
+pub use types::{DataLayer, SideEffectClass, TrustLevel, VerificationStatus};
