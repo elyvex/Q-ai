@@ -17,10 +17,14 @@
 //! `domain` may depend only on `(serde, thiserror, time, uuid)` (+ dev/test crates).
 //! It must never pull in `sqlx`, `tokio`, or any concrete provider.
 
+pub mod diagnostic;
 pub mod ids;
 pub mod primitives;
 pub mod types;
 
+pub use diagnostic::{
+    Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticId, DiagnosticSeverity, codes,
+};
 pub use ids::{
     ApprovalId, AuditEventId, DocumentId, EditionId, JobId, PrincipalId, ProvenanceId, RunId,
     SourceId, SourceVersionId, WorkspaceId,
