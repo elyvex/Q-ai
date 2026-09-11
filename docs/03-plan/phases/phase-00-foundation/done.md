@@ -113,6 +113,15 @@ _No tasks completed yet._
 
 ### Sprint 0.1 — Skeleton & Contracts (continued)
 
+### P0-T06 — `domain`: `DataLayer`, `TrustLevel`, `VerificationStatus`, `SideEffectClass`
+- **Deliverable:** D0.2
+- **Completed:** 2026-09-11
+- **Owner:** implementing engineer (BE)
+- **PR / commit:** `main` (worktree-local)
+- **Evidence:** `cargo test -p domain` → 9 unit + 6 proptest passed; `cargo clippy -p domain --all-targets -- -D warnings` clean; `cargo fmt -p domain --check` exit 0; `cargo run -q -p xtask -- arch-check` → `OK`.
+- **DoD:** ✅ all items.
+- **Notes:** Created `crates/domain/src/types.rs` containing `DataLayer`, `TrustLevel`, `VerificationStatus`, `SideEffectClass` enums and `DomainError`. Re-exported in `lib.rs`.
+
 ### P0-T05 — `domain`: typed IDs, `SemVer`, `Timestamp`, `Language`, `Confidence`
 - **Deliverable:** D0.2
 - **Completed:** 2026-09-07
