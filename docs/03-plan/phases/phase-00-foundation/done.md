@@ -113,6 +113,24 @@ _No tasks completed yet._
 
 ### Sprint 0.1 — Skeleton & Contracts (continued)
 
+### P0-T08 — `domain`: `LicenseRecord`, `DerivationVersions`, `SubjectRef` URN grammar
+- **Deliverable:** D0.2
+- **Completed:** 2026-09-11
+- **Owner:** implementing engineer (BE)
+- **PR / commit:** `main` (worktree-local)
+- **Evidence:** `cargo test -p domain` → 15 tests passed; `cargo clippy -p domain --all-targets -- -D warnings` clean; `cargo fmt -p domain --check` exit 0; `cargo run -q -p xtask -- arch-check` → `OK`.
+- **DoD:** ✅ all items.
+- **Notes:** Created `crates/domain/src/licensing.rs` with `LicenseRecord` and `LicenseStatus`. `DerivationVersions` and `SubjectRef` (URN grammar) are now defined in `crates/domain/src/provenance.rs`. Re-exported in `lib.rs`.
+
+### P0-T07 — `domain`: `ContentHash`, canonical serialization, property tests
+- **Deliverable:** D0.2
+- **Completed:** 2026-09-11
+- **Owner:** implementing engineer (BE)
+- **PR / commit:** `main` (worktree-local)
+- **Evidence:** `cargo test -p domain` → 13 tests passed (incl. proptest); `cargo clippy -p domain --all-targets -- -D warnings` clean; `cargo fmt -p domain --check` exit 0; `cargo run -q -p xtask -- arch-check` → `OK`.
+- **DoD:** ✅ all items.
+- **Notes:** Created `crates/domain/src/hashing.rs` with `ContentHash`, `HashAlgorithm`, `HashingError`, `canonical_json_bytes`, and `ContentHash::try_new` validator. Re-exported in `lib.rs`.
+
 ### P0-T06 — `domain`: `DataLayer`, `TrustLevel`, `VerificationStatus`, `SideEffectClass`
 - **Deliverable:** D0.2
 - **Completed:** 2026-09-11

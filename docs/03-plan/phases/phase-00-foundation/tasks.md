@@ -42,7 +42,7 @@ retrospective with any cell reading `_unassigned_`.
 | P0-T05 | `domain`: typed IDs, `SemVer`, `Timestamp`, `Language`, `Confidence` | D0.2 | T01 | 1.5 | BE | ☑ |
 | P0-T06 | `domain`: `DataLayer`, `TrustLevel`, `VerificationStatus`, `SideEffectClass` | D0.2 | T05 | 1.0 | BE | ☑ |
 | P0-T07 | `domain`: `ContentHash`, `canonical_json_bytes`, hashing spec + prop tests | D0.2 | T05 | 1.5 | BE | ☐ |
-| P0-T08 | `domain`: `LicenseRecord`, `DerivationVersions`, `SubjectRef` URN grammar | D0.2 | T05 | 1.0 | BE | ☐ |
+| P0-T08 | `domain`: `LicenseRecord`, `DerivationVersions`, `SubjectRef` URN grammar | D0.2 | T05 | 1.0 | BE | ☑ |
 | P0-T09 | `Diagnostic` trait, error-code registry, uniqueness test | D0.3 | T05 | 1.5 | BE | ☐ |
 | P0-T10 | ADR-0001 / 0002 / 0006 / 0012 written and reviewed | ADR | T01 | 1.5 | DOC | ☐ |
 | P0-T11 | CI pipeline (check / arch / test-3os / deny / schemas / coverage) | D0.16 | T02 | 2.0 | INF | ☐ |
