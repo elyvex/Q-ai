@@ -1,0 +1,91 @@
+version: 1.0.0
+title: Summarize Content with Goose
+description: A recipe for summarizing files and directories using the goose summarize extension, which leverages LLM analysis to produce concise summaries of codebases, documents, or any loaded content.
+instructions: Use the summarize__summarize tool to load files or directories and receive an LLM-generated summary. Specify paths to files or directories (respecting .gitignore), provide a question to focus the summary, and optionally filter by file extensions. The tool can also invoke subagents like technical-article-explainer for more specialized summarization tasks. No non-standard tools are required beyond the goose extension itself.
+extensions:
+- type: platform
+  name: analyze
+  description: 'Analyze code structure with tree-sitter: directory overviews, file details, symbol call graphs'
+  display_name: Analyze
+  bundled: true
+  available_tools: []
+- type: stdio
+  name: RTK Rewrite
+  description: Rewrites shell commands to their RTK-optimized equivalents for 60-90% token savings
+  cmd: /usr/local/bin/goose-rtk-rewrite
+  args: []
+  envs: {}
+  env_keys: []
+  timeout: 60
+  cwd: null
+  bundled: null
+  available_tools: []
+- type: platform
+  name: summon
+  description: Load knowledge and delegate tasks to subagents
+  display_name: Summon
+  bundled: true
+  available_tools: []
+- type: platform
+  name: summarize
+  description: Load files/directories and get an LLM summary in a single call
+  display_name: Summarize
+  bundled: true
+  available_tools: []
+- type: platform
+  name: developer
+  description: Write and edit files, and execute shell commands
+  display_name: Developer
+  bundled: true
+  available_tools: []
+- type: platform
+  name: Extension Manager
+  description: Enable extension management tools for discovering, enabling, and disabling extensions
+  display_name: Extension Manager
+  bundled: true
+  available_tools: []
+- type: platform
+  name: todo
+  description: Enable a todo list for goose so it can keep track of what it is doing
+  display_name: Todo
+  bundled: true
+  available_tools: []
+- type: builtin
+  name: computercontroller
+  description: General computer control tools that don't require you to be a developer or engineer.
+  display_name: Computer Controller
+  timeout: 300
+  bundled: true
+  available_tools: []
+- type: builtin
+  name: autovisualiser
+  description: Data visualization and UI generation tools
+  display_name: Auto Visualiser
+  timeout: 300
+  bundled: true
+  available_tools: []
+- type: stdio
+  name: Chrome DevTools
+  description: Control and inspect a live Chrome browser
+  cmd: npx
+  args:
+  - -y
+  - chrome-devtools-mcp@latest
+  envs: {}
+  env_keys: []
+  timeout: 300
+  cwd: null
+  bundled: null
+  available_tools: []
+settings:
+  goose_provider: custom_9router
+  goose_model: dev-flash
+  temperature: 0.0
+activities:
+- Summarize a codebase directory
+- Explain technical articles
+- Focus summaries on specific topics
+- Filter summaries by file type
+- Load and analyze project structure
+author:
+  contact: ali

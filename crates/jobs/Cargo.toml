@@ -3,3 +3,13 @@ name = "jobs"
 version = "0.0.0"
 edition = "2024"
 publish = false
+
+[dependencies]
+domain = { path = "../domain" }
+storage = { path = "../storage" }
+observability = { path = "../observability" }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

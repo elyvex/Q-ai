@@ -3,3 +3,17 @@ name = "provenance"
 version = "0.0.0"
 edition = "2024"
 publish = false
+
+[dependencies]
+domain = { path = "../domain" }
+storage = { path = "../storage" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+uuid = { workspace = true }
+time = { workspace = true }
+sha2 = { workspace = true }
+
+[lints]
+workspace = true

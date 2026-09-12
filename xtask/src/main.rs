@@ -3,6 +3,7 @@
 //! Subcommands:
 //!   arch-check    — enforce workspace dependency-direction rules (AC-P0-02)
 //!   ci            — run the whole pre-merge gate
+//!   migrate       — apply pending migrations to the database
 //!   migrate-check — enforce migrations are append-only and checksums stable
 //!   gen-schema    — emit JSON Schemas deterministically into `docs/schemas/`
 //!
@@ -30,6 +31,8 @@ enum Commands {
     ArchCheck,
     /// Run the full pre-merge gate (fmt, clippy, test, deny, arch, migrate).
     Ci,
+    /// Apply pending migrations to the database.
+    Migrate,
     /// Verify migrations are append-only and checksums are unchanged.
     MigrateCheck {
         /// Path to the migrations directory (default: ./migrations/sqlite).
@@ -44,6 +47,7 @@ fn run(cli: Cli) -> Result<(), anyhow::Error> {
     match cli.command {
         Commands::ArchCheck => arch::run(),
         Commands::Ci => ci::run(),
+        Commands::Migrate => migrate::apply(),
         Commands::MigrateCheck { dir } => migrate::run(dir.as_deref()),
         Commands::GenSchema => schema::run(),
     }

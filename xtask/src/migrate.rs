@@ -1,4 +1,4 @@
-//! `cargo xtask migrate-check` — enforce migrations are append-only and checksums stable.
+//! `cargo xtask migrate` / `cargo xtask migrate-check` — migration management.
 //!
 //! Migration files live in `migrations/sqlite/` as `NNNN_name.up.sql` + optional
 //! `NNNN_name.down.sql`. Two properties must hold:
@@ -8,6 +8,9 @@
 //!    of each migration file; any drift between the manifest and the on-disk content for an
 //!    already-recorded file is a hard failure (`QAI-DB-0003` is raised at runtime by the
 //!    migration runner; this xtask is the CI gate that blocks the edit before merge).
+//!
+//! `cargo xtask migrate` applies pending migrations to the SQLite database.
+//! `cargo xtask migrate-check` only validates ordering and checksums.
 
 use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
@@ -21,7 +24,7 @@ pub const CHECKSUMS_FILE: &str = "checksums.json";
 type Discovered = BTreeMap<u32, (PathBuf, Option<PathBuf>)>;
 
 /// Parse `migrations/sqlite` into a map of version -> (up, down).
-fn discover_migrations(dir: &Path) -> Result<Discovered> {
+pub fn discover_migrations(dir: &Path) -> Result<Discovered> {
     let mut map: Discovered = BTreeMap::new();
     if !dir.exists() {
         return Ok(map);
@@ -58,8 +61,102 @@ fn discover_migrations(dir: &Path) -> Result<Discovered> {
     Ok(map)
 }
 
+/// Apply all pending migrations to the SQLite database.
+pub fn apply() -> Result<()> {
+    let root = std::env::current_dir()?;
+    let migrations_dir = root.join(MIGRATIONS_SUBDIR);
+    let files = discover_migrations(&migrations_dir)?;
+
+    if files.is_empty() {
+        println!("migrate: OK — no pending migrations.");
+        return Ok(());
+    }
+
+    // Check if the database exists and has schema_migrations.
+    let db_path = std::env::var("QAI_DB_PATH").unwrap_or_else(|_| {
+        std::env::var("XDG_DATA_HOME")
+            .map(|p| format!("{p}/qai/qai.db"))
+            .unwrap_or_else(|_| "~/.local/share/qai/qai.db".to_string())
+    });
+
+    // Use the storage-sqlite crate to apply migrations.
+    // We import it here to avoid a compile-time dependency on the full crate
+    // from xtask. Instead, we use sqlx directly.
+    apply_migrations_sqlx(&migrations_dir, &db_path)
+}
+
+/// Apply migrations using sqlx directly.
+fn apply_migrations_sqlx(migrations_dir: &Path, db_path: &str) -> Result<()> {
+    let runtime = tokio::runtime::Runtime::new()?;
+    runtime.block_on(async {
+        let url = if db_path == "~/.local/share/qai/qai.db" {
+            format!("sqlite:{}?mode=rwc", dirs::home_dir().map(|h| h.join(".local/share/qai/qai.db").to_string_lossy().to_string()).unwrap_or_else(|| "/tmp/qai.db".to_string()))
+        } else {
+            format!("sqlite://{db_path}")
+        };
+
+        let pool = sqlx::SqlitePool::connect(&url).await?;
+
+        // Ensure schema_migrations table exists.
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS schema_migrations (
+                version INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                checksum TEXT NOT NULL,
+                applied_at TEXT NOT NULL,
+                applied_by TEXT NOT NULL,
+                duration_ms INTEGER NOT NULL
+            )",
+        )
+        .execute(&pool)
+        .await?;
+
+        let applied: Vec<i64> = sqlx::query_scalar("SELECT version FROM schema_migrations ORDER BY version")
+            .fetch_all(&pool)
+            .await
+            .unwrap_or_default();
+        let applied_set: std::collections::HashSet<i64> = applied.iter().copied().collect();
+
+        for (version, (up_path, _)) in files.iter() {
+            if applied_set.contains(&(*version as i64)) {
+                continue;
+            }
+
+            let sql = std::fs::read_to_string(up_path)?;
+            let start = std::time::Instant::now();
+
+            sqlx::query(&sql).execute(&pool).await
+                .map_err(|e| anyhow::anyhow!("migration {}: {}", version, e))?;
+
+            let checksum = sha256_file(up_path)?;
+            let now = time::OffsetDateTime::now_utc()
+                .format(&time::format_description::well_known::Rfc3339)
+                .unwrap_or_default();
+
+            sqlx::query(
+                "INSERT INTO schema_migrations (version, name, checksum, applied_at, applied_by, duration_ms)
+                 VALUES (?, ?, ?, ?, ?, ?)",
+            )
+            .bind(*version as i64)
+            .bind(up_path.file_name().and_then(|f| f.to_str()).unwrap_or(""))
+            .bind(checksum)
+            .bind(now)
+            .bind("qai")
+            .bind(start.elapsed().as_millis() as i64)
+            .execute(&pool)
+            .await?;
+
+            println!("Applied migration {version}");
+        }
+
+        sqlx::query("PRAGMA foreign_keys = ON").execute(&pool).await?;
+
+        Ok::<_, anyhow::Error>(())
+    })
+}
+
 /// sha256 hex of the file's bytes.
-fn sha256_file(path: &Path) -> Result<String> {
+pub fn sha256_file(path: &Path) -> Result<String> {
     let bytes = std::fs::read(path).with_context(|| format!("read {}", path.display()))?;
     let digest = Sha256::digest(&bytes);
     Ok(hex_lower(&digest))
@@ -73,16 +170,6 @@ fn hex_lower(bytes: &[u8]) -> String {
         s.push(HEX[(b & 0x0f) as usize] as char);
     }
     s
-}
-
-/// Canonical manifest key for a migration file: `<version>_<name>.<up|down>.sql`.
-fn manifest_key(path: &Path, kind: &str) -> String {
-    let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
-    let base = file_name
-        .strip_suffix(".up.sql")
-        .or_else(|| file_name.strip_suffix(".down.sql"))
-        .unwrap_or(&file_name);
-    format!("{base}.{kind}.sql")
 }
 
 /// Validate ordering and (if a manifest exists) checksum stability.
@@ -142,6 +229,16 @@ pub fn run(dir: Option<&Path>) -> Result<()> {
     Ok(())
 }
 
+/// Canonical manifest key for a migration file: `<version>_<name>.<up|down>.sql`.
+fn manifest_key(path: &Path, kind: &str) -> String {
+    let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
+    let base = file_name
+        .strip_suffix(".up.sql")
+        .or_else(|| file_name.strip_suffix(".down.sql"))
+        .unwrap_or(&file_name);
+    format!("{base}.{kind}.sql")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -174,7 +271,6 @@ mod tests {
     fn manifest_drift_is_detected() {
         let dir = scratch_dir("drift");
         std::fs::write(dir.join("0001_core.up.sql"), "-- original").unwrap();
-        // Record a matching manifest, then corrupt the file to simulate an edit.
         let key = "0001_core.up.sql";
         let digest = sha256_file(&dir.join("0001_core.up.sql")).unwrap();
         let mut manifest: BTreeMap<String, String> = BTreeMap::new();

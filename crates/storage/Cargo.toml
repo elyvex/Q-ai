@@ -3,3 +3,14 @@ name = "storage"
 version = "0.0.0"
 edition = "2024"
 publish = false
+description = "Storage abstraction layer — traits and error types for the persistence backend."
+
+[dependencies]
+domain = { path = "../domain" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+
+[lints]
+workspace = true

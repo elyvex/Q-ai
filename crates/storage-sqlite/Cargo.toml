@@ -3,3 +3,17 @@ name = "storage-sqlite"
 version = "0.0.0"
 edition = "2024"
 publish = false
+
+[dependencies]
+storage = { path = "../storage" }
+domain = { path = "../domain" }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+sha2 = { workspace = true }
+time = { workspace = true, features = ["fmt"] }
+dirs = { workspace = true }
+
+[lints]
+workspace = true
