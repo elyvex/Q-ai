@@ -18,16 +18,22 @@
 //! It must never pull in `sqlx`, `tokio`, or any concrete provider.
 
 pub mod diagnostic;
+pub mod hashing;
 pub mod ids;
+pub mod licensing;
 pub mod primitives;
+pub mod provenance;
 pub mod types;
 
 pub use diagnostic::{
     Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticId, DiagnosticSeverity, codes,
 };
+pub use hashing::{ContentHash, HashAlgorithm, HashingError, canonical_json_bytes};
 pub use ids::{
     ApprovalId, AuditEventId, DocumentId, EditionId, JobId, PrincipalId, ProvenanceId, RunId,
     SourceId, SourceVersionId, WorkspaceId,
 };
+pub use licensing::{LicenseRecord, LicenseStatus};
 pub use primitives::{Confidence, Language, SemVer, Timestamp};
+pub use provenance::{DerivationVersions, SubjectRef};
 pub use types::{DataLayer, SideEffectClass, TrustLevel, VerificationStatus};
