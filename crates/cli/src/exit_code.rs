@@ -42,7 +42,6 @@ pub fn from_io_error(err: &std::io::Error) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::exit_code;
     use config::ConfigError;
 
     #[test]
