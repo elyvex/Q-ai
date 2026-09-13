@@ -1360,9 +1360,10 @@ dependencies = [
 name = "server"
 version = "0.0.0"
 dependencies = [
- "application",
  "config",
- "observability",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
 ]
 
 [[package]]
@@ -1656,7 +1657,14 @@ dependencies = [
 name = "testkit"
 version = "0.0.0"
 dependencies = [
- "tokio",
+ "audit",
+ "config",
+ "domain",
+ "jobs",
+ "serde_json",
+ "sources",
+ "storage",
+ "tempfile",
 ]
 
 [[package]]
