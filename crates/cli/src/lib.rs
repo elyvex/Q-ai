@@ -1,4 +1,22 @@
-//! Phase 0 placeholder — cli.
-//!
-//! This crate is reserved for Phase 0 of the Q-ai roadmap and contains no
-//! implementation yet. See plan.md §3.1 for the workspace layout.
+pub mod commands;
+pub mod db;
+pub mod doctor;
+pub mod exit_code;
+pub mod server_stub;
+
+use clap::Parser;
+use commands::Cli;
+
+/// Q-ai CLI entry point.
+pub fn run() -> i32 {
+    let cli = Cli::parse();
+
+    let format = if cli.json {
+        observability::Format::Json
+    } else {
+        observability::Format::Text
+    };
+    let _guard = observability::init(format);
+
+    commands::dispatch(cli)
+}
