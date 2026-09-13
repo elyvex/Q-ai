@@ -229,10 +229,10 @@ pub trait JobRepository: Send {
     ) -> Result<(), JobError>;
 
     /// Reap expired leases, returning job IDs to reclaim.
-    async fn reap_expired_leases(&self) -> Result<Vec<String>, JobError>;
+    async fn reap_expired_leases(&mut self) -> Result<Vec<String>, JobError>;
 
     /// Get a job by ID.
-    async fn get(&self, job_id: &str) -> Result<Option<JobRecord>, JobError>;
+    async fn get(&mut self, job_id: &str) -> Result<Option<JobRecord>, JobError>;
 }
 
 // ─── JobStore ────────────────────────────────────────────────
@@ -297,12 +297,12 @@ impl JobRepository for JobStore {
             .map_err(|e| JobError::NotFound { id: job_id.to_string() })
     }
 
-    async fn reap_expired_leases(&self) -> Result<Vec<String>, JobError> {
+    async fn reap_expired_leases(&mut self) -> Result<Vec<String>, JobError> {
         self.repo.reap_expired_leases().await
             .map_err(|e| JobError::NotFound { id: String::new() })
     }
 
-    async fn get(&self, job_id: &str) -> Result<Option<JobRecord>, JobError> {
+    async fn get(&mut self, job_id: &str) -> Result<Option<JobRecord>, JobError> {
         // Note: storage::JobRepository doesn't have a `get` method,
         // so we cast through. This is a Phase 0 stub.
         Ok(None)
