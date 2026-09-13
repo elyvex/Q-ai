@@ -201,6 +201,7 @@ impl JobContext {
 ///
 /// This wraps [`storage::repository::JobRepository`] with additional
 /// job-specific operations and the state machine.
+#[async_trait]
 pub trait JobRepository: Send {
     /// Enqueue a new job.
     async fn enqueue(&mut self, job: JobRecord) -> Result<(), JobError>;
@@ -262,14 +263,13 @@ impl JobStore {
 #[async_trait]
 impl JobRepository for JobStore {
     async fn enqueue(&mut self, job: JobRecord) -> Result<(), JobError> {
-        self.repo.enqueue(job).await.map_err(|e| JobError::NotFound { id: String::new() })?;
+        self.repo.enqueue(job).await.map_err(|e| JobError::NotFound { id: e.to_string() })?;
         Ok(())
     }
 
     async fn claim(&mut self, job_id: &str, owner: &str) -> Result<Option<JobRecord>, JobError> {
         self.repo.claim(job_id, owner).await
-            .map_err(|e| JobError::NotFound { id: job_id.to_string() })?
-            .ok_or_else(|| JobError::NotFound { id: job_id.to_string() })
+            .map_err(|e| JobError::NotFound { id: job_id.to_string() })
     }
 
     async fn finish(
