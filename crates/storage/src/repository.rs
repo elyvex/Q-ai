@@ -254,7 +254,7 @@ pub trait JobRepository: Send {
     }
 
     /// Reap expired leases, returning job IDs to reclaim.
-    async fn reap_expired_leases(&self) -> Result<Vec<String>, StorageError> {
+    async fn reap_expired_leases(&mut self) -> Result<Vec<String>, StorageError> {
         Err(StorageError::StorageUnavailable)
     }
 }
