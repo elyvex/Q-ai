@@ -5,6 +5,7 @@
 //! Phase-N stub commands.
 
 pub mod doctor;
+mod exit_code;
 
 use clap::{Parser, Subcommand};
 use config::Config;
@@ -184,6 +185,10 @@ pub enum AuditAction {
 /// Dispatch a parsed command, returning the process exit code.
 pub fn dispatch(cli: Cli) -> i32 {
     match cli.command {
+        Commands::Status => {
+            println!("Q-ai: ready (Phase 0)");
+            exit_code::OK
+        }
         Commands::Version => {
             if cli.json {
                 println!(r#"{{ "version": "{}" }}"#, env!("CARGO_PKG_VERSION"));
@@ -319,7 +324,4 @@ fn phase_stub(name: &str, phase: u8) -> i32 {
     exit_code::OK
 }
 
-// exit_codes handled via exit_code module
-pub use crate::doctor::run as doctor_run;
-
-mod exit_code;
+// exit codes and dispatch complete
