@@ -20,10 +20,6 @@ impl<T: Zeroize> Secret<T> {
     pub fn expose(&self) -> &T {
         &self.inner
     }
-
-    pub fn into_inner(self) -> T {
-        self.inner
-    }
 }
 
 impl<T: Zeroize> Drop for Secret<T> {
