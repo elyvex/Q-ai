@@ -11,10 +11,13 @@ storage = { path = "../storage" }
 audit = { path = "../audit" }
 sources = { path = "../sources" }
 jobs = { path = "../jobs" }
+provenance = { path = "../provenance" }
+async-trait = { workspace = true }
 tempfile = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true

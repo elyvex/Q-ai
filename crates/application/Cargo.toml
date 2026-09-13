@@ -3,3 +3,24 @@ name = "application"
 version = "0.0.0"
 edition = "2024"
 publish = false
+
+[dependencies]
+config = { path = "../config" }
+domain = { path = "../domain" }
+storage = { path = "../storage" }
+storage-sqlite = { path = "../storage-sqlite" }
+provenance = { path = "../provenance" }
+audit = { path = "../audit" }
+jobs = { path = "../jobs" }
+sources = { path = "../sources" }
+observability = { path = "../observability" }
+tokio = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

@@ -22,6 +22,14 @@ pub enum SecurityError {
     DownloadTooLarge,
     /// Redirect target resolves to a blocked/private address (QAI-SEC-0006)
     PrivateAddressBlocked,
+    /// Input field failed validation (QAI-SEC-0007)
+    InvalidInput,
+    /// Input field exceeds maximum length (QAI-SEC-0008)
+    FieldTooLong,
+    /// Input JSON exceeds maximum nesting depth (QAI-SEC-0009)
+    JsonTooDeep,
+    /// HTML/content contains disallowed markup (QAI-SEC-0010)
+    DisallowedContent,
 }
 
 impl std::fmt::Display for SecurityError {
