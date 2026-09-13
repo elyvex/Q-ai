@@ -42,30 +42,31 @@ pub fn from_io_error(err: &std::io::Error) -> i32 {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use config::ConfigError;
 
     #[test]
     fn constants_are_correct() {
-        assert_eq!(exit_code::OK, 0);
-        assert_eq!(exit_code::GENERIC, 1);
-        assert_eq!(exit_code::USAGE, 2);
-        assert_eq!(exit_code::VALIDATION, 3);
-        assert_eq!(exit_code::POLICY, 4);
-        assert_eq!(exit_code::NOT_FOUND, 5);
-        assert_eq!(exit_code::CONFLICT, 6);
-        assert_eq!(exit_code::CANCELLED, 7);
-        assert_eq!(exit_code::INTERNAL, 70);
+        assert_eq!(OK, 0);
+        assert_eq!(GENERIC, 1);
+        assert_eq!(USAGE, 2);
+        assert_eq!(VALIDATION, 3);
+        assert_eq!(POLICY, 4);
+        assert_eq!(NOT_FOUND, 5);
+        assert_eq!(CONFLICT, 6);
+        assert_eq!(CANCELLED, 7);
+        assert_eq!(INTERNAL, 70);
     }
 
     #[test]
     fn config_validation_maps_to_validation() {
         let err = ConfigError::Validation("bad".into());
-        assert_eq!(exit_code::from_config_error(&err), exit_code::VALIDATION);
+        assert_eq!(from_config_error(&err), VALIDATION);
     }
 
     #[test]
     fn config_missing_key_maps_to_not_found() {
         let err = ConfigError::MissingKey("x".into());
-        assert_eq!(exit_code::from_config_error(&err), exit_code::NOT_FOUND);
+        assert_eq!(from_config_error(&err), NOT_FOUND);
     }
 }
