@@ -183,12 +183,13 @@ fn redact_json(value: &mut serde_json::Value) {
             if is_secret(s) { *value = serde_json::Value::String("***REDACTED***".to_string()); }
         }
         serde_json::Value::Object(map) => {
-            map.retain(|k, v| {
+            for (k, v) in map.iter_mut() {
                 if is_secret_key(k) {
                     *v = serde_json::Value::String("***REDACTED***".to_string());
-                    false
-                } else { redact_json(v); true }
-            });
+                } else {
+                    redact_json(v);
+                }
+            }
         }
         serde_json::Value::Array(arr) => { for item in arr { redact_json(item); } }
         _ => {}
