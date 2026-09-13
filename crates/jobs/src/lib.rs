@@ -299,7 +299,7 @@ impl JobRepository for JobStore {
 
     async fn reap_expired_leases(&mut self) -> Result<Vec<String>, JobError> {
         self.repo.reap_expired_leases().await
-            .map_err(|e| JobError::NotFound { id: String::new() })
+            .map_err(|e| JobError::NotFound { id: e.to_string() })
     }
 
     async fn get(&mut self, job_id: &str) -> Result<Option<JobRecord>, JobError> {
