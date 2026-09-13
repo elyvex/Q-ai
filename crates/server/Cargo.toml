@@ -5,6 +5,10 @@ edition = "2024"
 publish = false
 
 [dependencies]
-application = { path = "../application" }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
 config = { path = "../config" }
-observability = { path = "../observability" }
+
+[lints]
+workspace = true
