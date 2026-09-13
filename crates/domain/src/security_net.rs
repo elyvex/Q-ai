@@ -1,6 +1,6 @@
 use std::net::IpAddr;
 
-use crate::security::SecurityError;
+use crate::security::{self, SecurityError};
 
 /// SSRF guard: validate a resolved IP against private/blocked ranges (D0.15 / T44).
 ///
@@ -8,7 +8,7 @@ use crate::security::SecurityError;
 /// DNS resolution (network I/O lives outside `domain`), then hands the resolved
 /// IPs here. Any IP in a blocked range fails closed.
 pub fn check_resolved_ip(ip: IpAddr) -> Result<(), SecurityError> {
-    if super::is_private_ip(ip) {
+    if security::is_private_ip(ip) {
         return Err(SecurityError::PrivateAddressBlocked);
     }
     Ok(())

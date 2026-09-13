@@ -30,6 +30,8 @@ pub enum SecurityError {
     JsonTooDeep,
     /// HTML/content contains disallowed markup (QAI-SEC-0010)
     DisallowedContent,
+    /// Nested archive depth exceeds the configured cap (QAI-SEC-0011)
+    ArchiveTooDeep,
 }
 
 impl std::fmt::Display for SecurityError {
@@ -115,6 +117,8 @@ pub struct Limits {
     pub max_download_bytes: u64,
     pub max_archive_entries: usize,
     pub max_archive_expansion_ratio: f64,
+    /// Maximum nesting depth for archives-within-archives.
+    pub max_archive_depth: u32,
 }
 
 impl Limits {

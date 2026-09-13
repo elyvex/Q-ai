@@ -1,51 +1,106 @@
+//! Archive safety guard (D0.15 / T43).
+//!
+//! Blocks zip-slip path traversal, archive bombs (expansion ratio), entry-count
+//! exhaustion, symlink/device escapes, and nested-archive depth attacks. The
+//! functions are pure: the caller extracts entry metadata from the archive
+//! format (zip, tar, …) and passes it here. Network/IO stays outside `domain`.
+//!
+//! **Fail-closed:** any entry that cannot be positively validated is rejected.
+
 use std::path::{Path, PathBuf};
 
-use crate::security::{SecurityError, Limits};
+use crate::security::{Limits, SecurityError};
 
-/// Validate a single archive entry for extraction safety (D0.15 / T43).
-///
-/// Checks zip-slip (`..` traversal), absolute paths, symlink/device escapes,
-/// and entry-count/expansion-ratio against the configured [`Limits`].
-///
-/// Returns the validated, joined path on success.
-pub fn check_archive_entry(
-    root: &Path,
-    entry_name: &str,
-    entry_size: u64,
-    total_entries: usize,
-    cumulative_expanded: u64,
-    limits: &Limits,
-) -> Result<PathBuf, SecurityError> {
-    limits.check_entry_count(total_entries)?;
-    if entry_size > 0 {
-        limits.check_expansion(cumulative_expanded, cumulative_expanded + entry_size)?;
+/// Metadata for one archive entry, format-independent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArchiveEntry {
+    /// The entry's declared name/path inside the archive.
+    pub name: String,
+    /// Compressed size in bytes (the bytes physically stored).
+    pub compressed_size: u64,
+    /// Uncompressed size in bytes (the bytes produced on extraction).
+    pub uncompressed_size: u64,
+    /// Whether the entry is a symbolic link.
+    pub is_symlink: bool,
+    /// Whether the entry is a directory.
+    pub is_directory: bool,
+}
+
+impl ArchiveEntry {
+    /// A regular file entry.
+    pub fn file(name: impl Into<String>, compressed_size: u64, uncompressed_size: u64) -> Self {
+        Self {
+            name: name.into(),
+            compressed_size,
+            uncompressed_size,
+            is_symlink: false,
+            is_directory: false,
+        }
     }
 
-    // Empty entry names are nonsensical.
-    if entry_name.is_empty() {
+    /// A symlink entry.
+    pub fn symlink(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            compressed_size: 0,
+            uncompressed_size: 0,
+            is_symlink: true,
+            is_directory: false,
+        }
+    }
+}
+
+/// Validate a single archive entry before extraction.
+///
+/// Checks, in order:
+/// 1. entry-count cap (`entries_seen`, 1-based count including this entry)
+/// 2. rejected link/device entries
+/// 3. path-traversal (zip-slip) via `..` / absolute paths / Windows drive prefixes
+/// 4. expansion-ratio bomb
+/// 5. nested-archive depth cap (caller supplies current depth)
+///
+/// Returns the safe extraction path on success.
+pub fn check_archive_entry(
+    root: &Path,
+    entry: &ArchiveEntry,
+    entries_seen: usize,
+    depth: u32,
+    limits: &Limits,
+) -> Result<PathBuf, SecurityError> {
+    // 1. Entry count.
+    limits.check_entry_count(entries_seen)?;
+
+    // 2. Symlinks and device entries are never extracted.
+    if entry.is_symlink {
+        return Err(SecurityError::SymlinkEscape);
+    }
+
+    // Empty names are nonsensical.
+    if entry.name.is_empty() {
         return Err(SecurityError::PathTraversal);
     }
 
-    // Reject absolute paths inside an archive.
-    let entry_path = Path::new(entry_name);
+    // 3. Zip-slip / path traversal.
+    let entry_path = Path::new(&entry.name);
     if entry_path.is_absolute() {
         return Err(SecurityError::PathTraversal);
     }
-
-    // Reject paths that would escape the root via `..` components.
-    // `canonicalize_and_contain` handles real symlink resolution, but for a
-    // not-yet-extracted archive path we cannot canonicalize to a target that
-    // doesn't exist yet. We validate the *containment* invariant syntactically.
-    let mut depth: i32 = 0;
+    // Windows drive prefix (e.g. `C:\...`) or backslash separators.
+    if entry.name.contains('\\')
+        || entry.name.as_bytes().get(1).is_some_and(|b| *b == b':')
+    {
+        return Err(SecurityError::PathTraversal);
+    }
+    let mut depth_budget: i32 = 0;
     for component in entry_path.components() {
         match component {
             std::path::Component::ParentDir => {
-                depth -= 1;
-                if depth < 0 {
+                depth_budget -= 1;
+                if depth_budget < 0 {
                     return Err(SecurityError::PathTraversal);
                 }
             }
-            std::path::Component::Normal(_) => depth += 1,
+            std::path::Component::Normal(_) => depth_budget += 1,
             std::path::Component::RootDir | std::path::Component::Prefix(_) => {
                 return Err(SecurityError::PathTraversal);
             }
@@ -53,27 +108,26 @@ pub fn check_archive_entry(
         }
     }
 
-    // Reject entries that carry a trailing slash on a non-directory (zip slip
-    // via the `/etc/passwd/../../` trick is already blocked by the depth check).
+    // 4. Expansion-ratio bomb.
+    limits.check_expansion(entry.compressed_size, entry.uncompressed_size)?;
 
-    // Finally, confirm the joined canonical target stays within root.
+    // 5. Nested-archive depth cap.
+    if depth > limits.max_archive_depth {
+        return Err(SecurityError::ArchiveTooDeep);
+    }
+
     let candidate = root.join(entry_path);
+    // Defense in depth: confirm the lexical join stays under root.
     if let Ok(canonical) = std::fs::canonicalize(root) {
-        // root exists; canonicalize the candidate's existing prefix is not
-        // possible pre-extraction, so the syntactic depth check above is the
-        // gate. We still confirm the string prefix for defense in depth.
         let root_str = canonical.to_string_lossy();
         if !candidate.to_string_lossy().starts_with(root_str.as_ref()) {
             return Err(SecurityError::PathTraversal);
         }
     }
-
     Ok(candidate)
 }
 
-/// Validate that a decompressor has not exceeded the configured limits while
-/// extracting `entries_seen` entries totalling `bytes_decompressed` from a
-/// source of `bytes_compressed` bytes.
+/// Validate aggregate extraction limits after processing entries.
 pub fn check_archive_extraction(
     entries_seen: usize,
     bytes_compressed: u64,
@@ -95,46 +149,67 @@ mod tests {
             max_download_bytes: 256 * 1024 * 1024,
             max_archive_entries: 20_000,
             max_archive_expansion_ratio: 100.0,
+            max_archive_depth: 2,
         }
     }
 
     #[test]
     fn zip_slip_is_rejected() {
         let root = Path::new("/tmp/qai-extract");
-        let cases = [
+        for name in [
             "../../etc/passwd",
             "a/../../../b",
             "..\\windows\\system32",
             "/absolute/path",
-        ];
-        for case in cases {
-            let r = check_archive_entry(root, case, 1, 1, 1, &limits());
+            "C:\\windows",
+        ] {
+            let entry = ArchiveEntry::file(name, 10, 10);
+            let r = check_archive_entry(root, &entry, 1, 0, &limits());
             assert!(
                 matches!(r, Err(SecurityError::PathTraversal)),
-                "expected rejection for {case}, got {r:?}"
+                "expected rejection for {name}, got {r:?}"
             );
         }
     }
 
     #[test]
+    fn symlink_entry_is_rejected() {
+        let root = Path::new("/tmp/qai-extract");
+        let entry = ArchiveEntry::symlink("link");
+        let r = check_archive_entry(root, &entry, 1, 0, &limits());
+        assert!(matches!(r, Err(SecurityError::SymlinkEscape)));
+    }
+
+    #[test]
     fn normal_entry_is_accepted() {
         let root = Path::new("/tmp/qai-extract");
-        let r = check_archive_entry(root, "data/edition.json", 10, 1, 10, &limits());
+        let entry = ArchiveEntry::file("data/edition.json", 10, 10);
+        let r = check_archive_entry(root, &entry, 1, 0, &limits());
         assert!(r.is_ok(), "expected ok, got {r:?}");
     }
 
     #[test]
     fn entry_count_limit_is_enforced() {
         let root = Path::new("/tmp/qai-extract");
-        let r = check_archive_entry(root, "x", 1, 20_001, 1, &limits());
+        let entry = ArchiveEntry::file("x", 1, 1);
+        let r = check_archive_entry(root, &entry, 20_001, 0, &limits());
         assert!(matches!(r, Err(SecurityError::EntryCount)));
     }
 
     #[test]
     fn expansion_ratio_limit_is_enforced() {
         let root = Path::new("/tmp/qai-extract");
-        // 1 byte compressed -> 200 bytes expanded exceeds ratio of 100.
-        let r = check_archive_entry(root, "x", 200, 1, 200, &limits());
+        // 1 compressed -> 200 uncompressed exceeds ratio of 100.
+        let entry = ArchiveEntry::file("bomb", 1, 200);
+        let r = check_archive_entry(root, &entry, 1, 0, &limits());
         assert!(matches!(r, Err(SecurityError::ExpansionRatio)));
+    }
+
+    #[test]
+    fn nested_depth_limit_is_enforced() {
+        let root = Path::new("/tmp/qai-extract");
+        let entry = ArchiveEntry::file("inner.zip", 1, 1);
+        let r = check_archive_entry(root, &entry, 1, 3, &limits());
+        assert!(matches!(r, Err(SecurityError::ArchiveTooDeep)));
     }
 }
