@@ -23,6 +23,7 @@ pub mod ids;
 pub mod licensing;
 pub mod primitives;
 pub mod provenance;
+pub mod security;
 pub mod types;
 
 pub use diagnostic::{
