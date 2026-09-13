@@ -19,6 +19,9 @@ pub mod repository;
 
 use std::fmt;
 
+// Re-export commonly used types
+pub use error::StorageError;
+
 /// The storage backend type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DbBackend {

@@ -11,9 +11,8 @@ sqlx = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
-sha2 = { workspace = true }
-time = { workspace = true, features = ["fmt"] }
-dirs = { workspace = true }
+uuid = { workspace = true }
+time = { workspace = true }
 
 [lints]
 workspace = true

@@ -56,17 +56,6 @@ pub const SPAN_OUTCOME: &str = "qai.outcome";
 pub fn init(format: Format) -> Shutdown {
     let filter = EnvFilter::from_default_env();
 
-    let subscriber = tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_file(true)
-        .with_line_number(true)
-        .with_target(true)
-        .with_writer(std::io::stderr)
-        .finish();
-
-    // Wrap the subscriber with the chosen format layer.
-    // Both format types implement `Layer<T>` where T is the
-    // base subscriber type. We use `.with()` to layer them.
     let subscriber = match format {
         Format::Text => {
             tracing_subscriber::fmt::layer()
@@ -75,7 +64,7 @@ pub fn init(format: Format) -> Shutdown {
                 .with_target(true)
                 .with_file(true)
                 .with_line_number(true)
-                .with_env_filter(filter)
+                .with_filter(filter)
                 .with_current_span(true)
                 .expect_subscriber()
         }
@@ -86,7 +75,7 @@ pub fn init(format: Format) -> Shutdown {
                 .with_target(true)
                 .with_file(true)
                 .with_line_number(true)
-                .with_env_filter(filter)
+                .with_filter(filter)
                 .with_current_span(true)
                 .expect_subscriber()
         }

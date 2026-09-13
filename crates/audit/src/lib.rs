@@ -2,7 +2,8 @@
 //!
 //! Audit model: append-only, hash-chained, secret-free.
 
-use crate::domain::{AuditEventId, ContentHash, PrincipalId, Timestamp};
+use domain::{AuditEventId, ContentHash, HashAlgorithm, PrincipalId, SubjectRef, Timestamp, canonical_json_bytes};
+use storage::error::StorageError;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -62,7 +63,7 @@ pub struct AuditEvent {
     pub occurred_at: Timestamp,
     pub actor: Actor,
     pub action: AuditAction,
-    pub subject: crate::domain::SubjectRef,
+    pub subject: SubjectRef,
     pub outcome: AuditOutcome,
     pub reason: Option<String>,
     pub before: Option<serde_json::Value>,
@@ -77,7 +78,7 @@ pub struct AuditEvent {
 #[async_trait::async_trait]
 pub trait AuditRepository: Send + Sync {
     async fn append(&mut self, event: AuditEvent) -> Result<(), AuditError>;
-    async fn list_by_subject(&self, subject_urn: &crate::domain::SubjectRef) -> Result<Vec<AuditEvent>, AuditError>;
+    async fn list_by_subject(&self, subject_urn: &SubjectRef) -> Result<Vec<AuditEvent>, AuditError>;
     async fn list_by_sequence(&self, from: u64, to: Option<u64>) -> Result<Vec<AuditEvent>, AuditError>;
     async fn verify_chain(&self) -> Result<ChainVerificationResult, AuditError>;
     async fn latest_sequence(&self) -> Result<u64, AuditError>;
@@ -130,18 +131,18 @@ impl HashChainWriter {
 
     fn compute_chain_hash(prev_hash: &ContentHash, event: &AuditEvent) -> ContentHash {
         let mut event_without_hash = event.clone();
-        event_without_hash.chain_hash = ContentHash { algorithm: crate::domain::HashAlgorithm::Sha256, hex: String::new() };
-        event_without_hash.prev_chain_hash = ContentHash { algorithm: crate::domain::HashAlgorithm::Sha256, hex: String::new() };
-        let canonical = crate::domain::canonical_json_bytes(&event_without_hash).unwrap_or_else(|_| vec![]);
+        event_without_hash.chain_hash = ContentHash { algorithm: HashAlgorithm::Sha256, hex: String::new() };
+        event_without_hash.prev_chain_hash = ContentHash { algorithm: HashAlgorithm::Sha256, hex: String::new() };
+        let canonical = canonical_json_bytes(&event_without_hash).unwrap_or_else(|_| vec![]);
         let mut hasher = Sha256::new();
         hasher.update(prev_hash.hex.as_bytes());
         hasher.update(&canonical);
         let result = hasher.finalize();
-        ContentHash { algorithm: crate::domain::HashAlgorithm::Sha256, hex: hex_encode(&result) }
+        ContentHash { algorithm: HashAlgorithm::Sha256, hex: hex_encode(&result) }
     }
 
     async fn get_prev_chain_hash(&self, _seq: u64) -> Result<ContentHash, AuditError> {
-        Ok(ContentHash { algorithm: crate::domain::HashAlgorithm::Sha256, hex: "00".repeat(32) })
+        Ok(ContentHash { algorithm: HashAlgorithm::Sha256, hex: "00".repeat(32) })
     }
 }
 
@@ -220,7 +221,7 @@ pub enum AuditError {
     #[error("secret detected in audit record at sequence {sequence}")]
     SecretLeakDetected { sequence: u64 },
     #[error("storage error: {0}")]
-    Storage(#[from] crate::storage::StorageError),
+    Storage(#[from] storage::StorageError),
 }
 
 // ─── Helper ───────────────────────────────────────
@@ -232,42 +233,41 @@ fn hex_encode(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::AuditEventId;
 
     #[test]
     fn hash_chain_computation() {
-        let prev_hash = ContentHash { algorithm: crate::domain::HashAlgorithm::Sha256, hex: "00".repeat(32) };
+        let prev_hash = ContentHash { algorithm: HashAlgorithm::Sha256, hex: "00".repeat(32) };
         let event = AuditEvent {
             id: AuditEventId::new(), sequence: 1, occurred_at: Timestamp::now(),
             actor: Actor::System { name: "test".to_string() }, action: AuditAction::ConfigChange,
-            subject: crate::domain::SubjectRef("urn:test".to_string()),
+            subject: SubjectRef("urn:test".to_string()),
             outcome: AuditOutcome::Allowed, reason: None, before: None, after: None,
             request_id: None, prev_chain_hash: prev_hash.clone(),
-            chain_hash: ContentHash { algorithm: crate::domain::HashAlgorithm::Sha256, hex: String::new() },
+            chain_hash: ContentHash { algorithm: HashAlgorithm::Sha256, hex: String::new() },
         };
         let chain_hash = HashChainWriter::compute_chain_hash(&prev_hash, &event);
-        assert_eq!(chain_hash.algorithm, crate::domain::HashAlgorithm::Sha256);
+        assert_eq!(chain_hash.algorithm, HashAlgorithm::Sha256);
         assert!(!chain_hash.hex.is_empty());
     }
 
     #[test]
     fn different_events_produce_different_hashes() {
-        let prev_hash = ContentHash { algorithm: crate::domain::HashAlgorithm::Sha256, hex: "00".repeat(32) };
+        let prev_hash = ContentHash { algorithm: HashAlgorithm::Sha256, hex: "00".repeat(32) };
         let mut event1 = AuditEvent {
             id: AuditEventId::new(), sequence: 1, occurred_at: Timestamp::now(),
             actor: Actor::System { name: "test1".to_string() }, action: AuditAction::ConfigChange,
-            subject: crate::domain::SubjectRef("urn:test".to_string()),
+            subject: SubjectRef("urn:test".to_string()),
             outcome: AuditOutcome::Allowed, reason: None, before: None, after: None,
             request_id: None, prev_chain_hash: prev_hash.clone(),
-            chain_hash: ContentHash { algorithm: crate::domain::HashAlgorithm::Sha256, hex: String::new() },
+            chain_hash: ContentHash { algorithm: HashAlgorithm::Sha256, hex: String::new() },
         };
         let event2 = AuditEvent {
             id: AuditEventId::new(), sequence: 2, occurred_at: Timestamp::now(),
             actor: Actor::System { name: "test2".to_string() }, action: AuditAction::SourceApproved,
-            subject: crate::domain::SubjectRef("urn:test".to_string()),
+            subject: SubjectRef("urn:test".to_string()),
             outcome: AuditOutcome::Allowed, reason: None, before: None, after: None,
             request_id: None, prev_chain_hash: prev_hash.clone(),
-            chain_hash: ContentHash { algorithm: crate::domain::HashAlgorithm::Sha256, hex: String::new() },
+            chain_hash: ContentHash { algorithm: HashAlgorithm::Sha256, hex: String::new() },
         };
         let hash1 = HashChainWriter::compute_chain_hash(&prev_hash, &event1);
         let hash2 = HashChainWriter::compute_chain_hash(&prev_hash, &event2);
@@ -285,7 +285,7 @@ mod tests {
 
     #[test]
     fn actor_variants() {
-        let principal = Actor::Principal { principal_id: crate::domain::PrincipalId::new() };
+        let principal = Actor::Principal { principal_id: PrincipalId::new() };
         let system = Actor::System { name: "systemd".to_string() };
         let job = Actor::Job { job_id: "job-123".to_string() };
         assert!(matches!(principal, Actor::Principal { .. }));

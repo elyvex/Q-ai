@@ -42,57 +42,59 @@ pub fn init() {
 
 /// Record a job enqueue event.
 pub fn enqueue_job(kind: &str) {
-    metrics::counter!("qai_jobs_enqueued_total", &[("kind", kind)]).increment(1);
+    metrics::counter!("qai_jobs_enqueued_total", "kind" => kind.to_string()).increment(1);
 }
 
 /// Record a job completion.
 pub fn complete_job(kind: &str, outcome: &str) {
     metrics::counter!(
         "qai_jobs_completed_total",
-        &[("kind", kind), ("outcome", outcome)]
+        "kind" => kind.to_string(),
+        "outcome" => outcome.to_string()
     )
     .increment(1);
 }
 
 /// Record job duration.
 pub fn observe_job_duration(kind: &str, duration_secs: f64) {
-    metrics::histogram!("qai_job_duration_seconds", &[("kind", kind)])
+    metrics::histogram!("qai_job_duration_seconds", "kind" => kind.to_string())
         .record(duration_secs);
 }
 
 /// Record database query duration.
 pub fn observe_db_query_duration(operation: &str, duration_secs: f64) {
-    metrics::histogram!("qai_db_query_duration_seconds", &[("op", operation)])
+    metrics::histogram!("qai_db_query_duration_seconds", "op" => operation.to_string())
         .record(duration_secs);
 }
 
 /// Set the number of in-use database connections.
 pub fn set_db_pool_in_use(pool: &str, value: f64) {
-    metrics::gauge!("qai_db_pool_in_use", &[("pool", pool)]).set(value);
+    metrics::gauge!("qai_db_pool_in_use", "pool" => pool.to_string()).set(value);
 }
 
 /// Record an audit event.
 pub fn record_audit_event(action: &str) {
-    metrics::counter!("qai_audit_events_total", &[("action", action)])
+    metrics::counter!("qai_audit_events_total", "action" => action.to_string())
         .increment(1);
 }
 
 /// Record a configuration reload.
 pub fn record_config_reload(outcome: &str) {
-    metrics::counter!("qai_config_reloads_total", &[("outcome", outcome)])
+    metrics::counter!("qai_config_reloads_total", "outcome" => outcome.to_string())
         .increment(1);
 }
 
 /// Record an error.
 pub fn record_error(code: &str) {
-    metrics::counter!("qai_errors_total", &[("code", code)]).increment(1);
+    metrics::counter!("qai_errors_total", "code" => code.to_string()).increment(1);
 }
 
 /// Record a doctor check result.
 pub fn record_doctor_check(check: &str, status: &str) {
     metrics::counter!(
         "qai_doctor_checks_total",
-        &[("check", check), ("status", status)]
+        "check" => check.to_string(),
+        "status" => status.to_string()
     )
     .increment(1);
 }

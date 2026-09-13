@@ -34,7 +34,7 @@ pub struct SourceLocation {
 
 // ─── ProvenanceRecord ─────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProvenanceRecord {
     pub id: ProvenanceId,
     pub layer: domain::DataLayer,

@@ -1,13 +1,13 @@
 //! Phase 0 — Source catalog, manifest schema, and state machine (D0.10).
 
-use crate::domain::{
+use domain::{
     ApprovalId, ContentHash, DerivationVersions, PrincipalId, SourceId,
-    SourceVersionId, Timestamp, TrustLevel,
+    SourceVersionId, Timestamp, TrustLevel, LicenseStatus, HashAlgorithm, canonical_json_bytes,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use std::collections::BTreeMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use tokio::sync::RwLock as TokioRwLock;
 
 // ─── Source ────────────────────────────────────
@@ -54,7 +54,7 @@ pub struct SourceVersion {
     pub schema_version: u32,
     pub state: SourceState,
     pub trust_level: TrustLevel,
-    pub license_status: crate::domain::LicenseStatus,
+    pub license_status: LicenseStatus,
     pub license_json: String,
     pub manifest_blob_id: Option<String>,
     pub manifest_hash: Option<ContentHash>,
@@ -221,7 +221,7 @@ impl ManifestParser {
         Ok(())
     }
     pub fn canonical_reserialize(&self, manifest: &ManifestParseResult) -> Result<String, SourceError> {
-        let bytes = crate::domain::canonical_json_bytes(manifest).map_err(SourceError::Serialization)?;
+        let bytes = canonical_json_bytes(manifest).map_err(SourceError::Serialization)?;
         Ok(String::from_utf8(bytes).map_err(|_| SourceError::Serialization("invalid UTF-8".to_string()))?)
     }
     pub fn verify_signature(&self, _manifest: &ManifestParseResult, signature: Option<&str>) -> Result<(), SourceError> {
@@ -321,7 +321,7 @@ impl StateMachine {
         Ok(())
     }
     fn check_approved_preconditions(version: &SourceVersion) -> Result<(), SourceError> {
-        if version.license_status == crate::domain::LicenseStatus::Unknown {
+        if version.license_status == LicenseStatus::Unknown {
             return Err(SourceError::ApprovalPreconditionNotMet("license status must not be Unknown".to_string()));
         }
         if version.content_hash.is_none() {
@@ -376,7 +376,7 @@ pub enum SourceError {
     #[error("source is already in state {0:?}")]
     AlreadyInState(SourceState),
     #[error("storage error: {0}")]
-    Storage(#[from] crate::storage::StorageError),
+    Storage(#[from] storage::StorageError),
 }
 
 // ─── Tests ──────────────────────────────────────
@@ -384,7 +384,7 @@ pub enum SourceError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{SourceId, SourceVersionId};
+    use domain::{SourceId, SourceVersionId};
 
     #[test]
     fn legal_transitions() {
@@ -425,7 +425,7 @@ mod tests {
             schema_version: 1, state: SourceState::Staged, trust_level: TrustLevel::ImportedUnverified,
             license_status: crate::domain::LicenseStatus::OpenLicense, license_json: "{}".to_string(),
             manifest_blob_id: None, manifest_hash: None,
-            content_hash: Some(ContentHash { algorithm: crate::domain::HashAlgorithm::Sha256, hex: "00".repeat(32) }),
+            content_hash: Some(ContentHash { algorithm: HashAlgorithm::Sha256, hex: "00".repeat(32) }),
             source_urls: vec![], publication_date: None, imported_at: None, validated_at: None,
             approved_at: None, approved_by: None, activated_at: None, deprecated_at: None,
             quarantine_reason: None, validation_report: None, notes: None, created_at: Timestamp::now(),
