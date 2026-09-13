@@ -1,11 +1,13 @@
 //! Phase 0 — Provenance model (D0.11).
 
 use domain::{
-    ApprovalId, ContentHash, DerivationVersions, PrincipalId, ProvenanceId,
-    SubjectRef, Timestamp, TrustLevel, VerificationStatus,
+    ApprovalId, ContentHash, DataLayer, DerivationVersions, PrincipalId, ProvenanceId,
+    SemVer, SubjectRef, Timestamp, TrustLevel, VerificationStatus,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+type Result<T, E = ProvenanceError> = std::result::Result<T, E>;
 
 // ─── Attribution ──────────────────────────────────
 
@@ -185,7 +187,7 @@ mod tests {
     #[test]
     fn canonical_provenance_is_immutable() {
         let record = make_canonical_record();
-        assert_eq!(record.layer, domain::DataLayer::CanonicalSource);
+        assert_eq!(record.layer, DataLayer::Canonical);
     }
 
     #[test]
@@ -217,13 +219,13 @@ mod tests {
     fn make_canonical_record() -> ProvenanceRecord {
         ProvenanceRecord {
             id: ProvenanceId::new(),
-            layer: domain::DataLayer::CanonicalSource,
+            layer: DataLayer::Canonical,
             subject: SubjectRef("urn:qai:quran:ayah:1:1".to_string()),
             attribution: Attribution::Dataset { source_id: "test".to_string(), dataset_name: "test".to_string(), dataset_version: "1.0".to_string() },
             source_version_id: Some(domain::SourceVersionId::new()),
             source_location: None,
             trust_level: TrustLevel::CanonicalVerified,
-            verification: VerificationStatus::HumanVerified,
+            verification: VerificationStatus::Verified,
             confidence: None,
             versions: DerivationVersions {
                 source_version_id: domain::SourceVersionId::new(),
@@ -244,10 +246,10 @@ mod tests {
         }
     }
 
-    fn try_create_computational(algorithm: Option<String>, confidence: Option<f32>) -> Result<ProvenanceError> {
+    fn try_create_computational(algorithm: Option<String>, confidence: Option<f32>) -> Result<()> {
         if algorithm.is_none() || confidence.is_none() {
             return Err(ProvenanceError::MissingComputationalMetadata);
         }
-        Ok(ProvenanceError::MissingComputationalMetadata)
+        Ok(())
     }
 }
