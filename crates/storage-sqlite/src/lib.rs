@@ -283,7 +283,17 @@ impl UnitOfWork for SqliteUnitOfWork {
     }
 
     async fn commit(self: Box<Self>) -> Result<(), StorageError> {
-        let Self { tx, .. } = *self;
+        let Self {
+            tx,
+            sources,
+            provenance,
+            audit,
+            jobs,
+            settings,
+            schema_version: _,
+        } = *self;
+        // Drop the repository Arc clones so `tx` is the sole owner.
+        drop((sources, provenance, audit, jobs, settings));
         let mutex = Arc::try_unwrap(tx).map_err(|_| StorageError::StorageBusy)?;
         let txn = mutex.into_inner();
         txn.commit()
@@ -292,7 +302,16 @@ impl UnitOfWork for SqliteUnitOfWork {
     }
 
     async fn rollback(self: Box<Self>) -> Result<(), StorageError> {
-        let Self { tx, .. } = *self;
+        let Self {
+            tx,
+            sources,
+            provenance,
+            audit,
+            jobs,
+            settings,
+            schema_version: _,
+        } = *self;
+        drop((sources, provenance, audit, jobs, settings));
         let mutex = Arc::try_unwrap(tx).map_err(|_| StorageError::StorageBusy)?;
         let txn = mutex.into_inner();
         txn.rollback()
@@ -717,8 +736,8 @@ impl JobRepository for SqliteJobRepository {
             "INSERT INTO jobs
                 (id, kind, payload_json, idempotency_key, state, priority, attempts, max_attempts,
                  available_at, lease_owner, lease_expires_at, checkpoint_json, cancel_requested,
-                 created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 created_by, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&job.id)
         .bind(&job.kind)
@@ -734,6 +753,7 @@ impl JobRepository for SqliteJobRepository {
         .bind(&job.checkpoint_json)
         .bind(job.cancel_requested as i64)
         .bind(&job.created_by)
+        .bind(now_rfc3339())
         .execute(&mut **tx)
         .await
         .map_err(map_sqlx_error)?;
@@ -955,7 +975,10 @@ pub(crate) fn map_sqlx_error(err: sqlx::Error) -> StorageError {
                 StorageError::Conflict
             } else if msg.contains("QAI-PROV") || msg.contains("immutable") {
                 StorageError::ImmutableSourceVersion
-            } else if msg.contains("CHECK") || msg.contains("FOREIGN KEY") {
+            } else if msg.contains("CHECK")
+                || msg.contains("FOREIGN KEY")
+                || msg.contains("NOT NULL")
+            {
                 StorageError::ConstraintViolation { message: msg }
             } else {
                 StorageError::StorageUnavailable
@@ -979,6 +1002,25 @@ mod tests {
         migrate::apply_migrations(db_path.to_str().unwrap(), &repo_root)
             .await
             .unwrap();
+        // Seed a principal for FK targets (jobs.created_by, settings.updated_by).
+        let seed = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(
+                sqlx::sqlite::SqliteConnectOptions::new()
+                    .filename(&db_path)
+                    .foreign_keys(true),
+            )
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO principals (id, kind, display_name, created_at)
+             VALUES ('principal', 'local_user', 'Test', ?)",
+        )
+        .bind(now_rfc3339())
+        .execute(&seed)
+        .await
+        .unwrap();
+        seed.close().await;
         SqliteDatabase::new(db_path.to_str().unwrap(), 4, true)
             .await
             .unwrap()
