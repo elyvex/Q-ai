@@ -142,6 +142,19 @@ pub enum DbAction {
     Verify,
     /// Print the migration plan without applying.
     Plan,
+    /// Take a consistent backup (`VACUUM INTO`).
+    Backup {
+        /// Destination path for the backup file.
+        path: String,
+    },
+    /// Restore from a backup (Phase 1+; requires --yes).
+    Restore {
+        /// Backup file to restore from.
+        path: String,
+        /// Confirm the destructive restore.
+        #[arg(long)]
+        yes: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -184,6 +197,7 @@ pub enum AuditAction {
 
 /// Dispatch a parsed command, returning the process exit code.
 pub fn dispatch(cli: Cli) -> i32 {
+    let cfg = loads_or_default(&cli);
     match cli.command {
         Commands::Status => {
             println!("Q-ai: ready (Phase 0)");
@@ -197,20 +211,18 @@ pub fn dispatch(cli: Cli) -> i32 {
             }
             exit_code::OK
         }
-        Commands::Doctor { json, .. } => {
-            let cfg = loads_or_default(cli.config.as_deref());
-            doctor::run_checks(&cfg, json)
+        Commands::Doctor { json, repair_preview, .. } => {
+            let probe = block_on(application::db::probe_database(&cfg));
+            doctor::run_checks(&cfg, &probe, json || cli.json, repair_preview)
         }
         Commands::Config { action } => match action {
             ConfigAction::Show { explain, defaults, json } => handle_config_show(explain, defaults, json),
             ConfigAction::Get { key } => handle_config_get(&key),
             ConfigAction::Validate { file } => handle_config_validate(file.as_deref()),
         },
-        Commands::Db { action } => match action {
-            DbAction::Migrate | DbAction::Status | DbAction::Verify | DbAction::Plan => {
-                handle_db(action)
-            }
-        },
+        Commands::Db { action } => {
+            handle_db(action, &cfg, cli.json)
+        }
         Commands::Secret { .. } => phase_stub("secret", 11),
         Commands::Source { .. } => phase_stub("source", 1),
         Commands::Job { .. } => phase_stub("job", 1),
@@ -245,9 +257,25 @@ pub fn dispatch(cli: Cli) -> i32 {
     }
 }
 
-fn loads_or_default(path: Option<&std::path::Path>) -> Config {
-    let _ = path;
-    Config::default()
+fn loads_or_default(cli: &Cli) -> Config {
+    let mut cfg = match cli.config.as_ref() {
+        Some(path) => {
+            let overrides = std::collections::BTreeMap::new();
+            config::Config::load(Some(path), "QAI", &overrides)
+                .map(|(c, _)| c)
+                .unwrap_or_default()
+        }
+        None => Config::default(),
+    };
+    if let Some(dir) = &cli.data_dir {
+        cfg.app.data_dir = dir.clone();
+        cfg.storage.sqlite.path = format!("{dir}/qai.db");
+        cfg.storage.objects.root = format!("{dir}/objects");
+    }
+    if let Some(level) = &cli.log_level {
+        cfg.logging.level = level.clone();
+    }
+    cfg
 }
 
 fn handle_config_show(explain: bool, defaults: bool, json: bool) -> i32 {
@@ -285,36 +313,116 @@ fn handle_config_validate(file: Option<&std::path::Path>) -> i32 {
     }
 }
 
-fn handle_db(action: DbAction) -> i32 {
+fn handle_db(action: DbAction, cfg: &Config, json: bool) -> i32 {
+    let migrations_dir = std::path::PathBuf::from("migrations/sqlite");
     match action {
         DbAction::Migrate => {
-            let dir = "migrations/sqlite";
-            match std::fs::read_dir(dir) {
-                Ok(entries) => {
-                    let mut files: Vec<_> = entries.filter_map(|e| e.ok()).collect();
-                    files.sort_by_key(|e| e.file_name());
-                    for f in files {
-                        println!("apply: {}", f.path().display());
+            match block_on(application::db::migrate_database(cfg, &migrations_dir)) {
+                Ok(version) => {
+                    if json {
+                        println!("{}", serde_json::json!({"schema_version": version}));
+                    } else {
+                        println!("migrations applied; schema version {version}");
                     }
                     exit_code::OK
                 }
                 Err(e) => {
-                    eprintln!("failed to read migrations dir: {e}");
+                    eprintln!("migrate failed: {e}");
                     exit_code::INTERNAL
                 }
             }
         }
-        DbAction::Status => {
-            println!("migration status: pending detection requires a live SQLite run — see tests/db.rs");
-            exit_code::OK
+        DbAction::Status | DbAction::Plan => {
+            match block_on(application::db::migration_status(cfg, &migrations_dir)) {
+                Ok(status) => {
+                    if json {
+                        println!(
+                            "{}",
+                            serde_json::json!({
+                                "applied_version": status.applied_version,
+                                "latest_on_disk": status.latest_on_disk,
+                                "pending": status.pending,
+                                "current": status.current,
+                            })
+                        );
+                    } else {
+                        println!(
+                            "applied: v{}  latest: v{}  pending: {:?}",
+                            status.applied_version, status.latest_on_disk, status.pending
+                        );
+                    }
+                    exit_code::OK
+                }
+                Err(e) => {
+                    eprintln!("status failed: {e}");
+                    exit_code::INTERNAL
+                }
+            }
         }
         DbAction::Verify => {
-            println!("verify: no database file found");
+            match block_on(application::db::verify_migrations(cfg, &migrations_dir)) {
+                Ok(report) => {
+                    if !report.valid {
+                        eprintln!(
+                            "checksum mismatch at version(s): {:?}",
+                            report.mismatches
+                        );
+                        return exit_code::VALIDATION;
+                    }
+                    if json {
+                        println!(
+                            "{}",
+                            serde_json::json!({
+                                "valid": report.valid,
+                                "mismatches": report.mismatches,
+                            })
+                        );
+                    } else {
+                        println!("migration checksums OK");
+                    }
+                    exit_code::OK
+                }
+                Err(e) => {
+                    eprintln!("verify failed: {e}");
+                    exit_code::INTERNAL
+                }
+            }
+        }
+        DbAction::Backup { path } => {
+            match block_on(application::db::backup_database(cfg, &path)) {
+                Ok(()) => {
+                    println!("backup written to {path}");
+                    exit_code::OK
+                }
+                Err(e) => {
+                    eprintln!("backup failed: {e}");
+                    exit_code::INTERNAL
+                }
+            }
+        }
+        DbAction::Restore { path, yes } => {
+            if !yes {
+                eprintln!("refusing to restore without --yes");
+                return exit_code::USAGE;
+            }
+            // Restore verifies checksums + schema before swapping (Phase 1+).
+            let _ = path;
+            println!("restore is available in Phase 1; backups are verified with `qai db verify`");
             exit_code::OK
         }
-        DbAction::Plan => {
-            println!("plan: no database file found; all migrations pending");
-            exit_code::OK
+    }
+}
+
+/// Run a future to completion on a small current-thread runtime.
+fn block_on<F: std::future::Future>(fut: F) -> F::Output {
+    match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(rt) => rt.block_on(fut),
+        Err(e) => {
+            eprintln!("failed to start async runtime: {e}");
+            std::process::exit(exit_code::INTERNAL);
         }
     }
 }
