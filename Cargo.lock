@@ -782,8 +782,14 @@ dependencies = [
  "async-trait",
  "domain",
  "observability",
+ "serde",
+ "serde_json",
  "storage",
  "thiserror 2.0.20",
+ "time",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]
