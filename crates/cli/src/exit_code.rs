@@ -1,45 +1,42 @@
-pub mod exit_code {
-    pub const OK: i32 = 0;
-    pub const GENERIC: i32 = 1;
-    pub const USAGE: i32 = 2;
-    pub const VALIDATION: i32 = 3;
-    pub const POLICY: i32 = 4;
-    pub const NOT_FOUND: i32 = 5;
-    pub const CONFLICT: i32 = 6;
-    pub const CANCELLED: i32 = 7;
-    pub const INTERNAL: i32 = 70;
+//! CLI exit-code constants and error mapping (plan D0.13 conventions).
 
-    pub fn from_config_error(err: &config::ConfigError) -> i32 {
-        match err {
-            config::ConfigError::Validation(_) => VALIDATION,
-            config::ConfigError::MissingKey(_) => NOT_FOUND,
-            config::ConfigError::InterpolationCycle(_) => VALIDATION,
-            config::ConfigError::FileRead { .. } => GENERIC,
-            config::ConfigError::Parse(_) => VALIDATION,
-        }
+/// Successful execution.
+pub const OK: i32 = 0;
+/// Generic failure.
+pub const GENERIC: i32 = 1;
+/// Usage error (bad flags/args).
+pub const USAGE: i32 = 2;
+/// Validation failure.
+pub const VALIDATION: i32 = 3;
+/// Denied by policy.
+pub const POLICY: i32 = 4;
+/// Resource not found.
+pub const NOT_FOUND: i32 = 5;
+/// Conflict / invalid state.
+pub const CONFLICT: i32 = 6;
+/// Operation cancelled.
+pub const CANCELLED: i32 = 7;
+/// Internal error.
+pub const INTERNAL: i32 = 70;
+
+/// Map a config error to an exit code.
+pub fn from_config_error(err: &config::ConfigError) -> i32 {
+    match err {
+        config::ConfigError::Validation(_) => VALIDATION,
+        config::ConfigError::MissingKey(_) => NOT_FOUND,
+        config::ConfigError::InterpolationCycle(_) => VALIDATION,
+        config::ConfigError::FileRead { .. } => GENERIC,
+        config::ConfigError::Parse(_) => VALIDATION,
     }
+}
 
-    pub fn from_storage_error(err: &storage::StorageError) -> i32 {
-        match err {
-            storage::StorageError::NotFound { .. } => NOT_FOUND,
-            storage::StorageError::Conflict => CONFLICT,
-            storage::StorageError::ImmutableSourceVersion => POLICY,
-            storage::StorageError::ConstraintViolation { .. } => VALIDATION,
-            storage::StorageError::StorageBusy => GENERIC,
-            storage::StorageError::MigrationRequired { .. } => VALIDATION,
-            storage::StorageError::MigrationChecksumMismatch { .. } => VALIDATION,
-            storage::StorageError::IdempotencyKeyReplay => CONFLICT,
-            storage::StorageError::StorageUnavailable => INTERNAL,
-        }
-    }
-
-    pub fn from_io_error(err: &std::io::Error) -> i32 {
-        match err.kind() {
-            std::io::ErrorKind::NotFound => NOT_FOUND,
-            std::io::ErrorKind::PermissionDenied => POLICY,
-            std::io::ErrorKind::AlreadyExists => CONFLICT,
-            _ => GENERIC,
-        }
+/// Map an I/O error to an exit code.
+pub fn from_io_error(err: &std::io::Error) -> i32 {
+    match err.kind() {
+        std::io::ErrorKind::NotFound => NOT_FOUND,
+        std::io::ErrorKind::PermissionDenied => POLICY,
+        std::io::ErrorKind::AlreadyExists => CONFLICT,
+        _ => GENERIC,
     }
 }
 
@@ -47,37 +44,6 @@ pub mod exit_code {
 mod tests {
     use super::exit_code;
     use config::ConfigError;
-    use storage::StorageError;
-
-    #[test]
-    fn config_validation_maps_to_validation() {
-        let err = ConfigError::Validation("bad".into());
-        assert_eq!(exit_code::from_config_error(&err), exit_code::VALIDATION);
-    }
-
-    #[test]
-    fn config_missing_key_maps_to_not_found() {
-        let err = ConfigError::MissingKey("x".into());
-        assert_eq!(exit_code::from_config_error(&err), exit_code::NOT_FOUND);
-    }
-
-    #[test]
-    fn storage_not_found_maps_to_not_found() {
-        let err = StorageError::NotFound { urn: "x".into() };
-        assert_eq!(exit_code::from_storage_error(&err), exit_code::NOT_FOUND);
-    }
-
-    #[test]
-    fn storage_conflict_maps_to_conflict() {
-        let err = StorageError::Conflict;
-        assert_eq!(exit_code::from_storage_error(&err), exit_code::CONFLICT);
-    }
-
-    #[test]
-    fn storage_busy_maps_to_generic() {
-        let err = StorageError::StorageBusy;
-        assert_eq!(exit_code::from_storage_error(&err), exit_code::GENERIC);
-    }
 
     #[test]
     fn constants_are_correct() {
@@ -90,5 +56,17 @@ mod tests {
         assert_eq!(exit_code::CONFLICT, 6);
         assert_eq!(exit_code::CANCELLED, 7);
         assert_eq!(exit_code::INTERNAL, 70);
+    }
+
+    #[test]
+    fn config_validation_maps_to_validation() {
+        let err = ConfigError::Validation("bad".into());
+        assert_eq!(exit_code::from_config_error(&err), exit_code::VALIDATION);
+    }
+
+    #[test]
+    fn config_missing_key_maps_to_not_found() {
+        let err = ConfigError::MissingKey("x".into());
+        assert_eq!(exit_code::from_config_error(&err), exit_code::NOT_FOUND);
     }
 }
