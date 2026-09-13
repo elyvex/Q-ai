@@ -260,7 +260,8 @@ impl GenealogyResolver {
         let mut lineage = Vec::new();
         let mut cycle_detected = false;
         self.dfs_resolve(source_id, &graph, &mut visited, &mut lineage, &mut cycle_detected)?;
-        Ok(GenealogyResult { lineage, cycle_detected, rendering: self.render_lineage(&lineage) })
+        let rendering = self.render_lineage(&lineage);
+        Ok(GenealogyResult { lineage, cycle_detected, rendering })
     }
     fn dfs_resolve(&self, current: &SourceId, graph: &BTreeMap<SourceId, Vec<SourceId>>, visited: &mut BTreeMap<SourceId, bool>, lineage: &mut Vec<LineageNode>, cycle_detected: &mut bool) -> Result<(), SourceError> {
         if visited.get(current) == Some(&true) { *cycle_detected = true; return Err(SourceError::GenealogyCycleDetected(format!("cycle detected at {}", current))); }
