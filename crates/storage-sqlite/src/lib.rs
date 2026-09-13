@@ -16,7 +16,7 @@
 
 use async_trait::async_trait;
 use sha2::{Digest, Sha256};
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool, SqlitePoolOptions, SqliteSynchronous};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool, SqlitePoolOptions, SqliteSynchronous, SqliteRow};
 use sqlx::{Pool, Row, Sqlite, Transaction};
 use std::path::Path;
 use storage::{Database, ReadTx, UnitOfWork, DbHealth, DbBackend,
@@ -30,6 +30,8 @@ use storage::{Database, ReadTx, UnitOfWork, DbHealth, DbBackend,
     error::StorageError,
 };
 use crate::migrate::{discover_migrations, sha256_file};
+
+type SqlTx = Transaction<'static, Sqlite>;
 
 /// SQLite database implementation with dual pools.
 pub struct SqliteDatabase {
@@ -50,7 +52,6 @@ impl SqliteDatabase {
             .busy_timeout(std::time::Duration::from_millis(5000));
 
         if read_only_pool {
-            // For read pool we set query_only = ON
             write_options = write_options.read_only(false);
         }
 
@@ -58,9 +59,8 @@ impl SqliteDatabase {
             .max_connections(1)
             .connect_with(write_options)
             .await
-            .map_err(|e| StorageError::StorageUnavailable)?;
+            .map_err(|_| StorageError::StorageUnavailable)?;
 
-        // Read pool with query_only = ON
         let mut read_options = SqliteConnectOptions::new()
             .filename(path)
             .create_if_missing(false)
@@ -74,9 +74,8 @@ impl SqliteDatabase {
             .max_connections(max_connections)
             .connect_with(read_options)
             .await
-            .map_err(|e| StorageError::StorageUnavailable)?;
+            .map_err(|_| StorageError::StorageUnavailable)?;
 
-        // Get current schema version
         let schema_version = Self::get_schema_version(&write_pool).await.unwrap_or(0);
 
         Ok(Self {
@@ -93,11 +92,8 @@ impl SqliteDatabase {
         Ok(row.map(|r| r.get::<i64, _>("version") as u32).unwrap_or(0))
     }
 
-    /// Apply all pending migrations from the migrations directory.
-    ///
-    /// Returns the highest applied version number.
+    /// Apply all pending migrations and return the highest applied version.
     pub async fn apply_migrations(db_path: &str) -> Result<u32, StorageError> {
-        // Create a single connection pool for migrations
         let options = SqliteConnectOptions::new()
             .filename(db_path)
             .create_if_missing(true)
@@ -112,24 +108,20 @@ impl SqliteDatabase {
             .await
             .map_err(|_| StorageError::StorageUnavailable)?;
 
-        // Ensure schema_migrations table exists
         sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS schema_migrations (
-              version      INTEGER PRIMARY KEY,
-              name         TEXT    NOT NULL,
-              checksum     TEXT    NOT NULL,
-              applied_at   TEXT    NOT NULL,
-              applied_by   TEXT    NOT NULL,
-              duration_ms  INTEGER NOT NULL
-            )
-            "#,
+            r#"CREATE TABLE IF NOT EXISTS schema_migrations (
+                version      INTEGER PRIMARY KEY,
+                name         TEXT    NOT NULL,
+                checksum     TEXT    NOT NULL,
+                applied_at   TEXT    NOT NULL,
+                applied_by   TEXT    NOT NULL,
+                duration_ms  INTEGER NOT NULL
+            )"#,
         )
         .execute(&pool)
         .await
         .map_err(|_| StorageError::StorageUnavailable)?;
 
-        // Get already applied migrations
         let applied_rows = sqlx::query("SELECT version, checksum FROM schema_migrations")
             .fetch_all(&pool)
             .await
@@ -142,53 +134,51 @@ impl SqliteDatabase {
             applied.insert(version as u32, checksum);
         }
 
-        // Discover migrations from the migrations directory
-        let migrations_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..").join("migrations").join("sqlite");
+        // migrations/sqlite lives at <repo>/migrations/sqlite; this crate is at
+        // <repo>/crates/storage-sqlite, so two parents up from CARGO_MANIFEST_DIR.
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let migrations_dir = manifest_dir
+            .parent()
+            .and_then(|p| p.parent())
+            .map(|repo| repo.join("migrations").join("sqlite"))
+            .unwrap_or_else(|_| manifest_dir.join("migrations").join("sqlite"));
+
         let discovered = discover_migrations(&migrations_dir)
-            .map_err(|e| StorageError::StorageUnavailable)?;
+            .map_err(|_| StorageError::StorageUnavailable)?;
 
         let mut highest_version = 0u32;
 
-        for (version, (up_path, _down_opt)) in discovered {
+        for (version, (up_path, _down)) in discovered {
             highest_version = highest_version.max(version);
 
-            if let Some(existing_checksum) = applied.get(&version) {
-                // Migration already applied, verify checksum
-                let current_checksum = sha256_file(&up_path)
-                    .map_err(|_| StorageError::StorageUnavailable)?;
-                if existing_checksum != &current_checksum {
+            if let Some(existing) = applied.get(&version) {
+                let current = sha256_file(&up_path).map_err(|_| StorageError::StorageUnavailable)?;
+                if existing != &current {
                     return Err(StorageError::MigrationChecksumMismatch { version });
                 }
                 continue;
             }
 
-            // Apply the migration
-            let sql = std::fs::read_to_string(&up_path)
-                .map_err(|_| StorageError::StorageUnavailable)?;
-            let checksum = sha256_file(&up_path)
-                .map_err(|_| StorageError::StorageUnavailable)?;
-            let name = up_path.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("unknown")
-                .to_string();
+            let sql = std::fs::read_to_string(&up_path).map_err(|_| StorageError::StorageUnavailable)?;
+            let checksum = sha256_file(&up_path).map_err(|_| StorageError::StorageUnavailable)?;
+            let name = up_path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string();
 
             let start = std::time::Instant::now();
             let mut tx = pool.begin().await.map_err(|_| StorageError::StorageUnavailable)?;
 
-            // Execute migration SQL
             sqlx::query(&sql)
                 .execute(&mut *tx)
                 .await
                 .map_err(|_| StorageError::StorageUnavailable)?;
 
-            // Record the migration
-            let applied_at = time::OffsetDateTime::now_utc().format(&time::format_description::well_known::Rfc3339)
-                .unwrap_or_else(|_| "unknown".to_string());
+            let applied_at = time::OffsetDateTime::now_utc()
+                .format(&time::format_description::well_known::Rfc3339)
+                .unwrap_or_default();
             let applied_by = std::env::var("USER").unwrap_or_else(|_| "unknown".to_string());
             let duration_ms = start.elapsed().as_millis() as i64;
 
             sqlx::query(
-                "INSERT INTO schema_migrations (version, name, checksum, applied_at, applied_by, duration_ms) VALUES (?, ?, ?, ?, ?, ?)"
+                "INSERT INTO schema_migrations (version, name, checksum, applied_at, applied_by, duration_ms) VALUES (?, ?, ?, ?, ?, ?)",
             )
             .bind(version as i64)
             .bind(&name)
@@ -206,7 +196,7 @@ impl SqliteDatabase {
         Ok(highest_version)
     }
 
-    /// Create a backup of the database using VACUUM INTO.
+    /// Backup the database file using VACUUM INTO.
     pub async fn backup(db_path: &str, dest_path: &str) -> Result<(), StorageError> {
         let options = SqliteConnectOptions::new()
             .filename(db_path)
@@ -222,8 +212,8 @@ impl SqliteDatabase {
             .await
             .map_err(|_| StorageError::StorageUnavailable)?;
 
-        // Use VACUUM INTO for backup (SQLite 3.27+)
-        sqlx::query(&format!("VACUUM INTO '{}'", dest_path.replace("'", "''")))
+        let sql = format!("VACUUM INTO '{}'", dest_path.replace('\'', "''"));
+        sqlx::query(&sql)
             .execute(&pool)
             .await
             .map_err(|_| StorageError::StorageUnavailable)?;
@@ -268,10 +258,7 @@ pub struct SqliteReadTx {
 
 impl SqliteReadTx {
     fn new(pool: Pool<Sqlite>, schema_version: u32) -> Self {
-        Self {
-            pool,
-            schema_version,
-        }
+        Self { pool, schema_version }
     }
 }
 
@@ -291,95 +278,75 @@ impl ReadTx for SqliteReadTx {
 }
 
 /// Write transaction (unit of work) for SQLite.
+///
+/// The transaction is held behind a `tokio::sync::Mutex` so repository
+/// traits with `&self` read methods can also access it. It implements all
+/// repository traits itself.
 pub struct SqliteUnitOfWork {
-    tx: Transaction<'static, Sqlite>,
+    tx: tokio::sync::Mutex<SqlTx>,
     schema_version: u32,
-    sources: SqliteSourceRepository,
-    provenance: SqliteProvenanceRepository,
-    audit: SqliteAuditRepository,
-    jobs: SqliteJobRepository,
-    settings: SqliteSettingsRepository,
 }
 
 impl SqliteUnitOfWork {
     async fn new(pool: Pool<Sqlite>, schema_version: u32) -> Result<Self, StorageError> {
         let tx = pool.begin().await.map_err(|_| StorageError::StorageUnavailable)?;
         Ok(Self {
-            tx,
+            tx: tokio::sync::Mutex::new(tx),
             schema_version,
-            sources: SqliteSourceRepository::new(),
-            provenance: SqliteProvenanceRepository::new(),
-            audit: SqliteAuditRepository::new(),
-            jobs: SqliteJobRepository::new(),
-            settings: SqliteSettingsRepository::new(),
         })
+    }
+
+    async fn tx(&self) -> tokio::sync::MutexGuard<'_, SqlTx> {
+        self.tx.lock().await
     }
 }
 
 #[async_trait]
 impl UnitOfWork for SqliteUnitOfWork {
     fn sources(&mut self) -> &mut dyn SourceRepository {
-        &mut self.sources
+        self
     }
 
     fn provenance(&mut self) -> &mut dyn ProvenanceRepository {
-        &mut self.provenance
+        self
     }
 
     fn audit(&mut self) -> &mut dyn AuditRepository {
-        &mut self.audit
+        self
     }
 
     fn jobs(&mut self) -> &mut dyn JobRepository {
-        &mut self.jobs
+        self
     }
 
     fn settings(&mut self) -> &mut dyn SettingsRepository {
-        &mut self.settings
+        self
     }
 
     async fn commit(self: Box<Self>) -> Result<(), StorageError> {
-        self.tx.commit().await.map_err(|_| StorageError::StorageUnavailable)
+        self.tx.into_inner().commit().await.map_err(|_| StorageError::StorageUnavailable)
     }
 
     async fn rollback(self: Box<Self>) -> Result<(), StorageError> {
-        self.tx.rollback().await.map_err(|_| StorageError::StorageUnavailable)
+        self.tx.into_inner().rollback().await.map_err(|_| StorageError::StorageUnavailable)
     }
 }
 
 // ============================================================================
-// Repository Implementations
+// Source Repository
 // ============================================================================
 
-/// Helper to convert sqlx::Error to StorageError
-fn map_sqlx_error(e: sqlx::Error) -> StorageError {
-    tracing::error!("SQLx error: {:?}", e);
-    StorageError::StorageUnavailable
-}
-
-// ---------------------------------------------------------------------------
-// Source Repository
-// ---------------------------------------------------------------------------
-
-struct SqliteSourceRepository;
-
-impl SqliteSourceRepository {
-    fn new() -> Self { Self }
-}
-
 #[async_trait]
-impl SourceRepository for SqliteSourceRepository {
+impl SourceRepository for SqliteUnitOfWork {
     async fn get(&self, id: &str) -> Result<Option<SourceRow>, StorageError> {
+        let mut tx = self.tx().await;
         let row = sqlx::query(
-            r#"
-            SELECT id, title, content_type, language, created_at
-            FROM sources WHERE id = ?
-            "#,
+            "SELECT id, title, content_type, language, created_at FROM sources WHERE id = ?",
         )
         .bind(id)
-        .fetch_optional(&mut *self.tx)
+        .fetch_optional(&mut *tx)
         .await
-        .map_err(map_sqlx_error)?;
+        .map_err(|_| StorageError::StorageUnavailable)?;
 
         Ok(row.map(|r| SourceRow {
             id: r.get("id"),
@@ -391,43 +358,41 @@ impl SourceRepository for SqliteSourceRepository {
     }
 
     async fn insert_version(&mut self, version: SourceVersionRow) -> Result<(), StorageError> {
+        let mut tx = self.tx().await;
         sqlx::query(
-            r#"
-            INSERT INTO source_versions (
+            r#"INSERT INTO source_versions (
                 id, source_id, version, schema_version, state, trust_level,
                 license_status, license_json, manifest_blob_id, manifest_hash,
                 content_hash, source_urls, publication_date, imported_at,
                 validated_at, approved_at, approved_by, activated_at,
                 deprecated_at, quarantine_reason, validation_report, notes, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            "#,
+            ) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
         )
         .bind(&version.id)
         .bind(&version.source_id)
         .bind(&version.version)
-        .bind(1i64) // schema_version
         .bind(&version.state)
         .bind(&version.trust_level)
         .bind(&version.license_status)
-        .bind("{}") // license_json - placeholder
+        .bind("{}")
         .bind(&version.manifest_blob_id)
-        .bind(&version.manifest_hash)
+        .bind(Option::<String>::None) // manifest_hash
         .bind(&version.content_hash)
-        .bind("[]") // source_urls
-        .bind(None::<String>) // publication_date
-        .bind(None::<String>) // imported_at
-        .bind(None::<String>) // validated_at
-        .bind(None::<String>) // approved_at
-        .bind(None::<String>) // approved_by
-        .bind(None::<String>) // activated_at
-        .bind(None::<String>) // deprecated_at
-        .bind(None::<String>) // quarantine_reason
-        .bind(None::<String>) // validation_report
-        .bind(None::<String>) // notes
-        .bind(time::OffsetDateTime::now_utc().format(&time::format_description::well_known::Rfc3339).unwrap_or_default())
-        .execute(&mut *self.tx)
+        .bind("[]")
+        .bind(Option::<String>::None) // publication_date
+        .bind(Option::<String>::None) // imported_at
+        .bind(Option::<String>::None) // validated_at
+        .bind(Option::<String>::None) // approved_at
+        .bind(Option::<String>::None) // approved_by
+        .bind(Option::<String>::None) // activated_at
+        .bind(Option::<String>::None) // deprecated_at
+        .bind(Option::<String>::None) // quarantine_reason
+        .bind(Option::<String>::None) // validation_report
+        .bind(Option::<String>::None) // notes
+        .bind(now())
+        .execute(&mut *tx)
         .await
-        .map_err(map_sqlx_error)?;
+        .map_err(|_| StorageError::StorageUnavailable)?;
 
         Ok(())
     }
@@ -438,31 +403,27 @@ impl SourceRepository for SqliteSourceRepository {
         from: &str,
         to: &str,
     ) -> Result<(), StorageError> {
-        sqlx::query(
-            "UPDATE source_versions SET state = ? WHERE id = ? AND state = ?"
-        )
-        .bind(to)
-        .bind(source_version_id)
-        .bind(from)
-        .execute(&mut *self.tx)
-        .await
-        .map_err(map_sqlx_error)?;
-
+        let mut tx = self.tx().await;
+        sqlx::query("UPDATE source_versions SET state = ? WHERE id = ? AND state = ?")
+            .bind(to)
+            .bind(source_version_id)
+            .bind(from)
+            .execute(&mut *tx)
+            .await
+            .map_err(|_| StorageError::StorageUnavailable)?;
         Ok(())
     }
 
     async fn list_versions(&self, source_id: &str) -> Result<Vec<SourceVersionRow>, StorageError> {
+        let mut tx = self.tx().await;
         let rows = sqlx::query(
-            r#"
-            SELECT id, source_id, version, state, trust_level, license_status,
-                   content_hash, manifest_blob_id
-            FROM source_versions WHERE source_id = ? ORDER BY created_at
-            "#,
+            "SELECT id, source_id, version, state, trust_level, license_status, content_hash, manifest_blob_id
+             FROM source_versions WHERE source_id = ? ORDER BY created_at",
         )
         .bind(source_id)
-        .fetch_all(&mut *self.tx)
+        .fetch_all(&mut *tx)
         .await
-        .map_err(map_sqlx_error)?;
+        .map_err(|_| StorageError::StorageUnavailable)?;
 
         Ok(rows.into_iter().map(|r| SourceVersionRow {
             id: r.get("id"),
@@ -480,11 +441,10 @@ impl SourceRepository for SqliteSourceRepository {
         &mut self,
         transition: StateTransitionRow,
     ) -> Result<(), StorageError> {
+        let mut tx = self.tx().await;
         sqlx::query(
-            r#"
-            INSERT INTO source_state_transitions (id, source_version_id, from_state, to_state, actor_id, reason, occurred_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            "#,
+            "INSERT INTO source_state_transitions (id, source_version_id, from_state, to_state, actor_id, reason, occurred_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&transition.id)
         .bind(&transition.source_version_id)
@@ -493,37 +453,630 @@ impl SourceRepository for SqliteSourceRepository {
         .bind(&transition.actor_id)
         .bind(&transition.reason)
         .bind(&transition.occurred_at)
-        .execute(&mut *self.tx)
+        .execute(&mut *tx)
         .await
-        .map_err(map_sqlx_error)?;
-
+        .map_err(|_| StorageError::StorageUnavailable)?;
         Ok(())
     }
 }
 
-// We need access to the transaction. Add a field to hold it.
-impl SqliteSourceRepository {
-    fn tx(&mut self) -> &mut Transaction<'static, Sqlite> {
-        // This is a workaround - we need access to the transaction.
-        // The actual implementation will need the repositories to hold a reference to the transaction.
-        // Let's restructure to pass the transaction through.
-        panic!("Need transaction access - will fix in next revision")
+// ============================================================================
+// Provenance Repository
+// ============================================================================
+
+#[async_trait]
+impl ProvenanceRepository for SqliteUnitOfWork {
+    async fn insert(&mut self, record: ProvenanceRecord) -> Result<(), StorageError> {
+        let mut tx = self.tx().await;
+        sqlx::query(
+            r#"INSERT INTO provenance_records (
+                id, layer, subject_urn, attribution_kind, attribution_json,
+                source_version_id, location_json, quoted_text_hash, trust_level,
+                verification_status, confidence, versions_json, created_at,
+                created_by, reviewed_by, reviewed_at, review_note, superseded_by
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+        )
+        .bind(&record.id)
+        .bind(&record.layer)
+        .bind(&record.subject_urn)
+        .bind(&record.attribution_kind)
+        .bind(&record.attribution_json)
+        .bind(&record.source_version_id)
+        .bind(Option::<String>::None) // location_json
+        .bind(Option::<String>::None) // quoted_text_hash
+        .bind(&record.trust_level)
+        .bind(&record.verification_status)
+        .bind(record.confidence)
+        .bind(&record.versions_json)
+        .bind(now())
+        .bind(&record.created_by)
+        .bind(Option::<String>::None) // reviewed_by
+        .bind(Option::<String>::None) // reviewed_at
+        .bind(Option::<String>::None) // review_note
+        .bind(Option::<String>::None) // superseded_by
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+        Ok(())
+    }
+
+    async fn get(&self, id: &str) -> Result<Option<ProvenanceRecord>, StorageError> {
+        let mut tx = self.tx().await;
+        let row = sqlx::query(
+            r#"SELECT id, layer, subject_urn, attribution_kind, attribution_json,
+                      source_version_id, location_json, quoted_text_hash, trust_level,
+                      verification_status, confidence, versions_json, created_at,
+                      created_by, reviewed_by, reviewed_at, review_note, superseded_by
+               FROM provenance_records WHERE id = ?"#,
+        )
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+
+        Ok(row.map(|r| map_provenance_row(r)))
+    }
+
+    async fn list_by_subject(
+        &self,
+        subject_urn: &str,
+    ) -> Result<Vec<ProvenanceRecord>, StorageError> {
+        let mut tx = self.tx().await;
+        let rows = sqlx::query(
+            r#"SELECT id, layer, subject_urn, attribution_kind, attribution_json,
+                      source_version_id, location_json, quoted_text_hash, trust_level,
+                      verification_status, confidence, versions_json, created_at,
+                      created_by, reviewed_by, reviewed_at, review_note, superseded_by
+               FROM provenance_records WHERE subject_urn = ? ORDER BY created_at"#,
+        )
+        .bind(subject_urn)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+
+        Ok(rows.into_iter().map(map_provenance_row).collect())
+    }
+
+    async fn record_review(&mut self, review: ReviewRecord) -> Result<(), StorageError> {
+        let mut tx = self.tx().await;
+        sqlx::query(
+            r#"INSERT INTO review_queue (id, provenance_id, queue, evidence_json, state, decided_by, decided_at, decision_note, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+        )
+        .bind(&review.id)
+        .bind(&review.provenance_id)
+        .bind(&review.queue)
+        .bind(&review.evidence_json)
+        .bind(&review.state)
+        .bind(&review.decided_by)
+        .bind(&review.decided_at)
+        .bind(&review.decision_note)
+        .bind(&review.created_at)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+        Ok(())
     }
 }
 
-// ---------------------------------------------------------------------------
-// Let me restructure - the repositories need a reference to the transaction.
-// I'll use a different pattern where the UnitOfWork holds the transaction
-// and repositories borrow it via &mut.
-// ---------------------------------------------------------------------------
+fn map_provenance_row(r: SqliteRow) -> ProvenanceRecord {
+    ProvenanceRecord {
+        id: r.get("id"),
+        layer: r.get("layer"),
+        subject_urn: r.get("subject_urn"),
+        attribution_kind: r.get("attribution_kind"),
+        attribution_json: r.get("attribution_json"),
+        source_version_id: r.get("source_version_id"),
+        location_json: r.get("location_json"),
+        quoted_text_hash: r.get("quoted_text_hash"),
+        trust_level: r.get("trust_level"),
+        verification_status: r.get("verification_status"),
+        confidence: r.get("confidence"),
+        versions_json: r.get("versions_json"),
+        created_at: r.get("created_at"),
+        created_by: r.get("created_by"),
+        reviewed_by: r.get("reviewed_by"),
+        reviewed_at: r.get("reviewed_at"),
+        review_note: r.get("review_note"),
+        superseded_by: r.get("superseded_by"),
+    }
+}
 
-// Actually, looking at the code, the UnitOfWork already has `self.tx` and
-// the repositories are separate structs. The common pattern is to have
-// the repositories store a `&mut Transaction` reference.
+// ============================================================================
+// Audit Repository
+// ============================================================================
 
-// Let me rewrite this properly with a different approach - store the tx in the repo.
-// Actually, since they're created inside SqliteUnitOfWork::new(), we can
-// pass a reference to the transaction.
+/// Compute the hash-chain value for an audit event.
+///
+/// `prev` is the chain hash of the previous event (empty for the genesis event).
+/// The canonical payload covers every user-supplied field of the event.
+fn chain_hash_for(prev: &str, e: &AuditEvent) -> String {
+    let canonical = format!(
+        "{prev}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+        e.sequence,
+        e.occurred_at,
+        e.actor_kind,
+        e.actor_id.as_deref().unwrap_or(""),
+        e.action,
+        e.subject_urn,
+        e.outcome,
+        e.reason.as_deref().unwrap_or(""),
+        e.before_json.as_deref().unwrap_or(""),
+        e.after_json.as_deref().unwrap_or(""),
+        e.request_id.as_deref().unwrap_or(""),
+    );
+    let mut hasher = Sha256::new();
+    hasher.update(canonical.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
 
-// Better approach: Use a wrapper struct for the transaction that the repos borrow.
-// Let me rewrite the whole thing properly.
+#[async_trait]
+impl AuditRepository for SqliteUnitOfWork {
+    async fn append(&mut self, event: AuditEvent) -> Result<(), StorageError> {
+        let mut tx = self.tx().await;
+
+        let prev: String = sqlx::query("SELECT chain_hash FROM audit_events ORDER BY sequence DESC LIMIT 1")
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|_| StorageError::StorageUnavailable)?
+            .map(|r| r.get("chain_hash"))
+            .unwrap_or_default();
+
+        let chain_hash = chain_hash_for(&prev, &event);
+
+        sqlx::query(
+            r#"INSERT INTO audit_events
+               (id, sequence, occurred_at, actor_kind, actor_id, action, subject_urn, outcome,
+                reason, before_json, after_json, request_id, prev_chain_hash, chain_hash)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+        )
+        .bind(&event.id)
+        .bind(event.sequence as i64)
+        .bind(&event.occurred_at)
+        .bind(&event.actor_kind)
+        .bind(&event.actor_id)
+        .bind(&event.action)
+        .bind(&event.subject_urn)
+        .bind(&event.outcome)
+        .bind(&event.reason)
+        .bind(&event.before_json)
+        .bind(&event.after_json)
+        .bind(&event.request_id)
+        .bind(&prev)
+        .bind(&chain_hash)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+
+        Ok(())
+    }
+
+    async fn list_by_subject(
+        &self,
+        subject_urn: &str,
+    ) -> Result<Vec<AuditEvent>, StorageError> {
+        let mut tx = self.tx().await;
+        let rows = sqlx::query(
+            r#"SELECT id, sequence, occurred_at, actor_kind, actor_id, action, subject_urn, outcome,
+                      reason, before_json, after_json, request_id, prev_chain_hash, chain_hash
+               FROM audit_events WHERE subject_urn = ? ORDER BY sequence"#,
+        )
+        .bind(subject_urn)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+
+        Ok(rows.into_iter().map(map_audit_row).collect())
+    }
+
+    async fn verify_chain(&self) -> Result<ChainVerificationResult, StorageError> {
+        let mut tx = self.tx().await;
+        let rows = sqlx::query("SELECT id, sequence, occurred_at, actor_kind, actor_id, action, subject_urn, outcome, reason, before_json, after_json, request_id, prev_chain_hash, chain_hash FROM audit_events ORDER BY sequence")
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(|_| StorageError::StorageUnavailable)?;
+
+        let events: Vec<AuditEvent> = rows.into_iter().map(map_audit_row).collect();
+
+        let mut valid = true;
+        let mut gaps: Vec<u64> = Vec::new();
+        let mut prev_chain = String::new();
+        let mut expected_seq = 1u64;
+
+        for e in &events {
+            if e.sequence != expected_seq {
+                gaps.push(expected_seq);
+                valid = false;
+                expected_seq = e.sequence;
+            }
+
+            if e.prev_chain_hash != prev_chain {
+                valid = false;
+            }
+
+            let recomputed = chain_hash_for(&e.prev_chain_hash, e);
+            if recomputed != e.chain_hash {
+                valid = false;
+            }
+
+            prev_chain = e.chain_hash.clone();
+            expected_seq += 1;
+        }
+
+        Ok(ChainVerificationResult {
+            valid,
+            expected_next_sequence: expected_seq,
+            expected_next_hash: prev_chain,
+            gaps,
+        })
+    }
+}
+
+fn map_audit_row(r: SqliteRow) -> AuditEvent {
+    AuditEvent {
+        id: r.get("id"),
+        sequence: r.get::<i64, _>("sequence") as u64,
+        occurred_at: r.get("occurred_at"),
+        actor_kind: r.get("actor_kind"),
+        actor_id: r.get("actor_id"),
+        action: r.get("action"),
+        subject_urn: r.get("subject_urn"),
+        outcome: r.get("outcome"),
+        reason: r.get("reason"),
+        before_json: r.get("before_json"),
+        after_json: r.get("after_json"),
+        request_id: r.get("request_id"),
+        prev_chain_hash: r.get("prev_chain_hash"),
+        chain_hash: r.get("chain_hash"),
+    }
+}
+
+// ============================================================================
+// Job Repository
+// ============================================================================
+
+#[async_trait]
+impl JobRepository for SqliteUnitOfWork {
+    async fn enqueue(&mut self, job: JobRecord) -> Result<(), StorageError> {
+        let mut tx = self.tx().await;
+        sqlx::query(
+            r#"INSERT INTO jobs (
+                id, kind, payload_json, idempotency_key, state, priority, attempts,
+                max_attempts, available_at, lease_owner, lease_expires_at,
+                checkpoint_json, progress_json, cancel_requested, parent_job_id,
+                versions_json, error_code, error_json, created_at, started_at,
+                finished_at, created_by
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+        )
+        .bind(&job.id)
+        .bind(&job.kind)
+        .bind(&job.payload_json)
+        .bind(&job.idempotency_key)
+        .bind(&job.state)
+        .bind(job.priority)
+        .bind(job.attempts as i64)
+        .bind(job.max_attempts as i64)
+        .bind(&job.available_at)
+        .bind(&job.lease_owner)
+        .bind(&job.lease_expires_at)
+        .bind(&job.checkpoint_json)
+        .bind(Option::<String>::None) // progress_json
+        .bind(job.cancel_requested as i64)
+        .bind(Option::<String>::None) // parent_job_id
+        .bind("{}") // versions_json
+        .bind(Option::<String>::None) // error_code
+        .bind(Option::<String>::None) // error_json
+        .bind(now())
+        .bind(Option::<String>::None) // started_at
+        .bind(Option::<String>::None) // finished_at
+        .bind(&job.created_by)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+        Ok(())
+    }
+
+    async fn claim(
+        &mut self,
+        job_id: &str,
+        owner: &str,
+    ) -> Result<Option<JobRecord>, StorageError> {
+        let mut tx = self.tx().await;
+        let rows = sqlx::query(
+            r#"UPDATE jobs
+               SET state = 'Leased', lease_owner = ?, lease_expires_at = ?
+               WHERE id = ? AND state = 'Queued' AND available_at <= ?
+               RETURNING id, kind, payload_json, idempotency_key, state, priority,
+                         attempts, max_attempts, available_at, lease_owner,
+                         lease_expires_at, checkpoint_json, cancel_requested, created_by"#,
+        )
+        .bind(owner)
+        .bind(now_plus(Duration::minutes(30)))
+        .bind(job_id)
+        .bind(now())
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+
+        Ok(rows.into_iter().next().map(map_job_row))
+    }
+
+    async fn finish(
+        &mut self,
+        job_id: &str,
+        state: &str,
+        result: Option<String>,
+    ) -> Result<(), StorageError> {
+        let mut tx = self.tx().await;
+        sqlx::query("UPDATE jobs SET state = ?, finished_at = ?, checkpoint_json = ? WHERE id = ?")
+            .bind(state)
+            .bind(now())
+            .bind(&result)
+            .bind(job_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|_| StorageError::StorageUnavailable)?;
+        Ok(())
+    }
+
+    async fn cancel(&mut self, job_id: &str) -> Result<(), StorageError> {
+        let mut tx = self.tx().await;
+        sqlx::query("UPDATE jobs SET cancel_requested = 1, state = 'Cancelled' WHERE id = ?")
+            .bind(job_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|_| StorageError::StorageUnavailable)?;
+        Ok(())
+    }
+
+    async fn checkpoint(
+        &mut self,
+        job_id: &str,
+        progress: Option<String>,
+        checkpoint: Option<String>,
+    ) -> Result<(), StorageError> {
+        let mut tx = self.tx().await;
+        sqlx::query(
+            "UPDATE jobs SET checkpoint_json = ?, progress_json = ?, state = 'Checkpointed' WHERE id = ?",
+        )
+        .bind(&checkpoint)
+        .bind(&progress)
+        .bind(job_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+        Ok(())
+    }
+
+    async fn reap_expired_leases(&mut self) -> Result<Vec<String>, StorageError> {
+        let mut tx = self.tx().await;
+        let rows = sqlx::query(
+            "SELECT id FROM jobs WHERE state = 'Leased' AND lease_expires_at < ?",
+        )
+        .bind(now())
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+
+        let mut ids = Vec::new();
+        for row in rows {
+            let id: String = row.get("id");
+            sqlx::query(
+                "UPDATE jobs SET state = 'Queued', lease_owner = NULL, lease_expires_at = NULL WHERE id = ?",
+            )
+            .bind(&id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|_| StorageError::StorageUnavailable)?;
+            ids.push(id);
+        }
+
+        Ok(ids)
+    }
+}
+
+fn map_job_row(r: SqliteRow) -> JobRecord {
+    JobRecord {
+        id: r.get("id"),
+        kind: r.get("kind"),
+        payload_json: r.get("payload_json"),
+        idempotency_key: r.get("idempotency_key"),
+        state: r.get("state"),
+        priority: r.get("priority"),
+        attempts: r.get::<i64, _>("attempts") as u32,
+        max_attempts: r.get::<i64, _>("max_attempts") as u32,
+        available_at: r.get("available_at"),
+        lease_owner: r.get("lease_owner"),
+        lease_expires_at: r.get("lease_expires_at"),
+        checkpoint_json: r.get("checkpoint_json"),
+        cancel_requested: r.get::<i64, _>("cancel_requested") != 0,
+        created_by: r.get("created_by"),
+    }
+}
+
+// ============================================================================
+// Settings Repository
+// ============================================================================
+
+#[async_trait]
+impl SettingsRepository for SqliteUnitOfWork {
+    async fn get(&self, key: &str) -> Result<Option<SettingRow>, StorageError> {
+        let mut tx = self.tx().await;
+        let row = sqlx::query(
+            "SELECT key, value_json, origin, updated_at, updated_by FROM settings WHERE key = ?",
+        )
+        .bind(key)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+
+        Ok(row.map(|r| map_setting_row(r)))
+    }
+
+    async fn set(
+        &mut self,
+        key: &str,
+        value_json: &str,
+        origin: &str,
+        updated_by: Option<&str>,
+    ) -> Result<(), StorageError> {
+        let mut tx = self.tx().await;
+        sqlx::query(
+            r#"INSERT INTO settings (key, value_json, origin, updated_at, updated_by)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json,
+                   origin = excluded.origin, updated_at = excluded.updated_at,
+                   updated_by = excluded.updated_by"#,
+        )
+        .bind(key)
+        .bind(value_json)
+        .bind(origin)
+        .bind(now())
+        .bind(updated_by)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+        Ok(())
+    }
+
+    async fn list(&self) -> Result<Vec<SettingRow>, StorageError> {
+        let mut tx = self.tx().await;
+        let rows = sqlx::query(
+            "SELECT key, value_json, origin, updated_at, updated_by FROM settings ORDER BY key",
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+
+        Ok(rows.into_iter().map(map_setting_row).collect())
+    }
+}
+
+fn map_setting_row(r: SqliteRow) -> SettingRow {
+    SettingRow {
+        key: r.get("key"),
+        value_json: r.get("value_json"),
+        origin: r.get("origin"),
+        updated_at: r.get("updated_at"),
+        updated_by: r.get("updated_by"),
+    }
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+fn now() -> String {
+    format_rfc3339(time::OffsetDateTime::now_utc())
+}
+
+fn now_plus(d: time::Duration) -> String {
+    format_rfc3339(time::OffsetDateTime::now_utc() + d)
+}
+
+fn format_rfc3339(t: time::OffsetDateTime) -> String {
+    t.format(&time::format_description::well_known::Rfc3339).unwrap_or_default()
+}
+
+const _: () = {
+    // Keep `SqliteRow` import used even if a mapping helper changes later.
+    fn _assert_sqlite_row(_r: &SqliteRow) {}
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn sqlite_database_creation() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test.db");
+        let db = SqliteDatabase::new(path.to_str().unwrap(), 4, true).await.unwrap();
+        assert_eq!(db.backend(), DbBackend::SQLite);
+        let health = db.health().await.unwrap();
+        assert!(health.healthy);
+    }
+
+    #[tokio::test]
+    async fn test_migrate() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test_migrate.db");
+        let db_path = path.to_str().unwrap();
+
+        let version = SqliteDatabase::apply_migrations(db_path).await.unwrap();
+        assert!(version > 0, "should apply at least one migration");
+
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(
+                SqliteConnectOptions::new()
+                    .filename(db_path)
+                    .create_if_missing(false)
+                    .read_only(true),
+            )
+            .await
+            .unwrap();
+
+        let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM schema_migrations")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert!(count.0 > 0, "schema_migrations should have rows");
+        assert_eq!(count.0 as u32, version, "applied count matches highest version");
+
+        // Spot-check a table from a later migration exists.
+        let found: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sources'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(found.0, 1, "sources table should exist");
+    }
+
+    #[tokio::test]
+    async fn test_backup() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test_backup.db");
+        let backup_path = dir.path().join("test_backup_copy.db");
+
+        let db = SqliteDatabase::new(db_path.to_str().unwrap(), 1, false).await.unwrap();
+
+        let mut uow = db.write().await.unwrap();
+        uow.settings()
+            .set("test_key", r#"{"val": 42}"#, "test", Some("tester"))
+            .await
+            .unwrap();
+        uow.commit().await.unwrap();
+
+        let dest = backup_path.to_str().unwrap();
+        SqliteDatabase::backup(db_path.to_str().unwrap(), dest).await.unwrap();
+
+        assert!(backup_path.exists(), "backup file should exist");
+        let metadata = std::fs::metadata(&backup_path).unwrap();
+        assert!(metadata.len() > 0, "backup file should not be empty");
+
+        // The backup must be a valid, readable SQLite database containing the data.
+        let backup_pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(
+                SqliteConnectOptions::new()
+                    .filename(dest)
+                    .create_if_missing(false)
+                    .read_only(true),
+            )
+            .await
+            .unwrap();
+
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM settings WHERE key = 'test_key'")
+            .fetch_one(&backup_pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 1, "backup should contain inserted setting");
+    }
+}
