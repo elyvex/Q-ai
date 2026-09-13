@@ -1,19 +1,19 @@
 //! Application crate — Phase 0 orchestration layer (plan §3.1).
 //!
-//! This crate wires domain + storage + config + provenance + audit + jobs + sources.
-//! Phase 0 keeps this minimal: a `run()` skeleton for future CLI/serve integration
-//! that validates the config, initializes observability, and health-checks storage.
+//! Composition root that wires domain + storage + storage-sqlite + config +
+//! provenance + audit + jobs + sources + observability. The CLI depends on this
+//! crate (never on `storage-sqlite` directly) so the concrete backend choice
+//! stays in one place.
+
+pub mod db;
 
 pub use config::Config;
 
 use observability::{Format, init};
-use storage::{
-    error::StorageError, DbBackend, Database as StorageDatabase,
-    ReadTx as StorageReadTx, UnitOfWork as StorageUnitOfWork,
-};
+use storage::error::StorageError;
 use tracing::{error, info};
 
-/// Result of the application run.
+/// Result of the application `run` bootstrap.
 #[derive(Debug, Clone)]
 pub struct RunResult {
     pub health: storage::DbHealth,
@@ -56,9 +56,8 @@ mod tests {
         let mut cfg = Config::default();
         cfg.app.data_dir = dir.path().display().to_string();
         cfg.storage.sqlite.path = dir.path().join("qai.db").display().to_string();
-        let result = run(cfg).await;
-        let rr = result.expect("run should succeed on a fresh temp db");
+        let rr = run(cfg).await.expect("run should succeed");
         assert!(rr.health.healthy);
-        assert_eq!(rr.health.backend, DbBackend::SQLite);
+        assert_eq!(rr.health.backend, storage::DbBackend::SQLite);
     }
 }
