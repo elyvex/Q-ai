@@ -87,6 +87,7 @@ pub fn apply() -> Result<()> {
 
 /// Apply migrations using sqlx directly.
 fn apply_migrations_sqlx(migrations_dir: &Path, db_path: &str) -> Result<()> {
+    let files = discover_migrations(migrations_dir)?;
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(async {
         let url = if db_path == "~/.local/share/qai/qai.db" {
