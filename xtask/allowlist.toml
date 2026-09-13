@@ -33,7 +33,7 @@ workspace = { allow = ["domain", "storage", "observability"] }
 workspace = { allow = ["domain", "storage", "provenance"] }
 
 [cli]
-workspace = { allow = ["application", "config", "observability"] }
+workspace = { allow = ["application", "config", "observability", "server"] }
 
 [server]
 workspace = { allow = ["application", "config", "observability"] }
