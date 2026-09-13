@@ -911,7 +911,7 @@ mod tests {
     fn test_secret_redaction() {
         let secret = Secret::new(String::from("my-password"));
         assert_eq!(format!("{}", secret), "***");
-        assert_eq!(format!("{:?}", secret), "Secret(*** )");
+        assert_eq!(format!("{:?}", secret), "Secret(***)");
     }
 
     #[test]
