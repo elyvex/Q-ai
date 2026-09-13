@@ -18,6 +18,10 @@ pub enum SecurityError {
     ExpansionRatio,
     /// Archive entry count exceeded (QAI-SEC-0004)
     EntryCount,
+    /// Download size exceeds configured limit (QAI-SEC-0005)
+    DownloadTooLarge,
+    /// Redirect target resolves to a blocked/private address (QAI-SEC-0006)
+    PrivateAddressBlocked,
 }
 
 impl std::fmt::Display for SecurityError {
@@ -86,7 +90,7 @@ pub fn is_private_ip(ip: IpAddr) -> bool {
                 if segment & 0xfe00 == 0xfc00 { return true; }
             }
             // IPv6 loopback ::1
-            if ipv6.is_unspecified() || ipv6 == ::1 { return true; }
+            if ipv6.is_loopback() || ipv6.is_unspecified() { return true; }
             // IPv6 link-local fe80::/10
             if let Some(segment) = ipv6.segments().get(0) {
                 if segment & 0xffc0 == 0xfe80 { return true; }
@@ -98,7 +102,7 @@ pub fn is_private_ip(ip: IpAddr) -> bool {
 }
 
 /// Security limits for archive and download operations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Limits {
     pub max_download_bytes: u64,
     pub max_archive_entries: usize,
@@ -109,7 +113,7 @@ impl Limits {
     /// Check if a download length is within limits.
     pub fn check_download(&self, len: u64) -> Result<(), SecurityError> {
         if len > self.max_download_bytes {
-            return Err(SecurityError::EntryCount);
+            return Err(SecurityError::DownloadTooLarge);
         }
         Ok(())
     }
@@ -121,7 +125,12 @@ impl Limits {
         if ratio > self.max_archive_expansion_ratio {
             return Err(SecurityError::ExpansionRatio);
         }
-        if expanded > self.max_archive_entries as u64 {
+        Ok(())
+    }
+
+    /// Check if an entry count is within limits.
+    pub fn check_entry_count(&self, entries: usize) -> Result<(), SecurityError> {
+        if entries > self.max_archive_entries {
             return Err(SecurityError::EntryCount);
         }
         Ok(())
@@ -155,17 +164,17 @@ pub enum PolicyDecision {
 /// Deny-by-default baseline decision engine.
 pub fn default_denying(action: &str) -> PolicyDecision {
     match action {
-        "download" | "read" | "extract" => PolicyDecision::RequireApproval { reason: "new file" },
-        "write" | "create" | "overwrite" => PolicyDecision::Deny { reason: "write operations require explicit approval" },
-        "list" => PolicyDecision::Deny { reason: "directory listing blocked" },
-        _ => PolicyDecision::Deny { reason: "unknown action" },
+        "download" | "read" | "extract" => PolicyDecision::RequireApproval { reason: "new file".to_string() },
+        "write" | "create" | "overwrite" => PolicyDecision::Deny { reason: "write operations require explicit approval".to_string() },
+        "list" => PolicyDecision::Deny { reason: "directory listing blocked".to_string() },
+        _ => PolicyDecision::Deny { reason: "unknown action".to_string() },
     }
 }
 
 /// Check that a redirect host IP is not in private ranges.
 pub fn check_url_redirect(redirect_host_resolved: IpAddr) -> Result<(), SecurityError> {
     if is_private_ip(redirect_host_resolved) {
-        return Err(SecurityError::SymlinkEscape);
+        return Err(SecurityError::PrivateAddressBlocked);
     }
     Ok(())
 }
