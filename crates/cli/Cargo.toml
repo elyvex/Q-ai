@@ -3,3 +3,19 @@ name = "cli"
 version = "0.0.0"
 edition = "2024"
 publish = false
+
+[dependencies]
+config = { path = "../config" }
+observability = { path = "../observability" }
+storage = { path = "../storage" }
+storage-sqlite = { path = "../storage-sqlite" }
+clap = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+sqlx = { workspace = true }
+sha2 = { workspace = true }
+
+[lints]
+workspace = true
