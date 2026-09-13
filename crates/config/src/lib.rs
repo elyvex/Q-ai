@@ -909,14 +909,14 @@ mod tests {
 
     #[test]
     fn test_secret_redaction() {
-        let secret = Secret::new("my-password");
+        let secret = Secret::new(String::from("my-password"));
         assert_eq!(format!("{}", secret), "***");
         assert_eq!(format!("{:?}", secret), "Secret(*** )");
     }
 
     #[test]
     fn test_secret_serialize() {
-        let secret = Secret::new("my-password");
+        let secret = Secret::new(String::from("my-password"));
         let json = serde_json::to_string(&secret).unwrap();
         assert_eq!(json, "\"***\"");
     }
@@ -956,11 +956,17 @@ bind = "0.0.0.0"
 
     #[test]
     fn test_env_override() {
+        #[allow(unsafe_code)]
+        unsafe {
         std::env::set_var("QAI__SERVER__PORT", "9000");
+        }
         let mut cli = BTreeMap::new();
         let (config, _) = Config::load(None, "QAI", &cli).unwrap();
         assert_eq!(config.server.port, 9000);
+        #[allow(unsafe_code)]
+        unsafe {
         std::env::remove_var("QAI__SERVER__PORT");
+        }
     }
 
     #[test]
