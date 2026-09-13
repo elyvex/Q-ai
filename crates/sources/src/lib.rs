@@ -119,6 +119,20 @@ pub struct SourceGenealogy {
 #[serde(rename_all = "snake_case")]
 pub enum DerivationType { Translation, Summary, Edition, Abridgment, Commentary, Original }
 
+impl std::fmt::Display for DerivationType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            DerivationType::Translation => "translation",
+            DerivationType::Summary => "summary",
+            DerivationType::Edition => "edition",
+            DerivationType::Abridgment => "abridgment",
+            DerivationType::Commentary => "commentary",
+            DerivationType::Original => "original",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 // ─── SourceStateTransition ──────────────────────
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -204,7 +218,7 @@ pub struct ManifestParseResult {
 impl ManifestParser {
     pub fn new(allow_unsigned: bool) -> Self { Self { allow_unsigned } }
     pub fn parse(&self, json: &str) -> Result<ManifestParseResult, SourceError> {
-        serde_json::from_str(json).map_err(SourceError::Serialization)
+        serde_json::from_str::<ManifestParseResult>(json).map_err(|e| SourceError::Serialization(e.to_string()))
     }
     pub fn validate_schema(&self, manifest: &ManifestParseResult) -> Result<(), SourceError> {
         if manifest.manifest_version.is_empty() {
@@ -221,7 +235,7 @@ impl ManifestParser {
         Ok(())
     }
     pub fn canonical_reserialize(&self, manifest: &ManifestParseResult) -> Result<String, SourceError> {
-        let bytes = canonical_json_bytes(manifest).map_err(SourceError::Serialization)?;
+        let bytes = canonical_json_bytes(manifest).map_err(|e| SourceError::Serialization(e.to_string()))?;
         Ok(String::from_utf8(bytes).map_err(|_| SourceError::Serialization("invalid UTF-8".to_string()))?)
     }
     pub fn verify_signature(&self, _manifest: &ManifestParseResult, signature: Option<&str>) -> Result<(), SourceError> {
