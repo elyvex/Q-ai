@@ -119,7 +119,7 @@ impl HashChainWriter {
         event.sequence = seq;
         event.occurred_at = Timestamp::now();
         let prev_hash = if seq == 1 {
-            ContentHash { algorithm: crate::domain::HashAlgorithm::Sha256, hex: "00".repeat(32) }
+            ContentHash { algorithm: HashAlgorithm::Sha256, hex: "00".repeat(32) }
         } else {
             self.get_prev_chain_hash(seq - 1).await?
         };
