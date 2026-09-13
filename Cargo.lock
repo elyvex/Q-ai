@@ -253,10 +253,6 @@ dependencies = [
  "config",
  "observability",
  "serde_json",
- "sha2",
- "sqlx",
- "storage",
- "storage-sqlite",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
@@ -1580,6 +1576,7 @@ version = "0.0.0"
 dependencies = [
  "async-trait",
  "domain",
+ "sha2",
  "sqlx",
  "storage",
  "tempfile",
