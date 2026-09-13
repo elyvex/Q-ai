@@ -253,6 +253,7 @@ dependencies = [
  "config",
  "observability",
  "serde_json",
+ "server",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
