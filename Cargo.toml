@@ -76,7 +76,7 @@ anyhow = "1"
 uuid = { version = "1", features = ["v4", "serde"] }
 time = { version = "0.3", features = ["serde", "formatting", "parsing", "macros"] }
 reqwest = { version = "0.12", features = ["json"], default-features = false }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "fs", "sync", "signal"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "fs", "sync", "signal", "net", "io-util"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"] }
 metrics = "0.24"
