@@ -333,6 +333,26 @@ impl SourceRepository for SqliteSourceRepository {
         }))
     }
 
+    async fn insert_source(&mut self, source: SourceRow) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query(
+            "INSERT INTO sources
+                (id, title, alternate_titles, content_type, authors, identifiers, language,
+                 created_at, updated_at)
+             VALUES (?, ?, '[]', ?, '[]', '{}', ?, ?, ?)",
+        )
+        .bind(&source.id)
+        .bind(&source.title)
+        .bind(&source.content_type)
+        .bind(&source.language)
+        .bind(&source.created_at)
+        .bind(&source.created_at)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
     async fn insert_version(&mut self, version: SourceVersionRow) -> Result<(), StorageError> {
         let mut tx = self.tx.lock().await;
         sqlx::query(
@@ -1026,15 +1046,16 @@ mod tests {
         let mut uow = db.write().await.unwrap();
 
         // Insert the parent source first (FK).
-        sqlx::query(
-            "INSERT INTO sources (id, title, content_type, created_at, updated_at)
-             VALUES ('src-1', 'Test', 'quran_edition', ?, ?)",
-        )
-        .bind(now_rfc3339())
-        .bind(now_rfc3339())
-        .execute(&mut **uow.tx.lock().await)
-        .await
-        .unwrap();
+        uow.sources()
+            .insert_source(SourceRow {
+                id: "src-1".into(),
+                title: "Test".into(),
+                content_type: "quran_edition".into(),
+                language: Some("ar".into()),
+                created_at: now_rfc3339(),
+            })
+            .await
+            .unwrap();
 
         uow.sources()
             .insert_version(_SVRow {

@@ -21,9 +21,14 @@ use crate::error::StorageError;
 /// Manages `sources`, `source_versions`, `source_files`,
 /// `source_genealogy`, and `approvals` tables.
 #[async_trait]
-pub trait SourceRepository: Send {
+pub trait SourceRepository: Send + Sync {
     /// Retrieve a source by its ID.
     async fn get(&self, _id: &str) -> Result<Option<SourceRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Insert a new source catalog entry.
+    async fn insert_source(&mut self, _source: SourceRow) -> Result<(), StorageError> {
         Err(StorageError::StorageUnavailable)
     }
 
@@ -98,7 +103,7 @@ pub struct StateTransitionRow {
 /// Manages `provenance_records`, `review_queue`, and
 /// canonical write guard operations.
 #[async_trait]
-pub trait ProvenanceRepository: Send {
+pub trait ProvenanceRepository: Send + Sync {
     /// Insert a new provenance record.
     async fn insert(&mut self, _record: ProvenanceRecord) -> Result<(), StorageError> {
         Err(StorageError::StorageUnavailable)
@@ -162,7 +167,7 @@ pub struct ReviewRecord {
 ///
 /// Provides append-only writes and hash-chain verification.
 #[async_trait]
-pub trait AuditRepository: Send {
+pub trait AuditRepository: Send + Sync {
     /// Append a new audit event to the chain.
     async fn append(&mut self, _event: AuditEvent) -> Result<(), StorageError> {
         Err(StorageError::StorageUnavailable)
@@ -217,7 +222,7 @@ pub struct ChainVerificationResult {
 /// Manages the `jobs`, `job_events`, `corpus_generations`,
 /// `outbox_events`, and `tombstones` tables.
 #[async_trait]
-pub trait JobRepository: Send {
+pub trait JobRepository: Send + Sync {
     /// Enqueue a new job.
     async fn enqueue(&mut self, _job: JobRecord) -> Result<(), StorageError> {
         Err(StorageError::StorageUnavailable)
@@ -284,7 +289,7 @@ pub struct JobRecord {
 ///
 /// Manages the `settings` table and config provenance.
 #[async_trait]
-pub trait SettingsRepository: Send {
+pub trait SettingsRepository: Send + Sync {
     /// Get a setting value by key.
     async fn get(&self, _key: &str) -> Result<Option<SettingRow>, StorageError> {
         Err(StorageError::StorageUnavailable)
