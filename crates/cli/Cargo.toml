@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+application = { path = "../application" }
 config = { path = "../config" }
 observability = { path = "../observability" }
 server = { path = "../server" }
