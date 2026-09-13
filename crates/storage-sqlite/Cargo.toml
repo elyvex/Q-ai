@@ -13,6 +13,7 @@ async-trait = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
 time = { workspace = true }
+sha2 = { workspace = true }
 
 [lints]
 workspace = true
