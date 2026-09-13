@@ -344,7 +344,7 @@ impl JobRepository for SqliteJobRepository {
         Err(StorageError::StorageUnavailable)
     }
 
-    async fn reap_expired_leases(&self) -> Result<Vec<String>, StorageError> {
+    async fn reap_expired_leases(&mut self) -> Result<Vec<String>, StorageError> {
         Err(StorageError::StorageUnavailable)
     }
 }
