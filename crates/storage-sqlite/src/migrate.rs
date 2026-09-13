@@ -85,6 +85,19 @@ async fn connect_rw(db_path: &str) -> Result<sqlx::SqlitePool, StorageError> {
         .map_err(|_| StorageError::StorageUnavailable)
 }
 
+async fn connect_ro(db_path: &str) -> Result<sqlx::SqlitePool, StorageError> {
+    let options = SqliteConnectOptions::new()
+        .filename(db_path)
+        .create_if_missing(false)
+        .read_only(true)
+        .busy_timeout(std::time::Duration::from_millis(5000));
+    SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)
+}
+
 /// Ensure the `schema_migrations` bookkeeping table exists.
 async fn ensure_migrations_table(pool: &sqlx::SqlitePool) -> Result<(), StorageError> {
     sqlx::raw_sql(
@@ -103,7 +116,20 @@ async fn ensure_migrations_table(pool: &sqlx::SqlitePool) -> Result<(), StorageE
     Ok(())
 }
 
+/// Whether a table exists in the SQLite schema.
+async fn table_exists(pool: &sqlx::SqlitePool, name: &str) -> Result<bool, StorageError> {
+    let row = sqlx::query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
+        .bind(name)
+        .fetch_optional(pool)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+    Ok(row.is_some())
+}
+
 async fn applied_versions(pool: &sqlx::SqlitePool) -> Result<BTreeMap<u32, String>, StorageError> {
+    if !table_exists(pool, "schema_migrations").await? {
+        return Ok(BTreeMap::new());
+    }
     let rows = sqlx::query("SELECT version, checksum FROM schema_migrations")
         .fetch_all(pool)
         .await
@@ -127,8 +153,6 @@ pub async fn apply_migrations(
     migrations_dir: &Path,
 ) -> Result<u32, StorageError> {
     let pool = connect_rw(db_path).await?;
-    ensure_migrations_table(&pool).await?;
-
     let discovered = discover_migrations(migrations_dir)?;
     let already = applied_versions(&pool).await?;
 
@@ -162,6 +186,9 @@ pub async fn apply_migrations(
 
         let checksum = format!("sha256:{}", sha256_file_hex(&migration.path)?);
         let elapsed = start.elapsed().as_millis() as i64;
+        // Migration 0001 creates `schema_migrations`; fixtures may not, so
+        // ensure it exists before recording the applied row.
+        ensure_migrations_table(&pool).await?;
         sqlx::query(
             "INSERT INTO schema_migrations (version, name, checksum, applied_at, applied_by, duration_ms)
              VALUES (?, ?, ?, ?, ?, ?)",
@@ -195,10 +222,9 @@ pub async fn verify_checksums(
     db_path: &str,
     migrations_dir: &Path,
 ) -> Result<ChecksumReport, StorageError> {
-    let pool = connect_rw(db_path).await?;
-    ensure_migrations_table(&pool).await?;
-    let already = applied_versions(&pool).await?;
+    let pool = connect_ro(db_path).await?;
     let discovered = discover_migrations(migrations_dir)?;
+    let already = applied_versions(&pool).await?;
 
     let on_disk: BTreeMap<u32, &MigrationFile> =
         discovered.iter().map(|m| (m.version, m)).collect();
