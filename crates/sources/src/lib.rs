@@ -423,7 +423,7 @@ mod tests {
         let mut version = SourceVersion {
             id: SourceVersionId::new(), source_id: SourceId::new(), version: "1.0.0".to_string(),
             schema_version: 1, state: SourceState::Staged, trust_level: TrustLevel::ImportedUnverified,
-            license_status: crate::domain::LicenseStatus::OpenLicense, license_json: "{}".to_string(),
+            license_status: LicenseStatus::OpenLicense, license_json: "{}".to_string(),
             manifest_blob_id: None, manifest_hash: None, content_hash: None, source_urls: vec![],
             publication_date: None, imported_at: None, validated_at: None, approved_at: None,
             approved_by: None, activated_at: None, deprecated_at: None, quarantine_reason: None,
@@ -438,7 +438,7 @@ mod tests {
         let mut version = SourceVersion {
             id: SourceVersionId::new(), source_id: SourceId::new(), version: "1.0.0".to_string(),
             schema_version: 1, state: SourceState::Staged, trust_level: TrustLevel::ImportedUnverified,
-            license_status: crate::domain::LicenseStatus::OpenLicense, license_json: "{}".to_string(),
+            license_status: LicenseStatus::OpenLicense, license_json: "{}".to_string(),
             manifest_blob_id: None, manifest_hash: None,
             content_hash: Some(ContentHash { algorithm: HashAlgorithm::Sha256, hex: "00".repeat(32) }),
             source_urls: vec![], publication_date: None, imported_at: None, validated_at: None,
