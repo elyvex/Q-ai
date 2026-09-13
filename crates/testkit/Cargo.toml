@@ -4,5 +4,17 @@ version = "0.0.0"
 edition = "2024"
 publish = false
 
+[dependencies]
+domain = { path = "../domain" }
+config = { path = "../config" }
+storage = { path = "../storage" }
+audit = { path = "../audit" }
+sources = { path = "../sources" }
+jobs = { path = "../jobs" }
+tempfile = { workspace = true }
+
 [dev-dependencies]
-tokio = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true
