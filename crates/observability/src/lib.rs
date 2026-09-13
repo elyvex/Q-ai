@@ -16,7 +16,7 @@
 
 pub mod metrics;
 
-use tracing_subscriber::{EnvFilter, fmt};
+use tracing_subscriber::EnvFilter;
 
 /// Output format for the tracing subscriber.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,34 +56,30 @@ pub const SPAN_OUTCOME: &str = "qai.outcome";
 pub fn init(format: Format) -> Shutdown {
     let filter = EnvFilter::from_default_env();
 
-    let subscriber = match format {
+    match format {
         Format::Text => {
-            tracing_subscriber::fmt::layer()
-                .compact()
+            let subscriber = tracing_subscriber::fmt()
+                .with_env_filter(filter)
                 .with_writer(std::io::stderr)
                 .with_target(true)
                 .with_file(true)
                 .with_line_number(true)
-                .with_filter(filter)
-                .with_current_span(true)
-                .expect_subscriber()
+                .compact()
+                .finish();
+            let _ = tracing::subscriber::set_global_default(subscriber);
         }
         Format::Json => {
-            tracing_subscriber::fmt::layer()
-                .json()
+            let subscriber = tracing_subscriber::fmt()
+                .with_env_filter(filter)
                 .with_writer(std::io::stderr)
                 .with_target(true)
                 .with_file(true)
                 .with_line_number(true)
-                .with_filter(filter)
-                .with_current_span(true)
-                .expect_subscriber()
+                .json()
+                .finish();
+            let _ = tracing::subscriber::set_global_default(subscriber);
         }
-    };
-
-    #[allow(clippy::expect_used)]
-    let _ = tracing::subscriber::set_global_default(subscriber)
-        .map_err(|e| tracing::error!("failed to set tracing subscriber: {e}"));
+    }
 
     Shutdown
 }
