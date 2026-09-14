@@ -215,4 +215,14 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("QAI-DOM-0001"), "unexpected error: {msg}");
     }
+
+    #[test]
+    fn inner_uuid_and_conversions() {
+        let s = "12345678-1234-1234-1234-123456789abc";
+        let id = SourceId::from_str_unchecked(s);
+        assert_eq!(id.inner(), Uuid::parse_str(s).unwrap());
+        assert_eq!(Uuid::from(id), Uuid::parse_str(s).unwrap());
+        let rebuilt = SourceId::new_inner(Uuid::parse_str(s).unwrap());
+        assert_eq!(rebuilt, id);
+    }
 }
