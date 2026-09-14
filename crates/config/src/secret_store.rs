@@ -200,9 +200,7 @@ impl SecretStore for KeychainSecretStore {
     async fn put(&self, r: &SecretRef, v: Secret<String>) -> Result<(), SecretError> {
         let entry = keyring::Entry::new("qai", &r.segments().join("/"))
             .map_err(|e| SecretError::Backend(e.to_string()))?;
-        entry
-            .set_password(v.expose())
-            .map_err(|e| SecretError::Backend(e.to_string()))
+        entry.set_password(v.expose()).map_err(|e| SecretError::Backend(e.to_string()))
     }
     async fn delete(&self, r: &SecretRef) -> Result<(), SecretError> {
         let entry = keyring::Entry::new("qai", &r.segments().join("/"))
