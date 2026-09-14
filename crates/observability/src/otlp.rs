@@ -7,9 +7,9 @@
 
 use opentelemetry::KeyValue;
 use opentelemetry::trace::TracerProvider as _;
-use opentelemetry_sdk::trace::TracerProvider;
-use opentelemetry_sdk::Resource;
 use opentelemetry_otlp::{SpanExporter, WithExportConfig};
+use opentelemetry_sdk::Resource;
+use opentelemetry_sdk::trace::TracerProvider;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -43,8 +43,8 @@ pub fn build_provider(endpoint: &str) -> Result<TracerProvider, String> {
 pub fn init_otlp(endpoint: &str) -> Result<OtlpGuard, String> {
     let provider = build_provider(endpoint)?;
     let tracer = provider.tracer("qai");
-    let subscriber = tracing_subscriber::registry()
-        .with(tracing_opentelemetry::layer().with_tracer(tracer));
+    let subscriber =
+        tracing_subscriber::registry().with(tracing_opentelemetry::layer().with_tracer(tracer));
     let _ = tracing::subscriber::set_global_default(subscriber);
     Ok(OtlpGuard { provider })
 }
