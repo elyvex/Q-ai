@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qai.local/schemas/quran-edition-source.v1.schema.json",
+  "title": "qai.quran.edition v1 — normalized Quran edition source",
+  "description": "Intermediate format produced by quran-corpus adapters (D1.2). Field names match quran_corpus::format exactly. Only the keywords type/enum/required/properties/additionalProperties/items are enforced by `cargo xtask validate`.",
+  "type": "object",
+  "required": ["format", "format_version", "edition", "expected", "surahs", "ayahs", "tokenization"],
+  "additionalProperties": false,
+  "properties": {
+    "format": { "type": "string", "enum": ["qai.quran.edition"] },
+    "format_version": { "type": "integer", "enum": [1] },
+    "edition": {
+      "type": "object",
+      "required": ["slug", "name", "script", "language", "verse_numbering_scheme", "unicode_normalization", "basmala_policy", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "slug": { "type": "string" },
+        "name": { "type": "string" },
+        "script": { "type": "string", "enum": ["uthmani", "imlaei_simple"] },
+        "riwayah": { "type": ["string", "null"] },
+        "qiraah": { "type": ["string", "null"] },
+        "language": { "type": "string" },
+        "verse_numbering_scheme": { "type": "string", "enum": ["hafs", "kufi"] },
+        "unicode_normalization": { "type": "string", "enum": ["nfc", "nfd", "nfkc", "nfkd"] },
+        "basmala_policy": { "type": "string", "enum": ["counted_as_first_ayah", "unnumbered_header", "absent", "per_surah"] },
+        "publisher": { "type": ["string", "null"] },
+        "version": { "type": "string" }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "required": ["surah_count", "ayah_count"],
+      "additionalProperties": false,
+      "properties": {
+        "surah_count": { "type": "integer" },
+        "ayah_count": { "type": "integer" },
+        "reference_corpus_id": { "type": ["string", "null"] },
+        "reference_text_hash": { "type": ["string", "null"] }
+      }
+    },
+    "surahs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["number", "name_arabic", "ayah_count", "basmala"],
+        "additionalProperties": false,
+        "properties": {
+          "number": { "type": "integer" },
+          "name_arabic": { "type": "string" },
+          "name_transliteration": { "type": ["string", "null"] },
+          "ayah_count": { "type": "integer" },
+          "revelation_place": { "type": ["string", "null"], "enum": ["makki", "madani", null] },
+          "revelation_order": { "type": ["integer", "null"] },
+          "basmala": { "type": "string", "enum": ["counted_as_first_ayah", "unnumbered_header", "absent", "per_surah"] },
+          "ruku_count": { "type": ["integer", "null"] }
+        }
+      }
+    },
+    "ayahs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["surah", "ayah", "text"],
+        "additionalProperties": false,
+        "properties": {
+          "surah": { "type": "integer" },
+          "ayah": { "type": "integer" },
+          "text": { "type": "string" },
+          "juz": { "type": ["integer", "null"] },
+          "hizb": { "type": ["integer", "null"] },
+          "rub": { "type": ["integer", "null"] },
+          "manzil": { "type": ["integer", "null"] },
+          "ruku": { "type": ["integer", "null"] },
+          "page": { "type": ["integer", "null"] },
+          "sajdah": { "type": ["string", "null"], "enum": ["recommended", "obligatory", null] },
+          "tokens": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "object",
+              "required": ["position", "surface", "char_start", "char_end", "byte_start", "byte_end"],
+              "additionalProperties": false,
+              "properties": {
+                "position": { "type": "integer" },
+                "surface": { "type": "string" },
+                "char_start": { "type": "integer" },
+                "char_end": { "type": "integer" },
+                "byte_start": { "type": "integer" },
+                "byte_end": { "type": "integer" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "tokenization": {
+      "type": "object",
+      "required": ["strategy", "separator_policy"],
+      "additionalProperties": false,
+      "properties": {
+        "strategy": { "type": "string" },
+        "separator_policy": { "type": "string" }
+      }
+    }
+  }
+}
