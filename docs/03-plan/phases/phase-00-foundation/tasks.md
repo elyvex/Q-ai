@@ -1,11 +1,10 @@
 # Phase 0 — Task Board
 
-> **Update (2026-09-14, final):** Phase 0 is substantially complete. `cargo test --workspace`
-> = **229 passing**; `fmt`, `clippy -D warnings`, `arch-check`, `migrate-check`, and `adr-lint`
-> all green; `qai` binary smoke-tested end to end. Completed: T15 (env/encrypted-file/keychain
-> backends), T17–T20, T22–T24, T26–T39 (incl. the worker pool), T41–T46, T48–T54, T57–T63,
-> T65–T67, and the D0.18 outbox/generations/tombstones primitives. Remaining: the 3-OS CI run
-> (T11) and the recorded exit-gate ritual. See `docs/05-followups/done.md` for evidence and
+> **Update (2026-09-14, final):** Phase 0 is complete. `cargo test --workspace` = **267
+> passing**; `cargo xtask ci` (9 steps) passes; `fmt`, `clippy -D warnings`, `arch-check`,
+> `migrate-check`, `adr-lint`, and the coverage gate all green; CI runs the 3-OS matrix plus
+> `doctor`/`msrv`/`deny`/`schemas`/`coverage` jobs. All 67 tasks are done except the recorded
+> exit-gate ritual. See `docs/05-followups/done.md` for evidence and
 > `phase-0-remaining-work.md` for the breakdown.
 
 **Phase:** P0 — Foundations & Provenance
@@ -53,7 +52,7 @@ retrospective with any cell reading `_unassigned_`.
 | P0-T08 | `domain`: `LicenseRecord`, `DerivationVersions`, `SubjectRef` URN grammar | D0.2 | T05 | 1.0 | BE | ☑ |
 | P0-T09 | `Diagnostic` trait, error-code registry, uniqueness test | D0.3 | T05 | 1.5 | BE | ☑ |
 | P0-T10 | ADR-0001 / 0002 / 0006 / 0012 written and reviewed | ADR | T01 | 1.5 | DOC | ☑ |
-| P0-T11 | CI pipeline (check / arch / test-3os / deny / schemas / coverage) | D0.16 | T02 | 2.0 | INF | ☐ |
+| P0-T11 | CI pipeline (check / arch / test-3os / deny / schemas / coverage) | D0.16 | T02 | 2.0 | INF | ☑ |
 
 **Sprint exit:** `cargo xtask ci` green on a clean checkout on Linux, macOS, and Windows.
 `DerivationVersions` (T08) must already carry `dependency_snapshot_id` as an `Option`

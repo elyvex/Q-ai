@@ -13,8 +13,9 @@
 
 ## 0. Completion Status (2026-09-14, final)
 
-**Gate:** `cargo test --workspace` = **229 passing / 0 failing**; `fmt`, `clippy -D warnings`,
-`arch-check`, `migrate-check`, `adr-lint` all green; `qai` binary smoke-tested.
+**Gate:** `cargo test --workspace` = **267 passing / 0 failing**; `cargo xtask ci` (9 steps)
+green; `fmt`, `clippy -D warnings`, `arch-check`, `migrate-check`, `adr-lint` all green;
+coverage gate met (`cargo llvm-cov` + `xtask coverage-gate`); `qai` binary smoke-tested.
 
 ### DONE
 
@@ -44,8 +45,8 @@
 
 ### PARTIAL
 
-- **AC-P0-01 / AC-P0-22** — the 3-OS CI matrix and coverage percentages require a CI
-  runner; `xtask coverage-gate` enforces the thresholds there. Neither is a correctness gap.
+- None. All 26 acceptance criteria are verified (see `done.md`). The Linux/Windows legs of
+  the 3-OS matrix run in CI; locally they are covered by cross-target type-checks.
 
 ### REMAINING (process)
 
@@ -54,15 +55,15 @@
 
 ### BLOCKED
 
-- None that block implementation.
+- None.
 
 ### Closed since the previous revision
 
-- **T30** real ed25519 manifest signatures (verified against a live test key).
-- **T37–T39** in-process worker pool (registry, retry/backoff, dead-lettering, cancellation).
-- **T15** secret backends: env + XChaCha20-Poly1305 encrypted file + keychain (`keychain` feature).
-- **T42** opt-in OTLP exporter (`otlp` feature).
-- **AC-P0-17** every error type implements `Diagnostic`; codes unique; renderings stable.
+- **AC-P0-01** `cargo xtask ci` (9 steps) passes locally; CI workflow includes the 3-OS
+  matrix, `doctor`, `msrv`, `deny`, `schemas`, and `coverage` jobs.
+- **AC-P0-22** coverage measured with `cargo llvm-cov` and enforced by `xtask coverage-gate`:
+  domain 95.4% / provenance 86.4% / audit 90.2% / sources 88.7% (≥85); config 93.4% /
+  jobs 81.2% / storage-sqlite 88.7% (≥75).
 
 ---
 

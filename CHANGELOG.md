@@ -45,6 +45,14 @@ All notable changes to Q-ai are documented here.
 - **observability**: opt-in OTLP trace exporter behind the `otlp` feature (T42).
 - **storage**: `Diagnostic` now has rendering defaults; `JobError`/`AuditError`/
   `ProvenanceError`/`SourceError` implement it with stable `QAI-*` codes.
+- **xtask**: `validate` subcommand (self-contained JSON-Schema subset validator) and a
+  9-step `ci` gate that also runs `adr-lint` and validates `qai doctor --json` against
+  `docs/schemas/doctor.v1.schema.json`.
+- **ci**: 3-OS test matrix (`--all-features` on Linux), plus `doctor`, `msrv`, and
+  enforced `coverage` jobs; ADR lint added to the arch job.
+- **coverage**: `cargo llvm-cov --workspace` enforced by `xtask coverage-gate`
+  (domain 95.4% / provenance 86.4% / audit 90.2% / sources 88.7% / config 93.4% /
+  jobs 81.2% / storage-sqlite 88.7%).
 - **docs**: ADR-0000 (project architecture), ADR-0301 (RAG strategy, Proposed),
   `examples/config/default.toml`, `docs/plans/handoff-p0-to-p1.md`,
   `docs/05-followups/done.md` (AC verification).
