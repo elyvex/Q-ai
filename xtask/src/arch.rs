@@ -53,7 +53,7 @@ pub struct Allowlist {
     pub application: CrateRule,
     #[serde(default)]
     pub storage: CrateRule,
-    #[serde(default)]
+    #[serde(default, rename = "storage-sqlite")]
     pub storage_sqlite: CrateRule,
     #[serde(default)]
     pub provenance: CrateRule,
