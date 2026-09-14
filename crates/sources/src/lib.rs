@@ -1,14 +1,23 @@
 //! Phase 0 — Source catalog, manifest schema, and state machine (D0.10).
 
 use domain::{
-    ApprovalId, ContentHash, LicenseStatus, PrincipalId, SourceId, SourceVersionId, Timestamp,
-    TrustLevel, canonical_json_bytes,
+    ApprovalId, ContentHash, HashAlgorithm, LicenseStatus, PrincipalId, SourceId, SourceVersionId,
+    Timestamp, TrustLevel, canonical_json_bytes,
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::RwLock as TokioRwLock;
+
+fn hex_lower(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        s.push_str(&format!("{b:02x}"));
+    }
+    s
+}
 
 // ─── Source ────────────────────────────────────
 
@@ -290,17 +299,52 @@ impl ManifestParser {
         String::from_utf8(bytes)
             .map_err(|_| SourceError::Serialization("invalid UTF-8".to_string()))
     }
+    /// The canonical SHA-256 hash of a manifest (over `canonical_json_bytes`).
+    pub fn manifest_hash(
+        &self,
+        manifest: &ManifestParseResult,
+    ) -> Result<ContentHash, SourceError> {
+        let bytes = canonical_json_bytes(manifest)
+            .map_err(|e| SourceError::Serialization(e.to_string()))?;
+        let digest = Sha256::digest(&bytes);
+        Ok(ContentHash { algorithm: HashAlgorithm::Sha256, hex: hex_lower(&digest) })
+    }
+
+    /// Verify a manifest's detached signature against its canonical content.
+    ///
+    /// Phase 0 verifies a SHA-256 detached signature (the manifest's canonical
+    /// hash) rather than ed25519: the signature is rejected when it does not
+    /// match the recomputed content hash, which detects tampering. Unsigned
+    /// manifests are rejected unless `allow_unsigned` is set (the default for
+    /// remote sources is `false`). ed25519 verification is a Phase 1 enhancement
+    /// (requires the `ed25519-dalek` dependency).
     pub fn verify_signature(
         &self,
-        _manifest: &ManifestParseResult,
+        manifest: &ManifestParseResult,
         signature: Option<&str>,
     ) -> Result<(), SourceError> {
-        if signature.is_none() && !self.allow_unsigned {
-            return Err(SourceError::SignatureVerificationFailed(
-                "unsigned manifests not allowed by policy".to_string(),
-            ));
+        match signature {
+            None => {
+                if self.allow_unsigned {
+                    Ok(())
+                } else {
+                    Err(SourceError::SignatureVerificationFailed(
+                        "unsigned manifests not allowed by policy".to_string(),
+                    ))
+                }
+            }
+            Some(provided) => {
+                let expected = self.manifest_hash(manifest)?;
+                let provided_hex = provided.strip_prefix("sha256:").unwrap_or(provided);
+                if provided_hex != expected.hex {
+                    return Err(SourceError::SignatureVerificationFailed(
+                        "manifest signature does not match content (tampered or wrong key)"
+                            .to_string(),
+                    ));
+                }
+                Ok(())
+            }
         }
-        Ok(())
     }
 }
 
@@ -458,6 +502,13 @@ impl StateMachine {
         if version.validation_report.is_none() {
             return Err(SourceError::ApprovalPreconditionNotMet(
                 "validation report is required".to_string(),
+            ));
+        }
+        // PRD §22.3: no source becomes active solely because an LLM/import
+        // recommended it — a human approver identity is mandatory.
+        if version.approved_by.is_none() {
+            return Err(SourceError::ApprovalPreconditionNotMet(
+                "approver identity is required".to_string(),
             ));
         }
         Ok(())
@@ -630,5 +681,122 @@ mod tests {
         let json = serde_json::to_string(&manifest).unwrap();
         let parsed = parser.parse(&json).unwrap();
         assert_eq!(parsed.manifest_version, "1.0.0");
+    }
+
+    fn base_version() -> SourceVersion {
+        SourceVersion {
+            id: SourceVersionId::new(),
+            source_id: SourceId::new(),
+            version: "1.0.0".to_string(),
+            schema_version: 1,
+            state: SourceState::Staged,
+            trust_level: TrustLevel::ImportedUnverified,
+            license_status: LicenseStatus::OpenLicense,
+            license_json: "{}".to_string(),
+            manifest_blob_id: None,
+            manifest_hash: None,
+            content_hash: Some(ContentHash {
+                algorithm: HashAlgorithm::Sha256,
+                hex: "00".repeat(32),
+            }),
+            source_urls: vec![],
+            publication_date: None,
+            imported_at: None,
+            validated_at: None,
+            approved_at: None,
+            approved_by: None,
+            activated_at: None,
+            deprecated_at: None,
+            quarantine_reason: None,
+            validation_report: None,
+            notes: None,
+            created_at: Timestamp::now(),
+        }
+    }
+
+    fn sample_manifest() -> ManifestParseResult {
+        ManifestParseResult {
+            manifest_version: "1.0.0".to_string(),
+            catalog_version: "1.4.0".to_string(),
+            generated_at: Timestamp::now(),
+            sources: vec![],
+        }
+    }
+
+    #[test]
+    fn approved_requires_approver_identity() {
+        let mut version = base_version();
+        version.validation_report = Some(r#"{"valid":true}"#.to_string());
+        // All preconditions except the human approver.
+        let result = StateMachine::transition(&mut version, SourceState::Approved, None, None);
+        assert!(matches!(result, Err(SourceError::ApprovalPreconditionNotMet(_))));
+    }
+
+    #[test]
+    fn approved_succeeds_with_all_preconditions() {
+        let mut version = base_version();
+        version.validation_report = Some(r#"{"valid":true}"#.to_string());
+        version.approved_by = Some(PrincipalId::new());
+        StateMachine::transition(&mut version, SourceState::Approved, None, None).unwrap();
+        assert_eq!(version.state, SourceState::Approved);
+    }
+
+    #[test]
+    fn unsigned_manifest_rejected_by_default() {
+        let parser = ManifestParser::new(false);
+        let err = parser.verify_signature(&sample_manifest(), None).unwrap_err();
+        assert!(matches!(err, SourceError::SignatureVerificationFailed(_)));
+    }
+
+    #[test]
+    fn unsigned_manifest_allowed_for_local_files() {
+        let parser = ManifestParser::new(true);
+        parser.verify_signature(&sample_manifest(), None).unwrap();
+    }
+
+    #[test]
+    fn valid_signature_is_accepted() {
+        let parser = ManifestParser::new(false);
+        let manifest = sample_manifest();
+        let hash = parser.manifest_hash(&manifest).unwrap();
+        parser.verify_signature(&manifest, Some(&format!("sha256:{}", hash.hex))).unwrap();
+    }
+
+    #[test]
+    fn tampered_manifest_is_rejected() {
+        let parser = ManifestParser::new(false);
+        let manifest = sample_manifest();
+        let signature = format!("sha256:{}", parser.manifest_hash(&manifest).unwrap().hex);
+
+        // Tamper: add a source after signing.
+        let mut tampered = manifest.clone();
+        tampered.sources.push(base_version());
+
+        let err = parser.verify_signature(&tampered, Some(&signature)).unwrap_err();
+        assert!(matches!(err, SourceError::SignatureVerificationFailed(_)));
+    }
+
+    #[tokio::test]
+    async fn genealogy_renders_lineage_and_rejects_cycles() {
+        let resolver = GenealogyResolver::new();
+        let a = SourceId::new();
+        let b = SourceId::new();
+        let c = SourceId::new();
+        // c derives from b derives from a.
+        resolver.add_relationship(c, b).await.unwrap();
+        resolver.add_relationship(b, a).await.unwrap();
+
+        let result = resolver.resolve_lineage(&c).await.unwrap();
+        assert!(!result.cycle_detected);
+        assert_eq!(result.lineage.len(), 2, "three-level chain has two ancestors");
+        assert!(!result.rendering.is_empty());
+
+        // Introduce a cycle: a derives from c.
+        resolver.add_relationship(a, c).await.unwrap();
+        let cycle = resolver.resolve_lineage(&c).await;
+        assert!(
+            matches!(cycle, Err(SourceError::GenealogyCycleDetected(_))),
+            "a cycle must be rejected"
+        );
     }
 }

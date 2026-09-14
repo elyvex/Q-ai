@@ -1018,10 +1018,7 @@ impl OutboxRepository for SqliteOutboxRepository {
         })
     }
 
-    async fn current_generation(
-        &self,
-        scope: &str,
-    ) -> Result<Option<GenerationRow>, StorageError> {
+    async fn current_generation(&self, scope: &str) -> Result<Option<GenerationRow>, StorageError> {
         let mut tx = self.tx.lock().await;
         let row = sqlx::query(
             "SELECT id, scope, number, reason, created_at FROM corpus_generations

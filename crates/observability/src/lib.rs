@@ -15,6 +15,7 @@
 //! ```
 
 pub mod metrics;
+pub mod telemetry;
 
 use tracing_subscriber::EnvFilter;
 

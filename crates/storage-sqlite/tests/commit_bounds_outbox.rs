@@ -8,7 +8,6 @@
 mod common;
 
 use storage::Database as _;
-use storage::UnitOfWork;
 use storage::workflows::record_source_activation;
 
 #[tokio::test]
@@ -23,10 +22,7 @@ async fn committed_change_and_outbox_are_durable_together() {
     uow.commit().await.unwrap();
 
     // Both the state change and its outbox row are visible.
-    assert_eq!(
-        common::source_state(&fx.path, "ver-1").await.as_deref(),
-        Some("Active")
-    );
+    assert_eq!(common::source_state(&fx.path, "ver-1").await.as_deref(), Some("Active"));
     assert_eq!(common::outbox_count(&fx.path, "Pending").await, 1);
     assert_eq!(common::generation_numbers(&fx.path, "quran:test").await, vec![1]);
 }
@@ -69,16 +65,10 @@ async fn witness_change_without_outbox_rolls_back() {
 
     {
         let mut uow = fx.db.write().await.unwrap();
-        uow.sources()
-            .transition_state("ver-3", "Indexing", "Active")
-            .await
-            .unwrap();
+        uow.sources().transition_state("ver-3", "Indexing", "Active").await.unwrap();
         // Deliberately omit the outbox enqueue; drop without commit.
     }
 
-    assert_eq!(
-        common::source_state(&fx.path, "ver-3").await.as_deref(),
-        Some("Indexing")
-    );
+    assert_eq!(common::source_state(&fx.path, "ver-3").await.as_deref(), Some("Indexing"));
     assert_eq!(common::outbox_count(&fx.path, "Pending").await, 0);
 }

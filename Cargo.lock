@@ -144,6 +144,7 @@ dependencies = [
  "sha2",
  "storage",
  "thiserror 2.0.20",
+ "tokio",
 ]
 
 [[package]]
@@ -271,6 +272,7 @@ dependencies = [
  "observability",
  "serde_json",
  "server",
+ "tempfile",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
@@ -970,6 +972,7 @@ name = "observability"
 version = "0.0.0"
 dependencies = [
  "metrics",
+ "serde_json",
  "tracing",
  "tracing-subscriber",
 ]
@@ -1680,6 +1683,7 @@ dependencies = [
  "config",
  "domain",
  "jobs",
+ "observability",
  "provenance",
  "serde_json",
  "sources",

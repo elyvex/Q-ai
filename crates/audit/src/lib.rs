@@ -122,15 +122,23 @@ impl HashChainWriter {
         Self { repo }
     }
 
+    fn genesis_hash() -> ContentHash {
+        ContentHash { algorithm: HashAlgorithm::Sha256, hex: "00".repeat(32) }
+    }
+
     pub async fn append_event(&mut self, event: AuditEvent) -> Result<AuditEvent, AuditError> {
         let seq = self.repo.latest_sequence().await? + 1;
         let mut event = event;
         event.sequence = seq;
         event.occurred_at = Timestamp::now();
         let prev_hash = if seq == 1 {
-            ContentHash { algorithm: HashAlgorithm::Sha256, hex: "00".repeat(32) }
+            Self::genesis_hash()
         } else {
-            self.get_prev_chain_hash(seq - 1).await?
+            let prev = self.repo.list_by_sequence(seq - 1, Some(seq - 1)).await?;
+            prev.into_iter()
+                .find(|e| e.sequence == seq - 1)
+                .map(|e| e.chain_hash)
+                .unwrap_or_else(Self::genesis_hash)
         };
         event.prev_chain_hash = prev_hash.clone();
         event.chain_hash = Self::compute_chain_hash(&prev_hash, &event);
@@ -138,7 +146,7 @@ impl HashChainWriter {
         Ok(event)
     }
 
-    fn compute_chain_hash(prev_hash: &ContentHash, event: &AuditEvent) -> ContentHash {
+    pub(crate) fn compute_chain_hash(prev_hash: &ContentHash, event: &AuditEvent) -> ContentHash {
         let mut event_without_hash = event.clone();
         event_without_hash.chain_hash =
             ContentHash { algorithm: HashAlgorithm::Sha256, hex: String::new() };
@@ -150,10 +158,6 @@ impl HashChainWriter {
         hasher.update(&canonical);
         let result = hasher.finalize();
         ContentHash { algorithm: HashAlgorithm::Sha256, hex: hex_encode(&result) }
-    }
-
-    async fn get_prev_chain_hash(&self, _seq: u64) -> Result<ContentHash, AuditError> {
-        Ok(ContentHash { algorithm: HashAlgorithm::Sha256, hex: "00".repeat(32) })
     }
 }
 
@@ -168,8 +172,46 @@ impl AuditVerifier {
         Self { repo }
     }
 
+    /// Verify the whole chain end-to-end by **recomputing every hash**.
+    ///
+    /// Detects a tampered row (changed content, chain hash, or sequence) and
+    /// reports the offending sequence. This is stronger than a structural
+    /// linkage check because it re-derives each `chain_hash` from the event's
+    /// canonical serialization.
     pub async fn verify(&self) -> Result<ChainVerificationResult, AuditError> {
-        self.repo.verify_chain().await
+        let events = self.repo.list_by_sequence(0, None).await?;
+
+        let mut valid = true;
+        let mut gaps = Vec::new();
+        let mut tampered = Vec::new();
+        let mut prev_hash = HashChainWriter::genesis_hash();
+        let mut expected_seq: u64 = 1;
+
+        for event in &events {
+            if event.sequence != expected_seq {
+                gaps.push(event.sequence);
+                valid = false;
+            }
+            let expected = HashChainWriter::compute_chain_hash(&prev_hash, event);
+            if expected != event.chain_hash {
+                valid = false;
+                tampered.push(TamperEvidence {
+                    sequence: event.sequence,
+                    expected_hash: expected,
+                    actual_hash: event.chain_hash.clone(),
+                });
+            }
+            prev_hash = event.chain_hash.clone();
+            expected_seq = event.sequence + 1;
+        }
+
+        Ok(ChainVerificationResult {
+            valid,
+            expected_next_sequence: expected_seq,
+            expected_next_hash: prev_hash,
+            gaps,
+            tampered_events: tampered,
+        })
     }
 
     pub async fn verify_event(&self, sequence: u64) -> Result<bool, AuditError> {
@@ -340,5 +382,131 @@ mod tests {
         assert!(matches!(principal, Actor::Principal { .. }));
         assert!(matches!(system, Actor::System { .. }));
         assert!(matches!(job, Actor::Job { .. }));
+    }
+
+    // ─── In-memory repo for end-to-end chain tests ───
+
+    #[derive(Clone, Default)]
+    struct SharedRepo(std::sync::Arc<std::sync::Mutex<Vec<AuditEvent>>>);
+
+    #[async_trait::async_trait]
+    impl AuditRepository for SharedRepo {
+        async fn append(&mut self, event: AuditEvent) -> Result<(), AuditError> {
+            self.0.lock().unwrap().push(event);
+            Ok(())
+        }
+        async fn list_by_subject(
+            &self,
+            subject: &SubjectRef,
+        ) -> Result<Vec<AuditEvent>, AuditError> {
+            Ok(self
+                .0
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|e| e.subject.0 == subject.0)
+                .cloned()
+                .collect())
+        }
+        async fn list_by_sequence(
+            &self,
+            from: u64,
+            to: Option<u64>,
+        ) -> Result<Vec<AuditEvent>, AuditError> {
+            Ok(self
+                .0
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|e| e.sequence >= from && to.map(|t| e.sequence <= t).unwrap_or(true))
+                .cloned()
+                .collect())
+        }
+        async fn verify_chain(&self) -> Result<ChainVerificationResult, AuditError> {
+            Ok(ChainVerificationResult {
+                valid: true,
+                expected_next_sequence: self.0.lock().unwrap().len() as u64 + 1,
+                expected_next_hash: ContentHash {
+                    algorithm: HashAlgorithm::Sha256,
+                    hex: String::new(),
+                },
+                gaps: Vec::new(),
+                tampered_events: Vec::new(),
+            })
+        }
+        async fn latest_sequence(&self) -> Result<u64, AuditError> {
+            Ok(self.0.lock().unwrap().iter().map(|e| e.sequence).max().unwrap_or(0))
+        }
+    }
+
+    fn sample_event(subject: &str) -> AuditEvent {
+        AuditEvent {
+            id: AuditEventId::new(),
+            sequence: 0,
+            occurred_at: Timestamp::now(),
+            actor: Actor::System { name: "test".into() },
+            action: AuditAction::ConfigChange,
+            subject: SubjectRef(subject.into()),
+            outcome: AuditOutcome::Allowed,
+            reason: None,
+            before: None,
+            after: None,
+            request_id: None,
+            prev_chain_hash: ContentHash { algorithm: HashAlgorithm::Sha256, hex: String::new() },
+            chain_hash: ContentHash { algorithm: HashAlgorithm::Sha256, hex: String::new() },
+        }
+    }
+
+    #[tokio::test]
+    async fn writer_links_each_event_to_the_previous() {
+        let shared = SharedRepo::default();
+        let mut writer = HashChainWriter::new(Box::new(shared));
+        let e1 = writer.append_event(sample_event("urn:a")).await.unwrap();
+        let e2 = writer.append_event(sample_event("urn:b")).await.unwrap();
+        assert_eq!(e1.prev_chain_hash.hex, "00".repeat(32));
+        assert_eq!(e2.prev_chain_hash, e1.chain_hash);
+    }
+
+    #[tokio::test]
+    async fn verifier_accepts_a_valid_chain_then_detects_a_tampered_row() {
+        let shared = SharedRepo::default();
+        let mut writer = HashChainWriter::new(Box::new(shared.clone()));
+        writer.append_event(sample_event("urn:a")).await.unwrap();
+        writer.append_event(sample_event("urn:b")).await.unwrap();
+
+        let verifier = AuditVerifier::new(Box::new(shared.clone()));
+        let clean = verifier.verify().await.unwrap();
+        assert!(clean.valid, "freshly written chain must verify: {clean:?}");
+
+        // Manually tamper with the second row's content (not its hash).
+        {
+            let mut events = shared.0.lock().unwrap();
+            events[1].reason = Some("tampered".into());
+        }
+
+        let tampered = verifier.verify().await.unwrap();
+        assert!(!tampered.valid, "tampered chain must fail verification");
+        assert_eq!(tampered.tampered_events.len(), 1);
+        assert_eq!(tampered.tampered_events[0].sequence, 2);
+    }
+
+    #[tokio::test]
+    async fn verifier_detects_a_sequence_gap() {
+        let shared = SharedRepo::default();
+        let mut writer = HashChainWriter::new(Box::new(shared.clone()));
+        writer.append_event(sample_event("urn:a")).await.unwrap();
+        writer.append_event(sample_event("urn:b")).await.unwrap();
+        writer.append_event(sample_event("urn:c")).await.unwrap();
+
+        // Drop the middle row to create a gap.
+        {
+            let mut events = shared.0.lock().unwrap();
+            events.remove(1);
+        }
+
+        let verifier = AuditVerifier::new(Box::new(shared));
+        let result = verifier.verify().await.unwrap();
+        assert!(!result.valid);
+        assert!(!result.gaps.is_empty());
     }
 }

@@ -25,14 +25,10 @@ pub fn now() -> String {
         .unwrap_or_default()
 }
 
-async fn rw_pool(path: &str) -> sqlx::SqlitePool {
+pub async fn rw_pool(path: &str) -> sqlx::SqlitePool {
     SqlitePoolOptions::new()
         .max_connections(1)
-        .connect_with(
-            SqliteConnectOptions::new()
-                .filename(path)
-                .foreign_keys(true),
-        )
+        .connect_with(SqliteConnectOptions::new().filename(path).foreign_keys(true))
         .await
         .expect("connect rw")
 }
@@ -41,17 +37,9 @@ async fn rw_pool(path: &str) -> sqlx::SqlitePool {
 pub async fn fixture() -> Fixture {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("qai.db");
-    migrate::apply_migrations(path.to_str().unwrap(), &migrations_dir())
-        .await
-        .unwrap();
-    let db = SqliteDatabase::new(path.to_str().unwrap(), 4, true)
-        .await
-        .unwrap();
-    let fx = Fixture {
-        _dir: dir,
-        path: path.to_str().unwrap().to_string(),
-        db,
-    };
+    migrate::apply_migrations(path.to_str().unwrap(), &migrations_dir()).await.unwrap();
+    let db = SqliteDatabase::new(path.to_str().unwrap(), 4, true).await.unwrap();
+    let fx = Fixture { _dir: dir, path: path.to_str().unwrap().to_string(), db };
     let pool = rw_pool(&fx.path).await;
     sqlx::query(
         "INSERT OR IGNORE INTO principals (id, kind, display_name, created_at)
@@ -133,13 +121,11 @@ pub async fn generation_numbers(path: &str, scope: &str) -> Vec<i64> {
 /// Count outbox events in a state.
 pub async fn outbox_count(path: &str, state: &str) -> i64 {
     let pool = rw_pool(path).await;
-    let n = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM outbox_events WHERE state = ?",
-    )
-    .bind(state)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM outbox_events WHERE state = ?")
+        .bind(state)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     pool.close().await;
     n
 }
@@ -147,13 +133,72 @@ pub async fn outbox_count(path: &str, state: &str) -> i64 {
 /// Count all tombstones for a subject.
 pub async fn tombstone_count(path: &str, subject_urn: &str) -> i64 {
     let pool = rw_pool(path).await;
-    let n = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM tombstones WHERE subject_urn = ?",
-    )
-    .bind(subject_urn)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM tombstones WHERE subject_urn = ?")
+        .bind(subject_urn)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     pool.close().await;
     n
+}
+
+/// The state of a job.
+pub async fn job_state(path: &str, id: &str) -> Option<String> {
+    let pool = rw_pool(path).await;
+    let row = sqlx::query_scalar::<_, String>("SELECT state FROM jobs WHERE id = ?")
+        .bind(id)
+        .fetch_optional(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+    row
+}
+
+/// The checkpoint JSON of a job.
+pub async fn job_checkpoint(path: &str, id: &str) -> Option<String> {
+    let pool = rw_pool(path).await;
+    let row =
+        sqlx::query_scalar::<_, Option<String>>("SELECT checkpoint_json FROM jobs WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&pool)
+            .await
+            .unwrap()
+            .flatten();
+    pool.close().await;
+    row
+}
+
+/// The attempt counter of a job.
+pub async fn job_attempts(path: &str, id: &str) -> i64 {
+    let pool = rw_pool(path).await;
+    let n = sqlx::query_scalar::<_, i64>("SELECT attempts FROM jobs WHERE id = ?")
+        .bind(id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+    n
+}
+
+/// Whether cancellation has been requested for a job.
+pub async fn job_cancel_requested(path: &str, id: &str) -> bool {
+    let pool = rw_pool(path).await;
+    let n = sqlx::query_scalar::<_, i64>("SELECT cancel_requested FROM jobs WHERE id = ?")
+        .bind(id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+    n != 0
+}
+
+/// Force a job's lease into the past, simulating a crashed worker.
+pub async fn backdate_lease(path: &str, id: &str) {
+    let pool = rw_pool(path).await;
+    sqlx::query("UPDATE jobs SET lease_expires_at = '2000-01-01T00:00:00Z' WHERE id = ?")
+        .bind(id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
 }

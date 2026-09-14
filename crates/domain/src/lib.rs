@@ -41,8 +41,8 @@ pub use generation::{
 pub use hashing::{ContentHash, HashAlgorithm, HashingError, canonical_json_bytes};
 pub use ids::{
     ApprovalId, AuditEventId, CorpusGenerationId, DependencySnapshotId, DocumentId, EditionId,
-    JobId, OutboxEventId, PrincipalId, ProvenanceId, RunId, SourceId, SourceVersionId,
-    TombstoneId, WorkspaceId,
+    JobId, OutboxEventId, PrincipalId, ProvenanceId, RunId, SourceId, SourceVersionId, TombstoneId,
+    WorkspaceId,
 };
 pub use licensing::{LicenseRecord, LicenseStatus};
 pub use primitives::{Confidence, Language, SemVer, Timestamp};

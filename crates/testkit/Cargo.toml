@@ -12,6 +12,7 @@ audit = { path = "../audit" }
 sources = { path = "../sources" }
 jobs = { path = "../jobs" }
 provenance = { path = "../provenance" }
+observability = { path = "../observability" }
 async-trait = { workspace = true }
 tempfile = { workspace = true }
 

@@ -7,7 +7,6 @@
 mod common;
 
 use storage::Database as _;
-use storage::UnitOfWork;
 use storage::workflows::record_source_deactivation;
 
 const SUBJECT: &str = "urn:qai:source:src-t";
@@ -18,10 +17,7 @@ async fn deactivation_writes_tombstone_with_the_transition() {
     common::seed_source_version(&fx, "src-t", "ver-t", "Active").await;
 
     // Before deactivation: active, no tombstone.
-    assert_eq!(
-        common::source_state(&fx.path, "ver-t").await.as_deref(),
-        Some("Active")
-    );
+    assert_eq!(common::source_state(&fx.path, "ver-t").await.as_deref(), Some("Active"));
     assert_eq!(common::tombstone_count(&fx.path, SUBJECT).await, 0);
 
     let mut uow = fx.db.write().await.unwrap();
@@ -33,10 +29,7 @@ async fn deactivation_writes_tombstone_with_the_transition() {
     uow.commit().await.unwrap();
 
     // After: deactivated, with a tombstone and a pending outbox event.
-    assert_eq!(
-        common::source_state(&fx.path, "ver-t").await.as_deref(),
-        Some("Deprecated")
-    );
+    assert_eq!(common::source_state(&fx.path, "ver-t").await.as_deref(), Some("Deprecated"));
     assert_eq!(common::tombstone_count(&fx.path, SUBJECT).await, 1);
     assert_eq!(common::outbox_count(&fx.path, "Pending").await, 1);
 }
@@ -60,8 +53,5 @@ async fn failed_transition_leaves_no_tombstone() {
     assert!(result.is_err(), "transition from Staged must fail");
     assert_eq!(common::tombstone_count(&fx.path, SUBJECT).await, 0);
     assert_eq!(common::outbox_count(&fx.path, "Pending").await, 0);
-    assert_eq!(
-        common::source_state(&fx.path, "ver-s").await.as_deref(),
-        Some("Staged")
-    );
+    assert_eq!(common::source_state(&fx.path, "ver-s").await.as_deref(), Some("Staged"));
 }

@@ -4,7 +4,6 @@
 mod common;
 
 use storage::Database as _;
-use storage::UnitOfWork;
 use storage::error::StorageError;
 use storage::repository::NewOutboxEvent;
 
@@ -23,11 +22,7 @@ fn event(key: &str) -> NewOutboxEvent {
 async fn duplicate_enqueue_in_one_transaction_conflicts() {
     let fx = common::fixture().await;
     let mut uow = fx.db.write().await.unwrap();
-    let generation = uow
-        .outbox()
-        .allocate_generation("quran:test", "test")
-        .await
-        .unwrap();
+    let generation = uow.outbox().allocate_generation("quran:test", "test").await.unwrap();
 
     let mut first = event("dup-1");
     first.target_generation = generation.id.clone();
@@ -36,10 +31,7 @@ async fn duplicate_enqueue_in_one_transaction_conflicts() {
     let mut second = event("dup-1");
     second.target_generation = generation.id.clone();
     let err = uow.outbox().enqueue(second).await.unwrap_err();
-    assert!(
-        matches!(err, StorageError::Conflict),
-        "expected Conflict, got {err:?}"
-    );
+    assert!(matches!(err, StorageError::Conflict), "expected Conflict, got {err:?}");
 
     uow.commit().await.unwrap();
     assert_eq!(common::outbox_count(&fx.path, "Pending").await, 1);
@@ -51,11 +43,7 @@ async fn duplicate_enqueue_across_transactions_conflicts() {
 
     // First transaction allocates and enqueues.
     let mut uow = fx.db.write().await.unwrap();
-    let generation = uow
-        .outbox()
-        .allocate_generation("quran:test", "test")
-        .await
-        .unwrap();
+    let generation = uow.outbox().allocate_generation("quran:test", "test").await.unwrap();
     let mut first = event("dup-2");
     first.target_generation = generation.id.clone();
     uow.outbox().enqueue(first).await.unwrap();
@@ -63,11 +51,7 @@ async fn duplicate_enqueue_across_transactions_conflicts() {
 
     // Second transaction reuses the same idempotency key.
     let mut uow = fx.db.write().await.unwrap();
-    let gen2 = uow
-        .outbox()
-        .allocate_generation("quran:test", "test")
-        .await
-        .unwrap();
+    let gen2 = uow.outbox().allocate_generation("quran:test", "test").await.unwrap();
     let mut second = event("dup-2");
     second.target_generation = gen2.id;
     let err = uow.outbox().enqueue(second).await.unwrap_err();
@@ -81,11 +65,7 @@ async fn duplicate_enqueue_across_transactions_conflicts() {
 async fn distinct_keys_both_persist() {
     let fx = common::fixture().await;
     let mut uow = fx.db.write().await.unwrap();
-    let generation = uow
-        .outbox()
-        .allocate_generation("quran:test", "test")
-        .await
-        .unwrap();
+    let generation = uow.outbox().allocate_generation("quran:test", "test").await.unwrap();
 
     let mut a = event("key-a");
     a.target_generation = generation.id.clone();

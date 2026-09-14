@@ -32,10 +32,7 @@ pub async fn record_source_activation(
     scope: &str,
     subject_urn: &str,
 ) -> Result<String, StorageError> {
-    let generation = uow
-        .outbox()
-        .allocate_generation(scope, "source_activated")
-        .await?;
+    let generation = uow.outbox().allocate_generation(scope, "source_activated").await?;
     uow.outbox()
         .enqueue(NewOutboxEvent {
             scope: scope.to_string(),
@@ -46,9 +43,7 @@ pub async fn record_source_activation(
             payload_json: "{}".to_string(),
         })
         .await?;
-    uow.sources()
-        .transition_state(source_version_id, "Indexing", "Active")
-        .await?;
+    uow.sources().transition_state(source_version_id, "Indexing", "Active").await?;
     Ok(generation.id)
 }
 
@@ -76,10 +71,7 @@ pub async fn record_source_deactivation(
         })
         .await?;
 
-    let generation = uow
-        .outbox()
-        .allocate_generation(scope, "source_deactivated")
-        .await?;
+    let generation = uow.outbox().allocate_generation(scope, "source_deactivated").await?;
     uow.outbox()
         .enqueue(NewOutboxEvent {
             scope: scope.to_string(),
@@ -90,9 +82,7 @@ pub async fn record_source_deactivation(
             payload_json: serde_json::json!({ "reason": reason }).to_string(),
         })
         .await?;
-    uow.sources()
-        .transition_state(source_version_id, "Active", "Deprecated")
-        .await?;
+    uow.sources().transition_state(source_version_id, "Active", "Deprecated").await?;
     Ok(tombstone_id)
 }
 
@@ -105,10 +95,7 @@ pub async fn record_provenance_write(
 ) -> Result<String, StorageError> {
     let subject_urn = record.subject_urn.clone();
     uow.provenance().insert(record).await?;
-    let generation = uow
-        .outbox()
-        .allocate_generation(scope, "provenance_written")
-        .await?;
+    let generation = uow.outbox().allocate_generation(scope, "provenance_written").await?;
     uow.outbox()
         .enqueue(NewOutboxEvent {
             scope: scope.to_string(),

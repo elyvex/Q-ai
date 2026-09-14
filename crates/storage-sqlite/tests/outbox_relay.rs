@@ -4,7 +4,6 @@
 mod common;
 
 use storage::Database as _;
-use storage::UnitOfWork;
 use storage::workflows::{record_source_activation, relay_outbox_once};
 
 #[tokio::test]

@@ -170,22 +170,46 @@ pub struct JobOutcome {
 pub struct JobContext {
     /// The job being executed.
     pub job: JobRecord,
-    /// Whether cancellation has been requested.
+    /// Whether cancellation has been requested (snapshot at construction).
     pub cancel_requested: bool,
     /// The tracing span for this job execution.
     pub span: tracing::Span,
+    /// Shared cancellation flag, pollable from inside a long handler.
+    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// Latest checkpoint value reported by the handler.
+    checkpoint: std::sync::Arc<std::sync::Mutex<Option<String>>>,
 }
 
 impl JobContext {
     /// Create a new `JobContext` for the given job.
     pub fn new(job: JobRecord) -> Self {
         let span = tracing::span!(tracing::Level::INFO, "qai.job", job_id = %job.id);
-        Self { job, cancel_requested: false, span }
+        Self {
+            job,
+            cancel_requested: false,
+            span,
+            cancel: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            checkpoint: std::sync::Arc::new(std::sync::Mutex::new(None)),
+        }
     }
 
     /// Check whether a cancellation has been requested.
+    ///
+    /// Returns `true` if either the construction-time snapshot was set or the
+    /// shared cancellation flag has been raised since.
     pub fn is_cancelled(&self) -> bool {
-        self.cancel_requested
+        self.cancel_requested || self.cancel.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Request cancellation from outside the handler.
+    pub fn request_cancel(&self) {
+        self.cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// A cloneable handle to the cancellation flag, for a cooperative handler
+    /// that must observe cancellation from a spawned task or a loop.
+    pub fn cancel_flag(&self) -> std::sync::Arc<std::sync::atomic::AtomicBool> {
+        self.cancel.clone()
     }
 
     /// Report progress.
@@ -202,12 +226,20 @@ impl JobContext {
 
     /// Record a checkpoint value for resume support.
     pub fn checkpoint(&self, value: &str) {
+        if let Ok(mut slot) = self.checkpoint.lock() {
+            *slot = Some(value.to_string());
+        }
         tracing::info!(
             target: "qai.job",
             job_id = %self.job.id,
             checkpoint = value,
             "job checkpoint"
         );
+    }
+
+    /// The latest checkpoint value recorded by the handler, if any.
+    pub fn latest_checkpoint(&self) -> Option<String> {
+        self.checkpoint.lock().ok().and_then(|slot| slot.clone())
     }
 
     /// Return the deadline for the current lease.
@@ -416,5 +448,92 @@ mod tests {
         let unique: std::collections::HashSet<&str> = kinds::ALL.iter().copied().collect();
         assert_eq!(unique.len(), kinds::ALL.len(), "job kinds must be unique");
         assert!(kinds::ALL.contains(&"system.outbox_relay"));
+    }
+
+    fn record(id: &str, kind: &str, state: &str) -> JobRecord {
+        JobRecord {
+            id: id.into(),
+            kind: kind.into(),
+            payload_json: "{}".into(),
+            idempotency_key: None,
+            state: state.into(),
+            priority: 0,
+            attempts: 1,
+            max_attempts: 5,
+            available_at: String::new(),
+            lease_owner: None,
+            lease_expires_at: None,
+            checkpoint_json: None,
+            cancel_requested: false,
+            created_by: "test".into(),
+        }
+    }
+
+    #[test]
+    fn checkpoint_is_recorded_on_the_context() {
+        let ctx = JobContext::new(record("job-cp", "test", "Running"));
+        assert!(ctx.latest_checkpoint().is_none());
+        ctx.checkpoint("stage-2");
+        assert_eq!(ctx.latest_checkpoint().as_deref(), Some("stage-2"));
+    }
+
+    #[test]
+    fn cancel_flag_reflects_requests() {
+        let ctx = JobContext::new(record("job-cx", "test", "Running"));
+        assert!(!ctx.is_cancelled());
+        ctx.request_cancel();
+        assert!(ctx.is_cancelled());
+    }
+
+    #[tokio::test]
+    async fn cancellation_stops_a_cooperative_handler_within_two_seconds() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::time::{Duration, Instant};
+
+        struct Slow;
+        #[async_trait]
+        impl JobHandler for Slow {
+            fn kind(&self) -> JobKind {
+                "test.slow".into()
+            }
+            fn payload_schema(&self) -> &'static str {
+                "{}"
+            }
+            fn is_idempotent(&self) -> bool {
+                true
+            }
+            async fn run(
+                &self,
+                ctx: JobContext,
+                _payload: serde_json::Value,
+            ) -> Result<JobOutcome, JobError> {
+                let flag: Arc<AtomicBool> = ctx.cancel_flag();
+                let started = Instant::now();
+                while !flag.load(Ordering::SeqCst) {
+                    if started.elapsed() > Duration::from_secs(30) {
+                        return Ok(JobOutcome::failure());
+                    }
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                }
+                Ok(JobOutcome::success(Some("stopped".into())))
+            }
+        }
+
+        let ctx = JobContext::new(record("job-cancel", "test.slow", "Running"));
+        let flag = ctx.cancel_flag();
+        let handle = tokio::spawn(async move { Slow.run(ctx, serde_json::json!({})).await });
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let cancel_at = Instant::now();
+        flag.store(true, Ordering::SeqCst);
+
+        let outcome = handle.await.unwrap().unwrap();
+        assert!(
+            cancel_at.elapsed() < Duration::from_secs(2),
+            "cancellation took {:?}, expected < 2s",
+            cancel_at.elapsed()
+        );
+        assert!(outcome.success);
     }
 }

@@ -99,6 +99,26 @@ impl CheckResult {
     }
 }
 
+/// The stable JSON document emitted by `qai doctor --json`.
+///
+/// Shape (validated against `docs/schemas/doctor.v1.schema.json`):
+/// `{ "checks": [ { id, status, summary, remedy, next_command } ] }`.
+pub fn checks_json(results: &[CheckResult]) -> serde_json::Value {
+    let payload: Vec<serde_json::Value> = results
+        .iter()
+        .map(|r| {
+            serde_json::json!({
+                "id": r.id,
+                "status": r.status.as_str(),
+                "summary": r.summary,
+                "remedy": r.remedy,
+                "next_command": r.next_command,
+            })
+        })
+        .collect();
+    serde_json::json!({ "checks": payload })
+}
+
 /// Runs the Phase-0 doctor checks; returns the process exit code.
 pub fn run_checks(cfg: &Config, probe: &DbProbe, json: bool, repair_preview: bool) -> i32 {
     let results = checks(cfg, probe);
@@ -109,19 +129,7 @@ pub fn run_checks(cfg: &Config, probe: &DbProbe, json: bool, repair_preview: boo
     }
 
     if json {
-        let payload: Vec<serde_json::Value> = results
-            .iter()
-            .map(|r| {
-                serde_json::json!({
-                    "id": r.id,
-                    "status": r.status.as_str(),
-                    "summary": r.summary,
-                    "remedy": r.remedy,
-                    "next_command": r.next_command,
-                })
-            })
-            .collect();
-        let doc = serde_json::json!({ "checks": payload });
+        let doc = checks_json(&results);
         println!("{}", serde_json::to_string_pretty(&doc).unwrap());
     } else {
         for r in &results {
@@ -725,5 +733,48 @@ mod tests {
             })
             .collect();
         assert!(!payload.is_empty());
+    }
+
+    #[test]
+    fn json_document_matches_the_documented_schema_shape() {
+        // Mirrors docs/schemas/doctor.v1.schema.json.
+        let doc = checks_json(&checks(&Config::default(), &probe_ok()));
+        let checks = doc["checks"].as_array().expect("checks must be an array");
+        assert!(!checks.is_empty());
+        for check in checks {
+            for key in ["id", "status", "summary", "remedy", "next_command"] {
+                assert!(check.get(key).is_some(), "missing key {key} in {check}");
+            }
+            let status = check["status"].as_str().unwrap();
+            assert!(
+                matches!(status, "pass" | "warn" | "fail" | "skipped"),
+                "unexpected status {status}"
+            );
+            assert!(check["remedy"].is_string() || check["remedy"].is_null());
+            assert!(check["next_command"].is_string() || check["next_command"].is_null());
+        }
+    }
+
+    #[tokio::test]
+    async fn doctor_is_read_only() {
+        // Migrate a temp database, then run the doctor probe/checks and assert
+        // the database file is byte-for-byte unchanged (never written).
+        let dir = tempfile::tempdir().unwrap();
+        let mut cfg = Config::default();
+        cfg.app.data_dir = dir.path().display().to_string();
+        cfg.storage.sqlite.path = dir.path().join("qai.db").display().to_string();
+
+        let migrations =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../migrations/sqlite");
+        application::db::migrate_database(&cfg, &migrations).await.unwrap();
+
+        let before = std::fs::read(&cfg.storage.sqlite.path).unwrap();
+
+        let probe = application::db::probe_database(&cfg).await;
+        assert!(probe.reachable);
+        let _ = checks(&cfg, &probe);
+
+        let after = std::fs::read(&cfg.storage.sqlite.path).unwrap();
+        assert_eq!(before, after, "doctor must not write to the database");
     }
 }

@@ -6,7 +6,6 @@ mod common;
 use std::sync::Arc;
 
 use storage::Database as _;
-use storage::UnitOfWork;
 
 const SCOPE: &str = "quran:concurrent";
 
@@ -21,10 +20,7 @@ async fn numbers_are_unique_and_contiguous_under_concurrency() {
         let db = db.clone();
         handles.push(tokio::spawn(async move {
             let mut uow = db.write().await.unwrap();
-            uow.outbox()
-                .allocate_generation(SCOPE, "concurrent")
-                .await
-                .unwrap();
+            uow.outbox().allocate_generation(SCOPE, "concurrent").await.unwrap();
             uow.commit().await.unwrap();
         }));
     }

@@ -123,7 +123,8 @@ impl fmt::Display for Diagnostic {
 
 impl fmt::Display for DiagnosticCode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.namespace, self.code)
+        // Canonical form is `QAI-<NS>-<nnnn>` (D0.3 / docs/architecture/error-codes.md).
+        write!(f, "{}-{:04}", self.namespace, self.code)
     }
 }
 
