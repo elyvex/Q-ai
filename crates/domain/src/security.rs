@@ -96,15 +96,13 @@ pub fn is_private_ip(ip: IpAddr) -> bool {
         }
         IpAddr::V6(ipv6) => {
             // IPv6 ULA fc00::/7 (unique local addressing)
-            if let Some(segment) = ipv6.segments().get(0) {
-                if segment & 0xfe00 == 0xfc00 { return true; }
-            }
+            if let Some(segment) = ipv6.segments().first()
+                && segment & 0xfe00 == 0xfc00 { return true; }
             // IPv6 loopback ::1
             if ipv6.is_loopback() || ipv6.is_unspecified() { return true; }
             // IPv6 link-local fe80::/10
-            if let Some(segment) = ipv6.segments().get(0) {
-                if segment & 0xffc0 == 0xfe80 { return true; }
-            }
+            if let Some(segment) = ipv6.segments().first()
+                && segment & 0xffc0 == 0xfe80 { return true; }
             // Unique Local Addresses fc00::/7 (excludes global unicast)
             false
         }
