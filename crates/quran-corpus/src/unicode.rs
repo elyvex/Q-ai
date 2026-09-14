@@ -43,11 +43,13 @@ fn forbidden_reason(ch: char) -> Option<&'static str> {
         Some("control-character")
     } else if ch == '\u{FEFF}' {
         Some("byte-order-mark")
-    } else if matches!(ch, '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}') {
+    } else if matches!(ch, '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}')
+    {
         Some("bidi-control")
     } else if matches!(ch, '\u{200C}' | '\u{200D}') {
         Some("zero-width-joiner")
-    } else if matches!(ch, '\u{E000}'..='\u{F8FF}' | '\u{F0000}'..='\u{FFFFD}' | '\u{100000}'..='\u{10FFFD}') {
+    } else if matches!(ch, '\u{E000}'..='\u{F8FF}' | '\u{F0000}'..='\u{FFFFD}' | '\u{100000}'..='\u{10FFFD}')
+    {
         Some("private-use")
     } else if matches!(ch, '\u{FDD0}'..='\u{FDEF}')
         || (value & 0xFFFF) >= 0xFFFE && value <= 0x10FFFF
@@ -63,11 +65,7 @@ pub fn find_forbidden(text: &str) -> Vec<ForbiddenPoint> {
     let mut points = Vec::new();
     for (byte_offset, ch) in text.char_indices() {
         if let Some(reason) = forbidden_reason(ch) {
-            points.push(ForbiddenPoint {
-                byte_offset: byte_offset as u32,
-                character: ch,
-                reason,
-            });
+            points.push(ForbiddenPoint { byte_offset: byte_offset as u32, character: ch, reason });
         }
     }
     points
