@@ -200,4 +200,66 @@ mod tests {
         let back: CorpusGeneration = serde_json::from_str(&json).unwrap();
         assert_eq!(back, g);
     }
+
+    #[test]
+    fn every_enum_variant_has_a_stable_string() {
+        for (op, s) in [
+            (OutboxOperation::SourceActivated, "source_activated"),
+            (OutboxOperation::SourceDeactivated, "source_deactivated"),
+            (OutboxOperation::SourceRolledBack, "source_rolled_back"),
+            (OutboxOperation::ProvenanceWritten, "provenance_written"),
+            (OutboxOperation::CanonicalChangeCommitted, "canonical_change_committed"),
+        ] {
+            assert_eq!(op.as_str(), s);
+        }
+        for (st, s) in [
+            (OutboxState::Pending, "Pending"),
+            (OutboxState::Claimed, "Claimed"),
+            (OutboxState::Dispatched, "Dispatched"),
+            (OutboxState::Failed, "Failed"),
+        ] {
+            assert_eq!(st.as_str(), s);
+        }
+        for (r, s) in [
+            (TombstoneReason::Deactivated, "deactivated"),
+            (TombstoneReason::LicenseRevoked, "license_revoked"),
+            (TombstoneReason::UserDeleted, "user_deleted"),
+            (TombstoneReason::Superseded, "superseded"),
+        ] {
+            assert_eq!(r.as_str(), s);
+        }
+        assert_eq!(CorpusScope::global().as_str(), "global");
+    }
+
+    #[test]
+    fn outbox_event_and_tombstone_round_trip() {
+        let event = OutboxEvent {
+            id: OutboxEventId::new(),
+            scope: CorpusScope::from("quran:test"),
+            target_generation: CorpusGenerationId::new(),
+            operation: OutboxOperation::SourceActivated,
+            subject_urn: "urn:qai:source:test".into(),
+            idempotency_key: "source_activated:1".into(),
+            payload: serde_json::json!({"k": "v"}),
+            state: OutboxState::Pending,
+            lease_owner: None,
+            lease_expires_at: None,
+            attempts: 0,
+            created_at: Timestamp::now(),
+            dispatched_at: None,
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert_eq!(serde_json::from_str::<OutboxEvent>(&json).unwrap(), event);
+
+        let tombstone = Tombstone {
+            id: TombstoneId::new(),
+            subject_urn: "urn:qai:source:test".into(),
+            reason: TombstoneReason::Deactivated,
+            effective_at: Timestamp::now(),
+            created_by: None,
+            propagation_state: PropagationState::Pending,
+        };
+        let json = serde_json::to_string(&tombstone).unwrap();
+        assert_eq!(serde_json::from_str::<Tombstone>(&json).unwrap(), tombstone);
+    }
 }
