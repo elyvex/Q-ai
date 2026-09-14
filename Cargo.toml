@@ -105,3 +105,5 @@ unicode-segmentation = "1.12"
 csv = "1.3"
 # NFC/NFD/NFKC/NFKD detection for the Unicode auditor (ADR-0104, P1-T21).
 unicode-normalization = "0.1"
+# Char-level edition diffing (ADR-0109, P1-T27).
+similar = "2.7"
