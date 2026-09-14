@@ -32,11 +32,12 @@ pub mod quotation;
 pub mod reference;
 pub mod structure;
 pub mod text;
+pub mod view;
 
 pub use edition::{EditionStatistics, QuranEdition};
 pub use enums::{
-    BasmalaPolicy, EditionSelector, EditionStatus, NumberingScheme, RevelationPlace, SajdahKind,
-    Script, SegmentKind, UnicodeForm, is_valid_slug,
+    BasmalaPolicy, ContextBoundary, EditionSelector, EditionStatus, NumberingScheme,
+    RevelationPlace, SajdahKind, Script, SegmentKind, UnicodeForm, is_valid_slug,
 };
 pub use error::{Diagnostic, DiagnosticCode, QuranError, codes};
 pub use numbers::{AyahNumber, SurahNumber, TokenPosition};
@@ -46,3 +47,7 @@ pub use reference::{
 };
 pub use structure::{Ayah, Segment, Surah, Token};
 pub use text::grapheme_count;
+pub use view::{
+    AttributedGloss, AttributedTranslation, AyahLocation, AyahOptions, AyahView, ContextSpec,
+    ContextView,
+};

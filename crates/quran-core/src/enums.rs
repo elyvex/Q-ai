@@ -128,6 +128,22 @@ pub enum EditionSelector {
     },
 }
 
+/// Canonical-structure boundaries that context retrieval never crosses (§11.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContextBoundary {
+    /// Stay within the focal surah.
+    Surah,
+    /// Stay within the focal juz.
+    Juz,
+    /// Stay within the focal ruku.
+    Ruku,
+    /// Stay within the focal page.
+    Page,
+    /// No structural boundary (global order only).
+    None,
+}
+
 /// Validate an edition slug against the frozen grammar: `ALPHA (ALPHA|DIGIT|'-')*`.
 ///
 /// Slugs are lowercase by convention (`hafs-uthmani`), which is what the storage
