@@ -122,7 +122,7 @@ before opening the sprint.
 | P1-T28 | Activation transaction + rollback + `corpus_generation` | D1.3 | T25, T27 | 2.5 | BE | ☑ |
 | P1-T29 | Crash-at-each-checkpoint test matrix (13 cases) | D1.13 | T25, T28 | 2.5 | QA | ☑ |
 | P1-T30 | Adversarial-corpus rejection tests (16 fixtures × correct rule id) | D1.13 | T20, T25 | 2.5 | QA | ☑ |
-| P1-T31 | ADR-0106 / 0107 / 0108 / 0109 | ADR | T23, T28 | 2.0 | DOC | ☐ |
+| P1-T31 | ADR-0106 / 0107 / 0108 / 0109 | ADR | T23, T28 | 2.0 | DOC | ☑ |
 
 > **T25 is the §34 pipeline, exactly:** claim → verify hashes → detect format/select adapter →
 > parse (unwrap `Untrusted<T>` here) → Unicode audit → structural validation → tokenize +
