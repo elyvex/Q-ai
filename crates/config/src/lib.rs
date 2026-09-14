@@ -1136,4 +1136,214 @@ bind = "0.0.0.0"
         let resolved = resolve_string("${app.data_dir}/qai.db", &config).unwrap();
         assert!(resolved.contains("qai.db"));
     }
+
+    #[test]
+    fn toml_merges_every_section() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            r#"
+[app]
+mode = "server"
+data_dir = "/tmp/toml"
+locale = "es"
+[server]
+bind = "127.0.0.1"
+port = 4321
+tls = "required"
+require_auth_outside_localhost = false
+max_request_bytes = 1
+request_timeout_ms = 2
+concurrency_limit = 3
+[storage]
+backend = "sqlite"
+[storage.sqlite]
+path = "/tmp/toml.db"
+journal_mode = "wal"
+synchronous = "normal"
+busy_timeout_ms = 4
+foreign_keys = false
+max_connections = 5
+read_only_pool = false
+[storage.objects]
+backend = "filesystem"
+root = "/tmp/toml-objs"
+max_file_bytes = 6
+[secrets]
+backend = "env"
+encrypted_file_path = "/tmp/secrets.age"
+[jobs]
+workers = 8
+poll_interval_ms = 9
+lease_seconds = 10
+max_attempts = 11
+backoff_base_ms = 12
+backoff_max_ms = 13
+backoff_jitter = 0.3
+[logging]
+level = "warn"
+format = "json"
+file = "/tmp/qai.log"
+redact_secrets = false
+[telemetry]
+enabled = true
+otlp_endpoint = "http://localhost:4318"
+metrics_enabled = false
+[security]
+allow_network_egress = false
+domain_allowlist = ["example.org", "gnu.org"]
+ssrf_block_private_ranges = false
+max_download_bytes = 14
+max_archive_entries = 15
+max_archive_expansion_ratio = 16
+follow_symlinks = true
+[policy]
+tool_execution_default = "deny"
+command_execution_enabled = true
+canonical_write_requires_approval = false
+"#,
+        )
+        .unwrap();
+
+        let (cfg, origins) = Config::load(Some(&path), "QAI_TESTTOML", &BTreeMap::new()).unwrap();
+        assert_eq!(cfg.app.mode, "server");
+        assert_eq!(cfg.app.locale, "es");
+        assert_eq!(cfg.server.concurrency_limit, 3);
+        assert!(!cfg.server.require_auth_outside_localhost);
+        assert_eq!(cfg.storage.sqlite.max_connections, 5);
+        assert_eq!(cfg.storage.sqlite.synchronous, "normal");
+        assert!(!cfg.storage.sqlite.read_only_pool);
+        assert_eq!(cfg.storage.objects.max_file_bytes, 6);
+        assert_eq!(cfg.secrets.encrypted_file_path, "/tmp/secrets.age");
+        assert_eq!(cfg.jobs.workers, 8);
+        assert_eq!(cfg.jobs.backoff_jitter, 0.3);
+        assert_eq!(cfg.logging.format, "json");
+        assert_eq!(cfg.telemetry.otlp_endpoint, "http://localhost:4318");
+        assert!(!cfg.telemetry.metrics_enabled);
+        assert_eq!(cfg.security.domain_allowlist.len(), 2);
+        assert!(!cfg.security.ssrf_block_private_ranges);
+        assert_eq!(cfg.security.max_archive_entries, 15);
+        assert!(cfg.security.follow_symlinks);
+        assert!(cfg.policy.command_execution_enabled);
+        assert!(!cfg.policy.canonical_write_requires_approval);
+        assert!(matches!(origins.get("app.mode"), Some(ValueOrigin::File { .. })));
+    }
+
+    #[test]
+    #[allow(unsafe_code)]
+    fn env_overrides_every_section() {
+        let vars = [
+            ("QAI_ENVTEST__APP__MODE", "server"),
+            ("QAI_ENVTEST__APP__DATA_DIR", "/tmp/qai-env"),
+            ("QAI_ENVTEST__APP__LOCALE", "fr"),
+            ("QAI_ENVTEST__SERVER__BIND", "127.0.0.1"),
+            ("QAI_ENVTEST__SERVER__PORT", "9999"),
+            ("QAI_ENVTEST__SERVER__TLS", "required"),
+            ("QAI_ENVTEST__SERVER__REQUIRE_AUTH_OUTSIDE_LOCALHOST", "false"),
+            ("QAI_ENVTEST__STORAGE__BACKEND", "sqlite"),
+            ("QAI_ENVTEST__STORAGE__SQLITE__PATH", "/tmp/env.db"),
+            ("QAI_ENVTEST__STORAGE__OBJECTS__ROOT", "/tmp/env-objs"),
+            ("QAI_ENVTEST__SECRETS__BACKEND", "env"),
+            ("QAI_ENVTEST__JOBS__WORKERS", "7"),
+            ("QAI_ENVTEST__LOGGING__LEVEL", "debug"),
+            ("QAI_ENVTEST__TELEMETRY__ENABLED", "true"),
+            ("QAI_ENVTEST__SECURITY__ALLOW_NETWORK_EGRESS", "true"),
+            ("QAI_ENVTEST__POLICY__TOOL_EXECUTION_DEFAULT", "allow"),
+        ];
+        unsafe {
+            for (k, v) in vars {
+                std::env::set_var(k, v);
+            }
+        }
+        let (cfg, origins) = Config::load(None, "QAI_ENVTEST", &BTreeMap::new()).unwrap();
+        assert_eq!(cfg.app.mode, "server");
+        assert_eq!(cfg.app.data_dir, "/tmp/qai-env");
+        assert_eq!(cfg.app.locale, "fr");
+        assert_eq!(cfg.server.port, 9999);
+        assert_eq!(cfg.server.tls, "required");
+        assert_eq!(cfg.storage.sqlite.path, "/tmp/env.db");
+        assert_eq!(cfg.storage.objects.root, "/tmp/env-objs");
+        assert_eq!(cfg.jobs.workers, 7);
+        assert_eq!(cfg.logging.level, "debug");
+        assert!(cfg.telemetry.enabled);
+        assert!(cfg.security.allow_network_egress);
+        assert_eq!(cfg.policy.tool_execution_default, "allow");
+        assert!(matches!(origins.get("jobs.workers"), Some(ValueOrigin::Env(_))));
+        unsafe {
+            for (k, _) in vars {
+                std::env::remove_var(k);
+            }
+        }
+    }
+
+    #[test]
+    fn cli_overrides_every_section() {
+        let mut cli = BTreeMap::new();
+        for (k, v) in [
+            ("app.mode", "server"),
+            ("app.data_dir", "/tmp/cli"),
+            ("app.locale", "de"),
+            ("server.bind", "127.0.0.1"),
+            ("server.port", "1234"),
+            ("server.tls", "required"),
+            ("storage.backend", "sqlite"),
+            ("storage.sqlite.path", "/tmp/cli.db"),
+            ("storage.objects.root", "/tmp/cli-obj"),
+            ("secrets.backend", "env"),
+            ("jobs.workers", "3"),
+            ("logging.level", "trace"),
+            ("telemetry.enabled", "true"),
+            ("security.allow_network_egress", "false"),
+            ("policy.tool_execution_default", "deny"),
+        ] {
+            cli.insert(k.to_string(), v.to_string());
+        }
+        let (cfg, origins) = Config::load(None, "QAI_TESTCLI", &cli).unwrap();
+        assert_eq!(cfg.app.mode, "server");
+        assert_eq!(cfg.app.data_dir, "/tmp/cli");
+        assert_eq!(cfg.app.locale, "de");
+        assert_eq!(cfg.server.port, 1234);
+        assert_eq!(cfg.storage.sqlite.path, "/tmp/cli.db");
+        assert_eq!(cfg.storage.objects.root, "/tmp/cli-obj");
+        assert_eq!(cfg.jobs.workers, 3);
+        assert_eq!(cfg.logging.level, "trace");
+        assert!(cfg.telemetry.enabled);
+        assert_eq!(cfg.policy.tool_execution_default, "deny");
+        assert!(matches!(origins.get("server.port"), Some(ValueOrigin::Cli(_))));
+    }
+
+    #[test]
+    fn interpolation_resolves_data_dir_into_derived_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            "[app]\ndata_dir = \"/var/lib/qai\"\n\n[storage.sqlite]\npath = \"${app.data_dir}/qai.db\"\n",
+        )
+        .unwrap();
+        let (cfg, _) = Config::load(Some(&path), "QAI_TESTINTERP", &BTreeMap::new()).unwrap();
+        assert_eq!(cfg.storage.sqlite.path, "/var/lib/qai/qai.db");
+        assert_eq!(cfg.storage.objects.root, "/var/lib/qai/objects");
+        assert_eq!(cfg.secrets.encrypted_file_path, "/var/lib/qai/secrets.age");
+    }
+
+    #[test]
+    fn validate_rejects_unknown_tls_mode() {
+        let mut cfg = Config::default();
+        cfg.server.tls = "maybe".into();
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_non_loopback_without_tls_or_auth_override() {
+        let mut cfg = Config::default();
+        cfg.server.bind = "192.168.1.5".into();
+        cfg.server.tls = "disabled".into();
+        cfg.server.require_auth_outside_localhost = true;
+        assert!(cfg.validate().is_err());
+        // Allowing unauthenticated non-loopback (explicitly) is accepted.
+        cfg.server.require_auth_outside_localhost = false;
+        assert!(cfg.validate().is_ok());
+    }
 }
