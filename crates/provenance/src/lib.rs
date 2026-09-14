@@ -247,6 +247,32 @@ pub enum ProvenanceError {
     Storage(#[from] storage::StorageError),
 }
 
+impl ProvenanceError {
+    /// The stable `QAI-PROV-nnnn` diagnostic code.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::NotFound { .. } => "QAI-PROV-0001",
+            Self::MissingComputationalMetadata => "QAI-PROV-0002",
+            Self::MissingApprovalToken => "QAI-PROV-0003",
+            Self::MissingChangeRequestField { .. } => "QAI-PROV-0004",
+            Self::ImmutableCanonical => "QAI-PROV-0005",
+            Self::InvalidApprovalToken => "QAI-PROV-0006",
+            Self::ComputationalNeedsReview => "QAI-PROV-0007",
+            Self::InvalidSubjectRef(_) => "QAI-PROV-0008",
+            Self::Storage(_) => "QAI-PROV-0009",
+        }
+    }
+}
+
+impl storage::error::Diagnostic for ProvenanceError {
+    fn code(&self) -> storage::error::DiagnosticCode {
+        storage::error::DiagnosticCode::new(self.code(), 0)
+    }
+    fn summary(&self) -> String {
+        self.to_string()
+    }
+}
+
 // ─── Invariant Tests ──────────────────────────────
 
 #[cfg(test)]
