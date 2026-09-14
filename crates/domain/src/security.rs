@@ -218,3 +218,109 @@ pub fn check_url_redirect(redirect_host_resolved: IpAddr) -> Result<(), Security
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::IpAddr;
+    use std::path::Path;
+    use std::str::FromStr;
+
+    fn limits() -> Limits {
+        Limits {
+            max_download_bytes: 10,
+            max_archive_entries: 3,
+            max_archive_expansion_ratio: 2.0,
+            max_archive_depth: 2,
+        }
+    }
+
+    fn ip(s: &str) -> IpAddr {
+        IpAddr::from_str(s).unwrap()
+    }
+
+    #[test]
+    fn limits_reject_oversized_downloads() {
+        assert!(limits().check_download(10).is_ok());
+        assert!(matches!(limits().check_download(11), Err(SecurityError::DownloadTooLarge)));
+    }
+
+    #[test]
+    fn limits_reject_excess_entries_and_expansion() {
+        assert!(limits().check_entry_count(3).is_ok());
+        assert!(matches!(limits().check_entry_count(4), Err(SecurityError::EntryCount)));
+        assert!(limits().check_expansion(0, 100).is_ok());
+        assert!(limits().check_expansion(10, 20).is_ok());
+        assert!(matches!(limits().check_expansion(10, 21), Err(SecurityError::ExpansionRatio)));
+    }
+
+    #[test]
+    fn private_ip_matrix_is_fully_classified() {
+        for blocked in [
+            "127.0.0.1",
+            "10.0.0.1",
+            "192.168.1.1",
+            "172.16.0.1",
+            "172.31.255.255",
+            "169.254.1.1",
+            "0.0.0.0",
+            "224.0.0.1",
+            "::1",
+            "fe80::1",
+            "fc00::1",
+            "::",
+        ] {
+            assert!(is_private_ip(ip(blocked)), "{blocked} must be private");
+        }
+        for public in ["8.8.8.8", "1.1.1.1", "2001:4860:4860::8888"] {
+            assert!(!is_private_ip(ip(public)), "{public} must be public");
+        }
+    }
+
+    #[test]
+    fn untrusted_round_trips() {
+        let wrapped = Untrusted::from_raw(5);
+        assert_eq!(wrapped.into_inner(), 5);
+    }
+
+    #[test]
+    fn policy_defaults_deny_by_default() {
+        assert!(matches!(default_denying("write"), PolicyDecision::Deny { .. }));
+        assert!(matches!(default_denying("download"), PolicyDecision::RequireApproval { .. }));
+        assert!(matches!(default_denying("list"), PolicyDecision::Deny { .. }));
+        assert!(matches!(default_denying("something-unknown"), PolicyDecision::Deny { .. }));
+    }
+
+    #[test]
+    fn redirect_guard_blocks_private_targets() {
+        assert!(matches!(
+            check_url_redirect(ip("10.0.0.1")),
+            Err(SecurityError::PrivateAddressBlocked)
+        ));
+        assert!(check_url_redirect(ip("8.8.8.8")).is_ok());
+    }
+
+    #[test]
+    fn canonicalize_rejects_empty_and_absolute_paths() {
+        let root = std::env::temp_dir();
+        assert!(canonicalize_and_contain(&root, Path::new("")).is_err());
+        assert!(canonicalize_and_contain(&root, Path::new("/etc/passwd")).is_err());
+    }
+
+    #[test]
+    fn canonicalize_accepts_an_in_root_file() {
+        let root = std::env::temp_dir();
+        let name = format!("qai-sec-test-{}.txt", std::process::id());
+        std::fs::write(root.join(&name), b"x").unwrap();
+        let resolved = canonicalize_and_contain(&root, Path::new(&name));
+        assert!(resolved.is_ok());
+        let _ = std::fs::remove_file(root.join(&name));
+    }
+
+    #[test]
+    fn security_error_is_a_std_error_and_displays() {
+        fn assert_error<E: std::error::Error>() {}
+        assert_error::<SecurityError>();
+        assert_eq!(SecurityError::PathTraversal.to_string(), "PathTraversal");
+    }
+}
