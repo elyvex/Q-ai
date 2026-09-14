@@ -595,6 +595,25 @@ pub enum SourceError {
     Storage(#[from] storage::StorageError),
 }
 
+impl SourceError {
+    /// The stable `QAI-SRC-nnnn` diagnostic code (D0.3 / docs/architecture/error-codes.md).
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::NotFound { .. } => "QAI-SRC-0001",
+            Self::VersionNotFound { .. } => "QAI-SRC-0002",
+            Self::IllegalStateTransition { .. } => "QAI-SRC-0003",
+            Self::ApprovalPreconditionNotMet(_) => "QAI-SRC-0004",
+            Self::ManifestValidationError(_) => "QAI-SRC-0005",
+            Self::Serialization(_) => "QAI-SRC-0006",
+            Self::SignatureVerificationFailed(_) => "QAI-SRC-0007",
+            Self::GenealogyCycleDetected(_) => "QAI-SRC-0008",
+            Self::MultipleActiveVersions(_) => "QAI-SRC-0009",
+            Self::AlreadyInState(_) => "QAI-SRC-0010",
+            Self::Storage(_) => "QAI-SRC-0011",
+        }
+    }
+}
+
 // ─── Tests ──────────────────────────────────────
 
 #[cfg(test)]
@@ -831,6 +850,27 @@ mod tests {
         let json = serde_json::to_string(&manifest).unwrap();
         let err = parser.ingest_local(&json, None).unwrap_err();
         assert!(matches!(err, SourceError::SignatureVerificationFailed(_)));
+    }
+
+    #[test]
+    fn source_errors_have_unique_stable_codes() {
+        let codes = [
+            SourceError::NotFound { id: "x".into() }.code(),
+            SourceError::VersionNotFound { id: "x".into() }.code(),
+            SourceError::IllegalStateTransition { from: "a".into(), to: "b".into() }.code(),
+            SourceError::ApprovalPreconditionNotMet("x".into()).code(),
+            SourceError::ManifestValidationError("x".into()).code(),
+            SourceError::Serialization("x".into()).code(),
+            SourceError::SignatureVerificationFailed("x".into()).code(),
+            SourceError::GenealogyCycleDetected("x".into()).code(),
+            SourceError::MultipleActiveVersions("x".into()).code(),
+            SourceError::AlreadyInState(SourceState::Staged).code(),
+            SourceError::Storage(storage::StorageError::Conflict).code(),
+        ];
+        let unique: std::collections::HashSet<_> = codes.iter().collect();
+        assert_eq!(codes.len(), unique.len(), "source error codes must be unique");
+        assert!(codes.iter().all(|c| c.starts_with("QAI-SRC-")));
+        assert_eq!(SourceError::SignatureVerificationFailed("x".into()).code(), "QAI-SRC-0007");
     }
 
     #[tokio::test]

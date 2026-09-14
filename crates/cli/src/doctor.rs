@@ -755,6 +755,31 @@ mod tests {
         }
     }
 
+    #[test]
+    fn outbox_checks_report_backlog_without_mutation() {
+        let cfg = Config::default();
+        let probe = DbProbe {
+            reachable: true,
+            integrity_ok: true,
+            foreign_keys_on: true,
+            schema_version: 6,
+            outbox_pending: 3,
+            outbox_oldest_pending_seconds: 7200,
+            tombstones_unpropagated: 2,
+            ..Default::default()
+        };
+        let results = checks(&cfg, &probe);
+        let backlog = results.iter().find(|r| r.id == "outbox.backlog_age").unwrap();
+        assert_eq!(backlog.status, CheckStatus::Warn);
+        assert!(backlog.remedy.is_some() && backlog.next_command.is_some());
+
+        let undispatched = results.iter().find(|r| r.id == "outbox.undispatched_count").unwrap();
+        assert_eq!(undispatched.status, CheckStatus::Warn);
+
+        let tombstones = results.iter().find(|r| r.id == "tombstones.unpropagated_count").unwrap();
+        assert_eq!(tombstones.status, CheckStatus::Warn);
+    }
+
     #[tokio::test]
     async fn doctor_is_read_only() {
         // Migrate a temp database, then run the doctor probe/checks and assert

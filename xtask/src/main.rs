@@ -13,6 +13,7 @@
 use clap::{Parser, Subcommand};
 use std::process::ExitCode;
 
+mod adr;
 mod arch;
 mod ci;
 mod coverage;
@@ -48,6 +49,8 @@ enum Commands {
         #[arg(value_name = "LCOV")]
         path: std::path::PathBuf,
     },
+    /// Validate Phase-0 ADRs (existence, Accepted, all §48 fields).
+    AdrLint,
 }
 
 fn run(cli: Cli) -> Result<(), anyhow::Error> {
@@ -58,6 +61,7 @@ fn run(cli: Cli) -> Result<(), anyhow::Error> {
         Commands::MigrateCheck { dir } => migrate::run(dir.as_deref()),
         Commands::GenSchema => schema::run(),
         Commands::CoverageGate { path } => coverage::run(&path),
+        Commands::AdrLint => adr::run(),
     }
 }
 

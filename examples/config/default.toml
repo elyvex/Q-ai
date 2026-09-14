@@ -1,0 +1,72 @@
+# Q-ai default configuration (D0.4).
+# Precedence: CLI > Env > this file > built-in defaults.
+# `${...}` interpolates other config values (e.g. `${app.data_dir}`).
+
+[app]
+mode = "local"                 # local | server
+data_dir = "~/.local/share/qai"
+locale = "en"
+
+[server]
+bind = "127.0.0.1"             # PRD §37: localhost by default
+port = 8737
+tls = "disabled"               # disabled | required (required outside localhost, §84)
+require_auth_outside_localhost = true
+max_request_bytes = 10485760
+request_timeout_ms = 30000
+concurrency_limit = 128
+
+[storage]
+backend = "sqlite"             # sqlite | postgres (Phase 12)
+
+[storage.sqlite]
+path = "${app.data_dir}/qai.db"
+journal_mode = "wal"
+synchronous = "full"           # canonical integrity over write speed
+busy_timeout_ms = 5000
+foreign_keys = true
+max_connections = 8
+read_only_pool = true          # PRD §84: read-only credentials by default
+
+[storage.objects]
+backend = "filesystem"
+root = "${app.data_dir}/objects"
+max_file_bytes = 536870912
+
+[secrets]
+backend = "env"                # env | keychain | encrypted_file
+encrypted_file_path = "${app.data_dir}/secrets.age"
+
+[jobs]
+workers = 4
+poll_interval_ms = 250
+lease_seconds = 60
+max_attempts = 5
+backoff_base_ms = 500
+backoff_max_ms = 60000
+backoff_jitter = 0.2
+
+[logging]
+level = "info"                 # trace|debug|info|warn|error
+format = "text"                # text | json
+file = ""                      # empty = stderr only
+redact_secrets = true
+
+[telemetry]
+enabled = false                # PRD §39: no external telemetry without opt-in
+otlp_endpoint = ""
+metrics_enabled = true
+
+[security]
+allow_network_egress = false   # deny-by-default (§84)
+domain_allowlist = []
+ssrf_block_private_ranges = true
+max_download_bytes = 268435456
+max_archive_entries = 20000
+max_archive_expansion_ratio = 100
+follow_symlinks = false
+
+[policy]
+tool_execution_default = "deny"        # §29, §84
+command_execution_enabled = false
+canonical_write_requires_approval = true

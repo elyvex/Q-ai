@@ -1,6 +1,6 @@
 # ADR-0001 — Relational Store: SQLite + sqlx, PostgreSQL-Portable SQL
 
-- Status: Proposed
+- Status: Accepted
 - Phase: 0 — Foundations
 - Date: 2026-09-06
 - Related decisions: ADR-0201, ADR-0202, ADR-0701, ADR-0702
