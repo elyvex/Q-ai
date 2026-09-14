@@ -15,6 +15,7 @@
 //! `storage` -> `domain` (traits + errors only)
 
 pub mod error;
+pub mod quran;
 pub mod repository;
 pub mod workflows;
 
@@ -128,6 +129,9 @@ pub trait UnitOfWork: Send {
     /// Every projection-relevant write must enqueue its outbox row through this
     /// repository before the unit of work commits (ADR-0001 §6, ADR-0702 §3).
     fn outbox(&mut self) -> &mut dyn repository::OutboxRepository;
+
+    /// Return the Quran corpus repository for this transaction.
+    fn quran(&mut self) -> &mut dyn quran::QuranRepository;
 
     /// Commit the transaction, persisting all changes.
     async fn commit(self: Box<Self>) -> Result<(), error::StorageError>;

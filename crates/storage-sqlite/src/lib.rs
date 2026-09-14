@@ -14,15 +14,18 @@
 //! every repo's writes (the foundation of the outbox invariant, D0.18).
 
 pub mod migrate;
+pub(crate) mod quran;
 
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use quran::SqliteQuranRepository;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::{Pool, Row, Sqlite, Transaction};
 use storage::{
     Database, DbBackend, DbHealth, ReadTx, UnitOfWork,
     error::StorageError,
+    quran::QuranRepository,
     repository::{
         AuditEvent, AuditRepository, ChainVerificationResult, GenerationRow, JobRecord,
         JobRepository, NewOutboxEvent, OutboxEventRow, OutboxRepository, ProvenanceRecord,
@@ -227,6 +230,7 @@ pub struct SqliteUnitOfWork {
     jobs: SqliteJobRepository,
     settings: SqliteSettingsRepository,
     outbox: SqliteOutboxRepository,
+    quran: SqliteQuranRepository,
 }
 
 impl SqliteUnitOfWork {
@@ -240,7 +244,8 @@ impl SqliteUnitOfWork {
             audit: SqliteAuditRepository::new(shared.clone()),
             jobs: SqliteJobRepository::new(shared.clone()),
             settings: SqliteSettingsRepository::new(shared.clone()),
-            outbox: SqliteOutboxRepository::new(shared),
+            outbox: SqliteOutboxRepository::new(shared.clone()),
+            quran: SqliteQuranRepository::new(shared),
         })
     }
 }
@@ -271,18 +276,22 @@ impl UnitOfWork for SqliteUnitOfWork {
         &mut self.outbox
     }
 
+    fn quran(&mut self) -> &mut dyn QuranRepository {
+        &mut self.quran
+    }
+
     async fn commit(self: Box<Self>) -> Result<(), StorageError> {
-        let Self { tx, sources, provenance, audit, jobs, settings, outbox } = *self;
+        let Self { tx, sources, provenance, audit, jobs, settings, outbox, quran } = *self;
         // Drop the repository Arc clones so `tx` is the sole owner.
-        drop((sources, provenance, audit, jobs, settings, outbox));
+        drop((sources, provenance, audit, jobs, settings, outbox, quran));
         let mutex = Arc::try_unwrap(tx).map_err(|_| StorageError::StorageBusy)?;
         let txn = mutex.into_inner();
         txn.commit().await.map_err(|_| StorageError::StorageUnavailable)
     }
 
     async fn rollback(self: Box<Self>) -> Result<(), StorageError> {
-        let Self { tx, sources, provenance, audit, jobs, settings, outbox } = *self;
-        drop((sources, provenance, audit, jobs, settings, outbox));
+        let Self { tx, sources, provenance, audit, jobs, settings, outbox, quran } = *self;
+        drop((sources, provenance, audit, jobs, settings, outbox, quran));
         let mutex = Arc::try_unwrap(tx).map_err(|_| StorageError::StorageBusy)?;
         let txn = mutex.into_inner();
         txn.rollback().await.map_err(|_| StorageError::StorageUnavailable)
@@ -1322,6 +1331,8 @@ pub(crate) fn map_sqlx_error(err: sqlx::Error) -> StorageError {
             let msg = db_err.message().to_string();
             if code == "2067" || code == "1555" || msg.contains("UNIQUE") {
                 StorageError::Conflict
+            } else if msg.contains("QAI-QUR-") {
+                StorageError::ConstraintViolation { message: msg }
             } else if msg.contains("QAI-PROV") || msg.contains("immutable") {
                 StorageError::ImmutableSourceVersion
             } else if msg.contains("CHECK")
@@ -1377,7 +1388,7 @@ mod tests {
         assert_eq!(db.backend(), DbBackend::SQLite);
         let health = db.health().await.unwrap();
         assert!(health.healthy);
-        assert_eq!(health.schema_version, 6);
+        assert_eq!(health.schema_version, 12);
     }
 
     #[tokio::test]
