@@ -15,12 +15,11 @@
 
 pub mod migrate;
 
-use std::path::Path;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use sqlx::sqlite::{
-    SqliteConnectOptions, SqliteJournalMode, SqlitePool, SqlitePoolOptions, SqliteSynchronous,
+    SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous,
 };
 use sqlx::{Pool, Row, Sqlite, Transaction};
 use storage::{
@@ -93,7 +92,7 @@ impl SqliteDatabase {
         Ok(Self {
             write_pool,
             read_pool,
-            schema_version,
+
         })
     }
 
@@ -119,7 +118,7 @@ impl SqliteDatabase {
         Ok(Self {
             write_pool: read_pool.clone(),
             read_pool,
-            schema_version,
+
         })
     }
 
@@ -166,7 +165,7 @@ impl Database for SqliteDatabase {
 
     async fn write(&self) -> Result<Box<dyn UnitOfWork>, StorageError> {
         Ok(Box::new(
-            SqliteUnitOfWork::new(self.write_pool.clone(), self.schema_version).await?,
+            SqliteUnitOfWork::new(self.write_pool.clone()).await?,
         ))
     }
 
@@ -208,7 +207,7 @@ impl SqliteReadTx {
     fn new(pool: Pool<Sqlite>, schema_version: u32) -> Self {
         Self {
             pool,
-            schema_version,
+
         }
     }
 }
@@ -233,7 +232,6 @@ impl ReadTx for SqliteReadTx {
 /// Write transaction (unit of work) for SQLite.
 pub struct SqliteUnitOfWork {
     tx: SharedTx,
-    schema_version: u32,
     sources: SqliteSourceRepository,
     provenance: SqliteProvenanceRepository,
     audit: SqliteAuditRepository,
@@ -242,7 +240,7 @@ pub struct SqliteUnitOfWork {
 }
 
 impl SqliteUnitOfWork {
-    async fn new(pool: Pool<Sqlite>, schema_version: u32) -> Result<Self, StorageError> {
+    async fn new(pool: Pool<Sqlite>) -> Result<Self, StorageError> {
         let tx = pool
             .begin()
             .await
@@ -250,7 +248,7 @@ impl SqliteUnitOfWork {
         let shared: SharedTx = Arc::new(Mutex::new(tx));
         Ok(Self {
             tx: shared.clone(),
-            schema_version,
+
             sources: SqliteSourceRepository::new(shared.clone()),
             provenance: SqliteProvenanceRepository::new(shared.clone()),
             audit: SqliteAuditRepository::new(shared.clone()),
@@ -993,7 +991,8 @@ pub(crate) fn map_sqlx_error(err: sqlx::Error) -> StorageError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use storage::repository::{SourceRepository as _, SourceVersionRow as _SVRow};
+    use storage::repository::SourceVersionRow as _SVRow;
+    use std::path::Path;
     use tempfile::tempdir;
 
     async fn migrated_db(dir: &Path) -> SqliteDatabase {
@@ -1046,7 +1045,6 @@ mod tests {
 
     #[tokio::test]
     async fn job_enqueue_and_claim_round_trip() {
-        use storage::repository::JobRepository as _;
         let dir = tempdir().unwrap();
         let db = migrated_db(dir.path()).await;
 
@@ -1082,7 +1080,6 @@ mod tests {
 
     #[tokio::test]
     async fn source_version_insert_and_list() {
-        use storage::repository::SourceRepository as _;
         let dir = tempdir().unwrap();
         let db = migrated_db(dir.path()).await;
         let mut uow = db.write().await.unwrap();
@@ -1120,7 +1117,6 @@ mod tests {
 
     #[tokio::test]
     async fn settings_upsert_round_trip() {
-        use storage::repository::SettingsRepository as _;
         let dir = tempdir().unwrap();
         let db = migrated_db(dir.path()).await;
         let mut uow = db.write().await.unwrap();
@@ -1136,7 +1132,6 @@ mod tests {
 
     #[tokio::test]
     async fn audit_append_and_verify() {
-        use storage::repository::AuditRepository as _;
         let dir = tempdir().unwrap();
         let db = migrated_db(dir.path()).await;
         let mut uow = db.write().await.unwrap();
