@@ -103,3 +103,5 @@ tracing-opentelemetry = "0.28"
 unicode-segmentation = "1.12"
 # Second dataset shape for the CSV adapter (D1.2, P1-T17).
 csv = "1.3"
+# NFC/NFD/NFKC/NFKD detection for the Unicode auditor (ADR-0104, P1-T21).
+unicode-normalization = "0.1"
