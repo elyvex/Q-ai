@@ -2,6 +2,46 @@
 
 > Completed tasks across all phases. Newest first.
 
+## Phase 1 — Canonical Quran Core (in progress)
+
+### Session: 2026-09-14 — execution plan + M0/M1
+
+**Plan**
+- `docs/03-plan/phases/phase-01-core/execution-plan.md` written (M0–M10, files/deps/
+  allowlist/tests per increment, blocker fallbacks B1–B5, risk mitigations).
+- Owner decisions flagged in `done.md` §7 (OWN-01 dataset, OWN-02 reference corpus,
+  OWN-03 estimate gap, OWN-04 axum provisional, OWN-05 Phase-0 exit discrepancy).
+
+**quran-core (new crate)**
+- P1-T06 — newtypes, enums, slug grammar, grapheme-count helper.
+- P1-T07 — edition/surah/ayah/segment/token structs (+ per-row `provenance`, matching
+  the authoritative DDL/QV-025).
+- P1-T10 — `QuranQuotation` + I6/principle-5 constructor guards.
+- P1-T08/T09 — hand-written reference parser + serializer; 331-case golden set
+  (`fixtures/quran/golden/references.jsonl`); round-trip + never-panics proptests.
+  AC-P1-12/13 automated-green (exit ritual pending).
+- `cargo test -p quran-core`: 29 unit + 6 integration passing. Pinned deps respect I2
+  (`domain, serde, thiserror, unicode-segmentation` only).
+
+**quran-corpus (new crate)**
+- P1-T15 — `qai.quran.edition` v1 types + JSON Schema doc.
+- P1-T16/T17 — `EditionAdapter` trait with JSON and CSV adapters; CSV reproduces the
+  JSON manifest's ayahs exactly.
+- P1-T05 — synthetic `test-edition-min` + 16 adversarial fixtures (all schema-valid;
+  targeted at specific QV ids in M5).
+
+**Tooling**
+- M0 — allowlist entries for `quran-core`, `quran-corpus`, `citations`, `tools`,
+  `tool-registry`; extended `storage-sqlite`, `application`. `arch-check` converted to a
+  name-keyed map (fail-closed preserved) with a new regression test.
+
+### Verified
+- `cargo test --workspace`: 291 passing, 0 failing.
+- `cargo clippy --workspace --all-targets -- -D warnings`: clean.
+- `cargo fmt --all`: clean.
+- `cargo run -p xtask -- arch-check`: OK.
+- `cargo run -p xtask -- migrate-check`: OK.
+
 ## Phase 0 — Foundations & Provenance
 
 ### Session: Phase 0 completion push
