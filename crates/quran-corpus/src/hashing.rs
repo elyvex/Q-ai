@@ -30,10 +30,22 @@ fn feed(hasher: &mut Sha256, bytes: &[u8]) {
 }
 
 fn finish(hasher: Sha256) -> ContentHash {
-    ContentHash {
-        algorithm: HashAlgorithm::Sha256,
-        hex: format!("{:x}", hasher.finalize()),
-    }
+    ContentHash { algorithm: HashAlgorithm::Sha256, hex: format!("{:x}", hasher.finalize()) }
+}
+
+/// SHA-256 hex digest of bytes (manifest hashing, CLI-declared hashes).
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    format!("{:x}", hasher.finalize())
+}
+
+/// Render a hash in storage form (`sha256:<hex>`), matching D0.6.
+pub fn tagged(hash: &ContentHash) -> String {    let algorithm = match hash.algorithm {
+        HashAlgorithm::Sha256 => "sha256",
+        HashAlgorithm::Blake3 => "blake3",
+    };
+    format!("{algorithm}:{}", hash.hex)
 }
 
 /// Hash over the canonical ayah text stream in `(surah, ayah)` order.
@@ -160,32 +172,33 @@ mod tests {
         assert_ne!(base, text_hash("other", "1.0.0", &["a", "b"]));
         assert_ne!(base, text_hash("s", "2.0.0", &["a", "b"]));
         // Length-prefixing defeats boundary-shift collisions.
-        assert_ne!(
-            text_hash("s", "1.0.0", &["ab", "c"]),
-            text_hash("s", "1.0.0", &["a", "bc"])
-        );
+        assert_ne!(text_hash("s", "1.0.0", &["ab", "c"]), text_hash("s", "1.0.0", &["a", "bc"]));
     }
 
     #[test]
     fn recipes_are_domain_separated() {
         let text = text_hash("s", "1.0.0", &["x"]);
-        let structure = structure_hash("s", "1.0.0", &[(1, 1)], &[AyahLayout {
-            surah: 1,
-            ayah: 1,
-            juz: None,
-            hizb: None,
-            rub: None,
-            manzil: None,
-            ruku: None,
-            page: None,
-            sajdah: None,
-        }]);
-        let order = token_order_hash("s", "1.0.0", &[TokenOrder {
-            surah: 1,
-            ayah: 1,
-            position: 1,
-            surface: "x",
-        }]);
+        let structure = structure_hash(
+            "s",
+            "1.0.0",
+            &[(1, 1)],
+            &[AyahLayout {
+                surah: 1,
+                ayah: 1,
+                juz: None,
+                hizb: None,
+                rub: None,
+                manzil: None,
+                ruku: None,
+                page: None,
+                sajdah: None,
+            }],
+        );
+        let order = token_order_hash(
+            "s",
+            "1.0.0",
+            &[TokenOrder { surah: 1, ayah: 1, position: 1, surface: "x" }],
+        );
         assert_ne!(text.hex, structure.hex);
         assert_ne!(text.hex, order.hex);
         assert_ne!(structure.hex, order.hex);

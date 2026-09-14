@@ -38,9 +38,12 @@ pub use format::{
     AyahSource, EditionMeta, EditionSource, ExpectedCounts, FORMAT_TAG, FORMAT_VERSION,
     SurahSource, TokenSource, TokenizationPolicy,
 };
-pub use hashing::{AyahLayout, TokenOrder, structure_hash, tagged, text_hash, token_order_hash};
+pub use hashing::{
+    AyahLayout, TokenOrder, sha256_hex, structure_hash, tagged, text_hash, token_order_hash,
+};
 pub use import::{
-    ImportCheckpoint, ImportInput, ImportOptions, ImportOutcome, ImportSuccess, run_import,
+    ImportCheckpoint, ImportInput, ImportOptions, ImportOutcome, ImportProgress, ImportSuccess,
+    run_import,
 };
 pub use tokenize::{ComputedToken, TokenizedAyah, reconstruct, tokenize};
 pub use unicode::{

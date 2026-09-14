@@ -6,6 +6,10 @@
 
 use quran_core::error::{Diagnostic, DiagnosticCode};
 
+/// Re-exported so downstream crates implement one diagnostic contract without
+/// depending on `quran-core` directly (invariant I2 keeps `quran-core` narrow).
+pub use quran_core::error::{Diagnostic as QuranDiagnostic, DiagnosticCode as QuranDiagnosticCode};
+
 /// Corpus infrastructure error codes.
 pub mod codes {
     use super::DiagnosticCode;

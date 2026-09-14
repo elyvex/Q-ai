@@ -113,6 +113,7 @@ dependencies = [
  "quran-corpus",
  "serde_json",
  "sources",
+ "sqlx",
  "storage",
  "storage-sqlite",
  "tempfile",
