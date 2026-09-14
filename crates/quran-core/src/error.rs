@@ -177,8 +177,35 @@ pub mod codes {
     pub const QUOTATION_MISSING_EDITION: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 12);
     /// A quotation was constructed without a content hash (invariant I6).
     pub const QUOTATION_MISSING_HASH: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 13);
-}
 
+    // Reference grammar errors (ADR-0102).
+    /// The reference string was empty.
+    pub const REFERENCE_EMPTY: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 100);
+    /// The edition segment (`slug` or `slug@version`) was malformed.
+    pub const INVALID_EDITION: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 101);
+    /// The `@version` part of an edition segment was not `MAJOR.MINOR.PATCH`.
+    pub const INVALID_EDITION_VERSION: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 102);
+    /// The surah number in a reference was out of range.
+    pub const INVALID_SURAH: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 103);
+    /// The ayah number in a reference was zero or malformed.
+    pub const INVALID_AYAH: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 104);
+    /// The token position in a reference was zero or malformed.
+    pub const INVALID_REFERENCE_POSITION: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 105);
+    /// A range was malformed.
+    pub const INVALID_RANGE: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 106);
+    /// The division keyword was unknown.
+    pub const INVALID_DIVISION: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 107);
+    /// The division number was zero or malformed.
+    pub const INVALID_DIVISION_NUMBER: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 108);
+    /// Trailing or misplaced input remained after a complete reference.
+    pub const UNEXPECTED_INPUT: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 109);
+    /// The reference exceeded the maximum parseable length.
+    pub const REFERENCE_TOO_LONG: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 110);
+    /// A range ended before it started.
+    pub const RANGE_ORDER: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 111);
+    /// A locator was required but missing.
+    pub const MISSING_LOCATOR: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 112);
+}
 /// Errors originating in the Quran domain.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum QuranError {
@@ -209,6 +236,17 @@ pub enum QuranError {
     /// A quotation was constructed without an edition identity or a hash.
     #[error("a quotation requires an edition id, version, and content hash")]
     IncompleteQuotation,
+
+    /// A reference string that failed to parse.
+    #[error("invalid reference `{input}`: {detail}")]
+    InvalidReference {
+        /// The specific grammar failure.
+        code: DiagnosticCode,
+        /// The offending input.
+        input: String,
+        /// What was wrong with it.
+        detail: String,
+    },
 }
 
 impl Diagnostic for QuranError {
@@ -221,6 +259,7 @@ impl Diagnostic for QuranError {
             Self::InvalidSlug { .. } => codes::INVALID_SLUG,
             Self::MissingTranslator => codes::MISSING_TRANSLATOR,
             Self::IncompleteQuotation => codes::QUOTATION_MISSING_EDITION,
+            Self::InvalidReference { code, .. } => *code,
         }
     }
 
@@ -250,6 +289,9 @@ impl Diagnostic for QuranError {
                 "Canonical quotations must carry the edition identity and text hash (invariant I6)."
                     .into()
             }
+            Self::InvalidReference { detail, .. } => {
+                format!("{detail} Expected `[quran:] [edition:] locator` (ADR-0102).")
+            }
         }]
     }
 
@@ -268,9 +310,19 @@ impl Diagnostic for QuranError {
                 Self::IncompleteQuotation => {
                     "Construct the quotation through the corpus repository, which supplies them."
                 }
+                Self::InvalidReference { .. } => {
+                    "Rewrite it in the documented form (e.g. `quran:2:255` or `quran:juz:30`)."
+                }
             }
             .to_string(),
         )
+    }
+
+    fn next_command(&self) -> Option<String> {
+        match self {
+            Self::InvalidReference { input, .. } => Some(format!("qai quran resolve \"{input}\"")),
+            _ => None,
+        }
     }
 
     fn is_retryable(&self) -> bool {
@@ -292,6 +344,11 @@ mod tests {
             QuranError::InvalidSlug { slug: String::new() },
             QuranError::MissingTranslator,
             QuranError::IncompleteQuotation,
+            QuranError::InvalidReference {
+                code: codes::UNEXPECTED_INPUT,
+                input: "2:".into(),
+                detail: "trailing separator".into(),
+            },
         ]
     }
 

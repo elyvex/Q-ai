@@ -14,6 +14,7 @@
 //! - [`enums`] — script, numbering, basmala, Unicode, status and selector enums
 //! - [`edition`] — `QuranEdition`, `EditionStatistics`
 //! - [`structure`] — `Surah`, `Ayah`, `Segment`, `Token`
+//! - [`reference`] — the frozen reference grammar (parser + serializer, ADR-0102)
 //! - [`quotation`] — `QuranQuotation`, the only type for quoted canonical text
 //! - [`text`] — grapheme utilities
 //!
@@ -28,6 +29,7 @@ pub mod enums;
 pub mod error;
 pub mod numbers;
 pub mod quotation;
+pub mod reference;
 pub mod structure;
 pub mod text;
 
@@ -39,5 +41,8 @@ pub use enums::{
 pub use error::{Diagnostic, DiagnosticCode, QuranError, codes};
 pub use numbers::{AyahNumber, SurahNumber, TokenPosition};
 pub use quotation::{EditionRef, QuotationParts, QuranQuotation, TranslationRef};
+pub use reference::{
+    DivisionKind, QuranRef, ResolvedRef, canonical_form, parse, resolve, serialize,
+};
 pub use structure::{Ayah, Segment, Surah, Token};
 pub use text::grapheme_count;
