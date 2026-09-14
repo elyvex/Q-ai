@@ -1,11 +1,37 @@
 # Phase 0 — Remaining Work Log
 
 > **Written:** 2026-09-12
+> **Updated:** 2026-09-14
 > **Purpose:** Detailed breakdown of everything remaining for an AI agent to complete Phase 0.
 > **Repo:** /Users/ali/dev/rust/Q-ai
 > **Plan:** docs/03-plan/phases/phase-00-foundation/plan.md
 > **Tasks:** docs/03-plan/phases/phase-00-foundation/tasks.md
 > **Acceptance:** docs/03-plan/phases/phase-00-foundation/acceptance.md
+
+---
+
+## 0. Completion Status (2026-09-14)
+
+**Done in the latest push** (gates: fmt ✅ · clippy `-D warnings` ✅ · 139 tests ✅ ·
+arch-check ✅ · migrate-check ✅ · `qai` binary smoke-tested ✅):
+
+- §A storage-sqlite real repos + `migrate.rs` (`apply_migrations`, `verify_checksums`,
+  `backup` via `VACUUM INTO`). *(T17–T20)*
+- §B CLI binary entry point (`crates/cli/src/main.rs`, `[[bin]] name = "qai"`) wired through
+  `application` so the arch allowlist stays intact. *(T48–T51)*
+- §C Doctor engine: 26-check registry, read-only DB probe, remedies + next commands on every
+  non-pass, `--json`, `--repair-preview`. *(T52–T54)*
+- §D Security guards: `security::archive` (zip-slip/bomb/symlink/depth), `security::net`
+  (SSRF + allowlist), `security::input`, `security::sanitize`. *(T43–T45)*
+- §E Testkit fixtures + integration suites (`secret_leak`, `path_guard`, `archive_guard`,
+  `ssrf_guard`, `config_precedence`). *(T57)*
+- §I Runbooks (5) + `CONTRIBUTING.md`. *(T58, partial)*
+- §J `migrations/sqlite/checksums.json`. *(T19)*
+- §L Application crate wiring (`run()` + `db` module).
+
+**Still open:** §F remaining suites (jobs chaos, canonical/audit DB-level, telemetry privacy),
+§G outbox/generations/tombstones (T61–T67), §H ADR-0000/0301 content, keychain/age secret
+backends, coverage gates, and §M AC verification + handoff doc.
 
 ---
 

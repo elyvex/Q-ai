@@ -1,5 +1,11 @@
 # Phase 0 — Task Board
 
+> **Update (2026-09-14):** T17–T20, T43–T45, T48–T54, T57 and T58 are implemented and their
+> gates pass (`fmt`, `clippy -D warnings`, `cargo test --workspace` = 139 passing, `arch-check`,
+> `migrate-check`). T19's checksum manifest and T18's read-only pools are in place. T36 (job
+> repository), T52–T54 (doctor), and T43–T45 (security guards) are done; T40/T64/T66 (chaos
+> suite, outbox relay, outbox doctor checks) and §G (outbox/generations/tombstones) remain.
+
 **Phase:** P0 — Foundations & Provenance
 **Source:** `plan.md` §7 (Work Breakdown Structure)
 **Total tasks:** 67 sprint tasks + 3 swimlane decisions
