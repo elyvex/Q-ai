@@ -294,6 +294,38 @@ pub enum AuditError {
     Storage(#[from] storage::StorageError),
 }
 
+impl AuditError {
+    /// The stable `QAI-AUD-nnnn` diagnostic code.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::NotFound { .. } => "QAI-AUD-0001",
+            Self::AppendOnlyViolation => "QAI-AUD-0002",
+            Self::ChainVerificationFailed { .. } => "QAI-AUD-0003",
+            Self::SequenceGap { .. } => "QAI-AUD-0004",
+            Self::HashMismatch { .. } => "QAI-AUD-0005",
+            Self::SecretLeakDetected { .. } => "QAI-AUD-0006",
+            Self::Storage(_) => "QAI-AUD-0007",
+        }
+    }
+}
+
+impl storage::error::Diagnostic for AuditError {
+    fn code(&self) -> storage::error::DiagnosticCode {
+        storage::error::DiagnosticCode::new(self.code(), 0)
+    }
+    fn summary(&self) -> String {
+        self.to_string()
+    }
+    fn next_command(&self) -> Option<String> {
+        match self {
+            Self::ChainVerificationFailed { .. }
+            | Self::SequenceGap { .. }
+            | Self::HashMismatch { .. } => Some("qai audit verify".to_string()),
+            _ => None,
+        }
+    }
+}
+
 // ─── Helper ───────────────────────────────────────
 
 fn hex_encode(bytes: &[u8]) -> String {
