@@ -14,12 +14,14 @@ audit = { path = "../audit" }
 jobs = { path = "../jobs" }
 sources = { path = "../sources" }
 observability = { path = "../observability" }
+quran-core = { path = "../quran-core" }
 quran-corpus = { path = "../quran-corpus" }
 tokio = { workspace = true }
 tracing = { workspace = true }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
 serde_json = { workspace = true }
+lru = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
