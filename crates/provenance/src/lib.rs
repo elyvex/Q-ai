@@ -1,8 +1,7 @@
 //! Phase 0 — Provenance model (D0.11).
 
 use domain::{
-    ApprovalId, ContentHash, DataLayer, DerivationVersions, PrincipalId, ProvenanceId,
-    SemVer, SubjectRef, Timestamp, TrustLevel, VerificationStatus,
+    ApprovalId, ContentHash, DerivationVersions, PrincipalId, ProvenanceId, SubjectRef, Timestamp, TrustLevel, VerificationStatus,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -176,7 +175,7 @@ pub enum ProvenanceError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use domain::{Confidence, SemVer};
+    use domain::SemVer;
 
     #[test]
     fn computational_annotation_requires_algorithm_and_confidence() {
@@ -187,7 +186,7 @@ mod tests {
     #[test]
     fn canonical_provenance_is_immutable() {
         let record = make_canonical_record();
-        assert_eq!(record.layer, DataLayer::Canonical);
+        assert_eq!(record.layer, domain::DataLayer::Canonical);
     }
 
     #[test]
@@ -219,7 +218,7 @@ mod tests {
     fn make_canonical_record() -> ProvenanceRecord {
         ProvenanceRecord {
             id: ProvenanceId::new(),
-            layer: DataLayer::Canonical,
+            layer: domain::DataLayer::Canonical,
             subject: SubjectRef("urn:qai:quran:ayah:1:1".to_string()),
             attribution: Attribution::Dataset { source_id: "test".to_string(), dataset_name: "test".to_string(), dataset_version: "1.0".to_string() },
             source_version_id: Some(domain::SourceVersionId::new()),
