@@ -101,3 +101,5 @@ tracing-opentelemetry = "0.28"
 # --- Phase 1 (Canonical Quran Core) ---
 # Unicode grapheme handling: `char_count` is defined in grapheme clusters (ADR-0104).
 unicode-segmentation = "1.12"
+# Second dataset shape for the CSV adapter (D1.2, P1-T17).
+csv = "1.3"
