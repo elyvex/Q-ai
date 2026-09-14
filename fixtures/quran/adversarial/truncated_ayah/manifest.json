@@ -1,0 +1,275 @@
+{
+  "format": "qai.quran.edition",
+  "format_version": 1,
+  "edition": {
+    "slug": "test-edition-min",
+    "name": "Synthetic test edition (non-canonical, ADR-0101 fallback)",
+    "script": "uthmani",
+    "riwayah": null,
+    "qiraah": null,
+    "language": "ar",
+    "verse_numbering_scheme": "hafs",
+    "unicode_normalization": "nfc",
+    "basmala_policy": "per_surah",
+    "publisher": null,
+    "version": "0.1.0"
+  },
+  "expected": {
+    "surah_count": 5,
+    "ayah_count": 14,
+    "reference_corpus_id": null,
+    "reference_text_hash": null
+  },
+  "surahs": [
+    {
+      "number": 1,
+      "name_arabic": "سورة تجريبية 1",
+      "name_transliteration": "Test-1",
+      "ayah_count": 3,
+      "revelation_place": "makki",
+      "revelation_order": 1,
+      "basmala": "counted_as_first_ayah",
+      "ruku_count": 1
+    },
+    {
+      "number": 2,
+      "name_arabic": "سورة تجريبية 2",
+      "name_transliteration": "Test-2",
+      "ayah_count": 2,
+      "revelation_place": "madani",
+      "revelation_order": 2,
+      "basmala": "unnumbered_header",
+      "ruku_count": 1
+    },
+    {
+      "number": 3,
+      "name_arabic": "سورة تجريبية 3",
+      "name_transliteration": "Test-3",
+      "ayah_count": 4,
+      "revelation_place": "makki",
+      "revelation_order": 3,
+      "basmala": "absent",
+      "ruku_count": 1
+    },
+    {
+      "number": 4,
+      "name_arabic": "سورة تجريبية 4",
+      "name_transliteration": "Test-4",
+      "ayah_count": 2,
+      "revelation_place": "madani",
+      "revelation_order": 4,
+      "basmala": "per_surah",
+      "ruku_count": 1
+    },
+    {
+      "number": 5,
+      "name_arabic": "سورة تجريبية 5",
+      "name_transliteration": "Test-5",
+      "ayah_count": 3,
+      "revelation_place": "makki",
+      "revelation_order": 5,
+      "basmala": "counted_as_first_ayah",
+      "ruku_count": 1
+    }
+  ],
+  "ayahs": [
+    {
+      "surah": 1,
+      "ayah": 1,
+      "text": "أوَيت تَساكُن كن لهُم ثُشأوَ",
+      "juz": 1,
+      "hizb": 1,
+      "rub": 1,
+      "manzil": 1,
+      "ruku": 1,
+      "page": 1,
+      "sajdah": null
+    },
+    {
+      "surah": 1,
+      "ayah": 2,
+      "text": "شُأويَت يت اكَن بَلهمُ مثشُأو أوُ",
+      "juz": 1,
+      "hizb": 1,
+      "rub": 2,
+      "manzil": 1,
+      "ruku": 2,
+      "page": 1,
+      "sajdah": null
+    },
+    {
+      "surah": 1,
+      "ayah": 3,
+      "text": "ثش ويُت",
+      "juz": 1,
+      "hizb": 1,
+      "rub": 3,
+      "manzil": 1,
+      "ruku": 1,
+      "page": 1,
+      "sajdah": null,
+      "tokens": [
+        {
+          "position": 1,
+          "surface": "ثش",
+          "char_start": 0,
+          "char_end": 2,
+          "byte_start": 0,
+          "byte_end": 4
+        },
+        {
+          "position": 2,
+          "surface": "ويُت",
+          "char_start": 3,
+          "char_end": 6,
+          "byte_start": 5,
+          "byte_end": 13
+        },
+        {
+          "position": 3,
+          "surface": "سُاكنَ",
+          "char_start": 7,
+          "char_end": 12,
+          "byte_start": 14,
+          "byte_end": 26
+        }
+      ]
+    },
+    {
+      "surah": 2,
+      "ayah": 1,
+      "text": "نَبلهُم هم شأُو يُتساَ اكنَبل بلَ",
+      "juz": 1,
+      "hizb": 1,
+      "rub": 4,
+      "manzil": 1,
+      "ruku": 1,
+      "page": 2,
+      "sajdah": null
+    },
+    {
+      "surah": 2,
+      "ayah": 2,
+      "text": "كن لهَم ثَشأوُ",
+      "juz": 1,
+      "hizb": 1,
+      "rub": 1,
+      "manzil": 1,
+      "ruku": 2,
+      "page": 2,
+      "sajdah": null
+    },
+    {
+      "surah": 3,
+      "ayah": 1,
+      "text": "أو تسُا كُنبلَ",
+      "juz": 1,
+      "hizb": 1,
+      "rub": 2,
+      "manzil": 1,
+      "ruku": 1,
+      "page": 2,
+      "sajdah": null
+    },
+    {
+      "surah": 3,
+      "ayah": 2,
+      "text": "شأَو يَتساُ اكنُبل بلُ",
+      "juz": 1,
+      "hizb": 1,
+      "rub": 3,
+      "manzil": 1,
+      "ruku": 2,
+      "page": 3,
+      "sajdah": null
+    },
+    {
+      "surah": 3,
+      "ayah": 3,
+      "text": "ثُشأوَ ويتَسا ساَ نَبل همثُش",
+      "juz": 1,
+      "hizb": 1,
+      "rub": 4,
+      "manzil": 1,
+      "ruku": 1,
+      "page": 3,
+      "sajdah": null
+    },
+    {
+      "surah": 3,
+      "ayah": 4,
+      "text": "مثشُأو أوُ تُسا كنبَل لهَمثشُ ثَش",
+      "juz": 2,
+      "hizb": 2,
+      "rub": 1,
+      "manzil": 2,
+      "ruku": 2,
+      "page": 3,
+      "sajdah": null
+    },
+    {
+      "surah": 4,
+      "ayah": 1,
+      "text": "نبُل هُمثشَ شأوَيت يتَ",
+      "juz": 2,
+      "hizb": 2,
+      "rub": 2,
+      "manzil": 2,
+      "ruku": 1,
+      "page": 4,
+      "sajdah": null
+    },
+    {
+      "surah": 4,
+      "ayah": 2,
+      "text": "كَنبلُ لهمُثش ثشُ وُيت ساكَن",
+      "juz": 2,
+      "hizb": 2,
+      "rub": 3,
+      "manzil": 2,
+      "ruku": 2,
+      "page": 4,
+      "sajdah": "recommended"
+    },
+    {
+      "surah": 5,
+      "ayah": 1,
+      "text": "أُويتَ تساَكن كنَ لَهم ثشأُو",
+      "juz": 2,
+      "hizb": 2,
+      "rub": 4,
+      "manzil": 2,
+      "ruku": 1,
+      "page": 4,
+      "sajdah": null
+    },
+    {
+      "surah": 5,
+      "ayah": 2,
+      "text": "شأوُيت يتُ اُكن بلهَم مثَشأوُ أَو",
+      "juz": 2,
+      "hizb": 2,
+      "rub": 1,
+      "manzil": 2,
+      "ruku": 2,
+      "page": 5,
+      "sajdah": null
+    },
+    {
+      "surah": 5,
+      "ayah": 3,
+      "text": "ثشَ وَيت ساكُن",
+      "juz": 2,
+      "hizb": 2,
+      "rub": 2,
+      "manzil": 2,
+      "ruku": 1,
+      "page": 5,
+      "sajdah": null
+    }
+  ],
+  "tokenization": {
+    "strategy": "whitespace_preserving",
+    "separator_policy": "record_exact"
+  }
+}
