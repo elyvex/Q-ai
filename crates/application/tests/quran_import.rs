@@ -25,8 +25,7 @@ use storage::repository::JobRecord;
 use storage_sqlite::SqliteDatabase;
 use tempfile::tempdir;
 
-const BASE_MANIFEST: &str =
-    include_str!("../../../fixtures/quran/test-edition-min/manifest.json");
+const BASE_MANIFEST: &str = include_str!("../../../fixtures/quran/test-edition-min/manifest.json");
 const MISSING_AYAH: &str =
     include_str!("../../../fixtures/quran/adversarial/missing_ayah/manifest.json");
 const PRINCIPAL: &str = "00000000-0000-0000-0000-000000000001";
@@ -53,9 +52,7 @@ async fn migrated_db() -> (tempfile::TempDir, SqliteDatabase) {
     let seed = sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(1)
         .connect_with(
-            sqlx::sqlite::SqliteConnectOptions::new()
-                .filename(&path_str)
-                .foreign_keys(true),
+            sqlx::sqlite::SqliteConnectOptions::new().filename(&path_str).foreign_keys(true),
         )
         .await
         .unwrap();
@@ -138,9 +135,7 @@ async fn import_runs_end_to_end_to_staged() {
     )
     .await
     .expect("base import completes");
-    let ImportOutcome::Completed(success) = outcome else {
-        panic!("expected completion");
-    };
+    let ImportOutcome::Completed(success) = outcome else { panic!("expected completion"); };
     assert!(success.stopped_at.is_none());
     assert_eq!(success.edition_id, "ed-run-1");
     assert_eq!(progress.checkpoints(), ImportCheckpoint::ALL);
@@ -170,10 +165,14 @@ async fn crash_matrix_all_thirteen_checkpoints_leave_active_untouched() {
         )
         .await
         .expect("prefix run halts cleanly");
-        let ImportOutcome::Completed(success) = outcome else {
-            panic!("expected completion");
-        };
-        assert_eq!(success.stopped_at, Some(*checkpoint));
+        let ImportOutcome::Completed(success) = outcome else { panic!("expected completion"); };
+        if index < ImportCheckpoint::ALL.len() - 1 {
+            assert_eq!(success.stopped_at, Some(*checkpoint));
+        } else {
+            // The terminal checkpoint runs to completion by definition.
+            assert_eq!(success.stopped_at, None);
+            assert_eq!(staged_count(&db, &run_id).await, 14);
+        }
         assert_eq!(progress.checkpoints(), &ImportCheckpoint::ALL[..=index]);
         let mut uow = db.write().await.unwrap();
         assert!(
@@ -274,9 +273,8 @@ async fn hash_mismatch_aborts_at_the_hash_checkpoint() {
 async fn worker_runs_the_import_job_to_staged_with_audit() {
     let (_dir, db) = migrated_db().await;
     let db = Arc::new(db);
-    let registry = Arc::new(
-        HandlerRegistry::new().register(Arc::new(QuranImportHandler::new(db.clone()))),
-    );
+    let registry =
+        Arc::new(HandlerRegistry::new().register(Arc::new(QuranImportHandler::new(db.clone()))));
     assert!(registry.get(application::quran::QURAN_IMPORT_KIND).is_some());
     let queue = Arc::new(SqliteJobQueue::new(db.clone()));
     let payload = serde_json::to_value(input("run-worker", BASE_MANIFEST, None)).unwrap();
@@ -325,17 +323,17 @@ async fn activation_service_requires_a_granted_approval() {
     .await
     .unwrap();
 
-    let err = activate_edition(&db, "test-edition-min", "0.1.0", &principal(), "missing", &timestamp())
-        .await
-        .unwrap_err();
+    let err =
+        activate_edition(&db, "test-edition-min", "0.1.0", &principal(), "missing", &timestamp())
+            .await
+            .unwrap_err();
     assert!(matches!(err, application::quran::ActivationError::ApprovalMissing { .. }));
 
     // Record a denied approval and a mismatched one.
     let mut uow = db.write().await.unwrap();
-    for (id, decision, subject) in [
-        ("appr-denied", "denied", V1_URN),
-        ("appr-other", "approved", "quran-edition:other@9.9.9"),
-    ] {
+    for (id, decision, subject) in
+        [("appr-denied", "denied", V1_URN), ("appr-other", "approved", "quran-edition:other@9.9.9")]
+    {
         uow.sources()
             .insert_approval(storage::repository::ApprovalRow {
                 id: id.into(),
@@ -353,13 +351,27 @@ async fn activation_service_requires_a_granted_approval() {
             .unwrap();
     }
     uow.commit().await.unwrap();
-    let err = activate_edition(&db, "test-edition-min", "0.1.0", &principal(), "appr-denied", &timestamp())
-        .await
-        .unwrap_err();
+    let err = activate_edition(
+        &db,
+        "test-edition-min",
+        "0.1.0",
+        &principal(),
+        "appr-denied",
+        &timestamp(),
+    )
+    .await
+    .unwrap_err();
     assert!(matches!(err, application::quran::ActivationError::ApprovalNotGranted { .. }));
-    let err = activate_edition(&db, "test-edition-min", "0.1.0", &principal(), "appr-other", &timestamp())
-        .await
-        .unwrap_err();
+    let err = activate_edition(
+        &db,
+        "test-edition-min",
+        "0.1.0",
+        &principal(),
+        "appr-other",
+        &timestamp(),
+    )
+    .await
+    .unwrap_err();
     assert!(matches!(err, application::quran::ActivationError::ApprovalSubjectMismatch { .. }));
 
     let generation =
@@ -402,15 +414,21 @@ async fn rollback_service_restores_the_prior_version() {
     .unwrap();
 
     assert_eq!(
-        activate_edition(&db, "test-edition-min", "0.1.0", &principal(), "appr-1", &timestamp()).await.unwrap(),
+        activate_edition(&db, "test-edition-min", "0.1.0", &principal(), "appr-1", &timestamp())
+            .await
+            .unwrap(),
         1
     );
     assert_eq!(
-        activate_edition(&db, "test-edition-min", "0.2.0", &principal(), "appr-2", &timestamp()).await.unwrap(),
+        activate_edition(&db, "test-edition-min", "0.2.0", &principal(), "appr-2", &timestamp())
+            .await
+            .unwrap(),
         2
     );
     assert_eq!(
-        rollback_edition(&db, "test-edition-min", "0.1.0", &principal(), "appr-1", &timestamp()).await.unwrap(),
+        rollback_edition(&db, "test-edition-min", "0.1.0", &principal(), "appr-1", &timestamp())
+            .await
+            .unwrap(),
         3
     );
     let mut uow = db.write().await.unwrap();
