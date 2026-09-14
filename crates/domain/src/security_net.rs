@@ -30,9 +30,9 @@ pub fn check_domain_allowlist(host: &str, allowlist: &[String]) -> bool {
         return false;
     }
     let host = host.trim().to_lowercase();
-    allowlist
-        .iter()
-        .any(|allowed| host == allowed.to_lowercase() || host.ends_with(&format!(".{}", allowed.to_lowercase())))
+    allowlist.iter().any(|allowed| {
+        host == allowed.to_lowercase() || host.ends_with(&format!(".{}", allowed.to_lowercase()))
+    })
 }
 
 #[cfg(test)]
@@ -43,19 +43,10 @@ mod tests {
 
     #[test]
     fn private_ipv4_matrix() {
-        let blocked = [
-            "127.0.0.1",
-            "10.0.0.1",
-            "172.16.0.1",
-            "192.168.0.1",
-            "169.254.0.1",
-        ];
+        let blocked = ["127.0.0.1", "10.0.0.1", "172.16.0.1", "192.168.0.1", "169.254.0.1"];
         for ip in blocked {
             let ip = IpAddr::from_str(ip).unwrap();
-            assert!(
-                check_resolved_ip(ip).is_err(),
-                "expected {ip} to be blocked"
-            );
+            assert!(check_resolved_ip(ip).is_err(), "expected {ip} to be blocked");
         }
     }
 
@@ -64,10 +55,7 @@ mod tests {
         let blocked = ["fe80::1", "fc00::1", "::1"];
         for ip in blocked {
             let ip = IpAddr::from_str(ip).unwrap();
-            assert!(
-                check_resolved_ip(ip).is_err(),
-                "expected {ip} to be blocked"
-            );
+            assert!(check_resolved_ip(ip).is_err(), "expected {ip} to be blocked");
         }
     }
 
