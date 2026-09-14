@@ -264,9 +264,7 @@ impl JobContext {
 
     /// A cloneable handle to the checkpoint slot, so a worker can read the last
     /// checkpoint the handler recorded after the context is moved into `run`.
-    pub fn checkpoint_sink(
-        &self,
-    ) -> std::sync::Arc<std::sync::Mutex<Option<String>>> {
+    pub fn checkpoint_sink(&self) -> std::sync::Arc<std::sync::Mutex<Option<String>>> {
         self.checkpoint.clone()
     }
 

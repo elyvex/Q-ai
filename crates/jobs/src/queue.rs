@@ -23,19 +23,12 @@ pub trait JobQueue: Send + Sync {
     ///
     /// Considers `Queued`, `Interrupted`, and `Checkpointed` jobs whose
     /// `available_at` has passed.
-    async fn claim_next(
-        &self,
-        owner: &str,
-        lease: Duration,
-    ) -> Result<Option<JobRecord>, JobError>;
+    async fn claim_next(&self, owner: &str, lease: Duration)
+    -> Result<Option<JobRecord>, JobError>;
 
     /// Renew the lease if `owner` still holds it. Returns whether it is held.
-    async fn heartbeat(
-        &self,
-        job_id: &str,
-        owner: &str,
-        lease: Duration,
-    ) -> Result<bool, JobError>;
+    async fn heartbeat(&self, job_id: &str, owner: &str, lease: Duration)
+    -> Result<bool, JobError>;
 
     /// Record a progress update and/or checkpoint.
     async fn checkpoint(
@@ -82,8 +75,7 @@ fn now_rfc3339() -> String {
 
 fn plus(d: Duration) -> String {
     let at = time::OffsetDateTime::now_utc() + time::Duration::seconds(d.as_secs() as i64);
-    at.format(&time::format_description::well_known::Rfc3339)
-        .unwrap_or_default()
+    at.format(&time::format_description::well_known::Rfc3339).unwrap_or_default()
 }
 
 /// An in-memory [`JobQueue`] for tests and local/deterministic runs.
@@ -128,10 +120,8 @@ impl JobQueue for InMemoryJobQueue {
         let mut jobs = self.jobs.lock().unwrap();
         for id in order {
             let Some(job) = jobs.get_mut(&id) else { continue };
-            let claimable = matches!(
-                job.state.as_str(),
-                "Queued" | "Interrupted" | "Checkpointed"
-            ) && job.available_at <= now;
+            let claimable = matches!(job.state.as_str(), "Queued" | "Interrupted" | "Checkpointed")
+                && job.available_at <= now;
             if claimable {
                 job.state = "Running".to_string();
                 job.lease_owner = Some(owner.to_string());
@@ -235,13 +225,7 @@ impl JobQueue for InMemoryJobQueue {
     }
 
     async fn queued_count(&self) -> Result<u64, JobError> {
-        Ok(self
-            .jobs
-            .lock()
-            .unwrap()
-            .values()
-            .filter(|j| j.state == "Queued")
-            .count() as u64)
+        Ok(self.jobs.lock().unwrap().values().filter(|j| j.state == "Queued").count() as u64)
     }
 }
 
