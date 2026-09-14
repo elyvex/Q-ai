@@ -25,3 +25,7 @@ target
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
+
+# Coverage reports (cargo llvm-cov)
+lcov.info
+lcov-*.info
