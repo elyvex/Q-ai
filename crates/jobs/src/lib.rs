@@ -160,6 +160,33 @@ pub enum JobError {
     Storage(String),
 }
 
+impl JobError {
+    /// The stable `QAI-JOB-nnnn` diagnostic code.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::NotFound { .. } => "QAI-JOB-0001",
+            Self::InvalidState { .. } => "QAI-JOB-0002",
+            Self::IdempotencyKeyReplay { .. } => "QAI-JOB-0003",
+            Self::ClaimFailed { .. } => "QAI-JOB-0004",
+            Self::Cancelled { .. } => "QAI-JOB-0005",
+            Self::MaxAttemptsExceeded { .. } => "QAI-JOB-0006",
+            Self::Storage(_) => "QAI-JOB-0007",
+        }
+    }
+}
+
+impl storage::error::Diagnostic for JobError {
+    fn code(&self) -> storage::error::DiagnosticCode {
+        storage::error::DiagnosticCode::new(self.code(), 0)
+    }
+    fn summary(&self) -> String {
+        self.to_string()
+    }
+    fn is_retryable(&self) -> bool {
+        matches!(self, Self::Storage(_) | Self::ClaimFailed { .. })
+    }
+}
+
 // ─── JobHandler ──────────────────────────────────────────────
 
 /// Trait implemented by job handlers.
