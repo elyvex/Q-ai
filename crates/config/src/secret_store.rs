@@ -3,14 +3,17 @@
 //! Secret **values** never live in SQLite; what persists is a [`SecretRef`]
 //! (`secret://<backend>/<path...>`). Backends:
 //!
-//! - [`EnvSecretStore`] — reads `QAI_SECRET_<KEY>` from the environment (the
-//!   Phase 0 default, and the only backend with no external dependency).
-//! - [`KeychainSecretStore`] / [`EncryptedFileSecretStore`] — abstracted behind
-//!   the same trait; their concrete OS-crypto implementations require the
-//!   `keyring` / `age` crates and return [`SecretError::Unsupported`] until
-//!   those dependencies are added (Phase 1).
+//! - [`EnvSecretStore`] — reads `QAI_SECRET_<KEY>` from the environment.
+//! - [`EncryptedFileSecretStore`] — an XChaCha20-Poly1305 encrypted JSON file,
+//!   keyed by a passphrase supplied via the environment.
+//! - [`KeychainSecretStore`] — abstracted behind the same trait; its OS-native
+//!   implementation requires the `keyring` crate and returns
+//!   [`SecretError::Unsupported`] until that dependency is added (Phase 1).
 
 use async_trait::async_trait;
+use chacha20poly1305::aead::{Aead, KeyInit, OsRng, rand_core::RngCore};
+use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fmt;
 use thiserror::Error;
@@ -176,32 +179,100 @@ impl SecretStore for KeychainSecretStore {
     }
 }
 
-/// age/XChaCha20-Poly1305 encrypted-file secret backend. Requires the `age`
-/// crate — not yet a dependency.
-#[derive(Debug, Default, Clone)]
-pub struct EncryptedFileSecretStore;
+/// XChaCha20-Poly1305 encrypted-file secret backend.
+///
+/// Secrets are stored as an encrypted JSON map `{ "secret://…": value }`. The
+/// file layout is `24-byte nonce || ciphertext`. The 32-byte key is
+/// `SHA-256(passphrase)`; the passphrase is supplied at construction — normally
+/// read from an environment variable via
+/// [`EncryptedFileSecretStore::from_env`] — and is never written to disk.
+#[derive(Debug, Clone)]
+pub struct EncryptedFileSecretStore {
+    path: std::path::PathBuf,
+    passphrase: String,
+}
+
+impl EncryptedFileSecretStore {
+    /// Create from an explicit passphrase and file path.
+    pub fn new(path: impl Into<std::path::PathBuf>, passphrase: String) -> Self {
+        Self { path: path.into(), passphrase }
+    }
+
+    /// Create by reading the passphrase from `env_var`.
+    pub fn from_env(
+        path: impl Into<std::path::PathBuf>,
+        env_var: &str,
+    ) -> Result<Self, SecretError> {
+        let passphrase = std::env::var(env_var).map_err(|_| {
+            SecretError::Backend(format!("secret passphrase env var `{env_var}` is not set"))
+        })?;
+        Ok(Self::new(path, passphrase))
+    }
+
+    fn cipher(&self) -> XChaCha20Poly1305 {
+        let key_bytes = Sha256::digest(self.passphrase.as_bytes());
+        let key = Key::from_slice(&key_bytes);
+        XChaCha20Poly1305::new(key)
+    }
+
+    fn load(&self) -> Result<BTreeMap<String, String>, SecretError> {
+        if !self.path.exists() {
+            return Ok(BTreeMap::new());
+        }
+        let raw = std::fs::read(&self.path).map_err(|e| SecretError::Backend(e.to_string()))?;
+        if raw.len() < 24 {
+            return Err(SecretError::Backend("encrypted file is truncated".to_string()));
+        }
+        let (nonce, ciphertext) = raw.split_at(24);
+        let plaintext =
+            self.cipher().decrypt(XNonce::from_slice(nonce), ciphertext).map_err(|_| {
+                SecretError::Backend("decryption failed (wrong passphrase?)".to_string())
+            })?;
+        serde_json::from_slice(&plaintext).map_err(|e| SecretError::Backend(e.to_string()))
+    }
+
+    fn save(&self, map: &BTreeMap<String, String>) -> Result<(), SecretError> {
+        let plaintext = serde_json::to_vec(map).map_err(|e| SecretError::Backend(e.to_string()))?;
+        let mut nonce_bytes = [0u8; 24];
+        OsRng.fill_bytes(&mut nonce_bytes);
+        let ciphertext = self
+            .cipher()
+            .encrypt(XNonce::from_slice(&nonce_bytes), plaintext.as_ref())
+            .map_err(|_| SecretError::Backend("encryption failed".to_string()))?;
+        if let Some(parent) = self.path.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let mut out = nonce_bytes.to_vec();
+        out.extend_from_slice(&ciphertext);
+        std::fs::write(&self.path, out).map_err(|e| SecretError::Backend(e.to_string()))
+    }
+}
 
 #[async_trait]
 impl SecretStore for EncryptedFileSecretStore {
-    async fn get(&self, _r: &SecretRef) -> Result<Secret<String>, SecretError> {
-        Err(SecretError::Unsupported(
-            "encrypted_file backend requires the `age` crate (Phase 1)".to_string(),
-        ))
+    async fn get(&self, r: &SecretRef) -> Result<Secret<String>, SecretError> {
+        let map = self.load()?;
+        map.get(&r.to_string())
+            .cloned()
+            .map(Secret::new)
+            .ok_or_else(|| SecretError::NotFound(r.to_string()))
     }
-    async fn put(&self, _r: &SecretRef, _v: Secret<String>) -> Result<(), SecretError> {
-        Err(SecretError::Unsupported(
-            "encrypted_file backend requires the `age` crate (Phase 1)".to_string(),
-        ))
+    async fn put(&self, r: &SecretRef, v: Secret<String>) -> Result<(), SecretError> {
+        let mut map = self.load()?;
+        map.insert(r.to_string(), v.expose().clone());
+        self.save(&map)
     }
-    async fn delete(&self, _r: &SecretRef) -> Result<(), SecretError> {
-        Err(SecretError::Unsupported(
-            "encrypted_file backend requires the `age` crate (Phase 1)".to_string(),
-        ))
+    async fn delete(&self, r: &SecretRef) -> Result<(), SecretError> {
+        let mut map = self.load()?;
+        if map.remove(&r.to_string()).is_none() {
+            return Err(SecretError::NotFound(r.to_string()));
+        }
+        self.save(&map)
     }
     async fn list_refs(&self) -> Result<Vec<SecretRef>, SecretError> {
-        Err(SecretError::Unsupported(
-            "encrypted_file backend requires the `age` crate (Phase 1)".to_string(),
-        ))
+        Ok(self.load()?.keys().filter_map(|k| SecretRef::parse(k).ok()).collect())
     }
     fn backend_name(&self) -> &'static str {
         "encrypted_file"
@@ -209,11 +280,17 @@ impl SecretStore for EncryptedFileSecretStore {
 }
 
 /// Select a backend by name.
+///
+/// The encrypted-file backend needs a path and a passphrase, so it is
+/// constructed via [`EncryptedFileSecretStore::from_env`] rather than here.
 pub fn backend_by_name(name: &str) -> Result<Box<dyn SecretStore>, SecretError> {
     match name {
         "env" => Ok(Box::new(EnvSecretStore)),
         "keychain" => Ok(Box::new(KeychainSecretStore)),
-        "encrypted_file" => Ok(Box::new(EncryptedFileSecretStore)),
+        "encrypted_file" => Err(SecretError::Unsupported(
+            "construct the encrypted_file backend via EncryptedFileSecretStore::from_env"
+                .to_string(),
+        )),
         other => Err(SecretError::Unsupported(format!("unknown backend `{other}`"))),
     }
 }
@@ -276,12 +353,64 @@ mod tests {
     async fn unbacked_backends_report_unsupported() {
         let r = SecretRef::parse("secret://keychain/openai/default").unwrap();
         assert!(matches!(KeychainSecretStore.get(&r).await, Err(SecretError::Unsupported(_))));
-        assert!(matches!(EncryptedFileSecretStore.get(&r).await, Err(SecretError::Unsupported(_))));
+    }
+
+    #[tokio::test]
+    async fn encrypted_file_round_trips_with_a_real_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("secrets.enc");
+        let store =
+            EncryptedFileSecretStore::new(path.clone(), "correct horse battery staple".into());
+        let r = SecretRef::parse("secret://encrypted_file/openai/default").unwrap();
+
+        store.put(&r, Secret::new("sk-sentinel-123".to_string())).await.unwrap();
+        assert!(path.exists());
+
+        // The on-disk file is encrypted: the plaintext never appears.
+        let bytes = std::fs::read(&path).unwrap();
+        assert!(
+            !bytes.windows(14).any(|w| w == b"sk-sentinel-123"),
+            "secret must not appear in plaintext on disk"
+        );
+
+        // Round-trips and lists refs.
+        assert_eq!(store.get(&r).await.unwrap().expose(), "sk-sentinel-123");
+        assert_eq!(store.list_refs().await.unwrap().len(), 1);
+
+        // Delete removes it.
+        store.delete(&r).await.unwrap();
+        assert!(matches!(store.get(&r).await, Err(SecretError::NotFound(_))));
+    }
+
+    #[tokio::test]
+    async fn encrypted_file_rejects_the_wrong_passphrase() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("secrets.enc");
+        let r = SecretRef::parse("secret://encrypted_file/openai/default").unwrap();
+        EncryptedFileSecretStore::new(path.clone(), "right".into())
+            .put(&r, Secret::new("v".to_string()))
+            .await
+            .unwrap();
+
+        let wrong = EncryptedFileSecretStore::new(path, "wrong".into());
+        assert!(matches!(wrong.get(&r).await, Err(SecretError::Backend(_))));
+    }
+
+    #[tokio::test]
+    async fn encrypted_file_requires_the_passphrase_env_var() {
+        let dir = tempfile::tempdir().unwrap();
+        let err = EncryptedFileSecretStore::from_env(
+            dir.path().join("secrets.enc"),
+            "QAI_SECRET_PASSPHRASE_DEFINITELY_UNSET",
+        )
+        .unwrap_err();
+        assert!(matches!(err, SecretError::Backend(_)));
     }
 
     #[tokio::test]
     async fn backend_lookup_by_name() {
         assert_eq!(backend_by_name("env").unwrap().backend_name(), "env");
+        assert!(backend_by_name("encrypted_file").is_err());
         assert!(backend_by_name("nope").is_err());
     }
 }
