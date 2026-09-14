@@ -13,7 +13,7 @@
 
 ## 0. Completion Status (2026-09-14, final)
 
-**Gate:** `cargo test --workspace` = **209 passing / 0 failing**; `fmt`, `clippy -D warnings`,
+**Gate:** `cargo test --workspace` = **229 passing / 0 failing**; `fmt`, `clippy -D warnings`,
 `arch-check`, `migrate-check`, `adr-lint` all green; `qai` binary smoke-tested.
 
 ### DONE
@@ -27,10 +27,10 @@
 - **§D** Security guards: archive / net (SSRF) / input / sanitize. *(T43–T45)*
 - **§E** Testkit fixtures + suites (secret-leak, path/archive/SSRF, config precedence,
   telemetry privacy, error codes). *(T57)*
-- **§F** Jobs recovery (duplicate enqueue, lease expiry → Interrupted, checkpoint resume,
-  cancellation < 2s); provenance/audit DB-level integrity; sources preconditions + manifest
-  signing/ingest + genealogy; telemetry denylist; workspace error-code uniqueness. *(T26/T27,
-  T31, T36, T40-equivalent)*
+- **§F** Jobs: full recovery suite + **in-process worker pool** (registry, retry/backoff,
+  dead-lettering, cancellation); provenance/audit DB-level integrity; sources preconditions +
+  manifest signing (**real ed25519**) + ingest + genealogy; telemetry denylist; workspace
+  error-code uniqueness + **universal `Diagnostic`** conformance. *(T26/T27, T30, T31, T36–T39)*
 - **§G** Outbox / generations / tombstones: domain types, `OutboxRepository`,
   transaction-scoped workflows, SQLite impl, monotonic allocator, relay, consistency tests
   (commit-bounds, idempotency, 50-writer monotonicity, tombstone-before-visibility). *(T61–T63,
@@ -44,24 +44,25 @@
 
 ### PARTIAL
 
-- **ed25519 manifest signatures** (T30) — SHA-256 detached-hash verification is implemented and
-  tested; the cryptographic ed25519 path needs the `ed25519-dalek` crate (not available here).
-- **keychain / age secret backends** (T15) — abstracted behind `SecretStore`; concrete
-  implementations return `Unsupported` until `keyring` / `age` are added.
-- **worker pool** (T37–T39) — repository, cancellation, checkpoints, and recovery are done and
-  tested; no in-process pool/registry loop is built.
-- **OTLP exporter** (T42) — metric catalog + telemetry denylist exist; no OTLP export.
-- **outbox relay job** (T64) — relay logic + `system.outbox_relay` kind exist; worker-pool
-  execution deferred with T37.
+- **AC-P0-01 / AC-P0-22** — the 3-OS CI matrix and coverage percentages require a CI
+  runner; `xtask coverage-gate` enforces the thresholds there. Neither is a correctness gap.
 
-### REMAINING (environmental / process)
+### REMAINING (process)
 
-- **AC-P0-01** 3-OS CI matrix run; **AC-P0-22** coverage percentages (requires `cargo llvm-cov`).
-- **Exit-gate ritual** — the recorded live walkthrough (AC-P0-03/05/06/08/11/14/16).
+- **Exit-gate ritual** — the recorded live walkthrough (AC-P0-03/05/06/08/11/14/16) on a
+  clean machine.
 
 ### BLOCKED
 
-- None that block implementation. The above depend on external tooling/crates or a CI runner.
+- None that block implementation.
+
+### Closed since the previous revision
+
+- **T30** real ed25519 manifest signatures (verified against a live test key).
+- **T37–T39** in-process worker pool (registry, retry/backoff, dead-lettering, cancellation).
+- **T15** secret backends: env + XChaCha20-Poly1305 encrypted file + keychain (`keychain` feature).
+- **T42** opt-in OTLP exporter (`otlp` feature).
+- **AC-P0-17** every error type implements `Diagnostic`; codes unique; renderings stable.
 
 ---
 
