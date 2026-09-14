@@ -343,8 +343,80 @@ estimate — an under-recorded sprint is how the next phase inherits a wrong cap
   triggers and cascade from `quran_import_runs`; translation attribution uses a
   `CHECK(length(trim(translator)) > 0)` guard.
 
-**Entry format (repeat per task)**
+### P1-T25 — `quran.import` job with 13 checkpoints, cancellation, resume
+- **Deliverable:** D1.3
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** working tree
+- **Evidence:** `crates/quran-corpus/src/import.rs`; `crates/application/src/quran.rs`
+  (`QuranImportHandler`); `cargo test -p application --test quran_import` 8/8 green
+- **DoD:** ✅ all items
+- **Notes:** Pipeline is deterministic in `(run_id, manifest)`: a run always clears
+  its own staging first, so retry after a crash is a clean restart — restart *is*
+  resume, which is why the crash matrix is a prefix matrix. Checkpoints serve
+  progress/cancel/`stop_after`, not transaction boundaries. Idempotent on
+  `(source_version_id, adapter_version, parser_version)`.
 
+### P1-T27 — Edition differ
+- **Deliverable:** D1.3
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** working tree
+- **Evidence:** `quran_corpus::differ` unit tests; difference report persisted by the
+  importer and asserted in `quran_import.rs`
+- **DoD:** ✅ all items
+- **Notes:** Char-level via `similar`, aligned by `(surah, ayah)`, ranges reported in
+  new-text character offsets. ADR-0109 pending (P1-T31).
+
+### P1-T28 — Activation transaction + rollback + `corpus_generation`
+- **Deliverable:** D1.3
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** working tree
+- **Evidence:** `storage-sqlite::quran::SqliteQuranRepository::activate_edition` /
+  `rollback_edition`; `application::quran::{activate_edition, rollback_edition}`;
+  activation/rollback tests green
+- **DoD:** ✅ all items
+- **Notes:** AC-P1-03 is enforced in `application::quran`: activation/rollback require
+  a **granted** approval whose `subject_urn` equals the exact edition URN, and write a
+  hash-chained audit event in the same transaction. The importer holds no
+  `ApprovalToken` and never calls activation (I5/I7).
+
+### P1-T29 — Crash-at-each-checkpoint matrix
+- **Deliverable:** D1.13
+- **Completed:** 2026-09-14
+- **Owner:** agent (QA)
+- **PR / commit:** working tree
+- **Evidence:** `crash_matrix_all_thirteen_checkpoints_leave_active_untouched` →
+  active edition is absent after every one of the 13 prefixes; retry completes
+- **DoD:** ✅ all items
+- **Notes:** Satisfies AC-P1-10's negative guarantee automatically. AC-P1-11
+  (cancellation cleanup) is covered by `cancel_cleans_staging_and_marks_cancelled`.
+
+### P1-T26 — Round-trip verifier (reference comparator partial)
+- **Deliverable:** D1.4
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** working tree
+- **Evidence:** `roundtrip_verified` step reconstructs every staged ayah and recomputes
+  `text_hash` / `token_order_hash` from stored rows
+- **DoD:** ⚠️ exceptions: reference-corpus comparison (QV-015) is a recorded **skip**
+  because no reference corpus is configured (blocker B2 / ADR-0114 pending)
+- **Notes:** QV-014 (round-trip stability) and QV-024 (token-order hash reproducible
+  from rows) fail closed. QV-015 reports `Info` "skipped — not configured" into the
+  validation report, never a silent pass.
+
+### P1-T31 — ADR-0106/0107/0108/0109 drafts
+- **Deliverable:** ADR
+- **Completed:** 2026-09-14 (drafts)
+- **Owner:** agent (DOC)
+- **PR / commit:** working tree
+- **Evidence:** `docs/02-architecture/decisions/ADR-0101…0109`
+- **DoD:** ⚠️ exceptions: ADR-0101/0114 remain **Draft** pending human sign-off; the
+  rest are Accepted where no external input is required
+- **Notes:** See §4 for the ADR ledger.
+
+**Entry format (repeat per task)**
 ```
 ### P1-Tnn — <task title>
 - **Deliverable:** D1.x
