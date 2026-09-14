@@ -7,6 +7,7 @@
 //!   next command**.
 //! - `--repair-preview` prints the plan only (Phase 1+ executes repairs).
 
+use crate::exit_code;
 use application::db::DbProbe;
 use config::Config;
 
@@ -76,13 +77,7 @@ impl CheckResult {
         remedy: &str,
         next_command: &str,
     ) -> Self {
-        Self::new(
-            id,
-            CheckStatus::Fail,
-            summary,
-            Some(remedy),
-            Some(next_command),
-        )
+        Self::new(id, CheckStatus::Fail, summary, Some(remedy), Some(next_command))
     }
 
     fn warn(
@@ -91,13 +86,7 @@ impl CheckResult {
         remedy: &str,
         next_command: &str,
     ) -> Self {
-        Self::new(
-            id,
-            CheckStatus::Warn,
-            summary,
-            Some(remedy),
-            Some(next_command),
-        )
+        Self::new(id, CheckStatus::Warn, summary, Some(remedy), Some(next_command))
     }
 
     fn skipped(
@@ -106,13 +95,7 @@ impl CheckResult {
         remedy: &str,
         next_command: &str,
     ) -> Self {
-        Self::new(
-            id,
-            CheckStatus::Skipped,
-            summary,
-            Some(remedy),
-            Some(next_command),
-        )
+        Self::new(id, CheckStatus::Skipped, summary, Some(remedy), Some(next_command))
     }
 }
 
@@ -240,9 +223,7 @@ fn configuration_file_permissions(cfg: &Config) -> CheckResult {
 
 fn data_dir_writable(cfg: &Config) -> CheckResult {
     let dir = std::path::PathBuf::from(&cfg.app.data_dir);
-    match std::fs::create_dir_all(&dir)
-        .and_then(|_| std::fs::write(dir.join(".qai-probe"), b"q"))
-    {
+    match std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(dir.join(".qai-probe"), b"q")) {
         Ok(()) => {
             let _ = std::fs::remove_file(dir.join(".qai-probe"));
             CheckResult::pass(
@@ -336,10 +317,7 @@ fn database_foreign_keys_enabled(probe: &DbProbe) -> CheckResult {
         );
     }
     if probe.foreign_keys_on {
-        CheckResult::pass(
-            "database.foreign_keys_enabled",
-            "foreign_keys is ON",
-        )
+        CheckResult::pass("database.foreign_keys_enabled", "foreign_keys is ON")
     } else {
         CheckResult::fail(
             "database.foreign_keys_enabled",
@@ -477,10 +455,7 @@ fn sources_manifest_schema_valid() -> CheckResult {
 
 fn sources_orphaned_versions(_probe: &DbProbe) -> CheckResult {
     // Enforced by FK ON DELETE RESTRICT, so orphan versions cannot exist.
-    CheckResult::pass(
-        "sources.orphaned_versions",
-        "no orphaned source versions (FK-enforced)",
-    )
+    CheckResult::pass("sources.orphaned_versions", "no orphaned source versions (FK-enforced)")
 }
 
 fn sources_missing_files() -> CheckResult {
@@ -530,10 +505,7 @@ fn sources_multiple_active_versions(probe: &DbProbe) -> CheckResult {
     } else {
         CheckResult::fail(
             "sources.multiple_active_versions",
-            format!(
-                "{} source(s) have multiple Active versions",
-                probe.multiple_active_versions
-            ),
+            format!("{} source(s) have multiple Active versions", probe.multiple_active_versions),
             "deactivate superseded versions (violates the atomic-activation rule)",
             "qai source list --state Active",
         )
@@ -615,20 +587,14 @@ fn outbox_backlog_age(probe: &DbProbe) -> CheckResult {
     } else if probe.outbox_oldest_pending_seconds > 3600 {
         CheckResult::warn(
             "outbox.backlog_age",
-            format!(
-                "oldest pending outbox event is {}s old",
-                probe.outbox_oldest_pending_seconds
-            ),
+            format!("oldest pending outbox event is {}s old", probe.outbox_oldest_pending_seconds),
             "run the outbox relay to dispatch pending events",
             "qai job list --kind system.outbox_relay",
         )
     } else {
         CheckResult::pass(
             "outbox.backlog_age",
-            format!(
-                "oldest pending outbox event is {}s old",
-                probe.outbox_oldest_pending_seconds
-            ),
+            format!("oldest pending outbox event is {}s old", probe.outbox_oldest_pending_seconds),
         )
     }
 }
@@ -684,10 +650,7 @@ fn local_only_fallbacks(cfg: &Config) -> CheckResult {
             "qai config validate",
         )
     } else {
-        CheckResult::pass(
-            "local_only_fallbacks",
-            "network egress disabled (local-only)",
-        )
+        CheckResult::pass("local_only_fallbacks", "network egress disabled (local-only)")
     }
 }
 
@@ -713,10 +676,7 @@ mod tests {
     fn default_config_with_healthy_probe_passes() {
         let cfg = Config::default();
         let results = checks(&cfg, &probe_ok());
-        let fails: Vec<_> = results
-            .iter()
-            .filter(|r| r.status == CheckStatus::Fail)
-            .collect();
+        let fails: Vec<_> = results.iter().filter(|r| r.status == CheckStatus::Fail).collect();
         assert!(fails.is_empty(), "unexpected failures: {fails:?}");
         assert!(results.len() >= 20, "expected the full check registry");
     }
@@ -736,10 +696,7 @@ mod tests {
         let mut cfg = Config::default();
         cfg.server.bind = "0.0.0.0".into();
         let results = checks(&cfg, &probe_ok());
-        let tls = results
-            .iter()
-            .find(|r| r.id == "security.tls_policy_consistent")
-            .unwrap();
+        let tls = results.iter().find(|r| r.id == "security.tls_policy_consistent").unwrap();
         assert_eq!(tls.status, CheckStatus::Fail);
     }
 
@@ -748,10 +705,7 @@ mod tests {
         let cfg = Config::default();
         let probe = DbProbe::default();
         let results = checks(&cfg, &probe);
-        let reachable = results
-            .iter()
-            .find(|r| r.id == "database.reachable")
-            .unwrap();
+        let reachable = results.iter().find(|r| r.id == "database.reachable").unwrap();
         assert_eq!(reachable.status, CheckStatus::Fail);
     }
 
@@ -773,5 +727,3 @@ mod tests {
         assert!(!payload.is_empty());
     }
 }
-
-use crate::exit_code;
