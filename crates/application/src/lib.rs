@@ -9,6 +9,7 @@ pub mod audit_bridge;
 pub mod db;
 pub mod job_queue;
 pub mod quran;
+pub mod quran_reader;
 
 pub use config::Config;
 
