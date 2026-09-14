@@ -23,6 +23,37 @@ use async_trait::async_trait;
 use std::fmt;
 use storage::repository::JobRecord;
 
+pub mod queue;
+pub mod registry;
+pub mod worker;
+
+#[cfg(test)]
+pub(crate) mod test_support {
+    use storage::repository::JobRecord;
+
+    /// A minimal job record for tests.
+    pub fn record(id: &str, kind: &str, state: &str) -> JobRecord {
+        JobRecord {
+            id: id.into(),
+            kind: kind.into(),
+            payload_json: "{}".into(),
+            idempotency_key: None,
+            state: state.into(),
+            priority: 0,
+            attempts: 0,
+            max_attempts: 5,
+            available_at: time::OffsetDateTime::now_utc()
+                .format(&time::format_description::well_known::Rfc3339)
+                .unwrap_or_default(),
+            lease_owner: None,
+            lease_expires_at: None,
+            checkpoint_json: None,
+            cancel_requested: false,
+            created_by: "test".into(),
+        }
+    }
+}
+
 // ─── Job kinds ───────────────────────────────────────────────
 
 /// Phase 0 job kinds (plan D0.9). Stable strings; handlers register by kind.
@@ -124,6 +155,9 @@ pub enum JobError {
     /// The job exceeded its maximum number of attempts.
     #[error("job {id} exceeded max attempts ({max})")]
     MaxAttemptsExceeded { id: String, max: u32 },
+    /// A storage-layer failure while accessing the queue.
+    #[error("job storage error: {0}")]
+    Storage(String),
 }
 
 // ─── JobHandler ──────────────────────────────────────────────
@@ -201,6 +235,22 @@ impl JobContext {
         self.cancel_requested || self.cancel.load(std::sync::atomic::Ordering::SeqCst)
     }
 
+    /// Create a context sharing an externally-owned cancellation flag (used by
+    /// the worker's watchdog).
+    pub fn with_cancel(
+        job: JobRecord,
+        cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) -> Self {
+        let span = tracing::span!(tracing::Level::INFO, "qai.job", job_id = %job.id);
+        Self {
+            job,
+            cancel_requested: false,
+            span,
+            cancel,
+            checkpoint: std::sync::Arc::new(std::sync::Mutex::new(None)),
+        }
+    }
+
     /// Request cancellation from outside the handler.
     pub fn request_cancel(&self) {
         self.cancel.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -210,6 +260,14 @@ impl JobContext {
     /// that must observe cancellation from a spawned task or a loop.
     pub fn cancel_flag(&self) -> std::sync::Arc<std::sync::atomic::AtomicBool> {
         self.cancel.clone()
+    }
+
+    /// A cloneable handle to the checkpoint slot, so a worker can read the last
+    /// checkpoint the handler recorded after the context is moved into `run`.
+    pub fn checkpoint_sink(
+        &self,
+    ) -> std::sync::Arc<std::sync::Mutex<Option<String>>> {
+        self.checkpoint.clone()
     }
 
     /// Report progress.
