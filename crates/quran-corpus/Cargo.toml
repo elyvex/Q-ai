@@ -12,8 +12,10 @@ storage = { path = "../storage" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+async-trait = { workspace = true }
 csv = { workspace = true }
 sha2 = { workspace = true }
+similar = { workspace = true }
 unicode-segmentation = { workspace = true }
 unicode-normalization = { workspace = true }
 
@@ -23,3 +25,5 @@ workspace = true
 [dev-dependencies]
 serde_json = { workspace = true }
 tempfile = { workspace = true }
+proptest = { workspace = true }
+tokio = { workspace = true }

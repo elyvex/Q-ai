@@ -11,7 +11,7 @@
 //!   the open token (each separator row sits `after_position` of a token).
 //! - Quranic annotation signs (U+06D6..=U+06ED: waqf marks, end-of-ayah,
 //!   sajdah, rub-el-hizb) form their own tokens (`is_pause_mark`), except a
-//!   mark glued to a preceding word character stays attached to that word.
+//!   mark following a word character attaches to that word.
 //! - Everything else accumulates into word tokens.
 //! - Offsets are mapped back onto grapheme clusters, so every token spans at
 //!   least one cluster and all offsets are valid boundaries.
@@ -96,13 +96,13 @@ pub fn tokenize(text: &str) -> TokenizedAyah {
     let mut current_is_mark = false;
     let mut position = 0_u32;
 
-    let mut flush = |current: &mut String,
-                     tokens: &mut Vec<ComputedToken>,
-                     separators: &mut Vec<String>,
-                     position: &mut u32,
-                     start_byte: usize,
-                     start_cluster: u32,
-                     is_mark: bool| {
+    let flush = |current: &mut String,
+                 tokens: &mut Vec<ComputedToken>,
+                 separators: &mut Vec<String>,
+                 position: &mut u32,
+                 start_byte: usize,
+                 start_cluster: u32,
+                 is_mark: bool| {
         if current.is_empty() {
             return;
         }
@@ -135,17 +135,8 @@ pub fn tokenize(text: &str) -> TokenizedAyah {
                 separators.last_mut().expect("at least one separator").push(ch);
             }
             CharKind::Mark => {
-                if !current.is_empty() && !current_is_mark {
-                    flush(
-                        &mut current,
-                        &mut tokens,
-                        &mut separators,
-                        &mut position,
-                        current_start_byte,
-                        current_start_cluster,
-                        current_is_mark,
-                    );
-                }
+                // A mark following a word character attaches to that word;
+                // otherwise marks form their own tokens.
                 if current.is_empty() {
                     current_start_byte = byte;
                     current_start_cluster = cluster_of(&starts, byte);
@@ -261,6 +252,32 @@ mod tests {
             let tokenized = tokenize(text);
             assert!(tokenized.tokens.is_empty());
             assert_eq!(reconstruct(&tokenized.tokens, &tokenized.separators), text);
+        }
+    }
+}
+
+#[cfg(test)]
+mod property_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn roundtrip_is_lossless_and_offsets_valid(text in "\\PC*") {
+            let tokenized = tokenize(&text);
+            prop_assert!(reconstruct(&tokenized.tokens, &tokenized.separators) == text);
+            prop_assert_eq!(tokenized.separators.len(), tokenized.tokens.len() + 1);
+            let graphemes: Vec<&str> = text.graphemes(true).collect();
+            for (index, token) in tokenized.tokens.iter().enumerate() {
+                prop_assert_eq!(token.position, index as u32 + 1);
+                prop_assert!(token.byte_end > token.byte_start);
+                prop_assert!(token.char_end > token.char_start);
+                prop_assert_eq!(
+                    &text[token.byte_start as usize..token.byte_end as usize],
+                    token.surface.as_str()
+                );
+                prop_assert!((token.char_end as usize) <= graphemes.len());
+            }
         }
     }
 }

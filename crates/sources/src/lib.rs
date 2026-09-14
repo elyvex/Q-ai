@@ -1,5 +1,9 @@
 //! Phase 0 — Source catalog, manifest schema, and state machine (D0.10).
 
+pub mod registry;
+
+pub use registry::ValidatorRegistry;
+
 use base64::Engine as _;
 use domain::{
     ApprovalId, ContentHash, HashAlgorithm, LicenseStatus, PrincipalId, SourceId, SourceVersionId,
