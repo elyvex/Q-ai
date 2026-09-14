@@ -59,8 +59,6 @@ fn diagnostic_codes_are_unique_across_crates() {
 #[test]
 fn removable_errors_are_marked_retryable() {
     assert!(Diagnostic::is_retryable(&JobError::Storage("io".into())));
-    assert!(Diagnostic::is_retryable(&SourceError::Storage(
-        StorageError::StorageUnavailable
-    )));
+    assert!(Diagnostic::is_retryable(&SourceError::Storage(StorageError::StorageUnavailable)));
     assert!(!Diagnostic::is_retryable(&ProvenanceError::MissingApprovalToken));
 }
