@@ -9,10 +9,7 @@ pub struct InputLimits {
 
 impl Default for InputLimits {
     fn default() -> Self {
-        Self {
-            max_field_length: 10_000,
-            max_json_depth: 32,
-        }
+        Self { max_field_length: 10_000, max_json_depth: 32 }
     }
 }
 
@@ -76,10 +73,7 @@ mod tests {
 
     #[test]
     fn json_depth_enforced() {
-        let limits = InputLimits {
-            max_json_depth: 3,
-            ..Default::default()
-        };
+        let limits = InputLimits { max_json_depth: 3, ..Default::default() };
         assert!(check_json_depth(r#"{"a":{"b":1}}"#, &limits).is_ok());
         assert!(check_json_depth(r#"{"a":{"b":{"c":{"d":1}}}}"#, &limits).is_err());
     }
