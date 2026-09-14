@@ -658,6 +658,18 @@ impl SourceError {
     }
 }
 
+impl storage::error::Diagnostic for SourceError {
+    fn code(&self) -> storage::error::DiagnosticCode {
+        storage::error::DiagnosticCode::new(self.code(), 0)
+    }
+    fn summary(&self) -> String {
+        self.to_string()
+    }
+    fn is_retryable(&self) -> bool {
+        matches!(self, Self::Storage(_))
+    }
+}
+
 // ─── Tests ──────────────────────────────────────
 
 #[cfg(test)]
