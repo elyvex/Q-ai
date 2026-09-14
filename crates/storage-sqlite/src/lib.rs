@@ -719,7 +719,7 @@ impl JobRepository for SqliteJobRepository {
         .bind(&job.lease_expires_at)
         .bind(&job.checkpoint_json)
         .bind(job.cancel_requested as i64)
-        .bind(&job.created_by)
+        .bind(if job.created_by.is_empty() { None } else { Some(job.created_by.clone()) })
         .bind(now_rfc3339())
         .execute(&mut **tx)
         .await
@@ -752,6 +752,104 @@ impl JobRepository for SqliteJobRepository {
         if result.rows_affected() == 0 {
             return Ok(None);
         }
+        let row = sqlx::query(
+            "SELECT id, kind, payload_json, idempotency_key, state, priority, attempts,
+                    max_attempts, available_at, lease_owner, lease_expires_at, checkpoint_json,
+                    cancel_requested, created_by
+             FROM jobs WHERE id = ?",
+        )
+        .bind(job_id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+        Ok(row.map(map_job_row))
+    }
+
+    async fn claim_next(
+        &mut self,
+        owner: &str,
+        lease_seconds: u64,
+    ) -> Result<Option<JobRecord>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let now = now_rfc3339();
+        let lease_expires = (time::OffsetDateTime::now_utc()
+            + time::Duration::seconds(lease_seconds as i64))
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap_or_default();
+        // Select the highest-priority due job, then claim it atomically.
+        let candidate = sqlx::query(
+            "SELECT id FROM jobs
+             WHERE state IN ('Queued','Interrupted','Checkpointed') AND available_at <= ?
+             ORDER BY priority DESC, available_at ASC LIMIT 1",
+        )
+        .bind(&now)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+        let Some(row) = candidate else {
+            return Ok(None);
+        };
+        let id: String = row.get("id");
+        let result = sqlx::query(
+            "UPDATE jobs
+             SET state = 'Running', lease_owner = ?, lease_expires_at = ?,
+                 attempts = attempts + 1, started_at = COALESCE(started_at, ?)
+             WHERE id = ? AND state IN ('Queued','Interrupted','Checkpointed')",
+        )
+        .bind(owner)
+        .bind(&lease_expires)
+        .bind(now_rfc3339())
+        .bind(&id)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        if result.rows_affected() == 0 {
+            return Ok(None);
+        }
+        let row = sqlx::query(
+            "SELECT id, kind, payload_json, idempotency_key, state, priority, attempts,
+                    max_attempts, available_at, lease_owner, lease_expires_at, checkpoint_json,
+                    cancel_requested, created_by
+             FROM jobs WHERE id = ?",
+        )
+        .bind(&id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+        Ok(row.map(map_job_row))
+    }
+
+    async fn reschedule(
+        &mut self,
+        job_id: &str,
+        delay_seconds: u64,
+        reason: Option<String>,
+    ) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        let available_at = (time::OffsetDateTime::now_utc()
+            + time::Duration::seconds(delay_seconds as i64))
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap_or_default();
+        let affected = sqlx::query(
+            "UPDATE jobs
+             SET state = 'Queued', available_at = ?, lease_owner = NULL, lease_expires_at = NULL,
+                 error_json = ?
+             WHERE id = ?",
+        )
+        .bind(&available_at)
+        .bind(reason)
+        .bind(job_id)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        if affected.rows_affected() == 0 {
+            return Err(StorageError::NotFound { urn: format!("job:{job_id}") });
+        }
+        Ok(())
+    }
+
+    async fn get(&self, job_id: &str) -> Result<Option<JobRecord>, StorageError> {
+        let mut tx = self.tx.lock().await;
         let row = sqlx::query(
             "SELECT id, kind, payload_json, idempotency_key, state, priority, attempts,
                     max_attempts, available_at, lease_owner, lease_expires_at, checkpoint_json,
@@ -817,6 +915,40 @@ impl JobRepository for SqliteJobRepository {
             .await
             .map_err(map_sqlx_error)?;
         Ok(())
+    }
+
+    async fn heartbeat(
+        &mut self,
+        job_id: &str,
+        owner: &str,
+        lease_seconds: u64,
+    ) -> Result<bool, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let lease_expires = (time::OffsetDateTime::now_utc()
+            + time::Duration::seconds(lease_seconds as i64))
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap_or_default();
+        let result = sqlx::query(
+            "UPDATE jobs SET lease_expires_at = ?
+             WHERE id = ? AND lease_owner = ? AND state = 'Running'",
+        )
+        .bind(&lease_expires)
+        .bind(job_id)
+        .bind(owner)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    async fn count_by_state(&self, state: &str) -> Result<i64, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query("SELECT COUNT(*) AS n FROM jobs WHERE state = ?")
+            .bind(state)
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(|_| StorageError::StorageUnavailable)?;
+        Ok(row.get::<i64, _>("n"))
     }
 
     async fn reap_expired_leases(&mut self) -> Result<Vec<String>, StorageError> {
