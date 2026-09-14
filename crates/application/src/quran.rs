@@ -18,9 +18,7 @@ use audit::{Actor, AuditAction, AuditEvent, AuditOutcome};
 use domain::{AuditEventId, PrincipalId, SubjectRef, Timestamp};
 use jobs::{JobContext, JobError, JobHandler, JobKind, JobOutcome};
 use quran_corpus::error::QuranDiagnostic as _;
-use quran_corpus::import::{
-    ImportInput, ImportOptions, ImportOutcome, ImportProgress, run_import,
-};
+use quran_corpus::import::{ImportInput, ImportOptions, ImportOutcome, ImportProgress, run_import};
 use storage::Database as _;
 use storage::error::StorageError;
 use storage_sqlite::SqliteDatabase;
@@ -81,19 +79,17 @@ impl JobHandler for QuranImportHandler {
         }
         let cancel = ctx.cancel_flag();
         let progress = ImportProgress::new();
-        let outcome = run_import(&*self.db, &input, &ImportOptions::default(), &cancel, progress.clone())
-            .await;
+        let outcome =
+            run_import(&*self.db, &input, &ImportOptions::default(), &cancel, progress.clone())
+                .await;
         if let Some(last) = progress.checkpoints().last() {
             ctx.checkpoint(last.as_str());
         }
         match outcome {
             Ok(ImportOutcome::Completed(success)) => {
                 let urn = edition_urn(&success.edition_slug, &success.edition_version);
-                let mut uow = self
-                    .db
-                    .write()
-                    .await
-                    .map_err(|err| JobError::Storage(err.to_string()))?;
+                let mut uow =
+                    self.db.write().await.map_err(|err| JobError::Storage(err.to_string()))?;
                 append_audit_event(
                     &mut *uow,
                     AuditEvent {
@@ -136,10 +132,7 @@ impl JobHandler for QuranImportHandler {
 }
 
 fn audit_chain_genesis() -> domain::ContentHash {
-    domain::ContentHash {
-        algorithm: domain::HashAlgorithm::Sha256,
-        hex: "00".repeat(32),
-    }
+    domain::ContentHash { algorithm: domain::HashAlgorithm::Sha256, hex: "00".repeat(32) }
 }
 
 /// Errors from the approval-gated Quran services.
@@ -265,7 +258,7 @@ async fn audit_activation(
             id: AuditEventId::new(),
             sequence: 0,
             occurred_at: Timestamp::now(),
-            actor: Actor::Principal { principal_id: invoked_by.clone() },
+            actor: Actor::Principal { principal_id: *invoked_by },
             action,
             subject: SubjectRef(subject.to_string()),
             outcome: AuditOutcome::Allowed,
@@ -312,7 +305,13 @@ pub async fn activate_edition(
         })?;
     let generation = uow
         .quran()
-        .activate_edition(&staged.run_id, &staged.edition_id, &invoked_by.to_string(), approval_id, &at.to_string())
+        .activate_edition(
+            &staged.run_id,
+            &staged.edition_id,
+            &invoked_by.to_string(),
+            approval_id,
+            &at.to_string(),
+        )
         .await
         .map_err(ActivationError::storage)?;
     audit_activation(
