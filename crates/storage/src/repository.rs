@@ -231,6 +231,46 @@ pub trait JobRepository: Send + Sync {
         Err(StorageError::StorageUnavailable)
     }
 
+    /// Claim the next available job (Queued/Interrupted/Checkpointed, due now),
+    /// leasing it for `lease_seconds`.
+    async fn claim_next(
+        &mut self,
+        _owner: &str,
+        _lease_seconds: u64,
+    ) -> Result<Option<JobRecord>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Re-queue a job after a delay (retry/backoff).
+    async fn reschedule(
+        &mut self,
+        _job_id: &str,
+        _delay_seconds: u64,
+        _reason: Option<String>,
+    ) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Fetch a job by id.
+    async fn get(&self, _job_id: &str) -> Result<Option<JobRecord>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Renew a job's lease if `owner` still holds it.
+    async fn heartbeat(
+        &mut self,
+        _job_id: &str,
+        _owner: &str,
+        _lease_seconds: u64,
+    ) -> Result<bool, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Count jobs in a given state.
+    async fn count_by_state(&self, _state: &str) -> Result<i64, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
     /// Finish a job with a final state.
     async fn finish(
         &mut self,
