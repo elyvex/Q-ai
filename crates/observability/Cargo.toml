@@ -9,3 +9,19 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 metrics = { workspace = true }
 serde_json = { workspace = true }
+opentelemetry = { workspace = true, optional = true }
+opentelemetry_sdk = { workspace = true, optional = true }
+opentelemetry-otlp = { workspace = true, optional = true }
+tracing-opentelemetry = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+
+[features]
+# Opt-in OTLP export (D0.8 / T42). Off by default: PRD §39 forbids external
+# telemetry without explicit opt-in, and this pulls a large dependency tree.
+otlp = [
+    "dep:opentelemetry",
+    "dep:opentelemetry_sdk",
+    "dep:opentelemetry-otlp",
+    "dep:tracing-opentelemetry",
+    "dep:tokio",
+]

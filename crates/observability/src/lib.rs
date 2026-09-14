@@ -17,6 +17,9 @@
 pub mod metrics;
 pub mod telemetry;
 
+#[cfg(feature = "otlp")]
+pub mod otlp;
+
 use tracing_subscriber::EnvFilter;
 
 /// Output format for the tracing subscriber.
