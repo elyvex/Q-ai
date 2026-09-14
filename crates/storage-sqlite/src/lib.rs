@@ -489,7 +489,6 @@ impl SourceRepository for SqliteSourceRepository {
         }))
     }
 }
-}
 
 // ─── Provenance repository ──────────────────────────────────────────────
 
