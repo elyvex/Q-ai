@@ -12,7 +12,7 @@
 
 use async_trait::async_trait;
 use domain::{
-    Confidence, ContentHash, DataLayer, DerivationVersions, HashAlgorithm,
+    ContentHash, DataLayer, DerivationVersions, HashAlgorithm,
     LicenseStatus, PrincipalId, SemVer, SourceId, SourceVersionId,
     SubjectRef, Timestamp, TrustLevel, VerificationStatus,
 };
