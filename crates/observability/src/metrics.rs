@@ -74,14 +74,12 @@ pub fn set_db_pool_in_use(pool: &str, value: f64) {
 
 /// Record an audit event.
 pub fn record_audit_event(action: &str) {
-    metrics::counter!("qai_audit_events_total", "action" => action.to_string())
-        .increment(1);
+    metrics::counter!("qai_audit_events_total", "action" => action.to_string()).increment(1);
 }
 
 /// Record a configuration reload.
 pub fn record_config_reload(outcome: &str) {
-    metrics::counter!("qai_config_reloads_total", "outcome" => outcome.to_string())
-        .increment(1);
+    metrics::counter!("qai_config_reloads_total", "outcome" => outcome.to_string()).increment(1);
 }
 
 /// Record an error.
