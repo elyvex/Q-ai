@@ -45,34 +45,14 @@ pub struct Dependency {
 }
 
 /// The parsed allowlist, keyed by crate name.
+///
+/// A map (rather than Phase-0's hardcoded struct) so later phases can register new
+/// crates in `allowlist.toml` without touching this gate. Fail-closed is preserved:
+/// a crate absent from the map may depend on no workspace crate.
 #[derive(Debug, Default, Deserialize)]
 pub struct Allowlist {
-    #[serde(default)]
-    pub domain: CrateRule,
-    #[serde(default)]
-    pub application: CrateRule,
-    #[serde(default)]
-    pub storage: CrateRule,
-    #[serde(default, rename = "storage-sqlite")]
-    pub storage_sqlite: CrateRule,
-    #[serde(default)]
-    pub provenance: CrateRule,
-    #[serde(default)]
-    pub audit: CrateRule,
-    #[serde(default)]
-    pub jobs: CrateRule,
-    #[serde(default)]
-    pub sources: CrateRule,
-    #[serde(default)]
-    pub cli: CrateRule,
-    #[serde(default)]
-    pub server: CrateRule,
-    #[serde(default)]
-    pub observability: CrateRule,
-    #[serde(default)]
-    pub testkit: CrateRule,
-    #[serde(default)]
-    pub xtask: CrateRule,
+    #[serde(flatten)]
+    pub crates: HashMap<String, CrateRule>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -91,23 +71,10 @@ impl Allowlist {
     /// Returns the allowed workspace-dependency set for a crate, or an empty set if the
     /// crate is not recognized (fail-closed: unrecognized crates may depend on nothing).
     pub fn allowed_workspace_deps(&self, crate_name: &str) -> HashSet<&str> {
-        let rule = match crate_name {
-            "domain" => &self.domain,
-            "application" => &self.application,
-            "storage" => &self.storage,
-            "storage-sqlite" => &self.storage_sqlite,
-            "provenance" => &self.provenance,
-            "audit" => &self.audit,
-            "jobs" => &self.jobs,
-            "sources" => &self.sources,
-            "cli" => &self.cli,
-            "server" => &self.server,
-            "observability" => &self.observability,
-            "testkit" => &self.testkit,
-            "xtask" => &self.xtask,
-            _ => return Default::default(),
-        };
-        rule.workspace.allow.iter().map(String::as_str).collect()
+        match self.crates.get(crate_name) {
+            Some(rule) => rule.workspace.allow.iter().map(String::as_str).collect(),
+            None => Default::default(),
+        }
     }
 }
 
@@ -296,5 +263,35 @@ mod tests {
         let bad = violations(&meta, &allowlist());
         assert!(bad.iter().any(|v| v.starts_with("cli -> tui")), "got: {bad:?}");
         assert!(bad.iter().any(|v| v.starts_with("tui -> domain")), "got: {bad:?}");
+    }
+
+    #[test]
+    fn newly_registered_crate_uses_its_listed_edges() {
+        // Phase-1 regression: a crate added only via allowlist.toml (no struct
+        // change here) honours exactly its own allow set.
+        let toml = r#"
+            [quran-core]
+            workspace = { allow = ["domain"] }
+        "#;
+        let allowlist: Allowlist = toml::from_str(toml).unwrap();
+        let meta_allowed = meta(
+            vec!["#quran-core@0.0.0", "#domain@0.0.0"],
+            vec![
+                package("#quran-core@0.0.0", "quran-core", vec![("domain", None)]),
+                package("#domain@0.0.0", "domain", vec![]),
+            ],
+        );
+        let bad = violations(&meta_allowed, &allowlist);
+        assert!(bad.is_empty(), "expected no violations, got: {bad:?}");
+
+        let meta_forbidden = meta(
+            vec!["#quran-core@0.0.0", "#storage@0.0.0"],
+            vec![
+                package("#quran-core@0.0.0", "quran-core", vec![("storage", None)]),
+                package("#storage@0.0.0", "storage", vec![]),
+            ],
+        );
+        let bad = violations(&meta_forbidden, &allowlist);
+        assert!(bad.iter().any(|v| v.starts_with("quran-core -> storage")), "got: {bad:?}");
     }
 }
