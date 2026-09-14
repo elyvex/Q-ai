@@ -97,3 +97,7 @@ opentelemetry = "0.27"
 opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
 opentelemetry-otlp = { version = "0.27", default-features = false, features = ["http-proto", "reqwest-client"] }
 tracing-opentelemetry = "0.28"
+
+# --- Phase 1 (Canonical Quran Core) ---
+# Unicode grapheme handling: `char_count` is defined in grapheme clusters (ADR-0104).
+unicode-segmentation = "1.12"
