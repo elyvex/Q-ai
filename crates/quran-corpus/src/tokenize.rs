@@ -7,13 +7,14 @@
 //! `reconstruct(tokenize(text)) == text` always.
 //!
 //! Rules:
-//! - Unicode whitespace runs are separators, recorded exactly.
+//! - Unicode whitespace runs are separators, recorded exactly, and always end
+//!   the open token (each separator row sits `after_position` of a token).
 //! - Quranic annotation signs (U+06D6..=U+06ED: waqf marks, end-of-ayah,
-//!   sajdah, rub-el-hizb) form their own tokens (`is_pause_mark`).
-//! - A mark that does not start a new grapheme cluster (a combining mark glued
-//!   to a preceding letter) stays attached to its word token, so every token
-//!   always spans at least one grapheme cluster and offsets stay valid.
+//!   sajdah, rub-el-hizb) form their own tokens (`is_pause_mark`), except a
+//!   mark glued to a preceding word character stays attached to that word.
 //! - Everything else accumulates into word tokens.
+//! - Offsets are mapped back onto grapheme clusters, so every token spans at
+//!   least one cluster and all offsets are valid boundaries.
 //!
 //! Morphological segmentation is Phase 2 and separate; this layer never alters
 //! canonical order or content.
@@ -59,73 +60,129 @@ pub struct TokenizedAyah {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum ClusterKind {
+enum CharKind {
     Separator,
     Word,
     Mark,
 }
 
+fn char_kind(ch: char) -> CharKind {
+    if ch.is_whitespace() {
+        CharKind::Separator
+    } else if is_pause_mark_scalar(ch) {
+        CharKind::Mark
+    } else {
+        CharKind::Word
+    }
+}
+
+/// The cluster index containing `byte` (`starts` holds cluster start bytes).
+fn cluster_of(starts: &[usize], byte: usize) -> u32 {
+    starts.partition_point(|&start| start <= byte) as u32 - 1
+}
+
 /// Split ayah text into surface tokens with lossless separators.
+///
+/// Splitting is per-character (whitespace ends tokens; a mark following a word
+/// character attaches to it; otherwise marks form their own tokens), while
+/// offsets are expressed in grapheme clusters so they stay valid boundaries.
 pub fn tokenize(text: &str) -> TokenizedAyah {
+    let starts: Vec<usize> = text.grapheme_indices(true).map(|(byte, _)| byte).collect();
     let mut tokens = Vec::new();
     let mut separators = vec![String::new()];
     let mut current = String::new();
-    let mut current_start_byte = 0_u32;
+    let mut current_start_byte = 0_usize;
     let mut current_start_cluster = 0_u32;
-    let mut current_kind: Option<ClusterKind> = None;
-    let mut cluster_index = 0_u32;
+    let mut current_is_mark = false;
     let mut position = 0_u32;
 
-    for (byte, cluster) in text.grapheme_indices(true) {
-        let kind = if cluster.chars().all(|ch| ch.is_whitespace()) {
-            ClusterKind::Separator
-        } else if cluster.chars().all(is_pause_mark_scalar) {
-            ClusterKind::Mark
-        } else {
-            ClusterKind::Word
-        };
-        match kind {
-            ClusterKind::Separator => {
-                separators.last_mut().expect("at least one separator").push_str(cluster);
-            }
-            _ => {
-                if current_kind.is_some_and(|current| current != kind) {
-                    position += 1;
-                    tokens.push(ComputedToken {
-                        position,
-                        surface: std::mem::take(&mut current),
-                        char_start: current_start_cluster,
-                        char_end: cluster_index,
-                        byte_start: current_start_byte,
-                        byte_end: byte as u32,
-                        is_pause_mark: current_kind == Some(ClusterKind::Mark),
-                    });
-                    separators.push(String::new());
-                    current_kind = None;
-                }
-                if current_kind.is_none() {
-                    current_start_byte = byte as u32;
-                    current_start_cluster = cluster_index;
-                    current_kind = Some(kind);
-                }
-                current.push_str(cluster);
-            }
+    let mut flush = |current: &mut String,
+                     tokens: &mut Vec<ComputedToken>,
+                     separators: &mut Vec<String>,
+                     position: &mut u32,
+                     start_byte: usize,
+                     start_cluster: u32,
+                     is_mark: bool| {
+        if current.is_empty() {
+            return;
         }
-        cluster_index += 1;
-    }
-    if current_kind.is_some() {
-        position += 1;
+        *position += 1;
+        let byte_end = start_byte + current.len();
         tokens.push(ComputedToken {
-            position,
-            surface: current,
-            char_start: current_start_cluster,
-            char_end: cluster_index,
-            byte_start: current_start_byte,
-            byte_end: text.len() as u32,
-            is_pause_mark: current_kind == Some(ClusterKind::Mark),
+            position: *position,
+            surface: std::mem::take(current),
+            char_start: start_cluster,
+            char_end: cluster_of(&starts, byte_end - 1) + 1,
+            byte_start: start_byte as u32,
+            byte_end: byte_end as u32,
+            is_pause_mark: is_mark,
         });
         separators.push(String::new());
+    };
+
+    for (byte, ch) in text.char_indices() {
+        match char_kind(ch) {
+            CharKind::Separator => {
+                flush(
+                    &mut current,
+                    &mut tokens,
+                    &mut separators,
+                    &mut position,
+                    current_start_byte,
+                    current_start_cluster,
+                    current_is_mark,
+                );
+                separators.last_mut().expect("at least one separator").push(ch);
+            }
+            CharKind::Mark => {
+                if !current.is_empty() && !current_is_mark {
+                    flush(
+                        &mut current,
+                        &mut tokens,
+                        &mut separators,
+                        &mut position,
+                        current_start_byte,
+                        current_start_cluster,
+                        current_is_mark,
+                    );
+                }
+                if current.is_empty() {
+                    current_start_byte = byte;
+                    current_start_cluster = cluster_of(&starts, byte);
+                    current_is_mark = true;
+                }
+                current.push(ch);
+            }
+            CharKind::Word => {
+                if !current.is_empty() && current_is_mark {
+                    flush(
+                        &mut current,
+                        &mut tokens,
+                        &mut separators,
+                        &mut position,
+                        current_start_byte,
+                        current_start_cluster,
+                        current_is_mark,
+                    );
+                }
+                if current.is_empty() {
+                    current_start_byte = byte;
+                    current_start_cluster = cluster_of(&starts, byte);
+                    current_is_mark = false;
+                }
+                current.push(ch);
+            }
+        }
     }
+    flush(
+        &mut current,
+        &mut tokens,
+        &mut separators,
+        &mut position,
+        current_start_byte,
+        current_start_cluster,
+        current_is_mark,
+    );
     TokenizedAyah { tokens, separators }
 }
 
