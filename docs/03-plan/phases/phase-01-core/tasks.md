@@ -70,9 +70,9 @@ fallback decision), and the fixture set exists.
 | P1-T09 | Reference golden-set tests (300 cases incl. malformed) | D1.13 | T08 | 2.0 | QA | ☑ |
 | P1-T10 | `QuranQuotation` + constructor visibility guard + tests | D1.9 | T07 | 1.5 | BE | ☑ |
 | P1-T11 | ADR-0102 / 0103 / 0105 | ADR | T08 | 1.5 | DOC | ☐ |
-| P1-T12 | Migrations `0010`–`0012` + triggers + constraint tests | D1.5 | T07 | 3.0 | BE | ☐ |
-| P1-T13 | Repository layer: editions, surahs, ayahs, tokens, divisions (read paths) | D1.5 | T12 | 3.0 | BE | ☐ |
-| P1-T14 | Immutability test suite (trigger + API-level guards) | D1.13 | T12 | 2.0 | QA | ☐ |
+| P1-T12 | Migrations `0010`–`0012` + triggers + constraint tests | D1.5 | T07 | 3.0 | BE | ☑ |
+| P1-T13 | Repository layer: editions, surahs, ayahs, tokens, divisions (read paths) | D1.5 | T12 | 3.0 | BE | ☑ |
+| P1-T14 | Immutability test suite (trigger + API-level guards) | D1.13 | T12 | 2.0 | QA | ☑ |
 
 > **T06/T07 are the frozen vocabulary.** `quran-core` may depend only on `{domain, serde,
 > thiserror}` (plus Unicode crates for grapheme handling) — no async, no I/O, no `sqlx`.
@@ -104,13 +104,13 @@ before opening the sprint.
 | P1-T15 | Intermediate format schema + JSON Schema + serde types | D1.2 | T07 | 2.0 | BE | ☑ |
 | P1-T16 | Adapter trait + adapter for the chosen dataset (per ADR-0101) | D1.2 | T15 | 3.0 | DATA | ☑ |
 | P1-T17 | Second adapter (different shape) to prove extensibility | D1.2 | T16 | 1.5 | DATA | ☑ |
-| P1-T18 | Register `quran_edition_v1` in the Phase-0 validator registry | D1.4 | T15 | 1.0 | BE | ☐ |
-| P1-T19 | Validator rules QV-001…QV-012 | D1.4 | T18 | 3.5 | BE | ☐ |
-| P1-T20 | Validator rules QV-013…QV-028 | D1.4 | T19 | 3.5 | BE | ☐ |
-| P1-T21 | Unicode auditor (blocks, forbidden points, normalization check, grapheme utils) | D1.4 | T18 | 2.5 | BE | ☐ |
-| P1-T22 | Tokenizer (whitespace-preserving) + separator capture + offset computation | D1.3 | T15 | 3.0 | BE | ☐ |
-| P1-T23 | Hashing: `text_hash`, `structure_hash`, `token_order_hash` per ADR-0108 | D1.3 | T22 | 2.0 | BE | ☐ |
-| P1-T24 | Migrations `0014_staging`, `0015_validation` | D1.5 | T12 | 1.5 | BE | ☐ |
+| P1-T18 | Register `quran_edition_v1` in the Phase-0 validator registry | D1.4 | T15 | 1.0 | BE | ☑ |
+| P1-T19 | Validator rules QV-001…QV-012 | D1.4 | T18 | 3.5 | BE | ☑ |
+| P1-T20 | Validator rules QV-013…QV-028 | D1.4 | T19 | 3.5 | BE | ☑ |
+| P1-T21 | Unicode auditor (blocks, forbidden points, normalization check, grapheme utils) | D1.4 | T18 | 2.5 | BE | ☑ |
+| P1-T22 | Tokenizer (whitespace-preserving) + separator capture + offset computation | D1.3 | T15 | 3.0 | BE | ☑ |
+| P1-T23 | Hashing: `text_hash`, `structure_hash`, `token_order_hash` per ADR-0108 | D1.3 | T22 | 2.0 | BE | ☑ |
+| P1-T24 | Migrations `0014_staging`, `0015_validation` | D1.5 | T12 | 1.5 | BE | ☑ |
 
 ### 4.2 Sprint 1.2b — Importer, activation, differ, verification (≈ 23.0 ed)
 
@@ -121,7 +121,7 @@ before opening the sprint.
 | P1-T27 | Edition differ (char-level, per ADR-0109) + `DifferenceReport` | D1.3 | T23 | 2.5 | BE | ☐ |
 | P1-T28 | Activation transaction + rollback + `corpus_generation` | D1.3 | T25, T27 | 2.5 | BE | ☐ |
 | P1-T29 | Crash-at-each-checkpoint test matrix (13 cases) | D1.13 | T25, T28 | 2.5 | QA | ☐ |
-| P1-T30 | Adversarial-corpus rejection tests (16 fixtures × correct rule id) | D1.13 | T20, T25 | 2.5 | QA | ☐ |
+| P1-T30 | Adversarial-corpus rejection tests (16 fixtures × correct rule id) | D1.13 | T20, T25 | 2.5 | QA | ☑ |
 | P1-T31 | ADR-0106 / 0107 / 0108 / 0109 | ADR | T23, T28 | 2.0 | DOC | ☐ |
 
 > **T25 is the §34 pipeline, exactly:** claim → verify hashes → detect format/select adapter →

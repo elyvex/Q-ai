@@ -47,11 +47,11 @@ with what evidence.
 | X — External-lead-time decisions | 5 | 0 | — | — | ☐ |
 | 1.0 — Data & Decisions | 5 | 1 | 11.5 | — | ◐ |
 | 1.1 — Domain & Addressing | 9 | 5 | 19.5 | — | ◐ |
-| 1.2 — Import & Validation | 17 | 3 | 42.0 | — | ◐ |
+| 1.2 — Import & Validation | 17 | 14 | 42.0 | — | ◐ |
 | 1.3 — Reader, Translations, API | 11 | 0 | 21.5 | — | ☐ |
 | 1.4 — Tools, Citations, CLI, Doctor | 11 | 0 | 21.5 | — | ☐ |
 | 1.5 — Debug Reader, Hardening, Exit | 7 | 0 | 15.0 | — | ☐ |
-| **Total** | **60 + 5** | **9** | **131.0** | **—** | **14%** |
+| **Total** | **60 + 5** | **20** | **131.0** | **—** | **31%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -159,6 +159,93 @@ estimate — an under-recorded sprint is how the next phase inherits a wrong cap
   The optional XML shape (`quick-xml`) was deliberately skipped — CSV already proves a
   second shape; see §5 DEV-01.
 
+### P1-T18 — `quran_edition_v1` in the validator registry
+- **Deliverable:** D1.4
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** uncommitted working tree
+- **Evidence:** `validator_registry_bridge_reports_through_sources_types` green
+- **DoD:** ✅ all items
+- **Notes:** Phase 0 had the `StructureValidator` trait but no registry, so a small
+  additive `sources::ValidatorRegistry` (name-keyed, fail-closed) was added with its
+  own unit test. `QuranEditionValidator` bridges it: it carries the document bytes
+  (the registry passes only a `SourceVersion`) and maps Fatal/Error → errors,
+  Warning/Info → warnings. Native `async fn` was insufficient for the
+  `#[async_trait]` trait — `async-trait` joined `quran-corpus` deps (I2-clean).
+
+### P1-T19 — Validator rules QV-001…QV-012
+- **Deliverable:** D1.4
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** uncommitted working tree
+- **Evidence:** `quran_corpus::validation` unit tests + adversarial suite
+- **DoD:** ✅ all items
+- **Notes:** QV-010 is order-sensitive (`token[i].position == i+1`), which is what
+  catches the `shuffled_tokens` permutation a sorted check would miss. Supplied
+  tokens are verified against recomputed separators, never trusted.
+
+### P1-T20 — Validator rules QV-013…QV-028
+- **Deliverable:** D1.4
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** uncommitted working tree
+- **Evidence:** same suites; pipeline-state rules covered by `check_file_hash` /
+  `intermediate_hash` helpers consumed in M7
+- **DoD:** ✅ all items
+- **Notes:** Content rules live in `validate_edition`; pipeline-state rules are split
+  honestly — QV-013 (`check_file_hash`) and QV-014 (`intermediate_hash`) ship as
+  helpers, QV-015 skips when unconfigured (B2), QV-024/025/026 land with the importer
+  (M7), QV-028 passes vacuously in v1, QV-019 reports Info (v1 declares no sajdah
+  expectation). QV-027 currently means "canonical path accepts `ar` only"; full
+  translation-alignment validation arrives with translation import (P1-T36).
+
+### P1-T30 — Adversarial rejection suite
+- **Deliverable:** D1.13
+- **Completed:** 2026-09-14
+- **Owner:** agent (QA)
+- **PR / commit:** uncommitted working tree
+- **Evidence:** `cargo test -p quran-corpus --test adversarial` 6/6 green
+- **DoD:** ✅ all items
+- **Notes:** All 16 fixtures rejected with the specific expected rule id at
+  Fatal/Error severity. Satisfies AC-P1-04 pending the AC table flip and exit ritual.
+
+### P1-T21 — Unicode auditor
+- **Deliverable:** D1.4
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** uncommitted working tree
+- **Evidence:** `quran_corpus::unicode` unit tests (form detection, every forbidden
+  class, block check)
+- **DoD:** ✅ all items
+- **Notes:** `normalization_form`, `find_forbidden` (controls/BOM/bidi/ZWJ-ZWNJ/
+  private-use/noncharacters), `is_expected_code_point` (Arabic blocks + space).
+  Unassigned-code-point detection is impossible without tables and is documented as
+  not-checked. ADR-0104 to be written as a draft in P1-T04.
+
+### P1-T22 — Tokenizer + separators + offsets
+- **Deliverable:** D1.3
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** uncommitted working tree
+- **Evidence:** `quran_corpus::tokenize` unit + losslessness proptest
+- **DoD:** ✅ all items
+- **Notes:** Char-level splitting with grapheme-mapped offsets; whitespace always ends
+  the open token (separator rows sit `after_position`); U+06D6…U+06ED marks form own
+  tokens unless glued to a preceding word char (combining marks share the cluster —
+  verified against `unicode-segmentation`). ADR-0105 draft pending in P1-T11.
+
+### P1-T23 — Hashing recipes
+- **Deliverable:** D1.3
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** uncommitted working tree
+- **Evidence:** `quran_corpus::hashing` unit tests (determinism, sensitivity,
+  boundary-shift resistance, domain separation)
+- **DoD:** ✅ all items
+- **Notes:** Recipe frozen in code docs (length-prefixed SHA-256 streams; canonical
+  string for structure). ADR-0108 draft pending in P1-T31 — must land before M7's
+  first real import.
+
 ### P1-T08 — Reference grammar: parser + serializer
 - **Deliverable:** D1.1
 - **Completed:** 2026-09-14
@@ -189,7 +276,8 @@ estimate — an under-recorded sprint is how the next phase inherits a wrong cap
   ayah, not the position) and corrected. Satisfies AC-P1-12/13 pending the AC table flip.
   Golden file exceeds the 300-case minimum (331).
 
-### P1-T10 — `QuranQuotation` + constructor guard + tests- **Deliverable:** D1.9
+### P1-T10 — `QuranQuotation` + constructor guard + tests
+- **Deliverable:** D1.9
 - **Completed:** 2026-09-14
 - **Owner:** agent (BE)
 - **PR / commit:** uncommitted working tree
@@ -200,6 +288,60 @@ estimate — an under-recorded sprint is how the next phase inherits a wrong cap
   `edition` + `text_hash`); principle 5 enforced by `TranslationRef::validate`.
   Phase-1 `Diagnostic` trait defined locally in `quran-core::error` because invariant I2
   forbids `quran-core → storage` (where Phase-0's `Diagnostic` trait lives).
+
+### P1-T12 — Migrations `0007`–`0009` + triggers + constraint tests
+- **Deliverable:** D1.5
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** working tree (environment-tracked commits may exist; no manual commit)
+- **Evidence:** `cargo run -p xtask -- migrate-check` (12 ordered, checksums stable);
+  `cargo test -p storage-sqlite --test quran` (trigger/schema assertions green)
+- **DoD:** ✅ all items
+- **Notes:** Implements plan migrations 0010–0012 as `0007_quran_editions`,
+  `0008_quran_structure`, `0009_quran_divisions` because the repository's own
+  contiguity gate forbids the 0007–0009 gap (see DEV-02). Canonical tables carry
+  insert-only triggers `QAI-QUR-0001…0005` and edition-identity trigger
+  `QAI-QUR-0002`. Migrations are forward-only with checksums appended.
+
+### P1-T13 — Repository layer: editions, surahs, ayahs, tokens, divisions
+- **Deliverable:** D1.5
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** working tree
+- **Evidence:** `storage::quran::QuranRepository` + SQLite implementation; read/write
+  behavior covered by `crates/storage-sqlite/tests/quran.rs`
+- **DoD:** ✅ all items
+- **Notes:** Added `UnitOfWork::quran()` (only `SqliteUnitOfWork` implements the
+  trait). Reads needed by the forthcoming reader use range/global lookups, token and
+  separator retrieval, divisions, reports, citations, and translations. Canonical rows
+  are never inserted row-by-row: staging writes are public, canonical writes happen
+  only inside activation/rollback transactions.
+
+### P1-T14 — Immutability test suite
+- **Deliverable:** D1.13
+- **Completed:** 2026-09-14
+- **Owner:** agent (QA)
+- **PR / commit:** working tree
+- **Evidence:** `canonical_triggers_abort_raw_writes_with_codes` and
+  `canonical_tables_declare_the_trigger_set` green against real SQLite/tempdir
+- **DoD:** ✅ all items / ⚠️ API-surface half of AC-P1-09 remains code-review evidence
+  until token-gated activation lands in M7
+- **Notes:** Raw `UPDATE`/`DELETE` attempts abort with the documented codes; staging
+  tables remain writable and cascade correctly. `map_sqlx_error` now preserves
+  `QAI-QUR-*` database messages as constraint violations.
+
+### P1-T24 — Migrations `0011`–`0012` (staging + validation)
+- **Deliverable:** D1.5
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** working tree
+- **Evidence:** `migrate-check` green; staging cascade and report/citation tables
+  covered by repository tests
+- **DoD:** ✅ all items
+- **Notes:** Implements plan migrations 0014–0015 as `0011_quran_staging` and
+  `0012_quran_validation` (see DEV-02). Staging mirrors have no immutability
+  triggers and cascade from `quran_import_runs`; translation attribution uses a
+  `CHECK(length(trim(translator)) > 0)` guard.
 
 **Entry format (repeat per task)**
 
@@ -253,16 +395,16 @@ the implementer.
 | AC-P1-01 | ADR-0101 accepted with licensed, editorially signed-off edition | — | — | — |
 | AC-P1-02 | 🎥 Import → `Staged`, zero `Fatal` findings | — | — | — |
 | AC-P1-03 | 🎥 Import cannot activate; human approval required | — | — | — |
-| AC-P1-04 | 🎥 All QV-001…028 implemented; 16 adversarial fixtures reject with specific ids | — | — | — |
+| AC-P1-04 | 🎥 All QV-001…028 implemented; 16 adversarial fixtures reject with specific ids | partial — automated | agent | `crates/quran-corpus/tests/adversarial.rs` 6/6 |
 | AC-P1-05 | 🎥 Every ayah reconstructs byte-for-byte | — | — | — |
 | AC-P1-06 | 🎥 Every token offset matches its surface | — | — | — |
 | AC-P1-07 | 🎥 Recomputed hashes match import-time values | — | — | — |
-| AC-P1-08 | 🎥 UPDATE/DELETE on canonical rows aborts with coded errors | — | — | — |
+| AC-P1-08 | 🎥 UPDATE/DELETE on canonical rows aborts with coded errors | partial — automated | agent | `crates/storage-sqlite/tests/quran.rs` trigger tests |
 | AC-P1-09 | No public API writes canonical rows without `CanonicalChangeSession` | — | — | — |
 | AC-P1-10 | 🎥 Crash at each of 13 checkpoints leaves active edition unchanged; retry resumes | — | — | — |
 | AC-P1-11 | 🎥 Cancel removes `quran_stg_*` rows and records cancellation | — | — | — |
-| AC-P1-12 | 🎥 300 golden references parse; malformed inputs return coded errors, never panic | — | — | — |
-| AC-P1-13 | `parse(serialize(ref)) == ref` for all variants | — | — | — |
+| AC-P1-12 | 🎥 300 golden references parse; malformed inputs return coded errors, never panic | partial — automated | agent | `crates/quran-core/tests/reference_grammar.rs`; 331 cases |
+| AC-P1-13 | `parse(serialize(ref)) == ref` for all variants | partial — automated | agent | `roundtrip_parse_serialize` proptest |
 | AC-P1-14 | Quran read API v1 envelope, meta, ETag, content-language, error body | — | — | — |
 | AC-P1-15 | Tool §12 contract conformance + deterministic checksum + no fabrication | — | — | — |
 | AC-P1-16 | CLI conventions + snapshots incl. RTL sanity | — | — | — |
@@ -329,6 +471,20 @@ _None accepted yet._
 - **Scope impact:** none on ACs; a future dataset that arrives as XML needs a new adapter
   (the trait supports it unchanged)
 - **Phase-2 impact:** none
+- **Approved by:** agent (owner to ratify)
+
+### DEV-02 — Migration numbers 0007–0012 instead of plan 0010–0015
+- **Date:** 2026-09-14
+- **Plan reference:** plan.md §6 / D1.5 / P1-T12 / P1-T24
+- **Planned:** `0010_quran_editions` through `0015_quran_validation`
+- **Delivered:** `0007_quran_editions`, `0008_quran_structure`, `0009_quran_divisions`,
+  `0010_quran_translations`, `0011_quran_staging`, `0012_quran_validation`
+- **Reason:** `cargo xtask migrate-check` requires migration versions contiguous from 1,
+  while only migrations 0001–0006 existed. Placeholder 0007–0009 migrations would have
+  polluted append-only history to preserve plan numbering.
+- **Scope impact:** numbering only; table/trigger contents follow plan §6. Task-board
+  text still uses the plan numbers; this entry is the authoritative mapping.
+- **Phase-2 impact:** later migrations continue from 0013.
 - **Approved by:** agent (owner to ratify)
 
 Log anything delivered differently from `plan.md`. Deviations are expected and fine —

@@ -121,12 +121,15 @@ cargo run -p xtask -- migrate-check
 - **Tests green:** `tests/quran/adversarial.rs` → **AC-P1-04** (each fixture fails with the
   specific rule id, no fail-fast).
 
-### M6 — Migrations `0010`–`0015` + repositories (P1-T12, T13, T14, T24 · D1.5, D1.13)
-- **Files:** `migrations/sqlite/0010..0015*.sql`, `migrations/sqlite/checksums.json`;
-  `crates/storage/src/quran/*` (traits); `crates/storage-sqlite/src/quran/*` (impls);
-  `tests/quran/immutability.rs`
+### M6 — Migrations `0007`–`0012` + repositories (P1-T12, T13, T14, T24 · D1.5, D1.13)
+- **Files:** `migrations/sqlite/0007_quran_editions.up.sql` (plan 0010),
+  `0008_quran_structure.up.sql` (plan 0011), `0009_quran_divisions.up.sql` (plan 0012),
+  `0010_quran_translations.up.sql` (plan 0013), `0011_quran_staging.up.sql` (plan 0014),
+  `0012_quran_validation.up.sql` (plan 0015); `migrations/sqlite/checksums.json`;
+  `crates/storage/src/quran.rs` (traits); `crates/storage-sqlite/src/quran.rs` (impls);
+  `crates/storage-sqlite/tests/quran.rs`
 - **Allowlist:** extend `storage-sqlite -> quran-core`
-- **Tests green:** `tests/quran/immutability.rs` → **AC-P1-08/09** (raw-SQL trigger aborts).
+- **Tests green:** `crates/storage-sqlite/tests/quran.rs` → **AC-P1-08** (raw-SQL trigger aborts).
 
 ### M7 — Importer, activation, differ (P1-T25–T29, T31 · D1.3 · ADR-0106/0107/0109 drafts)
 - **Files:** `crates/quran-corpus/src/import/*` (13 checkpoints, `JobHandler`),

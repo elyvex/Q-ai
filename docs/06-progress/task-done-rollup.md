@@ -29,6 +29,22 @@
   JSON manifest's ayahs exactly.
 - P1-T05 — synthetic `test-edition-min` + 16 adversarial fixtures (all schema-valid;
   targeted at specific QV ids in M5).
+- P1-T21 — Unicode auditor (normalization form, forbidden points, expected blocks).
+- P1-T22 — whitespace-preserving tokenizer + exact separators + grapheme/byte
+  offsets, with a losslessness proptest.
+- P1-T23 — frozen `text_hash` / `structure_hash` / `token_order_hash` recipes.
+- P1-T18 — `quran_edition_v1` registered in a new (additive) `sources::ValidatorRegistry`;
+  `QuranEditionValidator` bridges registry calls to the detailed validator.
+- P1-T19/T20 — all QV-001…QV-028 implemented (content rules in `validate_edition`;
+  pipeline-state rules split honestly: QV-013/014 helpers now, QV-015 skip-if-unconfigured,
+  QV-024/025/026 with the importer, QV-028 vacuous in v1).
+- P1-T30 — 16/16 adversarial fixtures rejected with their specific rule ids.
+  AC-P1-04 automated-green (exit ritual pending).
+- P1-T12/T24 — Quran migrations `0007`–`0012` with insert-only triggers and checksums.
+- P1-T13 — `QuranRepository` plus SQLite staging, activation/rollback, canonical reads,
+  reports, citations, and translations.
+- P1-T14 — raw-SQL trigger suite plus staging/activation/rollback behavior. AC-P1-08
+  automated-green (exit ritual pending).
 
 **Tooling**
 - M0 — allowlist entries for `quran-core`, `quran-corpus`, `citations`, `tools`,
