@@ -35,6 +35,16 @@ All notable changes to Q-ai are documented here.
 - **sources**: `ManifestParser::ingest_local` (Staged) with tamper detection and the
   unsigned policy; `SourceError` gains stable `QAI-SRC-nnnn` codes.
 - **xtask**: `coverage-gate` (per-crate thresholds, CI-wired) and `adr-lint` (AC-P0-19).
+- **jobs**: in-process worker pool — `JobQueue` trait + `InMemoryJobQueue`, `HandlerRegistry`,
+  and a `Worker` with cancellation/heartbeat, retry/backoff, dead-lettering, and minimal
+  JSON-Schema payload validation; `application::job_queue` wires it to SQLite.
+- **sources**: real **ed25519** manifest signature verification (`ed25519-dalek`) with a
+  tamper/wrong-key test.
+- **config**: `SecretStore` backends — env, **XChaCha20-Poly1305** encrypted file, and OS
+  keychain behind the `keychain` feature.
+- **observability**: opt-in OTLP trace exporter behind the `otlp` feature (T42).
+- **storage**: `Diagnostic` now has rendering defaults; `JobError`/`AuditError`/
+  `ProvenanceError`/`SourceError` implement it with stable `QAI-*` codes.
 - **docs**: ADR-0000 (project architecture), ADR-0301 (RAG strategy, Proposed),
   `examples/config/default.toml`, `docs/plans/handoff-p0-to-p1.md`,
   `docs/05-followups/done.md` (AC verification).
