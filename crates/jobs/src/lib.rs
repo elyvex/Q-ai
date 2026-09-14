@@ -20,8 +20,6 @@
 //! ```
 
 use async_trait::async_trait;
-use domain::ids::JobId;
-use storage::error::StorageError;
 use storage::repository::JobRecord;
 use std::fmt;
 
@@ -249,6 +247,7 @@ impl JobStore {
     }
 
     /// Transition a job state, enforcing valid transitions.
+    #[cfg(test)]
     fn validate_transition(from: JobState, to: JobState) -> bool {
         match from {
             JobState::Queued => matches!(to, JobState::Leased | JobState::Cancelled),
@@ -269,7 +268,7 @@ impl JobRepository for JobStore {
 
     async fn claim(&mut self, job_id: &str, owner: &str) -> Result<Option<JobRecord>, JobError> {
         self.repo.claim(job_id, owner).await
-            .map_err(|e| JobError::NotFound { id: job_id.to_string() })
+            .map_err(|_e| JobError::NotFound { id: job_id.to_string() })
     }
 
     async fn finish(
@@ -279,12 +278,12 @@ impl JobRepository for JobStore {
         result: Option<String>,
     ) -> Result<(), JobError> {
         self.repo.finish(job_id, &state.to_string(), result).await
-            .map_err(|e| JobError::NotFound { id: job_id.to_string() })
+            .map_err(|_e| JobError::NotFound { id: job_id.to_string() })
     }
 
     async fn cancel(&mut self, job_id: &str) -> Result<(), JobError> {
         self.repo.cancel(job_id).await
-            .map_err(|e| JobError::NotFound { id: job_id.to_string() })
+            .map_err(|_e| JobError::NotFound { id: job_id.to_string() })
     }
 
     async fn checkpoint(
@@ -294,7 +293,7 @@ impl JobRepository for JobStore {
         checkpoint: Option<String>,
     ) -> Result<(), JobError> {
         self.repo.checkpoint(job_id, progress, checkpoint).await
-            .map_err(|e| JobError::NotFound { id: job_id.to_string() })
+            .map_err(|_e| JobError::NotFound { id: job_id.to_string() })
     }
 
     async fn reap_expired_leases(&mut self) -> Result<Vec<String>, JobError> {
@@ -302,7 +301,7 @@ impl JobRepository for JobStore {
             .map_err(|e| JobError::NotFound { id: e.to_string() })
     }
 
-    async fn get(&mut self, job_id: &str) -> Result<Option<JobRecord>, JobError> {
+    async fn get(&mut self, _job_id: &str) -> Result<Option<JobRecord>, JobError> {
         // Note: storage::JobRepository doesn't have a `get` method,
         // so we cast through. This is a Phase 0 stub.
         Ok(None)
