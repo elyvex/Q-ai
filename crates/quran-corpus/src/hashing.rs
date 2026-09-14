@@ -41,7 +41,8 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 }
 
 /// Render a hash in storage form (`sha256:<hex>`), matching D0.6.
-pub fn tagged(hash: &ContentHash) -> String {    let algorithm = match hash.algorithm {
+pub fn tagged(hash: &ContentHash) -> String {
+    let algorithm = match hash.algorithm {
         HashAlgorithm::Sha256 => "sha256",
         HashAlgorithm::Blake3 => "blake3",
     };
