@@ -1,0 +1,5 @@
+# Cargo aliases for Q-ai build tooling (D0.1).
+# Enables `cargo xtask <cmd>` as referenced by the Phase-0 acceptance criteria
+# (e.g. `cargo xtask arch-check`, `cargo xtask ci`).
+[alias]
+xtask = "run --quiet --package xtask --"
