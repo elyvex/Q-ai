@@ -8,12 +8,7 @@ pub fn sanitize_html(input: &str) -> String {
     let mut out = input.to_string();
 
     // Remove <script>…</script> blocks (case-insensitive, non-greedy).
-    out = replace_all_case_insensitive(
-        &out,
-        "<script",
-        "</script>",
-        "",
-    );
+    out = replace_all_case_insensitive(&out, "<script", "</script>", "");
 
     // Remove on*= event-handler attributes.
     out = strip_on_attributes(&out);
@@ -24,7 +19,12 @@ pub fn sanitize_html(input: &str) -> String {
     out
 }
 
-fn replace_all_case_insensitive(haystack: &str, open: &str, close: &str, replacement: &str) -> String {
+fn replace_all_case_insensitive(
+    haystack: &str,
+    open: &str,
+    close: &str,
+    replacement: &str,
+) -> String {
     let mut result = String::with_capacity(haystack.len());
     let lower = haystack.to_lowercase();
     let open_l = open.to_lowercase();
@@ -69,11 +69,7 @@ fn strip_on_attributes(input: &str) -> String {
                 return None;
             }
             let b = remaining.as_bytes()[after];
-            if b.is_ascii_alphabetic() {
-                Some(after + 1)
-            } else {
-                None
-            }
+            if b.is_ascii_alphabetic() { Some(after + 1) } else { None }
         };
 
         if let Some(mut j) = is_attr_start(0) {
