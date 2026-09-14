@@ -5,7 +5,7 @@
 //! Phase-N stub commands.
 
 pub mod doctor;
-mod exit_code;
+pub mod exit_code;
 
 use clap::{Parser, Subcommand};
 use config::Config;
@@ -216,13 +216,13 @@ pub fn dispatch(cli: Cli) -> i32 {
             doctor::run_checks(&cfg, &probe, json || cli.json, repair_preview)
         }
         Commands::Config { action } => match action {
-            ConfigAction::Show { explain, defaults, json } => handle_config_show(explain, defaults, json),
+            ConfigAction::Show { explain, defaults, json } => {
+                handle_config_show(explain, defaults, json)
+            }
             ConfigAction::Get { key } => handle_config_get(&key),
             ConfigAction::Validate { file } => handle_config_validate(file.as_deref()),
         },
-        Commands::Db { action } => {
-            handle_db(action, &cfg, cli.json)
-        }
+        Commands::Db { action } => handle_db(action, &cfg, cli.json),
         Commands::Secret { .. } => phase_stub("secret", 11),
         Commands::Source { .. } => phase_stub("source", 1),
         Commands::Job { .. } => phase_stub("job", 1),
@@ -232,13 +232,10 @@ pub fn dispatch(cli: Cli) -> i32 {
                 eprintln!("error: Phase 0 restricts server bind to loopback; refusing `{bind}`");
                 return exit_code::POLICY;
             }
-            let r = tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .map_err(|e| {
-                    eprintln!("failed to start async runtime: {e}");
-                    exit_code::INTERNAL
-                });
+            let r = tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(|e| {
+                eprintln!("failed to start async runtime: {e}");
+                exit_code::INTERNAL
+            });
             match r {
                 Ok(rt) => {
                     let result = rt.block_on(server::start(&bind));
@@ -261,9 +258,7 @@ fn loads_or_default(cli: &Cli) -> Config {
     let mut cfg = match cli.config.as_ref() {
         Some(path) => {
             let overrides = std::collections::BTreeMap::new();
-            config::Config::load(Some(path), "QAI", &overrides)
-                .map(|(c, _)| c)
-                .unwrap_or_default()
+            config::Config::load(Some(path), "QAI", &overrides).map(|(c, _)| c).unwrap_or_default()
         }
         None => Config::default(),
     };
@@ -363,10 +358,7 @@ fn handle_db(action: DbAction, cfg: &Config, json: bool) -> i32 {
             match block_on(application::db::verify_migrations(cfg, &migrations_dir)) {
                 Ok(report) => {
                     if !report.valid {
-                        eprintln!(
-                            "checksum mismatch at version(s): {:?}",
-                            report.mismatches
-                        );
+                        eprintln!("checksum mismatch at version(s): {:?}", report.mismatches);
                         return exit_code::VALIDATION;
                     }
                     if json {
@@ -388,18 +380,16 @@ fn handle_db(action: DbAction, cfg: &Config, json: bool) -> i32 {
                 }
             }
         }
-        DbAction::Backup { path } => {
-            match block_on(application::db::backup_database(cfg, &path)) {
-                Ok(()) => {
-                    println!("backup written to {path}");
-                    exit_code::OK
-                }
-                Err(e) => {
-                    eprintln!("backup failed: {e}");
-                    exit_code::INTERNAL
-                }
+        DbAction::Backup { path } => match block_on(application::db::backup_database(cfg, &path)) {
+            Ok(()) => {
+                println!("backup written to {path}");
+                exit_code::OK
             }
-        }
+            Err(e) => {
+                eprintln!("backup failed: {e}");
+                exit_code::INTERNAL
+            }
+        },
         DbAction::Restore { path, yes } => {
             if !yes {
                 eprintln!("refusing to restore without --yes");
@@ -415,10 +405,7 @@ fn handle_db(action: DbAction, cfg: &Config, json: bool) -> i32 {
 
 /// Run a future to completion on a small current-thread runtime.
 fn block_on<F: std::future::Future>(fut: F) -> F::Output {
-    match tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-    {
+    match tokio::runtime::Builder::new_current_thread().enable_all().build() {
         Ok(rt) => rt.block_on(fut),
         Err(e) => {
             eprintln!("failed to start async runtime: {e}");
