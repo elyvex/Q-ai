@@ -86,9 +86,7 @@ pub fn check_archive_entry(
         return Err(SecurityError::PathTraversal);
     }
     // Windows drive prefix (e.g. `C:\...`) or backslash separators.
-    if entry.name.contains('\\')
-        || entry.name.as_bytes().get(1).is_some_and(|b| *b == b':')
-    {
+    if entry.name.contains('\\') || entry.name.as_bytes().get(1).is_some_and(|b| *b == b':') {
         return Err(SecurityError::PathTraversal);
     }
     let mut depth_budget: i32 = 0;
