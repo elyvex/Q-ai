@@ -51,6 +51,13 @@ enum Commands {
     },
     /// Validate Phase-0 ADRs (existence, Accepted, all §48 fields).
     AdrLint,
+    /// Validate a JSON instance against a JSON Schema (Phase-0 subset).
+    Validate {
+        /// The JSON document to validate.
+        instance: std::path::PathBuf,
+        /// The JSON Schema to validate against.
+        schema: std::path::PathBuf,
+    },
 }
 
 fn run(cli: Cli) -> Result<(), anyhow::Error> {
@@ -62,6 +69,7 @@ fn run(cli: Cli) -> Result<(), anyhow::Error> {
         Commands::GenSchema => schema::run(),
         Commands::CoverageGate { path } => coverage::run(&path),
         Commands::AdrLint => adr::run(),
+        Commands::Validate { instance, schema } => schema::validate_cmd(&instance, &schema),
     }
 }
 
