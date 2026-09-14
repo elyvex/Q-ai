@@ -215,7 +215,8 @@ pub fn run(dir: Option<&Path>) -> Result<()> {
                     continue; // not yet recorded -> newly appended, allowed
                 };
                 let actual = sha256_file(file)?;
-                if recorded != &actual {
+                let recorded_hex = recorded.strip_prefix("sha256:").unwrap_or(recorded);
+                if recorded_hex != actual {
                     bail!(
                         "QAI-DB-0003: checksum drift for {} ({kind}); editing an applied \
                          migration is forbidden",
