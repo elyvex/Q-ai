@@ -84,3 +84,35 @@ impl<'de, T: Zeroize + serde::Deserialize<'de>> serde::Deserialize<'de> for Secr
 }
 
 impl<T: Zeroize> ZeroizeOnDrop for Secret<T> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clone_deref_default_and_from() {
+        let secret: Secret<String> = "abc".to_string().into();
+        assert_eq!(secret.expose().as_str(), "abc");
+        assert_eq!(&*secret, "abc");
+        let cloned = secret.clone();
+        assert_eq!(cloned.expose().as_str(), "abc");
+
+        let default: Secret<String> = Secret::default();
+        assert!(default.expose().is_empty());
+    }
+
+    #[test]
+    fn debug_and_display_redact() {
+        let secret = Secret::new("super-secret".to_string());
+        assert_eq!(format!("{secret:?}"), "Secret(***)");
+        assert_eq!(format!("{secret}"), "***");
+        assert_eq!(serde_json::to_string(&secret).unwrap(), "\"***\"");
+        assert!(!format!("{secret:?}").contains("super-secret"));
+    }
+
+    #[test]
+    fn deserialize_round_trips_the_value() {
+        let secret: Secret<String> = serde_json::from_str("\"value\"").unwrap();
+        assert_eq!(secret.expose().as_str(), "value");
+    }
+}
