@@ -18,9 +18,7 @@ pub mod migrate;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use sqlx::sqlite::{
-    SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous,
-};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::{Pool, Row, Sqlite, Transaction};
 use storage::{
     Database, DbBackend, DbHealth, ReadTx, UnitOfWork,
@@ -89,11 +87,7 @@ impl SqliteDatabase {
 
         let schema_version = Self::get_schema_version(&write_pool).await.unwrap_or(0);
 
-        Ok(Self {
-            write_pool,
-            read_pool,
-
-        })
+        Ok(Self { write_pool, read_pool, schema_version })
     }
 
     /// Open an existing database **read-only** (used by `qai doctor`, AC-P0-14).
@@ -115,11 +109,7 @@ impl SqliteDatabase {
 
         let schema_version = Self::get_schema_version(&read_pool).await.unwrap_or(0);
 
-        Ok(Self {
-            write_pool: read_pool.clone(),
-            read_pool,
-
-        })
+        Ok(Self { write_pool: read_pool.clone(), read_pool, schema_version })
     }
 
     async fn get_schema_version(pool: &Pool<Sqlite>) -> Result<u32, sqlx::Error> {
@@ -157,16 +147,11 @@ impl SqliteDatabase {
 #[async_trait]
 impl Database for SqliteDatabase {
     async fn read(&self) -> Result<Box<dyn ReadTx>, StorageError> {
-        Ok(Box::new(SqliteReadTx::new(
-            self.read_pool.clone(),
-            self.schema_version,
-        )))
+        Ok(Box::new(SqliteReadTx::new(self.read_pool.clone(), self.schema_version)))
     }
 
     async fn write(&self) -> Result<Box<dyn UnitOfWork>, StorageError> {
-        Ok(Box::new(
-            SqliteUnitOfWork::new(self.write_pool.clone()).await?,
-        ))
+        Ok(Box::new(SqliteUnitOfWork::new(self.write_pool.clone()).await?))
     }
 
     async fn health(&self) -> Result<DbHealth, StorageError> {
@@ -205,10 +190,7 @@ pub struct SqliteReadTx {
 
 impl SqliteReadTx {
     fn new(pool: Pool<Sqlite>, schema_version: u32) -> Self {
-        Self {
-            pool,
-
-        }
+        Self { pool, schema_version }
     }
 }
 
@@ -241,10 +223,7 @@ pub struct SqliteUnitOfWork {
 
 impl SqliteUnitOfWork {
     async fn new(pool: Pool<Sqlite>) -> Result<Self, StorageError> {
-        let tx = pool
-            .begin()
-            .await
-            .map_err(|_| StorageError::StorageUnavailable)?;
+        let tx = pool.begin().await.map_err(|_| StorageError::StorageUnavailable)?;
         let shared: SharedTx = Arc::new(Mutex::new(tx));
         Ok(Self {
             tx: shared.clone(),
@@ -281,40 +260,20 @@ impl UnitOfWork for SqliteUnitOfWork {
     }
 
     async fn commit(self: Box<Self>) -> Result<(), StorageError> {
-        let Self {
-            tx,
-            sources,
-            provenance,
-            audit,
-            jobs,
-            settings,
-            schema_version: _,
-        } = *self;
+        let Self { tx, sources, provenance, audit, jobs, settings } = *self;
         // Drop the repository Arc clones so `tx` is the sole owner.
         drop((sources, provenance, audit, jobs, settings));
         let mutex = Arc::try_unwrap(tx).map_err(|_| StorageError::StorageBusy)?;
         let txn = mutex.into_inner();
-        txn.commit()
-            .await
-            .map_err(|_| StorageError::StorageUnavailable)
+        txn.commit().await.map_err(|_| StorageError::StorageUnavailable)
     }
 
     async fn rollback(self: Box<Self>) -> Result<(), StorageError> {
-        let Self {
-            tx,
-            sources,
-            provenance,
-            audit,
-            jobs,
-            settings,
-            schema_version: _,
-        } = *self;
+        let Self { tx, sources, provenance, audit, jobs, settings } = *self;
         drop((sources, provenance, audit, jobs, settings));
         let mutex = Arc::try_unwrap(tx).map_err(|_| StorageError::StorageBusy)?;
         let txn = mutex.into_inner();
-        txn.rollback()
-            .await
-            .map_err(|_| StorageError::StorageUnavailable)
+        txn.rollback().await.map_err(|_| StorageError::StorageUnavailable)
     }
 }
 
@@ -400,15 +359,13 @@ impl SourceRepository for SqliteSourceRepository {
         to: &str,
     ) -> Result<(), StorageError> {
         let mut tx = self.tx.lock().await;
-        let result = sqlx::query(
-            "UPDATE source_versions SET state = ? WHERE id = ? AND state = ?",
-        )
-        .bind(to)
-        .bind(source_version_id)
-        .bind(from)
-        .execute(&mut **tx)
-        .await
-        .map_err(map_sqlx_error)?;
+        let result = sqlx::query("UPDATE source_versions SET state = ? WHERE id = ? AND state = ?")
+            .bind(to)
+            .bind(source_version_id)
+            .bind(from)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
         if result.rows_affected() == 0 {
             return Err(StorageError::NotFound {
                 urn: format!("source_version:{source_version_id}"),
@@ -815,9 +772,7 @@ impl JobRepository for SqliteJobRepository {
         .await
         .map_err(map_sqlx_error)?;
         if affected.rows_affected() == 0 {
-            return Err(StorageError::NotFound {
-                urn: format!("job:{job_id}"),
-            });
+            return Err(StorageError::NotFound { urn: format!("job:{job_id}") });
         }
         Ok(())
     }
@@ -830,9 +785,7 @@ impl JobRepository for SqliteJobRepository {
             .await
             .map_err(map_sqlx_error)?;
         if affected.rows_affected() == 0 {
-            return Err(StorageError::NotFound {
-                urn: format!("job:{job_id}"),
-            });
+            return Err(StorageError::NotFound { urn: format!("job:{job_id}") });
         }
         Ok(())
     }
@@ -991,23 +944,19 @@ pub(crate) fn map_sqlx_error(err: sqlx::Error) -> StorageError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use storage::repository::SourceVersionRow as _SVRow;
     use std::path::Path;
+    use storage::repository::SourceVersionRow as _SVRow;
     use tempfile::tempdir;
 
     async fn migrated_db(dir: &Path) -> SqliteDatabase {
         let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../migrations/sqlite");
         let db_path = dir.join("qai.db");
-        migrate::apply_migrations(db_path.to_str().unwrap(), &repo_root)
-            .await
-            .unwrap();
+        migrate::apply_migrations(db_path.to_str().unwrap(), &repo_root).await.unwrap();
         // Seed a principal for FK targets (jobs.created_by, settings.updated_by).
         let seed = sqlx::sqlite::SqlitePoolOptions::new()
             .max_connections(1)
             .connect_with(
-                sqlx::sqlite::SqliteConnectOptions::new()
-                    .filename(&db_path)
-                    .foreign_keys(true),
+                sqlx::sqlite::SqliteConnectOptions::new().filename(&db_path).foreign_keys(true),
             )
             .await
             .unwrap();
@@ -1020,9 +969,7 @@ mod tests {
         .await
         .unwrap();
         seed.close().await;
-        SqliteDatabase::new(db_path.to_str().unwrap(), 4, true)
-            .await
-            .unwrap()
+        SqliteDatabase::new(db_path.to_str().unwrap(), 4, true).await.unwrap()
     }
 
     #[tokio::test]
@@ -1120,10 +1067,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let db = migrated_db(dir.path()).await;
         let mut uow = db.write().await.unwrap();
-        uow.settings()
-            .set("logging.level", "\"debug\"", "cli", None)
-            .await
-            .unwrap();
+        uow.settings().set("logging.level", "\"debug\"", "cli", None).await.unwrap();
         let got = uow.settings().get("logging.level").await.unwrap().unwrap();
         assert_eq!(got.value_json, "\"debug\"");
         assert_eq!(got.origin, "cli");
