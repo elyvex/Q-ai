@@ -6,6 +6,7 @@
 //! stays in one place.
 
 pub mod db;
+pub mod job_queue;
 
 pub use config::Config;
 
