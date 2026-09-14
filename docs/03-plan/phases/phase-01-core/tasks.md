@@ -116,11 +116,11 @@ before opening the sprint.
 
 | ID | Task | Deliv. | Depends | Est | Role | Status |
 |---|---|---|---|---|---|---|
-| P1-T25 | `quran.import` job with 13 checkpoints, cancellation, resume | D1.3 | T22–T24 | 4.0 | BE | ☐ |
-| P1-T26 | Round-trip verifier + reference-corpus comparator | D1.4 | T23 | 2.5 | BE | ☐ |
-| P1-T27 | Edition differ (char-level, per ADR-0109) + `DifferenceReport` | D1.3 | T23 | 2.5 | BE | ☐ |
-| P1-T28 | Activation transaction + rollback + `corpus_generation` | D1.3 | T25, T27 | 2.5 | BE | ☐ |
-| P1-T29 | Crash-at-each-checkpoint test matrix (13 cases) | D1.13 | T25, T28 | 2.5 | QA | ☐ |
+| P1-T25 | `quran.import` job with 13 checkpoints, cancellation, resume | D1.3 | T22–T24 | 4.0 | BE | ☑ |
+| P1-T26 | Round-trip verifier + reference-corpus comparator | D1.4 | T23 | 2.5 | BE | ◐ |
+| P1-T27 | Edition differ (char-level, per ADR-0109) + `DifferenceReport` | D1.3 | T23 | 2.5 | BE | ☑ |
+| P1-T28 | Activation transaction + rollback + `corpus_generation` | D1.3 | T25, T27 | 2.5 | BE | ☑ |
+| P1-T29 | Crash-at-each-checkpoint test matrix (13 cases) | D1.13 | T25, T28 | 2.5 | QA | ☑ |
 | P1-T30 | Adversarial-corpus rejection tests (16 fixtures × correct rule id) | D1.13 | T20, T25 | 2.5 | QA | ☑ |
 | P1-T31 | ADR-0106 / 0107 / 0108 / 0109 | ADR | T23, T28 | 2.0 | DOC | ☐ |
 
