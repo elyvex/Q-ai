@@ -230,8 +230,8 @@ impl Config {
         mark_defaults(&mut origins);
 
         // Load from TOML file if present
-        if let Some(path) = config_path {
-            if path.exists() {
+        if let Some(path) = config_path
+            && path.exists() {
                 let raw = std::fs::read_to_string(path)
                     .map_err(|e| ConfigError::FileRead {
                         path: path.display().to_string(),
@@ -242,7 +242,6 @@ impl Config {
                 merge_toml(&mut config, &file_value);
                 mark_file_origins(&mut origins, path.display().to_string(), &file_value);
             }
-        }
 
         // Load from environment variables
         merge_env(&mut config, env_prefix, &mut origins);
@@ -283,8 +282,8 @@ impl Config {
         }
 
         // Non-loopback bind without TLS should not require auth outside localhost
-        if !is_loopback(&self.server.bind) && self.server.tls == "disabled" {
-            if self.server.require_auth_outside_localhost {
+        if !is_loopback(&self.server.bind) && self.server.tls == "disabled"
+            && self.server.require_auth_outside_localhost {
                 return Err(ConfigError::Validation(
                     format!(
                         "bind=\"{}\" with tls=\"disabled\": non-loopback binds without TLS \
@@ -293,7 +292,6 @@ impl Config {
                     )
                 ));
             }
-        }
 
         Ok(())
     }
@@ -567,7 +565,7 @@ fn set_env_value(config: &mut Config, parts: &[&str], value: &str, origins: &mut
 
 macro_rules! set_env_field {
     ($config:expr, $field:ident, $parts:expr, $value:expr, $origins:expr, $origin:expr, $($prefix:literal),*) => {
-        if $parts.len() >= 1 && $parts[0] == $($prefix),* {
+        if !$parts.is_empty() && $parts[0] == $($prefix),* {
             if let Some(v) = $parts.get(1) {
                 match *v {
                     $(
@@ -581,6 +579,10 @@ macro_rules! set_env_field {
             }
         }
     };
+}
+#[allow(unused_macros)]
+macro_rules! __retired_set_env_field {
+    () => {};
 }
 
 fn set_app_env(config: &mut Config, parts: &[&str], value: &str, origins: &mut OriginMap, origin: &ValueOrigin) {
@@ -629,9 +631,8 @@ fn set_secrets_env(config: &mut Config, parts: &[&str], value: &str, origins: &m
 }
 
 fn set_jobs_env(config: &mut Config, parts: &[&str], value: &str, origins: &mut OriginMap, origin: &ValueOrigin) {
-    if parts.first() == Some(&"WORKERS") {
-        if let Ok(w) = value.parse::<u32>() { config.jobs.workers = w; origins.insert("jobs.workers".to_string(), origin.clone()); }
-    }
+    if parts.first() == Some(&"WORKERS")
+        && let Ok(w) = value.parse::<u32>() { config.jobs.workers = w; origins.insert("jobs.workers".to_string(), origin.clone()); }
 }
 
 fn set_logging_env(config: &mut Config, parts: &[&str], value: &str, origins: &mut OriginMap, origin: &ValueOrigin) {
@@ -642,15 +643,13 @@ fn set_logging_env(config: &mut Config, parts: &[&str], value: &str, origins: &m
 }
 
 fn set_telemetry_env(config: &mut Config, parts: &[&str], value: &str, origins: &mut OriginMap, origin: &ValueOrigin) {
-    if parts.first() == Some(&"ENABLED") {
-        if let Ok(b) = value.parse::<bool>() { config.telemetry.enabled = b; origins.insert("telemetry.enabled".to_string(), origin.clone()); }
-    }
+    if parts.first() == Some(&"ENABLED")
+        && let Ok(b) = value.parse::<bool>() { config.telemetry.enabled = b; origins.insert("telemetry.enabled".to_string(), origin.clone()); }
 }
 
 fn set_security_env(config: &mut Config, parts: &[&str], value: &str, origins: &mut OriginMap, origin: &ValueOrigin) {
-    if parts.first() == Some(&"ALLOW_NETWORK_EGRESS") {
-        if let Ok(b) = value.parse::<bool>() { config.security.allow_network_egress = b; origins.insert("security.allow_network_egress".to_string(), origin.clone()); }
-    }
+    if parts.first() == Some(&"ALLOW_NETWORK_EGRESS")
+        && let Ok(b) = value.parse::<bool>() { config.security.allow_network_egress = b; origins.insert("security.allow_network_egress".to_string(), origin.clone()); }
 }
 
 fn set_policy_env(config: &mut Config, parts: &[&str], value: &str, origins: &mut OriginMap, origin: &ValueOrigin) {
@@ -714,9 +713,8 @@ fn set_cli_value(config: &mut Config, parts: &[&str], value: &str, origins: &mut
             }
         }
         "jobs" => {
-            if parts.len() >= 2 && parts[1] == "workers" {
-                if let Ok(w) = value.parse::<u32>() { config.jobs.workers = w; origins.insert("jobs.workers".to_string(), origin.clone()); }
-            }
+            if parts.len() >= 2 && parts[1] == "workers"
+                && let Ok(w) = value.parse::<u32>() { config.jobs.workers = w; origins.insert("jobs.workers".to_string(), origin.clone()); }
         }
         "logging" => {
             if parts.len() >= 2 && parts[1] == "level" {
@@ -725,21 +723,18 @@ fn set_cli_value(config: &mut Config, parts: &[&str], value: &str, origins: &mut
             }
         }
         "telemetry" => {
-            if parts.len() >= 2 && parts[1] == "enabled" {
-                if let Ok(b) = value.parse::<bool>() { config.telemetry.enabled = b; origins.insert("telemetry.enabled".to_string(), origin.clone()); }
-            }
+            if parts.len() >= 2 && parts[1] == "enabled"
+                && let Ok(b) = value.parse::<bool>() { config.telemetry.enabled = b; origins.insert("telemetry.enabled".to_string(), origin.clone()); }
         }
         "security" => {
-            if parts.len() >= 2 && parts[1] == "allow_network_egress" {
-                if let Ok(b) = value.parse::<bool>() { config.security.allow_network_egress = b; origins.insert("security.allow_network_egress".to_string(), origin.clone()); }
-            }
+            if parts.len() >= 2 && parts[1] == "allow_network_egress"
+                && let Ok(b) = value.parse::<bool>() { config.security.allow_network_egress = b; origins.insert("security.allow_network_egress".to_string(), origin.clone()); }
         }
-        "policy" => {
-            if parts.len() >= 2 && parts[1] == "tool_execution_default" {
+        "policy"
+            if parts.len() >= 2 && parts[1] == "tool_execution_default" => {
                 config.policy.tool_execution_default = value.to_string();
                 origins.insert("policy.tool_execution_default".to_string(), origin.clone());
             }
-        }
         _ => {}
     }
 }
@@ -767,39 +762,28 @@ let mut resolved = 0;
         }
 
         // Manually resolve each field (dotted paths don't work with macro_rules!)
-        if let Ok(val) = resolve_string(&config.app.data_dir, config) {
-            if val != config.app.data_dir { config.app.data_dir = val; did_something = true; }
-        }
-        if let Ok(val) = resolve_string(&config.app.locale, config) {
-            if val != config.app.locale { config.app.locale = val; did_something = true; }
-        }
-        if let Ok(val) = resolve_string(&config.server.bind, config) {
-            if val != config.server.bind { config.server.bind = val; did_something = true; }
-        }
-        if let Ok(val) = resolve_string(&config.server.tls, config) {
-            if val != config.server.tls { config.server.tls = val; did_something = true; }
-        }
-        if let Ok(val) = resolve_string(&config.storage.sqlite.path, config) {
-            if val != config.storage.sqlite.path { config.storage.sqlite.path = val; did_something = true; }
-        }
-        if let Ok(val) = resolve_string(&config.storage.sqlite.journal_mode, config) {
-            if val != config.storage.sqlite.journal_mode { config.storage.sqlite.journal_mode = val; did_something = true; }
-        }
-        if let Ok(val) = resolve_string(&config.storage.sqlite.synchronous, config) {
-            if val != config.storage.sqlite.synchronous { config.storage.sqlite.synchronous = val; did_something = true; }
-        }
-        if let Ok(val) = resolve_string(&config.storage.objects.root, config) {
-            if val != config.storage.objects.root { config.storage.objects.root = val; did_something = true; }
-        }
-        if let Ok(val) = resolve_string(&config.secrets.encrypted_file_path, config) {
-            if val != config.secrets.encrypted_file_path { config.secrets.encrypted_file_path = val; did_something = true; }
-        }
-        if let Ok(val) = resolve_string(&config.logging.file, config) {
-            if val != config.logging.file { config.logging.file = val; did_something = true; }
-        }
-        if let Ok(val) = resolve_string(&config.telemetry.otlp_endpoint, config) {
-            if val != config.telemetry.otlp_endpoint { config.telemetry.otlp_endpoint = val; did_something = true; }
-        }
+        if let Ok(val) = resolve_string(&config.app.data_dir, config)
+            && val != config.app.data_dir { config.app.data_dir = val; did_something = true; }
+        if let Ok(val) = resolve_string(&config.app.locale, config)
+            && val != config.app.locale { config.app.locale = val; did_something = true; }
+        if let Ok(val) = resolve_string(&config.server.bind, config)
+            && val != config.server.bind { config.server.bind = val; did_something = true; }
+        if let Ok(val) = resolve_string(&config.server.tls, config)
+            && val != config.server.tls { config.server.tls = val; did_something = true; }
+        if let Ok(val) = resolve_string(&config.storage.sqlite.path, config)
+            && val != config.storage.sqlite.path { config.storage.sqlite.path = val; did_something = true; }
+        if let Ok(val) = resolve_string(&config.storage.sqlite.journal_mode, config)
+            && val != config.storage.sqlite.journal_mode { config.storage.sqlite.journal_mode = val; did_something = true; }
+        if let Ok(val) = resolve_string(&config.storage.sqlite.synchronous, config)
+            && val != config.storage.sqlite.synchronous { config.storage.sqlite.synchronous = val; did_something = true; }
+        if let Ok(val) = resolve_string(&config.storage.objects.root, config)
+            && val != config.storage.objects.root { config.storage.objects.root = val; did_something = true; }
+        if let Ok(val) = resolve_string(&config.secrets.encrypted_file_path, config)
+            && val != config.secrets.encrypted_file_path { config.secrets.encrypted_file_path = val; did_something = true; }
+        if let Ok(val) = resolve_string(&config.logging.file, config)
+            && val != config.logging.file { config.logging.file = val; did_something = true; }
+        if let Ok(val) = resolve_string(&config.telemetry.otlp_endpoint, config)
+            && val != config.telemetry.otlp_endpoint { config.telemetry.otlp_endpoint = val; did_something = true; }
 
         if !did_something {
             break;
@@ -872,7 +856,7 @@ pub fn load(
 mod tests {
     use super::*;
     use std::collections::BTreeMap;
-    use std::path::PathBuf;
+    
 
     #[test]
     fn test_default_config() {
@@ -881,7 +865,7 @@ mod tests {
         assert_eq!(config.server.bind, "127.0.0.1");
         assert_eq!(config.server.port, 8737);
         assert_eq!(config.storage.backend, "sqlite");
-        assert_eq!(config.security.allow_network_egress, false);
+        assert!(!config.security.allow_network_egress);
     }
 
     #[test]
@@ -932,7 +916,7 @@ mod tests {
 
     #[test]
     fn test_load_from_toml() {
-        let mut cli = BTreeMap::new();
+        let cli = BTreeMap::new();
         // Note: this asserts only the file/default layers. The env-override
         // coverage lives in `test_env_override`; parallel tests may race on the
         // shared process env, so this assertion is tolerant of concurrent env
@@ -953,7 +937,7 @@ port = 9999
 bind = "0.0.0.0"
 "#,
         ).unwrap();
-        let mut cli = BTreeMap::new();
+        let cli = BTreeMap::new();
         let result = Config::load(Some(&toml_path), "QAI", &cli);
         assert!(result.is_err()); // 0.0.0.0 without tls should fail validation
     }
@@ -964,7 +948,7 @@ bind = "0.0.0.0"
         unsafe {
         std::env::set_var("QAI__SERVER__PORT", "9000");
         }
-        let mut cli = BTreeMap::new();
+        let cli = BTreeMap::new();
         let (config, _) = Config::load(None, "QAI", &cli).unwrap();
         assert_eq!(config.server.port, 9000);
         #[allow(unsafe_code)]
