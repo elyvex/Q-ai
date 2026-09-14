@@ -20,8 +20,8 @@
 //! ```
 
 use async_trait::async_trait;
-use storage::repository::JobRecord;
 use std::fmt;
+use storage::repository::JobRecord;
 
 // ─── JobState ────────────────────────────────────────────────
 
@@ -114,8 +114,11 @@ pub trait JobHandler: Send + Sync {
 
     /// Execute the job. Receives a `JobContext` for cancellation, progress,
     /// and checkpointing, plus the parsed payload.
-    async fn run(&self, ctx: JobContext, payload: serde_json::Value)
-        -> Result<JobOutcome, JobError>;
+    async fn run(
+        &self,
+        ctx: JobContext,
+        payload: serde_json::Value,
+    ) -> Result<JobOutcome, JobError>;
 }
 
 /// The outcome of a job execution.
@@ -146,11 +149,7 @@ impl JobContext {
     /// Create a new `JobContext` for the given job.
     pub fn new(job: JobRecord) -> Self {
         let span = tracing::span!(tracing::Level::INFO, "qai.job", job_id = %job.id);
-        Self {
-            job,
-            cancel_requested: false,
-            span,
-        }
+        Self { job, cancel_requested: false, span }
     }
 
     /// Check whether a cancellation has been requested.
@@ -251,10 +250,26 @@ impl JobStore {
     fn validate_transition(from: JobState, to: JobState) -> bool {
         match from {
             JobState::Queued => matches!(to, JobState::Leased | JobState::Cancelled),
-            JobState::Leased => matches!(to, JobState::Running | JobState::Cancelled | JobState::Interrupted),
-            JobState::Running => matches!(to, JobState::Checkpointed | JobState::Succeeded | JobState::Failed | JobState::Cancelled | JobState::Interrupted),
-            JobState::Checkpointed => matches!(to, JobState::Running | JobState::Succeeded | JobState::Failed | JobState::Cancelled),
-            JobState::Succeeded | JobState::Failed | JobState::Cancelled | JobState::Interrupted | JobState::DeadLettered => false,
+            JobState::Leased => {
+                matches!(to, JobState::Running | JobState::Cancelled | JobState::Interrupted)
+            }
+            JobState::Running => matches!(
+                to,
+                JobState::Checkpointed
+                    | JobState::Succeeded
+                    | JobState::Failed
+                    | JobState::Cancelled
+                    | JobState::Interrupted
+            ),
+            JobState::Checkpointed => matches!(
+                to,
+                JobState::Running | JobState::Succeeded | JobState::Failed | JobState::Cancelled
+            ),
+            JobState::Succeeded
+            | JobState::Failed
+            | JobState::Cancelled
+            | JobState::Interrupted
+            | JobState::DeadLettered => false,
         }
     }
 }
@@ -267,7 +282,9 @@ impl JobRepository for JobStore {
     }
 
     async fn claim(&mut self, job_id: &str, owner: &str) -> Result<Option<JobRecord>, JobError> {
-        self.repo.claim(job_id, owner).await
+        self.repo
+            .claim(job_id, owner)
+            .await
             .map_err(|_e| JobError::NotFound { id: job_id.to_string() })
     }
 
@@ -277,13 +294,14 @@ impl JobRepository for JobStore {
         state: JobState,
         result: Option<String>,
     ) -> Result<(), JobError> {
-        self.repo.finish(job_id, &state.to_string(), result).await
+        self.repo
+            .finish(job_id, &state.to_string(), result)
+            .await
             .map_err(|_e| JobError::NotFound { id: job_id.to_string() })
     }
 
     async fn cancel(&mut self, job_id: &str) -> Result<(), JobError> {
-        self.repo.cancel(job_id).await
-            .map_err(|_e| JobError::NotFound { id: job_id.to_string() })
+        self.repo.cancel(job_id).await.map_err(|_e| JobError::NotFound { id: job_id.to_string() })
     }
 
     async fn checkpoint(
@@ -292,13 +310,14 @@ impl JobRepository for JobStore {
         progress: Option<String>,
         checkpoint: Option<String>,
     ) -> Result<(), JobError> {
-        self.repo.checkpoint(job_id, progress, checkpoint).await
+        self.repo
+            .checkpoint(job_id, progress, checkpoint)
+            .await
             .map_err(|_e| JobError::NotFound { id: job_id.to_string() })
     }
 
     async fn reap_expired_leases(&mut self) -> Result<Vec<String>, JobError> {
-        self.repo.reap_expired_leases().await
-            .map_err(|e| JobError::NotFound { id: e.to_string() })
+        self.repo.reap_expired_leases().await.map_err(|e| JobError::NotFound { id: e.to_string() })
     }
 
     async fn get(&mut self, _job_id: &str) -> Result<Option<JobRecord>, JobError> {
