@@ -123,10 +123,7 @@ pub trait ProvenanceRepository: Send + Sync {
     }
 
     /// Record a review decision.
-    async fn record_review(
-        &mut self,
-        _review: ReviewRecord,
-    ) -> Result<(), StorageError> {
+    async fn record_review(&mut self, _review: ReviewRecord) -> Result<(), StorageError> {
         Err(StorageError::StorageUnavailable)
     }
 }
@@ -174,10 +171,7 @@ pub trait AuditRepository: Send + Sync {
     }
 
     /// Retrieve events for a subject.
-    async fn list_by_subject(
-        &self,
-        _subject_urn: &str,
-    ) -> Result<Vec<AuditEvent>, StorageError> {
+    async fn list_by_subject(&self, _subject_urn: &str) -> Result<Vec<AuditEvent>, StorageError> {
         Err(StorageError::StorageUnavailable)
     }
 
@@ -229,7 +223,11 @@ pub trait JobRepository: Send + Sync {
     }
 
     /// Claim a job for processing (lease acquisition).
-    async fn claim(&mut self, _job_id: &str, _owner: &str) -> Result<Option<JobRecord>, StorageError> {
+    async fn claim(
+        &mut self,
+        _job_id: &str,
+        _owner: &str,
+    ) -> Result<Option<JobRecord>, StorageError> {
         Err(StorageError::StorageUnavailable)
     }
 
