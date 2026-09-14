@@ -35,8 +35,8 @@ pub mod text;
 
 pub use edition::{EditionStatistics, QuranEdition};
 pub use enums::{
-    BasmalaPolicy, EditionSelector, EditionStatus, NumberingScheme, RevelationPlace, SajdahKind,
-    Script, SegmentKind, UnicodeForm,
+    BasmalaPolicy, EditionSelector, EditionStatus, NumberingScheme, RevelationPlace, Script,
+    SegmentKind, SajdahKind, UnicodeForm, is_valid_slug,
 };
 pub use error::{Diagnostic, DiagnosticCode, QuranError, codes};
 pub use numbers::{AyahNumber, SurahNumber, TokenPosition};
