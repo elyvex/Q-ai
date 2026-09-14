@@ -13,6 +13,12 @@ zeroize = { workspace = true }
 async-trait = { workspace = true }
 chacha20poly1305 = { workspace = true }
 sha2 = { workspace = true }
+keyring = { version = "3", optional = true }
+
+[features]
+# OS-native keychain backend. Off by default: it pulls platform dependencies
+# (secret-service/dbus on Linux) that are not needed for the local-first default.
+keychain = ["dep:keyring"]
 
 [dev-dependencies]
 tempfile = { workspace = true }
