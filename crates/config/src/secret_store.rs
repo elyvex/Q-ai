@@ -148,31 +148,75 @@ impl SecretStore for EnvSecretStore {
 }
 
 /// OS keychain secret backend (Secret Service / macOS Keychain / Windows
-/// Credential Manager). Requires the `keyring` crate — not yet a dependency.
+/// Credential Manager).
+///
+/// The concrete implementation is gated behind the `keychain` feature; without
+/// it the backend reports [`SecretError::Unsupported`] so the default build has
+/// no platform-specific dependencies. The account for a ref is its path
+/// segments joined by `/` (e.g. `openai/default`) under the `qai` service.
 #[derive(Debug, Default, Clone)]
 pub struct KeychainSecretStore;
 
+#[cfg(not(feature = "keychain"))]
 #[async_trait]
 impl SecretStore for KeychainSecretStore {
     async fn get(&self, _r: &SecretRef) -> Result<Secret<String>, SecretError> {
         Err(SecretError::Unsupported(
-            "keychain backend requires the `keyring` crate (Phase 1)".to_string(),
+            "keychain backend requires the `keychain` feature".to_string(),
         ))
     }
     async fn put(&self, _r: &SecretRef, _v: Secret<String>) -> Result<(), SecretError> {
         Err(SecretError::Unsupported(
-            "keychain backend requires the `keyring` crate (Phase 1)".to_string(),
+            "keychain backend requires the `keychain` feature".to_string(),
         ))
     }
     async fn delete(&self, _r: &SecretRef) -> Result<(), SecretError> {
         Err(SecretError::Unsupported(
-            "keychain backend requires the `keyring` crate (Phase 1)".to_string(),
+            "keychain backend requires the `keychain` feature".to_string(),
         ))
     }
     async fn list_refs(&self) -> Result<Vec<SecretRef>, SecretError> {
         Err(SecretError::Unsupported(
-            "keychain backend requires the `keyring` crate (Phase 1)".to_string(),
+            "keychain backend requires the `keychain` feature".to_string(),
         ))
+    }
+    fn backend_name(&self) -> &'static str {
+        "keychain"
+    }
+}
+
+#[cfg(feature = "keychain")]
+#[async_trait]
+impl SecretStore for KeychainSecretStore {
+    async fn get(&self, r: &SecretRef) -> Result<Secret<String>, SecretError> {
+        let entry = keyring::Entry::new("qai", &r.segments().join("/"))
+            .map_err(|e| SecretError::Backend(e.to_string()))?;
+        match entry.get_password() {
+            Ok(value) => Ok(Secret::new(value)),
+            Err(keyring::Error::NoEntry) => Err(SecretError::NotFound(r.to_string())),
+            Err(e) => Err(SecretError::Backend(e.to_string())),
+        }
+    }
+    async fn put(&self, r: &SecretRef, v: Secret<String>) -> Result<(), SecretError> {
+        let entry = keyring::Entry::new("qai", &r.segments().join("/"))
+            .map_err(|e| SecretError::Backend(e.to_string()))?;
+        entry
+            .set_password(v.expose())
+            .map_err(|e| SecretError::Backend(e.to_string()))
+    }
+    async fn delete(&self, r: &SecretRef) -> Result<(), SecretError> {
+        let entry = keyring::Entry::new("qai", &r.segments().join("/"))
+            .map_err(|e| SecretError::Backend(e.to_string()))?;
+        match entry.delete_credential() {
+            Ok(()) => Ok(()),
+            Err(keyring::Error::NoEntry) => Err(SecretError::NotFound(r.to_string())),
+            Err(e) => Err(SecretError::Backend(e.to_string())),
+        }
+    }
+    async fn list_refs(&self) -> Result<Vec<SecretRef>, SecretError> {
+        // The OS keychain has no portable enumeration API; listing requires an
+        // external index, which is a Phase 1 concern.
+        Ok(Vec::new())
     }
     fn backend_name(&self) -> &'static str {
         "keychain"
@@ -350,6 +394,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(feature = "keychain"))]
     async fn unbacked_backends_report_unsupported() {
         let r = SecretRef::parse("secret://keychain/openai/default").unwrap();
         assert!(matches!(KeychainSecretStore.get(&r).await, Err(SecretError::Unsupported(_))));
