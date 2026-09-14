@@ -140,6 +140,9 @@ mod tests {
 
 /// Trait implemented by all error types so they can be rendered
 /// consistently across CLI, logs, and JSON output.
+///
+/// Only [`Diagnostic::code`] and [`Diagnostic::summary`] are required; the rest
+/// have neutral defaults so a new error type is cheap to conform.
 pub trait Diagnostic {
     /// The error code in its namespace.
     fn code(&self) -> DiagnosticCode;
@@ -148,22 +151,63 @@ pub trait Diagnostic {
     fn summary(&self) -> String;
 
     /// The chain of causes leading to this error.
-    fn cause_chain(&self) -> Vec<String>;
+    fn cause_chain(&self) -> Vec<String> {
+        Vec::new()
+    }
 
     /// Where the error occurred (file, key, row, source id).
-    fn location(&self) -> Option<String>;
+    fn location(&self) -> Option<String> {
+        None
+    }
 
     /// How to fix the error.
-    fn remedy(&self) -> Option<String>;
+    fn remedy(&self) -> Option<String> {
+        None
+    }
 
     /// The next command to run (e.g. `qai doctor`).
-    fn next_command(&self) -> Option<String>;
+    fn next_command(&self) -> Option<String> {
+        None
+    }
 
     /// Whether the error is safe to retry.
-    fn is_retryable(&self) -> bool;
+    fn is_retryable(&self) -> bool {
+        false
+    }
 
     /// Whether the error message has already been secret-scrubbed.
-    fn redacted(&self) -> bool;
+    fn redacted(&self) -> bool {
+        true
+    }
+
+    /// Render the diagnostic as a stable human-readable string.
+    fn render_human(&self) -> String {
+        let mut out = format!("[{}] {}", self.code(), self.summary());
+        if let Some(loc) = self.location() {
+            out.push_str(&format!(" at {loc}"));
+        }
+        if let Some(remedy) = self.remedy() {
+            out.push_str(&format!("\nRemedy: {remedy}"));
+        }
+        if let Some(cmd) = self.next_command() {
+            out.push_str(&format!("\nNext: {cmd}"));
+        }
+        out
+    }
+
+    /// Render the diagnostic as a stable JSON object string.
+    fn render_json(&self) -> String {
+        serde_json::json!({
+            "code": self.code().to_string(),
+            "summary": self.summary(),
+            "why": self.cause_chain(),
+            "location": self.location(),
+            "remedy": self.remedy(),
+            "next_command": self.next_command(),
+            "retryable": self.is_retryable(),
+        })
+        .to_string()
+    }
 }
 
 /// Machine-readable error code. Must be unique across the entire domain.
@@ -182,7 +226,13 @@ impl DiagnosticCode {
 
 impl std::fmt::Display for DiagnosticCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", self.namespace, self.code)
+        // A `code` of 0 means the namespace already carries the full code
+        // (e.g. `QAI-DB-0001`); otherwise render the canonical `NS-nnnn` form.
+        if self.code == 0 {
+            write!(f, "{}", self.namespace)
+        } else {
+            write!(f, "{}-{:04}", self.namespace, self.code)
+        }
     }
 }
 
