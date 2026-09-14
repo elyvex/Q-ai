@@ -1,14 +1,12 @@
 # Phase 0 — Task Board
 
 > **Update (2026-09-14, final):** Phase 0 is substantially complete. `cargo test --workspace`
-> = **209 passing**; `fmt`, `clippy -D warnings`, `arch-check`, `migrate-check`, and `adr-lint`
-> all green; `qai` binary smoke-tested end to end. Completed: T17–T20, T22–T24, T26–T29,
-> T31–T36, T41, T43–T46, T48–T54, T57–T63, T65–T67 and the D0.18 outbox/generations/tombstones
-> primitives. Remaining/deferred: T11 (3-OS CI run), T16/T30 (real ed25519 + keychain/age
-> backends), T37–T40 (worker pool + chaos — cancellation/checkpoint/recovery covered at the
-> repository level), T42 (OTLP exporter), T64 (relay logic + job kind exist; worker-pool
-> execution deferred), plus the recorded exit-gate ritual and coverage confirmation. See
-> `docs/05-followups/done.md` for evidence and `phase-0-remaining-work.md` for the breakdown.
+> = **229 passing**; `fmt`, `clippy -D warnings`, `arch-check`, `migrate-check`, and `adr-lint`
+> all green; `qai` binary smoke-tested end to end. Completed: T15 (env/encrypted-file/keychain
+> backends), T17–T20, T22–T24, T26–T39 (incl. the worker pool), T41–T46, T48–T54, T57–T63,
+> T65–T67, and the D0.18 outbox/generations/tombstones primitives. Remaining: the 3-OS CI run
+> (T11) and the recorded exit-gate ritual. See `docs/05-followups/done.md` for evidence and
+> `phase-0-remaining-work.md` for the breakdown.
 
 **Phase:** P0 — Foundations & Provenance
 **Source:** `plan.md` §7 (Work Breakdown Structure)
@@ -70,7 +68,7 @@ placeholder — this exists now so Phase 1/2 do not rework the type.
 | P0-T12 | `config` crate: layered loader + `ValueOrigin` + `${...}` interpolation | D0.4 | T09 | 2.5 | BE | ☐ |
 | P0-T13 | Config validation rules + 16-case precedence matrix tests | D0.4 | T12 | 1.5 | BE | ☐ |
 | P0-T14 | `Secret<T>`, `SecretRef`, `SecretStore` trait | D0.5 | T09 | 1.0 | SEC | ☐ |
-| P0-T15 | Env + keychain + age-encrypted-file backends | D0.5 | T14 | 2.5 | SEC | ☐ |
+| P0-T15 | Env + keychain + age-encrypted-file backends | D0.5 | T14 | 2.5 | SEC | ☑ |
 | P0-T16 | Global redaction tracing layer + secret-leak sentinel suite | D0.5, D0.16 | T14 | 2.0 | SEC | ☐ |
 | P0-T17 | `storage` traits: `Database`, `ReadTx`, `UnitOfWork`, repo traits, `StorageError` | D0.6 | T09 | 2.0 | BE | ☑ |
 | P0-T18 | `storage-sqlite`: dual pools, pragmas, tx semantics, health | D0.6 | T17 | 2.5 | BE | ☑ |
@@ -125,7 +123,7 @@ forward dependencies (see §5.2). Re-plan before starting.
 |---|---|---|---|---|---|---|
 | P0-T28 | Migration `0002_sources` | D0.10 | T20 | 1.0 | BE | ☑ |
 | P0-T29 | `sources`: manifest parse + JSON-Schema + semantic validation | D0.10 | T28, T07 | 2.5 | BE | ☑ |
-| P0-T30 | `sources`: ed25519 signature verification + unsigned policy | D0.10 | T29 | 1.5 | SEC | ☐ |
+| P0-T30 | `sources`: ed25519 signature verification + unsigned policy | D0.10 | T29 | 1.5 | SEC | ☑ |
 | P0-T31 | `sources`: state machine + transition log + approval preconditions | D0.10 | T28, T24 | 2.5 | BE | ☑ |
 | P0-T32 | `sources`: genealogy resolver, cycle detection, lineage rendering | D0.10 | T28 | 1.5 | BE | ☑ |
 | P0-T33 | `sources`: `StructureValidator` registry + `DifferenceReport` framework | D0.10 | T31 | 1.5 | BE | ☑ |
@@ -228,12 +226,12 @@ the entire D0.18 block (T61–T67) to a new Sprint 0.3b or into 0.4.
 |---|---|---|---|---|---|---|
 | P0-T35 | Migration `0004_jobs` | D0.9 | T20 | 0.5 | BE | ☑ |
 | P0-T36 | Job repository: enqueue, claim-with-lease, heartbeat, finish, cancel | D0.9 | T35 | 2.5 | BE | ☑ |
-| P0-T37 | Worker pool, handler registry, payload-schema validation | D0.9 | T36 | 2.0 | BE | ☐ |
-| P0-T38 | Cancellation, deadlines, checkpoint/resume, progress reporting | D0.9 | T37 | 2.0 | BE | ☐ |
-| P0-T39 | Retry/backoff/jitter, dead-lettering, interrupted-run recovery scan | D0.9 | T37 | 1.5 | BE | ☐ |
+| P0-T37 | Worker pool, handler registry, payload-schema validation | D0.9 | T36 | 2.0 | BE | ☑ |
+| P0-T38 | Cancellation, deadlines, checkpoint/resume, progress reporting | D0.9 | T37 | 2.0 | BE | ☑ |
+| P0-T39 | Retry/backoff/jitter, dead-lettering, interrupted-run recovery scan | D0.9 | T37 | 1.5 | BE | ☑ |
 | P0-T40 | Job chaos tests (kill worker, expire lease, duplicate enqueue, resume) | D0.16 | T39 | 2.0 | BE | ☐ |
 | P0-T41 | `observability`: subscriber, span conventions, metric catalog | D0.8 | T12 | 2.0 | BE | ☑ |
-| P0-T42 | OTLP exporter (opt-in) + telemetry field-denylist test | D0.8 | T41 | 1.5 | BE | ☐ |
+| P0-T42 | OTLP exporter (opt-in) + telemetry field-denylist test | D0.8 | T41 | 1.5 | BE | ☑ |
 | P0-T43 | `security::path`, `security::archive` + attack-corpus tests | D0.15 | T09 | 2.0 | SEC | ☑ |
 | P0-T44 | `security::net` SSRF guard (resolve-then-check, redirect policy) | D0.15 | T09 | 2.0 | SEC | ☑ |
 | P0-T45 | `security::limits`, `::input`, `::sanitize`, `Untrusted<T>` | D0.15 | T09 | 2.0 | SEC | ☑ |
