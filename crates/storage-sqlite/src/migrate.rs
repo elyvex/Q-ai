@@ -42,11 +42,7 @@ pub fn discover_migrations(dir: &Path) -> Result<Vec<MigrationFile>, StorageErro
         let version: u32 = ver
             .parse()
             .map_err(|_| StorageError::MigrationRequired { at_schema: 0, required: 0 })?;
-        found.push(MigrationFile {
-            version,
-            name: stem.to_string(),
-            path,
-        });
+        found.push(MigrationFile { version, name: stem.to_string(), path });
     }
     found.sort_by_key(|m| m.version);
     Ok(found)
@@ -137,7 +133,8 @@ async fn applied_versions(pool: &sqlx::SqlitePool) -> Result<BTreeMap<u32, Strin
     let mut map = BTreeMap::new();
     for row in rows {
         let version: i64 = row.try_get("version").map_err(|_| StorageError::StorageUnavailable)?;
-        let checksum: String = row.try_get("checksum").map_err(|_| StorageError::StorageUnavailable)?;
+        let checksum: String =
+            row.try_get("checksum").map_err(|_| StorageError::StorageUnavailable)?;
         map.insert(version as u32, checksum);
     }
     Ok(map)
@@ -148,10 +145,7 @@ async fn applied_versions(pool: &sqlx::SqlitePool) -> Result<BTreeMap<u32, Strin
 /// Returns the resulting schema version (0 when there are no migrations).
 /// Already-applied migrations are checksum-verified; a mismatch aborts with
 /// [`StorageError::MigrationChecksumMismatch`].
-pub async fn apply_migrations(
-    db_path: &str,
-    migrations_dir: &Path,
-) -> Result<u32, StorageError> {
+pub async fn apply_migrations(db_path: &str, migrations_dir: &Path) -> Result<u32, StorageError> {
     let pool = connect_rw(db_path).await?;
     let discovered = discover_migrations(migrations_dir)?;
     let already = applied_versions(&pool).await?;
@@ -162,9 +156,7 @@ pub async fn apply_migrations(
             let actual = sha256_file_hex(&migration.path)?;
             let recorded_hex = recorded.strip_prefix("sha256:").unwrap_or(recorded);
             if recorded_hex != actual {
-                return Err(StorageError::MigrationChecksumMismatch {
-                    version: migration.version,
-                });
+                return Err(StorageError::MigrationChecksumMismatch { version: migration.version });
             }
         }
     }
@@ -179,10 +171,7 @@ pub async fn apply_migrations(
             .map_err(|_| StorageError::StorageUnavailable)?;
         let start = std::time::Instant::now();
 
-        sqlx::raw_sql(&sql)
-            .execute(&pool)
-            .await
-            .map_err(|_| StorageError::StorageUnavailable)?;
+        sqlx::raw_sql(&sql).execute(&pool).await.map_err(|_| StorageError::StorageUnavailable)?;
 
         let checksum = format!("sha256:{}", sha256_file_hex(&migration.path)?);
         let elapsed = start.elapsed().as_millis() as i64;
@@ -249,11 +238,7 @@ pub async fn verify_checksums(
         .map(|m| m.version)
         .collect();
 
-    Ok(ChecksumReport {
-        valid: mismatches.is_empty(),
-        mismatches,
-        missing_on_disk,
-    })
+    Ok(ChecksumReport { valid: mismatches.is_empty(), mismatches, missing_on_disk })
 }
 
 /// A consistent SQLite backup via `VACUUM INTO` (ADR-0001 §7).
@@ -321,10 +306,7 @@ mod tests {
         // Edit the applied migration file.
         write_migration(&mig, 1, "core", "CREATE TABLE t1 (id TEXT PRIMARY KEY, extra TEXT);");
         let err = apply_migrations(db, &mig).await.unwrap_err();
-        assert!(matches!(
-            err,
-            StorageError::MigrationChecksumMismatch { version: 1 }
-        ));
+        assert!(matches!(err, StorageError::MigrationChecksumMismatch { version: 1 }));
     }
 
     #[tokio::test]
