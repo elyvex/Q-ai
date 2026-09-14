@@ -3,7 +3,6 @@
 //! Audit model: append-only, hash-chained, secret-free.
 
 use domain::{AuditEventId, ContentHash, HashAlgorithm, PrincipalId, SubjectRef, Timestamp, canonical_json_bytes};
-use storage::error::StorageError;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -254,7 +253,7 @@ mod tests {
     #[test]
     fn different_events_produce_different_hashes() {
         let prev_hash = ContentHash { algorithm: HashAlgorithm::Sha256, hex: "00".repeat(32) };
-        let mut event1 = AuditEvent {
+        let event1 = AuditEvent {
             id: AuditEventId::new(), sequence: 1, occurred_at: Timestamp::now(),
             actor: Actor::System { name: "test1".to_string() }, action: AuditAction::ConfigChange,
             subject: SubjectRef("urn:test".to_string()),
