@@ -3,3 +3,20 @@ name = "quran-corpus"
 version = "0.0.0"
 edition = "2024"
 publish = false
+
+[dependencies]
+quran-core = { path = "../quran-core" }
+domain = { path = "../domain" }
+sources = { path = "../sources" }
+storage = { path = "../storage" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+csv = { workspace = true }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tempfile = { workspace = true }
