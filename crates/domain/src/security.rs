@@ -1,11 +1,11 @@
 //! Security primitives for Q-ai phase 0.
-//! 
+//!
 //! Implements the D0.15 — Security Baseline as reusable guard libraries.
 //! Functions and types are pure Rust (no async, no I/O, no provider deps).
 //! Fail-closed: deny on any error.
 
-use std::path::{Path, PathBuf};
 use std::net::IpAddr;
+use std::path::{Path, PathBuf};
 
 /// Security error codes (QAI-SEC-0xxx)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,29 +80,53 @@ pub fn is_private_ip(ip: IpAddr) -> bool {
         IpAddr::V4(ipv4) => {
             let octets = ipv4.octets();
             // RFC 1918: 10.0.0.0/8
-            if octets[0] == 10 { return true; }
+            if octets[0] == 10 {
+                return true;
+            }
+            // "This network" / unspecified 0.0.0.0/8
+            if octets[0] == 0 {
+                return true;
+            }
             // RFC 192.168.0.0/16
-            if octets[0] == 192 && octets[1] == 168 { return true; }
+            if octets[0] == 192 && octets[1] == 168 {
+                return true;
+            }
             // RFC 172.16.0.0/12
-            if octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31 { return true; }
+            if octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31 {
+                return true;
+            }
             // RFC 127.x.x.x loopback
-            if octets[0] == 127 { return true; }
+            if octets[0] == 127 {
+                return true;
+            }
             // RFC 169.254.x.x link-local
-            if octets[0] == 169 && octets[1] == 254 { return true; }
+            if octets[0] == 169 && octets[1] == 254 {
+                return true;
+            }
             // Multicast
-            if octets[0] & 0xF0 == 0xE0 { return true; }
+            if octets[0] & 0xF0 == 0xE0 {
+                return true;
+            }
             // IPv4 mcast ff00::/8
             false
         }
         IpAddr::V6(ipv6) => {
             // IPv6 ULA fc00::/7 (unique local addressing)
             if let Some(segment) = ipv6.segments().first()
-                && segment & 0xfe00 == 0xfc00 { return true; }
+                && segment & 0xfe00 == 0xfc00
+            {
+                return true;
+            }
             // IPv6 loopback ::1
-            if ipv6.is_loopback() || ipv6.is_unspecified() { return true; }
+            if ipv6.is_loopback() || ipv6.is_unspecified() {
+                return true;
+            }
             // IPv6 link-local fe80::/10
             if let Some(segment) = ipv6.segments().first()
-                && segment & 0xffc0 == 0xfe80 { return true; }
+                && segment & 0xffc0 == 0xfe80
+            {
+                return true;
+            }
             // Unique Local Addresses fc00::/7 (excludes global unicast)
             false
         }
@@ -130,7 +154,9 @@ impl Limits {
 
     /// Check if an archive expansion ratio is within limits.
     pub fn check_expansion(&self, compressed: u64, expanded: u64) -> Result<(), SecurityError> {
-        if compressed == 0 { return Ok(()); }
+        if compressed == 0 {
+            return Ok(());
+        }
         let ratio = expanded as f64 / compressed as f64;
         if ratio > self.max_archive_expansion_ratio {
             return Err(SecurityError::ExpansionRatio);
@@ -174,8 +200,12 @@ pub enum PolicyDecision {
 /// Deny-by-default baseline decision engine.
 pub fn default_denying(action: &str) -> PolicyDecision {
     match action {
-        "download" | "read" | "extract" => PolicyDecision::RequireApproval { reason: "new file".to_string() },
-        "write" | "create" | "overwrite" => PolicyDecision::Deny { reason: "write operations require explicit approval".to_string() },
+        "download" | "read" | "extract" => {
+            PolicyDecision::RequireApproval { reason: "new file".to_string() }
+        }
+        "write" | "create" | "overwrite" => PolicyDecision::Deny {
+            reason: "write operations require explicit approval".to_string(),
+        },
         "list" => PolicyDecision::Deny { reason: "directory listing blocked".to_string() },
         _ => PolicyDecision::Deny { reason: "unknown action".to_string() },
     }
