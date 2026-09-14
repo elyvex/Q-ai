@@ -146,7 +146,12 @@ impl HashChainWriter {
         Ok(event)
     }
 
-    pub(crate) fn compute_chain_hash(prev_hash: &ContentHash, event: &AuditEvent) -> ContentHash {
+    /// Compute the chain hash for an event, given the previous chain hash.
+    ///
+    /// Public so application services can append hash-chained events inside
+    /// their own units of work (same-transaction audit) using the exact recipe
+    /// [`HashChainWriter::append_event`] uses.
+    pub fn compute_chain_hash(prev_hash: &ContentHash, event: &AuditEvent) -> ContentHash {
         let mut event_without_hash = event.clone();
         event_without_hash.chain_hash =
             ContentHash { algorithm: HashAlgorithm::Sha256, hex: String::new() };

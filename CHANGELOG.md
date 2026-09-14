@@ -19,6 +19,10 @@ All notable changes to Q-ai are documented here.
 - **docs**: `docs/schemas/quran-edition-source.v1.schema.json` for the edition format.
 - **fixtures**: synthetic `test-edition-min` edition (5 surahs / 14 ayahs, nonsense
   Arabic-shaped text), 16 adversarial corpora, 331-case reference golden set.
+- **storage**: `QuranRepository` covering staging, atomic activation/rollback,
+  canonical reads, validation/difference reports, citations, and translations.
+- **storage-sqlite**: Quran migrations `0007`–`0012`, insert-only canonical triggers,
+  and repository implementation.
 
 ### Added — Phase 0 foundations
 
