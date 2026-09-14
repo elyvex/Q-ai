@@ -53,18 +53,15 @@ pub fn init_otlp(endpoint: &str) -> Result<OtlpGuard, String> {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn builds_a_provider_for_a_valid_endpoint() {
-        // Building does not connect; the exporter is lazy.
-        let provider = build_provider("http://127.0.0.1:4318/v1/traces");
-        assert!(provider.is_ok());
-        if let Ok(provider) = provider {
-            let _ = provider.shutdown();
-        }
-    }
-
     #[test]
     fn rejects_a_malformed_endpoint() {
         assert!(build_provider("not a url").is_err());
+    }
+
+    #[tokio::test]
+    #[ignore = "starts a batch exporter; run against a live OTLP endpoint"]
+    async fn builds_a_provider_for_a_valid_endpoint() {
+        let provider = build_provider("http://127.0.0.1:4318/v1/traces").unwrap();
+        let _ = provider.shutdown();
     }
 }
