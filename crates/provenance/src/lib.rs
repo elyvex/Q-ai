@@ -1,7 +1,8 @@
 //! Phase 0 — Provenance model (D0.11).
 
 use domain::{
-    ApprovalId, ContentHash, DerivationVersions, PrincipalId, ProvenanceId, SubjectRef, Timestamp, TrustLevel, VerificationStatus,
+    ApprovalId, ContentHash, DerivationVersions, PrincipalId, ProvenanceId, SubjectRef, Timestamp,
+    TrustLevel, VerificationStatus,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -13,10 +14,26 @@ type Result<T, E = ProvenanceError> = std::result::Result<T, E>;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Attribution {
-    Dataset { source_id: String, dataset_name: String, dataset_version: String },
-    Scholar { name: String, school: Option<String>, work: Option<String>, edition: Option<String> },
-    Computational { algorithm: String, version: String, model: Option<String>, parameters_hash: ContentHash },
-    User { principal_id: PrincipalId },
+    Dataset {
+        source_id: String,
+        dataset_name: String,
+        dataset_version: String,
+    },
+    Scholar {
+        name: String,
+        school: Option<String>,
+        work: Option<String>,
+        edition: Option<String>,
+    },
+    Computational {
+        algorithm: String,
+        version: String,
+        model: Option<String>,
+        parameters_hash: ContentHash,
+    },
+    User {
+        principal_id: PrincipalId,
+    },
 }
 
 // ─── SourceLocation ───────────────────────────────
@@ -61,10 +78,26 @@ pub struct ProvenanceRecord {
 pub trait ProvenanceRepository: Send + Sync {
     async fn insert(&mut self, record: ProvenanceRecord) -> Result<(), ProvenanceError>;
     async fn get(&self, id: &ProvenanceId) -> Result<Option<ProvenanceRecord>, ProvenanceError>;
-    async fn list_by_subject(&self, subject: &SubjectRef) -> Result<Vec<ProvenanceRecord>, ProvenanceError>;
-    async fn list_by_source_version(&self, source_version_id: &domain::SourceVersionId) -> Result<Vec<ProvenanceRecord>, ProvenanceError>;
-    async fn record_review(&mut self, provenance_id: &ProvenanceId, reviewed_by: PrincipalId, note: Option<String>, accepted: bool) -> Result<(), ProvenanceError>;
-    async fn supersede(&mut self, id: &ProvenanceId, superseded_by: ProvenanceId) -> Result<(), ProvenanceError>;
+    async fn list_by_subject(
+        &self,
+        subject: &SubjectRef,
+    ) -> Result<Vec<ProvenanceRecord>, ProvenanceError>;
+    async fn list_by_source_version(
+        &self,
+        source_version_id: &domain::SourceVersionId,
+    ) -> Result<Vec<ProvenanceRecord>, ProvenanceError>;
+    async fn record_review(
+        &mut self,
+        provenance_id: &ProvenanceId,
+        reviewed_by: PrincipalId,
+        note: Option<String>,
+        accepted: bool,
+    ) -> Result<(), ProvenanceError>;
+    async fn supersede(
+        &mut self,
+        id: &ProvenanceId,
+        superseded_by: ProvenanceId,
+    ) -> Result<(), ProvenanceError>;
 }
 
 // ─── ReviewQueue ──────────────────────────────────
@@ -85,30 +118,60 @@ pub struct ReviewQueue {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ReviewQueueType { GraphEdge, Morphology, NarratorIdentity, CrossReference }
+pub enum ReviewQueueType {
+    GraphEdge,
+    Morphology,
+    NarratorIdentity,
+    CrossReference,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ReviewQueueState { Pending, Accepted, Rejected, Corrected }
+pub enum ReviewQueueState {
+    Pending,
+    Accepted,
+    Rejected,
+    Corrected,
+}
 
 // ─── CanonicalWriter ──────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ApprovalToken { inner: approval::ApprovalTokenInner }
+pub struct ApprovalToken {
+    inner: approval::ApprovalTokenInner,
+}
 
 mod approval {
     use super::*;
     #[derive(Debug, Clone, PartialEq, Eq)]
-    pub struct ApprovalTokenInner { pub approval_id: ApprovalId, pub subject_urn: String, pub approved_by: PrincipalId, pub approved_at: Timestamp }
+    pub struct ApprovalTokenInner {
+        pub approval_id: ApprovalId,
+        pub subject_urn: String,
+        pub approved_by: PrincipalId,
+        pub approved_at: Timestamp,
+    }
 }
 
 impl ApprovalToken {
     pub fn new(approval_id: ApprovalId, subject_urn: String, approved_by: PrincipalId) -> Self {
-        Self { inner: approval::ApprovalTokenInner { approval_id, subject_urn, approved_by, approved_at: Timestamp::now() } }
+        Self {
+            inner: approval::ApprovalTokenInner {
+                approval_id,
+                subject_urn,
+                approved_by,
+                approved_at: Timestamp::now(),
+            },
+        }
     }
-    pub fn approval_id(&self) -> &ApprovalId { &self.inner.approval_id }
-    pub fn subject_urn(&self) -> &str { &self.inner.subject_urn }
-    pub fn approved_by(&self) -> &PrincipalId { &self.inner.approved_by }
+    pub fn approval_id(&self) -> &ApprovalId {
+        &self.inner.approval_id
+    }
+    pub fn subject_urn(&self) -> &str {
+        &self.inner.subject_urn
+    }
+    pub fn approved_by(&self) -> &PrincipalId {
+        &self.inner.approved_by
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -129,13 +192,27 @@ pub struct CanonicalChangeSession {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SessionStatus { Open, Committed, Aborted }
+pub enum SessionStatus {
+    Open,
+    Committed,
+    Aborted,
+}
 
 #[async_trait::async_trait]
 pub trait CanonicalWriter: Send + Sync {
-    fn begin_canonical_change(&self, token: &ApprovalToken, change: CanonicalChangeRequest) -> Result<CanonicalChangeSession, ProvenanceError>;
-    async fn commit_canonical_change(&self, session: &CanonicalChangeSession) -> Result<(), ProvenanceError>;
-    async fn abort_canonical_change(&self, session: &CanonicalChangeSession) -> Result<(), ProvenanceError>;
+    fn begin_canonical_change(
+        &self,
+        token: &ApprovalToken,
+        change: CanonicalChangeRequest,
+    ) -> Result<CanonicalChangeSession, ProvenanceError>;
+    async fn commit_canonical_change(
+        &self,
+        session: &CanonicalChangeSession,
+    ) -> Result<(), ProvenanceError>;
+    async fn abort_canonical_change(
+        &self,
+        session: &CanonicalChangeSession,
+    ) -> Result<(), ProvenanceError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -191,7 +268,11 @@ mod tests {
 
     #[test]
     fn approval_token_cannot_be_constructed_directly() {
-        let token = ApprovalToken::new(ApprovalId::new(), "urn:qai:source:test".to_string(), PrincipalId::new());
+        let token = ApprovalToken::new(
+            ApprovalId::new(),
+            "urn:qai:source:test".to_string(),
+            PrincipalId::new(),
+        );
         assert_eq!(token.approval_id().to_string(), token.approval_id().to_string());
     }
 
@@ -207,7 +288,10 @@ mod tests {
     fn canonical_change_request_requires_all_fields() {
         let req = CanonicalChangeRequest {
             new_source_version_id: domain::SourceVersionId::new(),
-            content_hash: ContentHash { algorithm: domain::HashAlgorithm::Sha256, hex: "00".to_string() },
+            content_hash: ContentHash {
+                algorithm: domain::HashAlgorithm::Sha256,
+                hex: "00".to_string(),
+            },
             structural_validation_report: "valid".to_string(),
             difference_report: DifferenceReport::default(),
             approver_identity: PrincipalId::new(),
@@ -220,7 +304,11 @@ mod tests {
             id: ProvenanceId::new(),
             layer: domain::DataLayer::Canonical,
             subject: SubjectRef("urn:qai:quran:ayah:1:1".to_string()),
-            attribution: Attribution::Dataset { source_id: "test".to_string(), dataset_name: "test".to_string(), dataset_version: "1.0".to_string() },
+            attribution: Attribution::Dataset {
+                source_id: "test".to_string(),
+                dataset_name: "test".to_string(),
+                dataset_version: "1.0".to_string(),
+            },
             source_version_id: Some(domain::SourceVersionId::new()),
             source_location: None,
             trust_level: TrustLevel::CanonicalVerified,
