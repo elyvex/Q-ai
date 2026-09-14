@@ -212,13 +212,13 @@ mod tests {
         cfg.storage.sqlite.path = dir.path().join("qai.db").display().to_string();
 
         let version = migrate_database(&cfg, &migrations_dir()).await.unwrap();
-        assert_eq!(version, 6);
+        assert_eq!(version, 12);
 
         let probe = probe_database(&cfg).await;
         assert!(probe.reachable);
         assert!(probe.integrity_ok);
         assert!(probe.foreign_keys_on);
-        assert_eq!(probe.schema_version, 6);
+        assert_eq!(probe.schema_version, 12);
     }
 
     #[tokio::test]
@@ -240,7 +240,7 @@ mod tests {
 
         let status = migration_status(&cfg, &migrations_dir()).await.unwrap();
         assert!(status.current);
-        assert_eq!(status.latest_on_disk, 6);
+        assert_eq!(status.latest_on_disk, 12);
 
         let dest = dir.path().join("bk.db");
         backup_database(&cfg, dest.to_str().unwrap()).await.unwrap();

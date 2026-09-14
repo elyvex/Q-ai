@@ -675,7 +675,7 @@ mod tests {
             reachable: true,
             integrity_ok: true,
             foreign_keys_on: true,
-            schema_version: 6,
+            schema_version: 12,
             ..Default::default()
         }
     }
@@ -762,7 +762,7 @@ mod tests {
             reachable: true,
             integrity_ok: true,
             foreign_keys_on: true,
-            schema_version: 6,
+            schema_version: 12,
             outbox_pending: 3,
             outbox_oldest_pending_seconds: 7200,
             tombstones_unpropagated: 2,
