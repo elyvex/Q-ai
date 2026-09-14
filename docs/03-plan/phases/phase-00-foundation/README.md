@@ -41,6 +41,7 @@ them are **unenforceable if retrofitted**:
 | `tasks.md` | Live work board: 67 tasks + 3 critical-path decisions, with dependencies and status. | Daily |
 | `acceptance.md` | The 26 exit-gate criteria, verification method, and evidence log. | On AC verification |
 | `done.md` | Append-only completion ledger (tasks, ACs, ADRs, decisions). | On every completion |
+| `summary.md` | Implementation summary: what was built, verification, deviations, open items. | At phase close (then frozen) |
 
 **Rule:** `plan.md` states intent, `tasks.md` states current state, `done.md` states history.
 Never edit `done.md` entries after the fact — append a correction instead.
