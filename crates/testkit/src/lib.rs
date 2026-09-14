@@ -12,9 +12,8 @@
 
 use async_trait::async_trait;
 use domain::{
-    ContentHash, DataLayer, DerivationVersions, HashAlgorithm,
-    LicenseStatus, PrincipalId, SemVer, SourceId, SourceVersionId,
-    SubjectRef, Timestamp, TrustLevel, VerificationStatus,
+    ContentHash, DataLayer, DerivationVersions, HashAlgorithm, LicenseStatus, PrincipalId, SemVer,
+    SourceId, SourceVersionId, SubjectRef, Timestamp, TrustLevel, VerificationStatus,
 };
 use sources::{FileRole, SourceFile, SourceState, SourceVersion};
 use std::path::PathBuf;
@@ -58,10 +57,7 @@ read_only_pool = true
 
 /// A canonical `SourceVersion` fixture passing state machine preconditions.
 pub fn sample_source_version() -> SourceVersion {
-    let content_hash = ContentHash {
-        algorithm: HashAlgorithm::Sha256,
-        hex: "00".repeat(32),
-    };
+    let content_hash = ContentHash { algorithm: HashAlgorithm::Sha256, hex: "00".repeat(32) };
     SourceVersion {
         id: SourceVersionId::new(),
         source_id: SourceId::new(),
@@ -188,10 +184,7 @@ impl MockAuditRepo {
     /// Replace the `chain_hash` of the event at `sequence` with a broken value.
     pub fn tamper(&mut self, sequence: u64) {
         if let Some(ev) = self.events.iter_mut().find(|e| e.sequence == sequence) {
-            ev.chain_hash = ContentHash {
-                algorithm: HashAlgorithm::Sha256,
-                hex: "ff".repeat(32),
-            };
+            ev.chain_hash = ContentHash { algorithm: HashAlgorithm::Sha256, hex: "ff".repeat(32) };
         }
     }
 }
@@ -211,12 +204,7 @@ impl audit::AuditRepository for MockAuditRepo {
         &self,
         subject_urn: &SubjectRef,
     ) -> Result<Vec<audit::AuditEvent>, audit::AuditError> {
-        Ok(self
-            .events
-            .iter()
-            .filter(|e| e.subject.0 == subject_urn.0)
-            .cloned()
-            .collect())
+        Ok(self.events.iter().filter(|e| e.subject.0 == subject_urn.0).cloned().collect())
     }
 
     async fn list_by_sequence(
@@ -270,14 +258,8 @@ mod tests {
             before: None,
             after: Some(serde_json::json!({"level": "info"})),
             request_id: None,
-            prev_chain_hash: ContentHash {
-                algorithm: HashAlgorithm::Sha256,
-                hex: "00".repeat(32),
-            },
-            chain_hash: ContentHash {
-                algorithm: HashAlgorithm::Sha256,
-                hex: "aa".repeat(32),
-            },
+            prev_chain_hash: ContentHash { algorithm: HashAlgorithm::Sha256, hex: "00".repeat(32) },
+            chain_hash: ContentHash { algorithm: HashAlgorithm::Sha256, hex: "aa".repeat(32) },
         };
         repo.append(ev.clone()).await.unwrap();
         repo.tamper(ev.sequence);
