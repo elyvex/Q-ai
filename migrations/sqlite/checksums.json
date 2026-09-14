@@ -10,5 +10,11 @@
   "0005_audit.down.sql": "sha256:072c5bbf82861a5d521a1180254b03edecf5d4129d95c3df5a5aa66fac98c390",
   "0005_audit.up.sql": "sha256:42f45126bf2c7b817db92d5c714aace52c990b2ad23b89e04511776140a59e11",
   "0006_outbox_generations_tombstones.down.sql": "sha256:b1fad7e046074c5dd6b482098309ffd01f0f2904a2e1434acc703890debf1f16",
-  "0006_outbox_generations_tombstones.up.sql": "sha256:5057211e85a9a1639d6e9192a9e0aa1708c1536ce102358f70b6871d6bc6d6e2"
+  "0006_outbox_generations_tombstones.up.sql": "sha256:5057211e85a9a1639d6e9192a9e0aa1708c1536ce102358f70b6871d6bc6d6e2",
+  "0007_quran_editions.up.sql": "sha256:ec6c4cbc595f4da08bf79acd46b97318608a49de3954d1416241f10ca33fc452",
+  "0008_quran_structure.up.sql": "sha256:da92687286a7f11e4136bdff5752a78df27dd1392b3cd9e4830f895c3e8247b7",
+  "0009_quran_divisions.up.sql": "sha256:dae3a4ac8bedc496a204cf52f1f9a4e51a56485394bb0932837051408f0e750c",
+  "0010_quran_translations.up.sql": "sha256:744cf84731c056ec32ffb566ceab3d66d7ebb1192498046bc1187e549c6743c5",
+  "0011_quran_staging.up.sql": "sha256:3b57110dbf26f3faca86a722c8cef85e6315e1981a4201276bbd74aed23fcce8",
+  "0012_quran_validation.up.sql": "sha256:5ef779bf604ea383346c86f59b1301ac0ea0afdedd9b616f3c58cf143abbf3e2"
 }
