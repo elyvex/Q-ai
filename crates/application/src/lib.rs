@@ -5,8 +5,10 @@
 //! crate (never on `storage-sqlite` directly) so the concrete backend choice
 //! stays in one place.
 
+pub mod audit_bridge;
 pub mod db;
 pub mod job_queue;
+pub mod quran;
 
 pub use config::Config;
 
