@@ -376,4 +376,57 @@ mod tests {
         // out-of-range rejects on deserialize
         assert!(serde_json::from_str::<Confidence>("1.5").is_err());
     }
+
+    #[test]
+    fn error_types_display_their_codes_and_are_errors() {
+        fn assert_error<E: std::error::Error>() {}
+        assert_error::<UuidParseError>();
+        assert_error::<SemVerParseError>();
+        assert_error::<TimestampParseError>();
+        assert_error::<LanguageParseError>();
+        assert_error::<ConfidenceOutOfRange>();
+
+        assert!(UuidParseError.to_string().contains("QAI-DOM-0001"));
+        assert!(SemVerParseError.to_string().contains("QAI-DOM-0002"));
+        assert!(TimestampParseError.to_string().contains("QAI-DOM-0003"));
+        assert!(LanguageParseError.to_string().contains("QAI-DOM-0004"));
+        assert!(ConfidenceOutOfRange.to_string().contains("QAI-DOM-0005"));
+    }
+
+    #[test]
+    fn semver_accessors() {
+        let v = SemVer::new(2, 3, 4);
+        assert_eq!((v.major(), v.minor(), v.patch()), (2, 3, 4));
+        assert!(serde_json::from_str::<SemVer>("\"not-semver\"").is_err());
+        assert!(serde_json::from_str::<SemVer>("\"1.2\"").is_err());
+    }
+
+    #[test]
+    fn timestamp_accessors_and_epoch() {
+        let ts = Timestamp::from_ymd_hms(2026, 1, 15, 10, 30, 0).unwrap();
+        assert_eq!(ts.as_time().year(), 2026);
+        assert!(ts.epoch_micros() > 0);
+        // Invalid calendar dates are rejected.
+        assert!(Timestamp::from_ymd_hms(2026, 13, 1, 0, 0, 0).is_err());
+        assert!(Timestamp::from_ymd_hms(2026, 2, 30, 0, 0, 0).is_err());
+        assert!(serde_json::from_str::<Timestamp>("\"nope\"").is_err());
+    }
+
+    #[test]
+    fn language_display_and_deserialize() {
+        let lang: Language = "ar".parse().unwrap();
+        assert_eq!(lang.to_string(), "ar");
+        assert_eq!(serde_json::to_string(&lang).unwrap(), "\"ar\"");
+        let back: Language = serde_json::from_str("\"fa-IR\"").unwrap();
+        assert_eq!(back.as_str(), "fa-IR");
+        assert!(serde_json::from_str::<Language>("\"bad_tag\"").is_err());
+    }
+
+    #[test]
+    fn confidence_default_from_str_and_deserialize_errors() {
+        assert_eq!(Confidence::default().value(), 1.0);
+        assert_eq!("0.25".parse::<Confidence>().unwrap().value(), 0.25);
+        assert!("2.0".parse::<Confidence>().is_err());
+        assert!(serde_json::from_str::<Confidence>("\"x\"").is_err());
+    }
 }
