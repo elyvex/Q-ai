@@ -216,9 +216,7 @@ impl Diagnostic for StorageError {
             Self::MigrationChecksumMismatch { version } => {
                 format!("Migration checksum mismatch at version {version}.")
             }
-            Self::IdempotencyKeyReplay => {
-                "An identical request was submitted previously.".into()
-            }
+            Self::IdempotencyKeyReplay => "An identical request was submitted previously.".into(),
             Self::StorageUnavailable => "The storage backend cannot be reached.".into(),
         }]
     }
@@ -241,10 +239,7 @@ impl Diagnostic for StorageError {
     }
 
     fn is_retryable(&self) -> bool {
-        matches!(
-            self,
-            Self::StorageBusy | Self::StorageUnavailable | Self::Conflict
-        )
+        matches!(self, Self::StorageBusy | Self::StorageUnavailable | Self::Conflict)
     }
 
     fn redacted(&self) -> bool {
