@@ -1,5 +1,6 @@
 //! Phase 0 — Source catalog, manifest schema, and state machine (D0.10).
 
+use base64::Engine as _;
 use domain::{
     ApprovalId, ContentHash, HashAlgorithm, LicenseStatus, PrincipalId, SourceId, SourceVersionId,
     Timestamp, TrustLevel, canonical_json_bytes,
@@ -366,6 +367,49 @@ impl ManifestParser {
         })?;
         version.state = SourceState::Staged;
         Ok(version)
+    }
+
+    /// The exact byte sequence a publisher signs: the canonical JSON of the
+    /// manifest (stable key order, LF, no BOM) — ADR-0007.
+    pub fn signing_payload(&self, manifest: &ManifestParseResult) -> Result<Vec<u8>, SourceError> {
+        canonical_json_bytes(manifest).map_err(|e| SourceError::Serialization(e.to_string()))
+    }
+
+    /// Verify a detached **ed25519** signature over the manifest's canonical
+    /// JSON (D0.10 / ADR-0007).
+    ///
+    /// `public_key_base64` and `signature_base64` are standard-base64.
+    pub fn verify_ed25519(
+        &self,
+        manifest: &ManifestParseResult,
+        public_key_base64: &str,
+        signature_base64: &str,
+    ) -> Result<(), SourceError> {
+        let engine = base64::engine::general_purpose::STANDARD;
+        let payload = self.signing_payload(manifest)?;
+
+        let key_bytes = engine.decode(public_key_base64).map_err(|_| {
+            SourceError::SignatureVerificationFailed("invalid base64 public key".to_string())
+        })?;
+        let key_arr: [u8; 32] = key_bytes.try_into().map_err(|_| {
+            SourceError::SignatureVerificationFailed("public key must be 32 bytes".to_string())
+        })?;
+        let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&key_arr).map_err(|_| {
+            SourceError::SignatureVerificationFailed("invalid ed25519 public key".to_string())
+        })?;
+
+        let sig_bytes = engine.decode(signature_base64).map_err(|_| {
+            SourceError::SignatureVerificationFailed("invalid base64 signature".to_string())
+        })?;
+        let signature = ed25519_dalek::Signature::from_slice(&sig_bytes).map_err(|_| {
+            SourceError::SignatureVerificationFailed("invalid ed25519 signature".to_string())
+        })?;
+
+        verifying_key.verify_strict(&payload, &signature).map_err(|_| {
+            SourceError::SignatureVerificationFailed(
+                "ed25519 signature does not verify (tampered or wrong key)".to_string(),
+            )
+        })
     }
 }
 
@@ -871,6 +915,41 @@ mod tests {
         assert_eq!(codes.len(), unique.len(), "source error codes must be unique");
         assert!(codes.iter().all(|c| c.starts_with("QAI-SRC-")));
         assert_eq!(SourceError::SignatureVerificationFailed("x".into()).code(), "QAI-SRC-0007");
+    }
+
+    #[test]
+    fn ed25519_signature_verifies_and_rejects_tampering() {
+        use base64::engine::general_purpose::STANDARD;
+        use ed25519_dalek::{Signer, SigningKey};
+
+        let parser = ManifestParser::new(false);
+        let manifest = sample_manifest();
+        let payload = parser.signing_payload(&manifest).unwrap();
+
+        let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+        let signature = signing_key.sign(&payload);
+        let public_key = signing_key.verifying_key();
+        let pk_b64 = STANDARD.encode(public_key.to_bytes());
+        let sig_b64 = STANDARD.encode(signature.to_bytes());
+
+        // A valid signature verifies.
+        parser.verify_ed25519(&manifest, &pk_b64, &sig_b64).unwrap();
+
+        // A tampered manifest does not.
+        let mut tampered = manifest.clone();
+        tampered.manifest_version = "9.9.9".to_string();
+        assert!(
+            parser.verify_ed25519(&tampered, &pk_b64, &sig_b64).is_err(),
+            "tampered manifest must fail ed25519 verification"
+        );
+
+        // A different key does not verify.
+        let other = SigningKey::from_bytes(&[9u8; 32]).verifying_key();
+        let other_b64 = STANDARD.encode(other.to_bytes());
+        assert!(parser.verify_ed25519(&manifest, &other_b64, &sig_b64).is_err());
+
+        // Malformed base64 is rejected.
+        assert!(parser.verify_ed25519(&manifest, "not base64!!", &sig_b64).is_err());
     }
 
     #[tokio::test]
