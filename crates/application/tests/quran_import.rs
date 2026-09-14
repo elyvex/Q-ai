@@ -137,7 +137,7 @@ async fn import_runs_end_to_end_to_staged() {
     .expect("base import completes");
     let ImportOutcome::Completed(success) = outcome else { panic!("expected completion"); };
     assert!(success.stopped_at.is_none());
-    assert_eq!(success.edition_id, "ed-run-1");
+    assert_eq!(success.edition_id, "run-1");
     assert_eq!(progress.checkpoints(), ImportCheckpoint::ALL);
     assert_eq!(staged_count(&db, "run-1").await, 14);
 
@@ -146,7 +146,7 @@ async fn import_runs_end_to_end_to_staged() {
     assert_eq!(report.fatal_count, 0);
     assert_eq!(report.error_count, 0);
     assert!(uow.quran().get_active().await.unwrap().is_none(), "no canonical writes");
-    assert_eq!(uow.quran().count_ayahs("ed-run-1").await.unwrap(), 0);
+    assert_eq!(uow.quran().count_ayahs("run-1").await.unwrap(), 0);
     uow.rollback().await.unwrap();
 }
 
