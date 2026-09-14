@@ -27,7 +27,7 @@ use storage::{
     error::StorageError,
     quran::QuranRepository,
     repository::{
-        AuditEvent, AuditRepository, ChainVerificationResult, GenerationRow, JobRecord,
+        ApprovalRow, AuditEvent, AuditRepository, ChainVerificationResult, GenerationRow, JobRecord,
         JobRepository, NewOutboxEvent, OutboxEventRow, OutboxRepository, ProvenanceRecord,
         ProvenanceRepository, ReviewRecord, SettingRow, SettingsRepository, SourceRepository,
         SourceRow, SourceVersionRow, StateTransitionRow, TombstoneRow,
@@ -443,6 +443,52 @@ impl SourceRepository for SqliteSourceRepository {
         .map_err(map_sqlx_error)?;
         Ok(())
     }
+
+    async fn insert_approval(&mut self, approval: ApprovalRow) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query(
+            "INSERT INTO approvals
+                (id, subject_urn, kind, requested_by, decided_by, decision,
+                 request_payload, decision_note, requested_at, decided_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&approval.id)
+        .bind(&approval.subject_urn)
+        .bind(&approval.kind)
+        .bind(&approval.requested_by)
+        .bind(&approval.decided_by)
+        .bind(&approval.decision)
+        .bind(&approval.request_payload)
+        .bind(&approval.decision_note)
+        .bind(&approval.requested_at)
+        .bind(&approval.decided_at)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn get_approval(&self, id: &str) -> Result<Option<ApprovalRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query("SELECT * FROM approvals WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        Ok(row.map(|r| ApprovalRow {
+            id: r.get("id"),
+            subject_urn: r.get("subject_urn"),
+            kind: r.get("kind"),
+            requested_by: r.get("requested_by"),
+            decided_by: r.get("decided_by"),
+            decision: r.get("decision"),
+            request_payload: r.get("request_payload"),
+            decision_note: r.get("decision_note"),
+            requested_at: r.get("requested_at"),
+            decided_at: r.get("decided_at"),
+        }))
+    }
+}
 }
 
 // ─── Provenance repository ──────────────────────────────────────────────
@@ -610,6 +656,47 @@ impl AuditRepository for SqliteAuditRepository {
         .await
         .map_err(|_| StorageError::StorageUnavailable)?;
         Ok(rows.into_iter().map(map_audit_row).collect())
+    }
+
+    async fn list_by_sequence(
+        &self,
+        from: u64,
+        to: Option<u64>,
+    ) -> Result<Vec<AuditEvent>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = match to {
+            Some(to) => sqlx::query(
+                "SELECT id, sequence, occurred_at, actor_kind, actor_id, action, subject_urn,
+                        outcome, reason, before_json, after_json, request_id, prev_chain_hash,
+                        chain_hash
+                 FROM audit_events WHERE sequence BETWEEN ? AND ? ORDER BY sequence ASC",
+            )
+            .bind(from as i64)
+            .bind(to as i64)
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(|_| StorageError::StorageUnavailable)?,
+            None => sqlx::query(
+                "SELECT id, sequence, occurred_at, actor_kind, actor_id, action, subject_urn,
+                        outcome, reason, before_json, after_json, request_id, prev_chain_hash,
+                        chain_hash
+                 FROM audit_events WHERE sequence >= ? ORDER BY sequence ASC",
+            )
+            .bind(from as i64)
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(|_| StorageError::StorageUnavailable)?,
+        };
+        Ok(rows.into_iter().map(map_audit_row).collect())
+    }
+
+    async fn latest_sequence(&self) -> Result<u64, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query("SELECT MAX(sequence) AS max_seq FROM audit_events")
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(|_| StorageError::StorageUnavailable)?;
+        Ok(row.get::<Option<i64>, _>("max_seq").unwrap_or(0).max(0) as u64)
     }
 
     async fn verify_chain(&self) -> Result<ChainVerificationResult, StorageError> {

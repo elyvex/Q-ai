@@ -59,6 +59,16 @@ pub trait SourceRepository: Send + Sync {
     ) -> Result<(), StorageError> {
         Err(StorageError::StorageUnavailable)
     }
+
+    /// Record a human approval decision.
+    async fn insert_approval(&mut self, _approval: ApprovalRow) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Fetch an approval by id.
+    async fn get_approval(&self, _id: &str) -> Result<Option<ApprovalRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
 }
 
 /// A row in the `sources` table.
@@ -94,6 +104,21 @@ pub struct StateTransitionRow {
     pub actor_id: Option<String>,
     pub reason: Option<String>,
     pub occurred_at: String,
+}
+
+/// A row in the `approvals` table.
+#[derive(Debug, Clone)]
+pub struct ApprovalRow {
+    pub id: String,
+    pub subject_urn: String,
+    pub kind: String,
+    pub requested_by: Option<String>,
+    pub decided_by: Option<String>,
+    pub decision: Option<String>,
+    pub request_payload: String,
+    pub decision_note: Option<String>,
+    pub requested_at: String,
+    pub decided_at: Option<String>,
 }
 
 // ─── Provenance Repository ───────────────────────────────────────────
@@ -172,6 +197,20 @@ pub trait AuditRepository: Send + Sync {
 
     /// Retrieve events for a subject.
     async fn list_by_subject(&self, _subject_urn: &str) -> Result<Vec<AuditEvent>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// List events in a sequence range, ordered ascending.
+    async fn list_by_sequence(
+        &self,
+        _from: u64,
+        _to: Option<u64>,
+    ) -> Result<Vec<AuditEvent>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// The highest allocated sequence, or 0 when the log is empty.
+    async fn latest_sequence(&self) -> Result<u64, StorageError> {
         Err(StorageError::StorageUnavailable)
     }
 

@@ -139,9 +139,19 @@ pub struct DivisionRow {
     pub provenance_id: String,
 }
 
+/// A staged edition reference: the run holding it plus its edition id.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StagedEditionRef {
+    /// Import run id.
+    pub run_id: String,
+    /// Staged edition id.
+    pub edition_id: String,
+}
+
 /// A row in `quran_import_runs`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImportRunRow {
+    /// Run id.
     pub run_id: String,
     pub job_id: Option<String>,
     pub edition_slug: String,
@@ -247,6 +257,15 @@ pub trait QuranRepository: Send + Sync {
         Err(StorageError::StorageUnavailable)
     }
 
+    /// Find a staged edition by slug and version.
+    async fn find_staged_edition(
+        &self,
+        _slug: &str,
+        _version: &str,
+    ) -> Result<Option<StagedEditionRef>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
     /// Update an import run's state.
     async fn set_import_run_state(
         &mut self,
@@ -313,6 +332,38 @@ pub trait QuranRepository: Send + Sync {
 
     /// Count staged ayahs for a run.
     async fn count_stg_ayahs(&self, _run_id: &str) -> Result<i64, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Delete all staging rows for a run, keeping the run record.
+    async fn clear_staging(&mut self, _run_id: &str) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// List staged ayahs for a run ordered by `(surah, ayah)`.
+    async fn list_stg_ayahs(&self, _run_id: &str) -> Result<Vec<AyahRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// List staged tokens for one ayah ordered by position.
+    async fn list_stg_tokens(
+        &self,
+        _run_id: &str,
+        _edition_id: &str,
+        _surah: i64,
+        _ayah: i64,
+    ) -> Result<Vec<TokenRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// List staged separators for one ayah ordered by `after_position`.
+    async fn list_stg_separators(
+        &self,
+        _run_id: &str,
+        _edition_id: &str,
+        _surah: i64,
+        _ayah: i64,
+    ) -> Result<Vec<SeparatorRow>, StorageError> {
         Err(StorageError::StorageUnavailable)
     }
 

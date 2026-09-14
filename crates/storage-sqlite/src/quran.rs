@@ -11,8 +11,8 @@ use sqlx::Row;
 use storage::error::StorageError;
 use storage::quran::{
     ActiveEditionRow, AyahRow, CitationRow, DifferenceReportRow, DivisionRow, ImportRunRow,
-    QuranEditionRow, QuranRepository, SeparatorRow, SurahRow, TokenRow, TranslationEditionRow,
-    TranslationPassageRow, ValidationReportRow,
+    QuranEditionRow, QuranRepository, SeparatorRow, StagedEditionRef, SurahRow, TokenRow,
+    TranslationEditionRow, TranslationPassageRow, ValidationReportRow,
 };
 
 use super::{SharedTx, map_sqlx_error};
@@ -179,6 +179,27 @@ impl QuranRepository for SqliteQuranRepository {
             .await
             .map_err(map_sqlx_error)?;
         Ok(())
+    }
+
+    async fn find_staged_edition(
+        &self,
+        slug: &str,
+        version: &str,
+    ) -> Result<Option<StagedEditionRef>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query(
+            "SELECT import_run_id AS run_id, id AS edition_id
+             FROM quran_stg_editions WHERE slug = ? AND version = ? LIMIT 1",
+        )
+        .bind(slug)
+        .bind(version)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(row.map(|r| StagedEditionRef {
+            run_id: r.get("run_id"),
+            edition_id: r.get("edition_id"),
+        }))
     }
 
     async fn insert_stg_edition(
@@ -372,6 +393,99 @@ impl QuranRepository for SqliteQuranRepository {
             .await
             .map_err(map_sqlx_error)?;
         Ok(row.get("n"))
+    }
+
+    async fn clear_staging(&mut self, run_id: &str) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        for table in [
+            "quran_stg_token_separators",
+            "quran_stg_tokens",
+            "quran_stg_ayahs",
+            "quran_stg_surahs",
+            "quran_stg_segments",
+            "quran_stg_divisions",
+            "quran_stg_editions",
+        ] {
+            let sql = format!("DELETE FROM {table} WHERE import_run_id = ?");
+            sqlx::query(&sql)
+                .bind(run_id)
+                .execute(&mut **tx)
+                .await
+                .map_err(map_sqlx_error)?;
+        }
+        Ok(())
+    }
+
+    async fn list_stg_ayahs(&self, run_id: &str) -> Result<Vec<AyahRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT edition_id, surah, ayah, text, text_hash, char_count, token_count,
+                    global_ayah_index, juz, hizb, rub, manzil, ruku, page, sajdah, provenance_id
+             FROM quran_stg_ayahs WHERE import_run_id = ? ORDER BY surah, ayah",
+        )
+        .bind(run_id)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows.iter().map(decode_ayah).collect())
+    }
+
+    async fn list_stg_tokens(
+        &self,
+        run_id: &str,
+        edition_id: &str,
+        surah: i64,
+        ayah: i64,
+    ) -> Result<Vec<TokenRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT edition_id, surah, ayah, position, surface, surface_hash, char_start,
+                    char_end, byte_start, byte_end, is_pause_mark, global_token_index
+             FROM quran_stg_tokens
+             WHERE import_run_id = ? AND edition_id = ? AND surah = ? AND ayah = ?
+             ORDER BY position",
+        )
+        .bind(run_id)
+        .bind(edition_id)
+        .bind(surah)
+        .bind(ayah)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows.iter().map(decode_token).collect())
+    }
+
+    async fn list_stg_separators(
+        &self,
+        run_id: &str,
+        edition_id: &str,
+        surah: i64,
+        ayah: i64,
+    ) -> Result<Vec<SeparatorRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT edition_id, surah, ayah, after_position, separator
+             FROM quran_stg_token_separators
+             WHERE import_run_id = ? AND edition_id = ? AND surah = ? AND ayah = ?
+             ORDER BY after_position",
+        )
+        .bind(run_id)
+        .bind(edition_id)
+        .bind(surah)
+        .bind(ayah)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows
+            .iter()
+            .map(|r| SeparatorRow {
+                edition_id: r.get("edition_id"),
+                surah: r.get("surah"),
+                ayah: r.get("ayah"),
+                after_position: r.get("after_position"),
+                separator: r.get("separator"),
+            })
+            .collect())
     }
 
     async fn activate_edition(
