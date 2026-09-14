@@ -66,8 +66,8 @@ impl Diagnostic {
         let mut out = String::new();
         let _ = write!(
             out,
-            "[{}] {:?} [{}] {}: {}",
-            self.timestamp, self.severity, self.code.namespace, self.code.code, self.message
+            "[{}] {:?} [{}] {}",
+            self.timestamp, self.severity, self.code, self.message
         );
         if let Some(ref loc) = self.location {
             let _ = write!(out, " at {}", loc);
@@ -89,14 +89,8 @@ impl Diagnostic {
         let mut out = String::new();
         let _ = write!(
             out,
-            "{{\"id\":{},\"timestamp\":\"{}\",\"severity\":\"{:?}\",\"code\":\"{}:{}\",\"category\":\"{:?}\",\"message\":\"{}\"",
-            self.id.0,
-            self.timestamp,
-            self.severity,
-            self.code.namespace,
-            self.code.code,
-            self.category,
-            self.message
+            "{{\"id\":{},\"timestamp\":\"{}\",\"severity\":\"{:?}\",\"code\":\"{}\",\"category\":\"{:?}\",\"message\":\"{}\"",
+            self.id.0, self.timestamp, self.severity, self.code, self.category, self.message
         );
         if let Some(ref loc) = self.location {
             let _ = write!(out, ",\"location\":\"{}\"", loc);
@@ -142,4 +136,95 @@ pub mod codes {
         DiagnosticCode { namespace: "QAI-DOM", code: 1004 };
     pub const INVALID_DIAGNOSTIC_CODE_FORMAT: DiagnosticCode =
         DiagnosticCode { namespace: "QAI-DOM", code: 1005 };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample() -> Diagnostic {
+        Diagnostic {
+            id: DiagnosticId(7),
+            timestamp: "2026-01-01T00:00:00Z".to_string(),
+            severity: DiagnosticSeverity::Error,
+            code: codes::DATA_LAYER_MISMATCH,
+            category: DiagnosticCategory::Integrity,
+            message: "boom".to_string(),
+            location: Some("config.toml:3".to_string()),
+            affected_resource: Some("storage.sqlite.path".to_string()),
+            remedy: Some("choose a writable path".to_string()),
+            next_command: Some("qai doctor".to_string()),
+        }
+    }
+
+    #[test]
+    fn render_human_includes_all_populated_fields() {
+        let rendered = sample().render_human();
+        assert!(rendered.contains("boom"));
+        assert!(rendered.contains("QAI-DOM-1002"));
+        assert!(rendered.contains("config.toml:3"));
+        assert!(rendered.contains("storage.sqlite.path"));
+        assert!(rendered.contains("Remedy: choose a writable path"));
+        assert!(rendered.contains("Next: qai doctor"));
+        assert!(rendered.contains("Error"));
+    }
+
+    #[test]
+    fn render_json_is_valid_and_carries_the_code() {
+        let json = sample().render_json();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(value["message"], "boom");
+        assert_eq!(value["code"], "QAI-DOM-1002");
+        assert_eq!(value["location"], "config.toml:3");
+        assert_eq!(value["remedy"], "choose a writable path");
+        assert_eq!(value["next_command"], "qai doctor");
+    }
+
+    #[test]
+    fn render_without_optional_fields_omits_them() {
+        let mut diagnostic = sample();
+        diagnostic.location = None;
+        diagnostic.affected_resource = None;
+        diagnostic.remedy = None;
+        diagnostic.next_command = None;
+
+        let human = diagnostic.render_human();
+        assert!(!human.contains("Remedy"));
+        assert!(!human.contains("Next"));
+        let json: serde_json::Value = serde_json::from_str(&diagnostic.render_json()).unwrap();
+        assert!(json.get("location").is_none());
+        assert!(json.get("remedy").is_none());
+    }
+
+    #[test]
+    fn display_matches_render_human() {
+        let diagnostic = sample();
+        assert_eq!(format!("{diagnostic}"), diagnostic.render_human());
+    }
+
+    #[test]
+    fn severity_and_category_are_ordered_and_comparable() {
+        assert!(DiagnosticSeverity::Info < DiagnosticSeverity::Warning);
+        assert!(DiagnosticSeverity::Warning < DiagnosticSeverity::Error);
+        assert!(DiagnosticSeverity::Error < DiagnosticSeverity::Fatal);
+        assert_eq!(DiagnosticCategory::Security, DiagnosticCategory::Security);
+        assert_ne!(DiagnosticCategory::Audit, DiagnosticCategory::Network);
+    }
+
+    #[test]
+    fn codes_render_in_canonical_form() {
+        assert_eq!(codes::INVALID_TRUST_TRANSITION.to_string(), "QAI-DOM-1001");
+        assert_eq!(codes::INVALID_DIAGNOSTIC_CODE_FORMAT.to_string(), "QAI-DOM-1005");
+        let unique: std::collections::HashSet<String> = [
+            codes::INVALID_TRUST_TRANSITION,
+            codes::DATA_LAYER_MISMATCH,
+            codes::MISSING_DIAGNOSTIC_ID,
+            codes::INVALID_DIAGNOSTIC_LEVEL,
+            codes::INVALID_DIAGNOSTIC_CODE_FORMAT,
+        ]
+        .iter()
+        .map(|c| c.to_string())
+        .collect();
+        assert_eq!(unique.len(), 5);
+    }
 }
