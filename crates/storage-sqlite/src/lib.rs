@@ -59,6 +59,12 @@ impl SqliteDatabase {
         max_connections: u32,
         _read_only_pool: bool,
     ) -> Result<Self, StorageError> {
+        // Ensure the parent directory exists so a fresh `--data-dir` works.
+        if let Some(parent) = std::path::Path::new(path).parent()
+            && !parent.as_os_str().is_empty()
+        {
+            let _ = std::fs::create_dir_all(parent);
+        }
         let write_options = SqliteConnectOptions::new()
             .filename(path)
             .create_if_missing(true)

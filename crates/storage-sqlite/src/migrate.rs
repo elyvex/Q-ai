@@ -83,6 +83,12 @@ fn now_rfc3339() -> String {
 }
 
 async fn connect_rw(db_path: &str) -> Result<sqlx::SqlitePool, StorageError> {
+    // Ensure the parent directory exists so a fresh `--data-dir` works.
+    if let Some(parent) = Path::new(db_path).parent()
+        && !parent.as_os_str().is_empty()
+    {
+        let _ = std::fs::create_dir_all(parent);
+    }
     let options = SqliteConnectOptions::new()
         .filename(db_path)
         .create_if_missing(true)

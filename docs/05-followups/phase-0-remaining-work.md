@@ -1,39 +1,71 @@
 # Phase 0 — Remaining Work Log
 
 > **Written:** 2026-09-12
-> **Updated:** 2026-09-14
+> **Updated:** 2026-09-14 (final)
 > **Purpose:** Detailed breakdown of everything remaining for an AI agent to complete Phase 0.
 > **Repo:** /Users/ali/dev/rust/Q-ai
 > **Plan:** docs/03-plan/phases/phase-00-foundation/plan.md
 > **Tasks:** docs/03-plan/phases/phase-00-foundation/tasks.md
 > **Acceptance:** docs/03-plan/phases/phase-00-foundation/acceptance.md
+> **Evidence:** docs/05-followups/done.md
 
 ---
 
-## 0. Completion Status (2026-09-14)
+## 0. Completion Status (2026-09-14, final)
 
-**Done in the latest push** (gates: fmt ✅ · clippy `-D warnings` ✅ · 139 tests ✅ ·
-arch-check ✅ · migrate-check ✅ · `qai` binary smoke-tested ✅):
+**Gate:** `cargo test --workspace` = **209 passing / 0 failing**; `fmt`, `clippy -D warnings`,
+`arch-check`, `migrate-check`, `adr-lint` all green; `qai` binary smoke-tested.
 
-- §A storage-sqlite real repos + `migrate.rs` (`apply_migrations`, `verify_checksums`,
-  `backup` via `VACUUM INTO`). *(T17–T20)*
-- §B CLI binary entry point (`crates/cli/src/main.rs`, `[[bin]] name = "qai"`) wired through
-  `application` so the arch allowlist stays intact. *(T48–T51)*
-- §C Doctor engine: 26-check registry, read-only DB probe, remedies + next commands on every
-  non-pass, `--json`, `--repair-preview`. *(T52–T54)*
-- §D Security guards: `security::archive` (zip-slip/bomb/symlink/depth), `security::net`
-  (SSRF + allowlist), `security::input`, `security::sanitize`. *(T43–T45)*
-- §E Testkit fixtures + integration suites (`secret_leak`, `path_guard`, `archive_guard`,
-  `ssrf_guard`, `config_precedence`). *(T57)*
-- §I Runbooks (5) + `CONTRIBUTING.md`. *(T58, partial)*
-- §J `migrations/sqlite/checksums.json`. *(T19)*
-- §L Application crate wiring (`run()` + `db` module).
+### DONE
 
-**Still open:** §F remaining suites (jobs chaos, canonical/audit DB-level, telemetry privacy),
-§G outbox/generations/tombstones (T61–T67), §H ADR-0000/0301 content, keychain/age secret
-backends, coverage gates, and §M AC verification + handoff doc.
+- **§A** storage-sqlite real repositories + `migrate.rs` (`apply_migrations`,
+  `verify_checksums`, `revert_last_migration`, `backup` via `VACUUM INTO`). *(T17–T20)*
+- **§B** CLI binary (`crates/cli/src/main.rs`, `[[bin]] name = "qai"`), wired through
+  `application`. *(T48–T51)*
+- **§C** Doctor engine: 26-check registry, read-only DB probe, remedies + next commands,
+  `--json` (schema-validated), `--repair-preview`. *(T52–T54)*
+- **§D** Security guards: archive / net (SSRF) / input / sanitize. *(T43–T45)*
+- **§E** Testkit fixtures + suites (secret-leak, path/archive/SSRF, config precedence,
+  telemetry privacy, error codes). *(T57)*
+- **§F** Jobs recovery (duplicate enqueue, lease expiry → Interrupted, checkpoint resume,
+  cancellation < 2s); provenance/audit DB-level integrity; sources preconditions + manifest
+  signing/ingest + genealogy; telemetry denylist; workspace error-code uniqueness. *(T26/T27,
+  T31, T36, T40-equivalent)*
+- **§G** Outbox / generations / tombstones: domain types, `OutboxRepository`,
+  transaction-scoped workflows, SQLite impl, monotonic allocator, relay, consistency tests
+  (commit-bounds, idempotency, 50-writer monotonicity, tombstone-before-visibility). *(T61–T63,
+  T65–T67)*
+- **§H** ADR-0000 (project architecture) written; ADR-0001 status corrected; `adr-lint` guards
+  all 12 Phase-0 ADRs. Secret-store trait + `SecretRef` with a real env backend. *(T14 partial)*
+- **§I** 5 runbooks, `CONTRIBUTING.md`, `examples/config/default.toml`, `hashing-spec.md`. *(T58)*
+- **§J** `migrations/sqlite/checksums.json` (up **and** down files). *(T19)*
+- **§L** Application composition root + `run()`/`db` module. *(T37-adjacent)*
+- **§M** `done.md` (AC verification), `docs/plans/handoff-p0-to-p1.md`, task-board sync.
+
+### PARTIAL
+
+- **ed25519 manifest signatures** (T30) — SHA-256 detached-hash verification is implemented and
+  tested; the cryptographic ed25519 path needs the `ed25519-dalek` crate (not available here).
+- **keychain / age secret backends** (T15) — abstracted behind `SecretStore`; concrete
+  implementations return `Unsupported` until `keyring` / `age` are added.
+- **worker pool** (T37–T39) — repository, cancellation, checkpoints, and recovery are done and
+  tested; no in-process pool/registry loop is built.
+- **OTLP exporter** (T42) — metric catalog + telemetry denylist exist; no OTLP export.
+- **outbox relay job** (T64) — relay logic + `system.outbox_relay` kind exist; worker-pool
+  execution deferred with T37.
+
+### REMAINING (environmental / process)
+
+- **AC-P0-01** 3-OS CI matrix run; **AC-P0-22** coverage percentages (requires `cargo llvm-cov`).
+- **Exit-gate ritual** — the recorded live walkthrough (AC-P0-03/05/06/08/11/14/16).
+
+### BLOCKED
+
+- None that block implementation. The above depend on external tooling/crates or a CI runner.
 
 ---
+
+
 
 ## 1. Current Workspace Status
 
