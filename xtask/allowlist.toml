@@ -12,13 +12,13 @@
 workspace = { allow = [] }
 
 [application]
-workspace = { allow = ["domain", "storage", "storage-sqlite", "provenance", "audit", "jobs", "sources", "config", "observability"] }
+workspace = { allow = ["domain", "storage", "storage-sqlite", "provenance", "audit", "jobs", "sources", "config", "observability", "quran-core", "quran-corpus", "citations", "tools", "tool-registry"] }
 
 [storage]
 workspace = { allow = ["domain"] }
 
 [storage-sqlite]
-workspace = { allow = ["storage", "domain"] }
+workspace = { allow = ["storage", "domain", "quran-core"] }
 
 [provenance]
 workspace = { allow = ["domain", "storage"] }
@@ -48,3 +48,27 @@ workspace = { allow = ["domain", "config", "storage", "audit", "sources", "jobs"
 
 [xtask]
 workspace = { allow = [] }
+
+# --- Phase 1 (Canonical Quran Core) ---
+# quran-core is a pure domain crate: types + reference grammar + QuranQuotation.
+# Hard rule I2: it may depend only on {domain, serde, thiserror} (+ Unicode crates).
+# It must never depend on llm/embeddings/retrieval or any vector store.
+[quran-core]
+workspace = { allow = ["domain"] }
+
+# quran-corpus: intermediate format, adapters, tokenizer, validator, differ, importer logic.
+# Same I2 prohibition applies (no llm/embeddings/retrieval/vector store).
+[quran-corpus]
+workspace = { allow = ["quran-core", "domain", "sources", "storage"] }
+
+# citations: citation resolver v1, deep links, verify_quotation.
+[citations]
+workspace = { allow = ["quran-core", "domain"] }
+
+# tools: ToolResult contract + reproducibility data (D1.8).
+[tools]
+workspace = { allow = ["quran-core", "domain"] }
+
+# tool-registry: minimal local registry wiring the first two read-only tools.
+[tool-registry]
+workspace = { allow = ["tools"] }
