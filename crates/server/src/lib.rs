@@ -41,10 +41,7 @@ pub async fn start(addr: &str) -> Result<(), ServerError> {
 
     let listener = TcpListener::bind(addr)
         .await
-        .map_err(|source| ServerError::Bind {
-            addr: addr.to_string(),
-            source,
-        })?;
+        .map_err(|source| ServerError::Bind { addr: addr.to_string(), source })?;
 
     loop {
         let (stream, _peer) = listener.accept().await?;
