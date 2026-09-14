@@ -2,7 +2,10 @@
 //!
 //! Audit model: append-only, hash-chained, secret-free.
 
-use domain::{AuditEventId, ContentHash, HashAlgorithm, PrincipalId, SubjectRef, Timestamp, canonical_json_bytes};
+use domain::{
+    AuditEventId, ContentHash, HashAlgorithm, PrincipalId, SubjectRef, Timestamp,
+    canonical_json_bytes,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -77,8 +80,15 @@ pub struct AuditEvent {
 #[async_trait::async_trait]
 pub trait AuditRepository: Send + Sync {
     async fn append(&mut self, event: AuditEvent) -> Result<(), AuditError>;
-    async fn list_by_subject(&self, subject_urn: &SubjectRef) -> Result<Vec<AuditEvent>, AuditError>;
-    async fn list_by_sequence(&self, from: u64, to: Option<u64>) -> Result<Vec<AuditEvent>, AuditError>;
+    async fn list_by_subject(
+        &self,
+        subject_urn: &SubjectRef,
+    ) -> Result<Vec<AuditEvent>, AuditError>;
+    async fn list_by_sequence(
+        &self,
+        from: u64,
+        to: Option<u64>,
+    ) -> Result<Vec<AuditEvent>, AuditError>;
     async fn verify_chain(&self) -> Result<ChainVerificationResult, AuditError>;
     async fn latest_sequence(&self) -> Result<u64, AuditError>;
 }
@@ -130,8 +140,10 @@ impl HashChainWriter {
 
     fn compute_chain_hash(prev_hash: &ContentHash, event: &AuditEvent) -> ContentHash {
         let mut event_without_hash = event.clone();
-        event_without_hash.chain_hash = ContentHash { algorithm: HashAlgorithm::Sha256, hex: String::new() };
-        event_without_hash.prev_chain_hash = ContentHash { algorithm: HashAlgorithm::Sha256, hex: String::new() };
+        event_without_hash.chain_hash =
+            ContentHash { algorithm: HashAlgorithm::Sha256, hex: String::new() };
+        event_without_hash.prev_chain_hash =
+            ContentHash { algorithm: HashAlgorithm::Sha256, hex: String::new() };
         let canonical = canonical_json_bytes(&event_without_hash).unwrap_or_else(|_| vec![]);
         let mut hasher = Sha256::new();
         hasher.update(prev_hash.hex.as_bytes());
@@ -162,7 +174,9 @@ impl AuditVerifier {
 
     pub async fn verify_event(&self, sequence: u64) -> Result<bool, AuditError> {
         let events = self.repo.list_by_sequence(sequence - 1, Some(sequence)).await?;
-        if events.len() < 2 { return Ok(false); }
+        if events.len() < 2 {
+            return Ok(false);
+        }
         let prev = &events[0];
         let current = &events[1];
         let expected = HashChainWriter::compute_chain_hash(&prev.chain_hash, current);
@@ -179,7 +193,9 @@ pub fn redact_audit_value(value: &mut serde_json::Value) {
 fn redact_json(value: &mut serde_json::Value) {
     match value {
         serde_json::Value::String(s) => {
-            if is_secret(s) { *value = serde_json::Value::String("***REDACTED***".to_string()); }
+            if is_secret(s) {
+                *value = serde_json::Value::String("***REDACTED***".to_string());
+            }
         }
         serde_json::Value::Object(map) => {
             for (k, v) in map.iter_mut() {
@@ -190,18 +206,30 @@ fn redact_json(value: &mut serde_json::Value) {
                 }
             }
         }
-        serde_json::Value::Array(arr) => { for item in arr { redact_json(item); } }
+        serde_json::Value::Array(arr) => {
+            for item in arr {
+                redact_json(item);
+            }
+        }
         _ => {}
     }
 }
 
 fn is_secret(s: &str) -> bool {
     let lower = s.to_lowercase();
-    lower.contains("secret") || lower.contains("password") || lower.contains("api_key") || lower.contains("token") || lower.contains("credential")
+    lower.contains("secret")
+        || lower.contains("password")
+        || lower.contains("api_key")
+        || lower.contains("token")
+        || lower.contains("credential")
 }
 fn is_secret_key(key: &str) -> bool {
     let lower = key.to_lowercase();
-    lower.contains("secret") || lower.contains("password") || lower.contains("api_key") || lower.contains("token") || lower.contains("credential")
+    lower.contains("secret")
+        || lower.contains("password")
+        || lower.contains("api_key")
+        || lower.contains("token")
+        || lower.contains("credential")
 }
 
 // ─── AuditError ──────────────────────────────────
@@ -238,11 +266,18 @@ mod tests {
     fn hash_chain_computation() {
         let prev_hash = ContentHash { algorithm: HashAlgorithm::Sha256, hex: "00".repeat(32) };
         let event = AuditEvent {
-            id: AuditEventId::new(), sequence: 1, occurred_at: Timestamp::now(),
-            actor: Actor::System { name: "test".to_string() }, action: AuditAction::ConfigChange,
+            id: AuditEventId::new(),
+            sequence: 1,
+            occurred_at: Timestamp::now(),
+            actor: Actor::System { name: "test".to_string() },
+            action: AuditAction::ConfigChange,
             subject: SubjectRef("urn:test".to_string()),
-            outcome: AuditOutcome::Allowed, reason: None, before: None, after: None,
-            request_id: None, prev_chain_hash: prev_hash.clone(),
+            outcome: AuditOutcome::Allowed,
+            reason: None,
+            before: None,
+            after: None,
+            request_id: None,
+            prev_chain_hash: prev_hash.clone(),
             chain_hash: ContentHash { algorithm: HashAlgorithm::Sha256, hex: String::new() },
         };
         let chain_hash = HashChainWriter::compute_chain_hash(&prev_hash, &event);
@@ -254,19 +289,33 @@ mod tests {
     fn different_events_produce_different_hashes() {
         let prev_hash = ContentHash { algorithm: HashAlgorithm::Sha256, hex: "00".repeat(32) };
         let event1 = AuditEvent {
-            id: AuditEventId::new(), sequence: 1, occurred_at: Timestamp::now(),
-            actor: Actor::System { name: "test1".to_string() }, action: AuditAction::ConfigChange,
+            id: AuditEventId::new(),
+            sequence: 1,
+            occurred_at: Timestamp::now(),
+            actor: Actor::System { name: "test1".to_string() },
+            action: AuditAction::ConfigChange,
             subject: SubjectRef("urn:test".to_string()),
-            outcome: AuditOutcome::Allowed, reason: None, before: None, after: None,
-            request_id: None, prev_chain_hash: prev_hash.clone(),
+            outcome: AuditOutcome::Allowed,
+            reason: None,
+            before: None,
+            after: None,
+            request_id: None,
+            prev_chain_hash: prev_hash.clone(),
             chain_hash: ContentHash { algorithm: HashAlgorithm::Sha256, hex: String::new() },
         };
         let event2 = AuditEvent {
-            id: AuditEventId::new(), sequence: 2, occurred_at: Timestamp::now(),
-            actor: Actor::System { name: "test2".to_string() }, action: AuditAction::SourceApproved,
+            id: AuditEventId::new(),
+            sequence: 2,
+            occurred_at: Timestamp::now(),
+            actor: Actor::System { name: "test2".to_string() },
+            action: AuditAction::SourceApproved,
             subject: SubjectRef("urn:test".to_string()),
-            outcome: AuditOutcome::Allowed, reason: None, before: None, after: None,
-            request_id: None, prev_chain_hash: prev_hash.clone(),
+            outcome: AuditOutcome::Allowed,
+            reason: None,
+            before: None,
+            after: None,
+            request_id: None,
+            prev_chain_hash: prev_hash.clone(),
             chain_hash: ContentHash { algorithm: HashAlgorithm::Sha256, hex: String::new() },
         };
         let hash1 = HashChainWriter::compute_chain_hash(&prev_hash, &event1);
