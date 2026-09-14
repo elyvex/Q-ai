@@ -1,8 +1,8 @@
 //! Phase 0 — Source catalog, manifest schema, and state machine (D0.10).
 
 use domain::{
-    ApprovalId, ContentHash, DerivationVersions, PrincipalId, SourceId,
-    SourceVersionId, Timestamp, TrustLevel, LicenseStatus, HashAlgorithm, canonical_json_bytes,
+    ApprovalId, ContentHash, PrincipalId, SourceId,
+    SourceVersionId, Timestamp, TrustLevel, LicenseStatus, canonical_json_bytes,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -236,7 +236,7 @@ impl ManifestParser {
     }
     pub fn canonical_reserialize(&self, manifest: &ManifestParseResult) -> Result<String, SourceError> {
         let bytes = canonical_json_bytes(manifest).map_err(|e| SourceError::Serialization(e.to_string()))?;
-        Ok(String::from_utf8(bytes).map_err(|_| SourceError::Serialization("invalid UTF-8".to_string()))?)
+        String::from_utf8(bytes).map_err(|_| SourceError::Serialization("invalid UTF-8".to_string()))
     }
     pub fn verify_signature(&self, _manifest: &ManifestParseResult, signature: Option<&str>) -> Result<(), SourceError> {
         if signature.is_none() && !self.allow_unsigned {
@@ -246,15 +246,16 @@ impl ManifestParser {
     }
 }
 
-fn verify_ed25519(_manifest: &ManifestParseResult, _signature: &str) -> Result<(), String> {
-    // ed25519-dalek is not a workspace dep; stub implementation
-    Ok(())
-}
-
 // ─── GenealogyResolver ──────────────────────────
 
 pub struct GenealogyResolver {
     graph: Arc<TokioRwLock<BTreeMap<SourceId, Vec<SourceId>>>>,
+}
+
+impl Default for GenealogyResolver {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl GenealogyResolver {
@@ -279,10 +280,10 @@ impl GenealogyResolver {
     }
     fn dfs_resolve(&self, current: &SourceId, graph: &BTreeMap<SourceId, Vec<SourceId>>, visited: &mut BTreeMap<SourceId, bool>, lineage: &mut Vec<LineageNode>, cycle_detected: &mut bool) -> Result<(), SourceError> {
         if visited.get(current) == Some(&true) { *cycle_detected = true; return Err(SourceError::GenealogyCycleDetected(format!("cycle detected at {}", current))); }
-        visited.insert(current.clone(), true);
+        visited.insert(*current, true);
         if let Some(parents) = graph.get(current) {
             for parent in parents {
-                lineage.push(LineageNode { source_id: parent.clone(), relationship: DerivationType::Original });
+                lineage.push(LineageNode { source_id: *parent, relationship: DerivationType::Original });
                 self.dfs_resolve(parent, graph, visited, lineage, cycle_detected)?;
             }
         }
@@ -304,30 +305,30 @@ pub struct StateMachine;
 
 impl StateMachine {
     pub fn is_legal_transition(from: &SourceState, to: &SourceState) -> bool {
-        match (from, to) {
-            (SourceState::Discovered, SourceState::PendingReview) |
-            (SourceState::Discovered, SourceState::Quarantined) |
-            (SourceState::PendingReview, SourceState::Downloading) |
-            (SourceState::PendingReview, SourceState::Quarantined) |
-            (SourceState::Downloading, SourceState::Downloaded) |
-            (SourceState::Downloading, SourceState::Quarantined) |
-            (SourceState::Downloaded, SourceState::Validating) |
-            (SourceState::Downloaded, SourceState::Quarantined) |
-            (SourceState::Validating, SourceState::Staged) |
-            (SourceState::Validating, SourceState::ValidationFailed) |
-            (SourceState::ValidationFailed, SourceState::Quarantined) |
-            (SourceState::Staged, SourceState::Approved) |
-            (SourceState::Staged, SourceState::Quarantined) |
-            (SourceState::Approved, SourceState::Indexing) |
-            (SourceState::Indexing, SourceState::Active) |
-            (SourceState::Indexing, SourceState::ValidationFailed) |
-            (SourceState::Active, SourceState::Deprecated) |
-            (SourceState::Deprecated, SourceState::Removed) |
-            (_, SourceState::Quarantined) => true,
-            _ => false,
-        }
+        matches!(
+            (from, to),
+            (SourceState::Discovered, SourceState::PendingReview)
+                | (SourceState::Discovered, SourceState::Quarantined)
+                | (SourceState::PendingReview, SourceState::Downloading)
+                | (SourceState::PendingReview, SourceState::Quarantined)
+                | (SourceState::Downloading, SourceState::Downloaded)
+                | (SourceState::Downloading, SourceState::Quarantined)
+                | (SourceState::Downloaded, SourceState::Validating)
+                | (SourceState::Downloaded, SourceState::Quarantined)
+                | (SourceState::Validating, SourceState::Staged)
+                | (SourceState::Validating, SourceState::ValidationFailed)
+                | (SourceState::ValidationFailed, SourceState::Quarantined)
+                | (SourceState::Staged, SourceState::Approved)
+                | (SourceState::Staged, SourceState::Quarantined)
+                | (SourceState::Approved, SourceState::Indexing)
+                | (SourceState::Indexing, SourceState::Active)
+                | (SourceState::Indexing, SourceState::ValidationFailed)
+                | (SourceState::Active, SourceState::Deprecated)
+                | (SourceState::Deprecated, SourceState::Removed)
+                | (_, SourceState::Quarantined)
+        )
     }
-    pub fn transition(version: &mut SourceVersion, new_state: SourceState, actor: Option<PrincipalId>, reason: Option<String>) -> Result<(), SourceError> {
+    pub fn transition(version: &mut SourceVersion, new_state: SourceState, _actor: Option<PrincipalId>, _reason: Option<String>) -> Result<(), SourceError> {
         if !Self::is_legal_transition(&version.state, &new_state) {
             return Err(SourceError::IllegalStateTransition { from: format!("{:?}", version.state), to: format!("{:?}", new_state) });
         }
@@ -440,7 +441,7 @@ mod tests {
             schema_version: 1, state: SourceState::Staged, trust_level: TrustLevel::ImportedUnverified,
             license_status: LicenseStatus::OpenLicense, license_json: "{}".to_string(),
             manifest_blob_id: None, manifest_hash: None,
-            content_hash: Some(ContentHash { algorithm: HashAlgorithm::Sha256, hex: "00".repeat(32) }),
+            content_hash: Some(ContentHash { algorithm: domain::HashAlgorithm::Sha256, hex: "00".repeat(32) }),
             source_urls: vec![], publication_date: None, imported_at: None, validated_at: None,
             approved_at: None, approved_by: None, activated_at: None, deprecated_at: None,
             quarantine_reason: None, validation_report: None, notes: None, created_at: Timestamp::now(),
