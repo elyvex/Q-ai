@@ -46,10 +46,7 @@ pub fn latest_migration_version(migrations_dir: &Path) -> u32 {
 }
 
 /// Apply pending migrations. Returns the resulting schema version.
-pub async fn migrate_database(
-    cfg: &Config,
-    migrations_dir: &Path,
-) -> Result<u32, StorageError> {
+pub async fn migrate_database(cfg: &Config, migrations_dir: &Path) -> Result<u32, StorageError> {
     migrate::apply_migrations(&cfg.storage.sqlite.path, migrations_dir).await
 }
 
@@ -70,16 +67,10 @@ pub async fn migration_status(
     let latest_on_disk = discovered.iter().map(|m| m.version).max().unwrap_or(0);
     let db = SqliteDatabase::open_read_only(&cfg.storage.sqlite.path).await?;
     let applied_version = db.schema_version();
-    let applied_count = db
-        .count("SELECT COUNT(*) FROM schema_migrations")
-        .await
-        .unwrap_or(0);
+    let applied_count = db.count("SELECT COUNT(*) FROM schema_migrations").await.unwrap_or(0);
     // Pending = on-disk versions not yet applied (by count, versions are contiguous).
-    let pending: Vec<u32> = discovered
-        .iter()
-        .filter(|m| m.version > applied_version)
-        .map(|m| m.version)
-        .collect();
+    let pending: Vec<u32> =
+        discovered.iter().filter(|m| m.version > applied_version).map(|m| m.version).collect();
     Ok(MigrationStatus {
         applied_version,
         latest_on_disk,
@@ -117,23 +108,15 @@ pub async fn probe_database(cfg: &Config) -> DbProbe {
     probe.foreign_keys_on = db.count("PRAGMA foreign_keys").await.unwrap_or(0) == 1;
 
     let table_exists = |name: &str| {
-        format!(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '{name}'"
-        )
+        format!("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '{name}'")
     };
     if db.count(&table_exists("jobs")).await.unwrap_or(0) > 0 {
-        probe.running_jobs = db
-            .count("SELECT COUNT(*) FROM jobs WHERE state = 'Running'")
-            .await
-            .unwrap_or(0);
-        probe.interrupted_jobs = db
-            .count("SELECT COUNT(*) FROM jobs WHERE state = 'Interrupted'")
-            .await
-            .unwrap_or(0);
-        probe.dead_lettered_jobs = db
-            .count("SELECT COUNT(*) FROM jobs WHERE state = 'DeadLettered'")
-            .await
-            .unwrap_or(0);
+        probe.running_jobs =
+            db.count("SELECT COUNT(*) FROM jobs WHERE state = 'Running'").await.unwrap_or(0);
+        probe.interrupted_jobs =
+            db.count("SELECT COUNT(*) FROM jobs WHERE state = 'Interrupted'").await.unwrap_or(0);
+        probe.dead_lettered_jobs =
+            db.count("SELECT COUNT(*) FROM jobs WHERE state = 'DeadLettered'").await.unwrap_or(0);
     }
     if db.count(&table_exists("outbox_events")).await.unwrap_or(0) > 0 {
         probe.outbox_pending = db
@@ -170,10 +153,7 @@ pub async fn probe_database(cfg: &Config) -> DbProbe {
             .unwrap_or(0);
     }
     if db.count(&table_exists("audit_events")).await.unwrap_or(0) > 0 {
-        probe.audit_events = db
-            .count("SELECT COUNT(*) FROM audit_events")
-            .await
-            .unwrap_or(0);
+        probe.audit_events = db.count("SELECT COUNT(*) FROM audit_events").await.unwrap_or(0);
     }
     probe
 }
