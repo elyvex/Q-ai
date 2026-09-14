@@ -149,7 +149,8 @@ pub struct ImportOptions {
 /// A completed import.
 #[derive(Debug, Clone)]
 pub struct ImportSuccess {
-    /// Canonical edition row id (`ed-{run_id}`).
+    /// Canonical edition row id (== run id: a bare UUID, so it maps back to
+    /// the typed domain IDs).
     pub edition_id: String,
     /// Edition slug.
     pub edition_slug: String,
@@ -293,8 +294,8 @@ impl<'a> Driver<'a> {
             text_hash: None,
             structure_hash: None,
             token_order_hash: None,
-            edition_id: format!("ed-{run_id}"),
-            provenance_id: format!("prov-{run_id}"),
+            edition_id: run_id.clone(),
+            provenance_id: run_id.clone(),
             findings: Vec::new(),
             report: None,
         }
