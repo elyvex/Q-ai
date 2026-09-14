@@ -10,6 +10,7 @@ pub mod db;
 pub use config::Config;
 
 use observability::{Format, init};
+use storage::Database as _;
 use storage::error::StorageError;
 use tracing::{error, info};
 
