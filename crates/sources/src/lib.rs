@@ -1,13 +1,13 @@
 //! Phase 0 — Source catalog, manifest schema, and state machine (D0.10).
 
 use domain::{
-    ApprovalId, ContentHash, PrincipalId, SourceId,
-    SourceVersionId, Timestamp, TrustLevel, LicenseStatus, canonical_json_bytes,
+    ApprovalId, ContentHash, LicenseStatus, PrincipalId, SourceId, SourceVersionId, Timestamp,
+    TrustLevel, canonical_json_bytes,
 };
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use thiserror::Error;
 use tokio::sync::RwLock as TokioRwLock;
 
 // ─── Source ────────────────────────────────────
@@ -34,7 +34,13 @@ pub struct Source {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SourceContentType {
-    QuranEdition, Translation, Tafsir, HadithCollection, Scripture, Book, Dataset,
+    QuranEdition,
+    Translation,
+    Tafsir,
+    HadithCollection,
+    Scripture,
+    Book,
+    Dataset,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -76,8 +82,19 @@ pub struct SourceVersion {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SourceState {
-    Discovered, PendingReview, Downloading, Downloaded, Validating,
-    ValidationFailed, Staged, Approved, Indexing, Active, Deprecated, Quarantined, Removed,
+    Discovered,
+    PendingReview,
+    Downloading,
+    Downloaded,
+    Validating,
+    ValidationFailed,
+    Staged,
+    Approved,
+    Indexing,
+    Active,
+    Deprecated,
+    Quarantined,
+    Removed,
 }
 
 // ─── SourceFile ────────────────────────────────
@@ -101,7 +118,13 @@ pub struct SourceFile {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum FileRole { Primary, Metadata, Scan, Audio, Aux }
+pub enum FileRole {
+    Primary,
+    Metadata,
+    Scan,
+    Audio,
+    Aux,
+}
 
 // ─── SourceGenealogy ────────────────────────────
 
@@ -117,7 +140,14 @@ pub struct SourceGenealogy {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum DerivationType { Translation, Summary, Edition, Abridgment, Commentary, Original }
+pub enum DerivationType {
+    Translation,
+    Summary,
+    Edition,
+    Abridgment,
+    Commentary,
+    Original,
+}
 
 impl std::fmt::Display for DerivationType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -164,11 +194,18 @@ pub struct ApprovalRecord {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ApprovalKind { SourceActivation, CanonicalChange, Rollback }
+pub enum ApprovalKind {
+    SourceActivation,
+    CanonicalChange,
+    Rollback,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ApprovalDecision { Approved, Denied }
+pub enum ApprovalDecision {
+    Approved,
+    Denied,
+}
 
 // ─── StructureValidator ─────────────────────────
 
@@ -205,7 +242,9 @@ pub struct DifferenceReport {
 
 // ─── ManifestParser ─────────────────────────────
 
-pub struct ManifestParser { allow_unsigned: bool }
+pub struct ManifestParser {
+    allow_unsigned: bool,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ManifestParseResult {
@@ -216,31 +255,50 @@ pub struct ManifestParseResult {
 }
 
 impl ManifestParser {
-    pub fn new(allow_unsigned: bool) -> Self { Self { allow_unsigned } }
+    pub fn new(allow_unsigned: bool) -> Self {
+        Self { allow_unsigned }
+    }
     pub fn parse(&self, json: &str) -> Result<ManifestParseResult, SourceError> {
-        serde_json::from_str::<ManifestParseResult>(json).map_err(|e| SourceError::Serialization(e.to_string()))
+        serde_json::from_str::<ManifestParseResult>(json)
+            .map_err(|e| SourceError::Serialization(e.to_string()))
     }
     pub fn validate_schema(&self, manifest: &ManifestParseResult) -> Result<(), SourceError> {
         if manifest.manifest_version.is_empty() {
-            return Err(SourceError::ManifestValidationError("manifest_version is required".to_string()));
+            return Err(SourceError::ManifestValidationError(
+                "manifest_version is required".to_string(),
+            ));
         }
         Ok(())
     }
     pub fn validate_semantic(&self, manifest: &ManifestParseResult) -> Result<(), SourceError> {
         for source in &manifest.sources {
             if source.version.is_empty() {
-                return Err(SourceError::ManifestValidationError(format!("source {} has empty version", source.id)));
+                return Err(SourceError::ManifestValidationError(format!(
+                    "source {} has empty version",
+                    source.id
+                )));
             }
         }
         Ok(())
     }
-    pub fn canonical_reserialize(&self, manifest: &ManifestParseResult) -> Result<String, SourceError> {
-        let bytes = canonical_json_bytes(manifest).map_err(|e| SourceError::Serialization(e.to_string()))?;
-        String::from_utf8(bytes).map_err(|_| SourceError::Serialization("invalid UTF-8".to_string()))
+    pub fn canonical_reserialize(
+        &self,
+        manifest: &ManifestParseResult,
+    ) -> Result<String, SourceError> {
+        let bytes = canonical_json_bytes(manifest)
+            .map_err(|e| SourceError::Serialization(e.to_string()))?;
+        String::from_utf8(bytes)
+            .map_err(|_| SourceError::Serialization("invalid UTF-8".to_string()))
     }
-    pub fn verify_signature(&self, _manifest: &ManifestParseResult, signature: Option<&str>) -> Result<(), SourceError> {
+    pub fn verify_signature(
+        &self,
+        _manifest: &ManifestParseResult,
+        signature: Option<&str>,
+    ) -> Result<(), SourceError> {
         if signature.is_none() && !self.allow_unsigned {
-            return Err(SourceError::SignatureVerificationFailed("unsigned manifests not allowed by policy".to_string()));
+            return Err(SourceError::SignatureVerificationFailed(
+                "unsigned manifests not allowed by policy".to_string(),
+            ));
         }
         Ok(())
     }
@@ -262,14 +320,23 @@ impl GenealogyResolver {
     pub fn new() -> Self {
         Self { graph: Arc::new(TokioRwLock::new(BTreeMap::new())) }
     }
-    pub async fn add_relationship(&self, child: SourceId, parent: SourceId) -> Result<(), SourceError> {
+    pub async fn add_relationship(
+        &self,
+        child: SourceId,
+        parent: SourceId,
+    ) -> Result<(), SourceError> {
         if child == parent {
-            return Err(SourceError::GenealogyCycleDetected("self-referencing genealogy".to_string()));
+            return Err(SourceError::GenealogyCycleDetected(
+                "self-referencing genealogy".to_string(),
+            ));
         }
         self.graph.write().await.insert(child, vec![parent]);
         Ok(())
     }
-    pub async fn resolve_lineage(&self, source_id: &SourceId) -> Result<GenealogyResult, SourceError> {
+    pub async fn resolve_lineage(
+        &self,
+        source_id: &SourceId,
+    ) -> Result<GenealogyResult, SourceError> {
         let graph = self.graph.read().await;
         let mut visited = BTreeMap::new();
         let mut lineage = Vec::new();
@@ -278,26 +345,57 @@ impl GenealogyResolver {
         let rendering = self.render_lineage(&lineage);
         Ok(GenealogyResult { lineage, cycle_detected, rendering })
     }
-    fn dfs_resolve(&self, current: &SourceId, graph: &BTreeMap<SourceId, Vec<SourceId>>, visited: &mut BTreeMap<SourceId, bool>, lineage: &mut Vec<LineageNode>, cycle_detected: &mut bool) -> Result<(), SourceError> {
-        if visited.get(current) == Some(&true) { *cycle_detected = true; return Err(SourceError::GenealogyCycleDetected(format!("cycle detected at {}", current))); }
+    fn dfs_resolve(
+        &self,
+        current: &SourceId,
+        graph: &BTreeMap<SourceId, Vec<SourceId>>,
+        visited: &mut BTreeMap<SourceId, bool>,
+        lineage: &mut Vec<LineageNode>,
+        cycle_detected: &mut bool,
+    ) -> Result<(), SourceError> {
+        if visited.get(current) == Some(&true) {
+            *cycle_detected = true;
+            return Err(SourceError::GenealogyCycleDetected(format!(
+                "cycle detected at {}",
+                current
+            )));
+        }
         visited.insert(*current, true);
         if let Some(parents) = graph.get(current) {
             for parent in parents {
-                lineage.push(LineageNode { source_id: *parent, relationship: DerivationType::Original });
+                lineage.push(LineageNode {
+                    source_id: *parent,
+                    relationship: DerivationType::Original,
+                });
                 self.dfs_resolve(parent, graph, visited, lineage, cycle_detected)?;
             }
         }
         Ok(())
     }
     fn render_lineage(&self, nodes: &[LineageNode]) -> String {
-        if nodes.is_empty() { "original (no parents)".to_string() } else { nodes.iter().map(|n| format!("{} (derived from {})", n.source_id, n.relationship)).collect::<Vec<_>>().join(", ") }
+        if nodes.is_empty() {
+            "original (no parents)".to_string()
+        } else {
+            nodes
+                .iter()
+                .map(|n| format!("{} (derived from {})", n.source_id, n.relationship))
+                .collect::<Vec<_>>()
+                .join(", ")
+        }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LineageNode { pub source_id: SourceId, pub relationship: DerivationType }
+pub struct LineageNode {
+    pub source_id: SourceId,
+    pub relationship: DerivationType,
+}
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GenealogyResult { pub lineage: Vec<LineageNode>, pub cycle_detected: bool, pub rendering: String }
+pub struct GenealogyResult {
+    pub lineage: Vec<LineageNode>,
+    pub cycle_detected: bool,
+    pub rendering: String,
+}
 
 // ─── StateMachine ────────────────────────────────
 
@@ -328,23 +426,39 @@ impl StateMachine {
                 | (_, SourceState::Quarantined)
         )
     }
-    pub fn transition(version: &mut SourceVersion, new_state: SourceState, _actor: Option<PrincipalId>, _reason: Option<String>) -> Result<(), SourceError> {
+    pub fn transition(
+        version: &mut SourceVersion,
+        new_state: SourceState,
+        _actor: Option<PrincipalId>,
+        _reason: Option<String>,
+    ) -> Result<(), SourceError> {
         if !Self::is_legal_transition(&version.state, &new_state) {
-            return Err(SourceError::IllegalStateTransition { from: format!("{:?}", version.state), to: format!("{:?}", new_state) });
+            return Err(SourceError::IllegalStateTransition {
+                from: format!("{:?}", version.state),
+                to: format!("{:?}", new_state),
+            });
         }
-        if new_state == SourceState::Approved { Self::check_approved_preconditions(version)?; }
+        if new_state == SourceState::Approved {
+            Self::check_approved_preconditions(version)?;
+        }
         version.state = new_state;
         Ok(())
     }
     fn check_approved_preconditions(version: &SourceVersion) -> Result<(), SourceError> {
         if version.license_status == LicenseStatus::Unknown {
-            return Err(SourceError::ApprovalPreconditionNotMet("license status must not be Unknown".to_string()));
+            return Err(SourceError::ApprovalPreconditionNotMet(
+                "license status must not be Unknown".to_string(),
+            ));
         }
         if version.content_hash.is_none() {
-            return Err(SourceError::ApprovalPreconditionNotMet("content hash is required".to_string()));
+            return Err(SourceError::ApprovalPreconditionNotMet(
+                "content hash is required".to_string(),
+            ));
         }
         if version.validation_report.is_none() {
-            return Err(SourceError::ApprovalPreconditionNotMet("validation report is required".to_string()));
+            return Err(SourceError::ApprovalPreconditionNotMet(
+                "validation report is required".to_string(),
+            ));
         }
         Ok(())
     }
@@ -356,12 +470,26 @@ impl StateMachine {
 pub trait SourceRepository: Send + Sync {
     async fn get_source(&self, id: &SourceId) -> Result<Option<Source>, SourceError>;
     async fn insert_source(&mut self, source: Source) -> Result<(), SourceError>;
-    async fn get_version(&self, id: &SourceVersionId) -> Result<Option<SourceVersion>, SourceError>;
+    async fn get_version(&self, id: &SourceVersionId)
+    -> Result<Option<SourceVersion>, SourceError>;
     async fn insert_version(&mut self, version: SourceVersion) -> Result<(), SourceError>;
     async fn list_versions(&self, source_id: &SourceId) -> Result<Vec<SourceVersion>, SourceError>;
-    async fn transition_state(&mut self, version_id: &SourceVersionId, from: &SourceState, to: SourceState, actor: Option<PrincipalId>, reason: Option<String>) -> Result<(), SourceError>;
-    async fn record_transition(&mut self, transition: SourceStateTransition) -> Result<(), SourceError>;
-    async fn list_active_versions(&self, source_id: &SourceId) -> Result<Vec<SourceVersion>, SourceError>;
+    async fn transition_state(
+        &mut self,
+        version_id: &SourceVersionId,
+        from: &SourceState,
+        to: SourceState,
+        actor: Option<PrincipalId>,
+        reason: Option<String>,
+    ) -> Result<(), SourceError>;
+    async fn record_transition(
+        &mut self,
+        transition: SourceStateTransition,
+    ) -> Result<(), SourceError>;
+    async fn list_active_versions(
+        &self,
+        source_id: &SourceId,
+    ) -> Result<Vec<SourceVersion>, SourceError>;
     async fn insert_genealogy(&mut self, genealogy: SourceGenealogy) -> Result<(), SourceError>;
     async fn get_approval(&self, id: &ApprovalId) -> Result<Option<ApprovalRecord>, SourceError>;
     async fn insert_approval(&mut self, approval: ApprovalRecord) -> Result<(), SourceError>;
@@ -404,7 +532,10 @@ mod tests {
 
     #[test]
     fn legal_transitions() {
-        assert!(StateMachine::is_legal_transition(&SourceState::Discovered, &SourceState::PendingReview));
+        assert!(StateMachine::is_legal_transition(
+            &SourceState::Discovered,
+            &SourceState::PendingReview
+        ));
         assert!(StateMachine::is_legal_transition(&SourceState::Staged, &SourceState::Approved));
         assert!(StateMachine::is_legal_transition(&SourceState::Approved, &SourceState::Indexing));
         assert!(StateMachine::is_legal_transition(&SourceState::Active, &SourceState::Deprecated));
@@ -417,18 +548,37 @@ mod tests {
     #[test]
     fn quarantine_from_any_state() {
         assert!(StateMachine::is_legal_transition(&SourceState::Active, &SourceState::Quarantined));
-        assert!(StateMachine::is_legal_transition(&SourceState::Approved, &SourceState::Quarantined));
+        assert!(StateMachine::is_legal_transition(
+            &SourceState::Approved,
+            &SourceState::Quarantined
+        ));
     }
     #[test]
     fn approved_requires_content_hash() {
         let mut version = SourceVersion {
-            id: SourceVersionId::new(), source_id: SourceId::new(), version: "1.0.0".to_string(),
-            schema_version: 1, state: SourceState::Staged, trust_level: TrustLevel::ImportedUnverified,
-            license_status: LicenseStatus::OpenLicense, license_json: "{}".to_string(),
-            manifest_blob_id: None, manifest_hash: None, content_hash: None, source_urls: vec![],
-            publication_date: None, imported_at: None, validated_at: None, approved_at: None,
-            approved_by: None, activated_at: None, deprecated_at: None, quarantine_reason: None,
-            validation_report: None, notes: None, created_at: Timestamp::now(),
+            id: SourceVersionId::new(),
+            source_id: SourceId::new(),
+            version: "1.0.0".to_string(),
+            schema_version: 1,
+            state: SourceState::Staged,
+            trust_level: TrustLevel::ImportedUnverified,
+            license_status: LicenseStatus::OpenLicense,
+            license_json: "{}".to_string(),
+            manifest_blob_id: None,
+            manifest_hash: None,
+            content_hash: None,
+            source_urls: vec![],
+            publication_date: None,
+            imported_at: None,
+            validated_at: None,
+            approved_at: None,
+            approved_by: None,
+            activated_at: None,
+            deprecated_at: None,
+            quarantine_reason: None,
+            validation_report: None,
+            notes: None,
+            created_at: Timestamp::now(),
         };
         let result = StateMachine::transition(&mut version, SourceState::Approved, None, None);
         assert!(result.is_err());
@@ -437,14 +587,32 @@ mod tests {
     #[test]
     fn approved_requires_validation_report() {
         let mut version = SourceVersion {
-            id: SourceVersionId::new(), source_id: SourceId::new(), version: "1.0.0".to_string(),
-            schema_version: 1, state: SourceState::Staged, trust_level: TrustLevel::ImportedUnverified,
-            license_status: LicenseStatus::OpenLicense, license_json: "{}".to_string(),
-            manifest_blob_id: None, manifest_hash: None,
-            content_hash: Some(ContentHash { algorithm: domain::HashAlgorithm::Sha256, hex: "00".repeat(32) }),
-            source_urls: vec![], publication_date: None, imported_at: None, validated_at: None,
-            approved_at: None, approved_by: None, activated_at: None, deprecated_at: None,
-            quarantine_reason: None, validation_report: None, notes: None, created_at: Timestamp::now(),
+            id: SourceVersionId::new(),
+            source_id: SourceId::new(),
+            version: "1.0.0".to_string(),
+            schema_version: 1,
+            state: SourceState::Staged,
+            trust_level: TrustLevel::ImportedUnverified,
+            license_status: LicenseStatus::OpenLicense,
+            license_json: "{}".to_string(),
+            manifest_blob_id: None,
+            manifest_hash: None,
+            content_hash: Some(ContentHash {
+                algorithm: domain::HashAlgorithm::Sha256,
+                hex: "00".repeat(32),
+            }),
+            source_urls: vec![],
+            publication_date: None,
+            imported_at: None,
+            validated_at: None,
+            approved_at: None,
+            approved_by: None,
+            activated_at: None,
+            deprecated_at: None,
+            quarantine_reason: None,
+            validation_report: None,
+            notes: None,
+            created_at: Timestamp::now(),
         };
         let result = StateMachine::transition(&mut version, SourceState::Approved, None, None);
         assert!(result.is_err());
@@ -453,7 +621,12 @@ mod tests {
     #[test]
     fn manifest_parser_roundtrip() {
         let parser = ManifestParser::new(false);
-        let manifest = ManifestParseResult { manifest_version: "1.0.0".to_string(), catalog_version: "1.4.0".to_string(), generated_at: Timestamp::now(), sources: vec![] };
+        let manifest = ManifestParseResult {
+            manifest_version: "1.0.0".to_string(),
+            catalog_version: "1.4.0".to_string(),
+            generated_at: Timestamp::now(),
+            sources: vec![],
+        };
         let json = serde_json::to_string(&manifest).unwrap();
         let parsed = parser.parse(&json).unwrap();
         assert_eq!(parsed.manifest_version, "1.0.0");
