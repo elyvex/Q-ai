@@ -4,6 +4,22 @@ All notable changes to Q-ai are documented here.
 
 ## [Unreleased]
 
+### Added — Phase 1 Canonical Quran Core (in progress)
+
+- **quran-core** (new crate): pure domain — `SurahNumber`/`AyahNumber`/`TokenPosition`
+  newtypes, edition/enum vocabulary, `QuranEdition`/`EditionStatistics`,
+  `Surah`/`Ayah`/`Segment`/`Token`, `QuranQuotation` (constructor requires edition
+  identity + version + hash; translations need a named translator), and `QAI-QUR-*`
+  errors implementing the Phase-1 `Diagnostic` contract.
+- **xtask**: `arch-check` allowlist is now name-keyed (`#[serde(flatten)]`) so Phase-1
+  crates register edges in `allowlist.toml` without gate changes; fail-closed preserved
+  with a new regression test.
+- **quran-corpus** (new crate): `qai.quran.edition` v1 intermediate format + JSON/CSV
+  adapters (`EditionAdapter` trait) with `QAI-QUR-02xx` errors.
+- **docs**: `docs/schemas/quran-edition-source.v1.schema.json` for the edition format.
+- **fixtures**: synthetic `test-edition-min` edition (5 surahs / 14 ayahs, nonsense
+  Arabic-shaped text), 16 adversarial corpora, 331-case reference golden set.
+
 ### Added — Phase 0 foundations
 
 - **storage-sqlite**: real repository implementations for sources, provenance, audit,

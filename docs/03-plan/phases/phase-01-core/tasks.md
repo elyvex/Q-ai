@@ -48,7 +48,7 @@ public-domain test fixture; user supplies the real edition via `qai quran import
 | P1-T02 | Legal review of redistribution rights; decide bundle vs user-supplied | ADR-0101 | T01 | 2.0 | EDIT | ☐ |
 | P1-T03 | Select reference corpus + define comparison procedure and sign-off | ADR-0114 | T01 | 1.5 | EDIT | ☐ |
 | P1-T04 | Write ADR-0101 / 0104 / 0110 | ADR | T01–T03 | 2.0 | DOC | ☐ |
-| P1-T05 | Build `test-edition-min` + `adversarial/*` fixtures | D1.13 | T04 | 3.0 | QA | ☐ |
+| P1-T05 | Build `test-edition-min` + `adversarial/*` fixtures | D1.13 | T04 | 3.0 | QA | ☑ |
 
 > **T05 is not optional even if a real dataset is licensed.** The `test-edition-min` fixture
 > (structurally valid, ~5 surahs, public-domain-safe) keeps CI fast and lets the importer and
@@ -64,11 +64,11 @@ fallback decision), and the fixture set exists.
 
 | ID | Task | Deliv. | Depends | Est | Role | Status |
 |---|---|---|---|---|---|---|
-| P1-T06 | `quran-core`: newtypes, `Script`, `NumberingScheme`, enums | D1.1 | Phase 0 done | 1.5 | BE | ☐ |
-| P1-T07 | `quran-core`: edition/surah/ayah/segment/token structs | D1.1 | T06 | 2.0 | BE | ☐ |
-| P1-T08 | Reference grammar implementation: parser (zero-alloc) + serializer | D1.1 | T06 | 3.0 | BE | ☐ |
-| P1-T09 | Reference golden-set tests (300 cases incl. malformed) | D1.13 | T08 | 2.0 | QA | ☐ |
-| P1-T10 | `QuranQuotation` + constructor visibility guard + tests | D1.9 | T07 | 1.5 | BE | ☐ |
+| P1-T06 | `quran-core`: newtypes, `Script`, `NumberingScheme`, enums | D1.1 | Phase 0 done | 1.5 | BE | ☑ |
+| P1-T07 | `quran-core`: edition/surah/ayah/segment/token structs | D1.1 | T06 | 2.0 | BE | ☑ |
+| P1-T08 | Reference grammar implementation: parser (zero-alloc) + serializer | D1.1 | T06 | 3.0 | BE | ☑ |
+| P1-T09 | Reference golden-set tests (300 cases incl. malformed) | D1.13 | T08 | 2.0 | QA | ☑ |
+| P1-T10 | `QuranQuotation` + constructor visibility guard + tests | D1.9 | T07 | 1.5 | BE | ☑ |
 | P1-T11 | ADR-0102 / 0103 / 0105 | ADR | T08 | 1.5 | DOC | ☐ |
 | P1-T12 | Migrations `0010`–`0012` + triggers + constraint tests | D1.5 | T07 | 3.0 | BE | ☐ |
 | P1-T13 | Repository layer: editions, surahs, ayahs, tokens, divisions (read paths) | D1.5 | T12 | 3.0 | BE | ☐ |
@@ -101,9 +101,9 @@ before opening the sprint.
 
 | ID | Task | Deliv. | Depends | Est | Role | Status |
 |---|---|---|---|---|---|---|
-| P1-T15 | Intermediate format schema + JSON Schema + serde types | D1.2 | T07 | 2.0 | BE | ☐ |
-| P1-T16 | Adapter trait + adapter for the chosen dataset (per ADR-0101) | D1.2 | T15 | 3.0 | DATA | ☐ |
-| P1-T17 | Second adapter (different shape) to prove extensibility | D1.2 | T16 | 1.5 | DATA | ☐ |
+| P1-T15 | Intermediate format schema + JSON Schema + serde types | D1.2 | T07 | 2.0 | BE | ☑ |
+| P1-T16 | Adapter trait + adapter for the chosen dataset (per ADR-0101) | D1.2 | T15 | 3.0 | DATA | ☑ |
+| P1-T17 | Second adapter (different shape) to prove extensibility | D1.2 | T16 | 1.5 | DATA | ☑ |
 | P1-T18 | Register `quran_edition_v1` in the Phase-0 validator registry | D1.4 | T15 | 1.0 | BE | ☐ |
 | P1-T19 | Validator rules QV-001…QV-012 | D1.4 | T18 | 3.5 | BE | ☐ |
 | P1-T20 | Validator rules QV-013…QV-028 | D1.4 | T19 | 3.5 | BE | ☐ |

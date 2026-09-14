@@ -45,13 +45,13 @@ with what evidence.
 | Sprint | Tasks | Done | Est (ed) | Actual (ed) | Status |
 |---|---|---|---|---|---|
 | X — External-lead-time decisions | 5 | 0 | — | — | ☐ |
-| 1.0 — Data & Decisions | 5 | 0 | 11.5 | — | ☐ |
-| 1.1 — Domain & Addressing | 9 | 0 | 19.5 | — | ☐ |
-| 1.2 — Import & Validation | 17 | 0 | 42.0 | — | ☐ |
+| 1.0 — Data & Decisions | 5 | 1 | 11.5 | — | ◐ |
+| 1.1 — Domain & Addressing | 9 | 5 | 19.5 | — | ◐ |
+| 1.2 — Import & Validation | 17 | 3 | 42.0 | — | ◐ |
 | 1.3 — Reader, Translations, API | 11 | 0 | 21.5 | — | ☐ |
 | 1.4 — Tools, Citations, CLI, Doctor | 11 | 0 | 21.5 | — | ☐ |
 | 1.5 — Debug Reader, Hardening, Exit | 7 | 0 | 15.0 | — | ☐ |
-| **Total** | **60 + 5** | **0** | **131.0** | **—** | **0%** |
+| **Total** | **60 + 5** | **9** | **131.0** | **—** | **14%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -71,7 +71,135 @@ estimate — an under-recorded sprint is how the next phase inherits a wrong cap
 
 ## 2. Completed Tasks
 
-_No tasks completed yet._
+### M0 — Allowlist + dependency registry for Phase 1
+- **Deliverable:** M0 (enables D1.1+)
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** uncommitted working tree (no commits per AGENT-PROMPT)
+- **Evidence:** `cargo run -p xtask -- arch-check` OK; new regression
+  `xtask::arch::tests::newly_registered_crate_uses_its_listed_edges` green (18/18 xtask tests)
+- **DoD:** ✅ all items
+- **Notes:** `xtask/src/arch.rs` converted the hardcoded Phase-0 `Allowlist` struct to a
+  name-keyed map (`#[serde(flatten)]`), otherwise new TOML sections were silently ignored
+  and every Phase-1 edge would fail arch-check. Fail-closed behavior preserved and covered
+  by a new unit test. Added allowlist entries for `quran-core`, `quran-corpus`,
+  `citations`, `tools`, `tool-registry`; extended `storage-sqlite` and `application`.
+  Added `unicode-segmentation` to `[workspace.dependencies]` (verified cached: 1.12.0/1.13.3).
+  Remaining Phase-1 deps (csv, quick-xml, unicode-normalization, similar, lru, axum,
+  tower-http) are confirmed cached and will be registered in their owning increments.
+
+### P1-T06 — `quran-core`: newtypes, enums
+- **Deliverable:** D1.1
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** uncommitted working tree
+- **Evidence:** `cargo test -p quran-core` 23/23 green (`numbers`, `enums`, `text` units)
+- **DoD:** ✅ all items / dependency constraint `quran-core ⊆ {domain, serde, thiserror,
+  unicode-segmentation}` enforced by updated arch-check
+- **Notes:** `SurahNumber(1..=114)`, `AyahNumber`, `TokenPosition` with validated
+  construction; slug grammar locked to lowercase per deep-link/storage convention.
+
+### P1-T07 — `quran-core`: edition/surah/ayah/segment/token structs
+- **Deliverable:** D1.1
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** uncommitted working tree
+- **Evidence:** `cargo test -p quran-core` 23/23 green (`edition`, `structure` units incl. serde round-trips)
+- **DoD:** ✅ all items
+- **Notes:** `Ayah` carries a `provenance: ProvenanceId` even though the plan §3.2 sketch
+  omits it — the authoritative DDL (plan §6, `provenance_id NOT NULL`) and QV-025 require
+  per-row provenance, so the domain type matches the storage shape.
+
+### P1-T05 — `test-edition-min` + `adversarial/*` fixtures
+- **Deliverable:** D1.13
+- **Completed:** 2026-09-14
+- **Owner:** agent (QA)
+- **PR / commit:** uncommitted working tree
+- **Evidence:** `fixtures/quran/{test-edition-min,adversarial/*,golden/ayah_texts.jsonl}`;
+  `cargo test -p quran-corpus --test fixtures` 3/3 green; all 15 edition manifests pass
+  `cargo xtask validate` against `docs/schemas/quran-edition-source.v1.schema.json`
+- **DoD:** ✅ all items
+- **Notes:** Synthetic nonsense-Arabic text (deterministic generator, clearly
+  non-canonical per the ADR-0101 fallback): 5 surahs / 14 ayahs with juz/hizb/page/
+  sajdah/basmala variety. All 16 adversarial corpora are *format*-valid by construction
+  so they fail in the validator (M5) with their specific rule id, not at parse.
+
+### P1-T15 — Intermediate format schema + JSON Schema + serde types
+- **Deliverable:** D1.2
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** uncommitted working tree
+- **Evidence:** `quran_corpus::format` round-trip tests; hand-rolled `xtask validate`
+  conformance on all fixtures
+- **DoD:** ✅ all items
+- **Notes:** Schema hand-written to `docs/schemas/quran-edition-source.v1.schema.json`
+  using only keywords the Phase-0 `xtask validate` enforces; `AyahSource.tokens` added
+  as an optional adapter-supplied, verified-never-trusted token array so the
+  `bad_offsets` / `shuffled_tokens` / `truncated_ayah` fixtures can exercise QV-010…012.
+
+### P1-T16 — Adapter trait + JSON adapter
+- **Deliverable:** D1.2
+- **Completed:** 2026-09-14
+- **Owner:** agent (DATA)
+- **PR / commit:** uncommitted working tree
+- **Evidence:** `quran_corpus::adapters` unit tests incl. garbage/unknown-adapter codes
+- **DoD:** ✅ all items
+- **Notes:** JSON adapter consumes the normalized intermediate format; "chosen dataset"
+  is the synthetic fixture until ADR-0101 names a licensed one (OWN-01).
+
+### P1-T17 — Second adapter (CSV) proving extensibility
+- **Deliverable:** D1.2
+- **Completed:** 2026-09-14
+- **Owner:** agent (DATA)
+- **PR / commit:** uncommitted working tree
+- **Evidence:** `csv_adapter_reproduces_the_same_ayahs` — CSV rows reproduce the JSON
+  manifest's ayahs exactly
+- **DoD:** ✅ all items
+- **Notes:** CSV carries ayah rows; edition metadata rides as a sidecar constructor arg.
+  The optional XML shape (`quick-xml`) was deliberately skipped — CSV already proves a
+  second shape; see §5 DEV-01.
+
+### P1-T08 — Reference grammar: parser + serializer
+- **Deliverable:** D1.1
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** uncommitted working tree
+- **Evidence:** `cargo test -p quran-core` (29 unit incl. 11 documented examples +
+  19-case malformed battery); `cargo test -p quran-core --test reference_grammar`
+  (6/6: 331-case golden file, round-trip + never-panics proptests)
+- **DoD:** ✅ all items
+- **Notes:** Hand-written parser over borrowed slices (fixed 6-segment array, no heap
+  in the hot path); `QAI-QUR-0100…0112` codes added. `serialize` emits the
+  re-parseable short form; `canonical_form` emits the pinned form for storage/citations
+  (ayah-level only). Division keywords win over edition slugs only for exactly
+  `keyword:number`; longer shapes treat the keyword as a slug (documented in module docs).
+  ADR-0102 to be written as a draft in P1-T11.
+
+### P1-T09 — Reference golden-set tests (331 cases)
+- **Deliverable:** D1.13
+- **Completed:** 2026-09-14
+- **Owner:** agent (QA)
+- **PR / commit:** uncommitted working tree
+- **Evidence:** `fixtures/quran/golden/references.jsonl` (190 valid + 141 invalid);
+  proptest round-trip over arbitrary refs incl. `canonical_form` re-parse
+- **DoD:** ✅ all items
+- **Notes:** Fixture generated deterministically from the grammar spec
+  (`/tmp/gen_refs.py`, not committed); two generator mistakes caught by the tests
+  themselves during development (`x` is a legal slug; `2::255` fails on the empty
+  ayah, not the position) and corrected. Satisfies AC-P1-12/13 pending the AC table flip.
+  Golden file exceeds the 300-case minimum (331).
+
+### P1-T10 — `QuranQuotation` + constructor guard + tests- **Deliverable:** D1.9
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** uncommitted working tree
+- **Evidence:** `cargo test -p quran-core quotation::` 4/4 green (provenance exposure,
+  empty-text rejection, translator requirement, serde round-trip)
+- **DoD:** ✅ all items
+- **Notes:** Invariant I6 enforced by the constructor signature (`QuotationParts` requires
+  `edition` + `text_hash`); principle 5 enforced by `TranslationRef::validate`.
+  Phase-1 `Diagnostic` trait defined locally in `quran-core::error` because invariant I2
+  forbids `quran-core → storage` (where Phase-0's `Diagnostic` trait lives).
 
 **Entry format (repeat per task)**
 
@@ -190,7 +318,18 @@ _None accepted yet._
 
 ## 5. Deviations From Plan
 
-_None recorded yet._
+### DEV-01 — XML adapter shape skipped in M3
+- **Date:** 2026-09-14
+- **Plan reference:** P1-T17 / technology-stack.md §5 (`quick-xml` row)
+- **Planned:** CSV + optional XML as second/third adapter shapes
+- **Delivered:** JSON + CSV adapters only
+- **Reason:** CSV already proves the adapter trait works for a genuinely different shape
+  (row-oriented vs document-oriented, sidecar metadata); a third shape adds fixture and
+  test surface without new architectural evidence
+- **Scope impact:** none on ACs; a future dataset that arrives as XML needs a new adapter
+  (the trait supports it unchanged)
+- **Phase-2 impact:** none
+- **Approved by:** agent (owner to ratify)
 
 Log anything delivered differently from `plan.md`. Deviations are expected and fine —
 **undocumented** deviations are the problem, because Phase 2 inherits this corpus assuming the
@@ -244,7 +383,11 @@ silent scope leak into Phase 2.
 
 | ID | Item | Reason deferred | Target phase | Owner | Logged |
 |---|---|---|---|---|---|
-| — | — | — | — | — | — |
+| OWN-01 | ADR-0101 dataset/license/reviewer (P1-X01/X02) unresolved; engineering proceeds on the synthetic `test-edition-min` fixture; ADR-0101 stays DRAFT | legal/editorial act an agent cannot make | Phase 1 / swimlane X | _unassigned_ | 2026-09-14 |
+| OWN-02 | ADR-0114 reference corpus/procedure/sign-off (P1-X03) unresolved; QV-015 implemented as skip-when-unconfigured, never silent pass; ADR-0114 stays DRAFT | editorial act an agent cannot make | Phase 1 / swimlane X | _unassigned_ | 2026-09-14 |
+| OWN-03 | Estimate gap 82 ed (stated) vs 131.0 ed (summed); proceeds incrementally with the 1.2a/1.2b split; no silent compression | owner capacity/scope decision | Phase 1 scheduling | _unassigned_ | 2026-09-14 |
+| OWN-04 | HTTP framework adopted provisionally as axum + tower-http; short ADR recorded before P1-T39; health endpoints unchanged | owner to ratify or redirect | Phase 1 (before P1-T39) | _unassigned_ | 2026-09-14 |
+| OWN-05 | Phase-0 exit discrepancy: `status.md` lists outstanding Phase-0 items while the build prompt declares Phase 0 complete; Phase-1 work does not touch them | owner to reconcile | Phase 0 exit | _unassigned_ | 2026-09-14 |
 
 Carried into `docs/plans/handoff-p1-to-p2.md` by task P1-T60.
 

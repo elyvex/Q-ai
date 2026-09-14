@@ -70,8 +70,8 @@
 
 | ID | Criterion | Verification | Blocks | Evidence | Status |
 |---|---|---|---|---|---|
-| **AC-P1-12** | The reference grammar parses all **300 golden references** correctly and returns **coded errors (never panics)** for all malformed inputs | Golden set + fuzz/property test | D1.1 | | ☐ |
-| **AC-P1-13** | `parse(serialize(ref)) == ref` for **all** reference variants | Property test | D1.1 | | ☐ |
+| **AC-P1-12** | The reference grammar parses all **300 golden references** correctly and returns **coded errors (never panics)** for all malformed inputs | Golden set + fuzz/property test | D1.1 | `crates/quran-core/tests/reference_grammar.rs` (331 cases green; ritual pending) | ◐ |
+| **AC-P1-13** | `parse(serialize(ref)) == ref` for **all** reference variants | Property test | D1.1 | `roundtrip_parse_serialize` proptest green | ◐ |
 
 > AC-P1-12/13 freeze ADR-0102. After the grammar is frozen, changing it breaks every stored
 > citation, so the golden set and round-trip property must be green **before** the freeze is
