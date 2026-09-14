@@ -1,8 +1,13 @@
 mod origin;
 mod secret;
+mod secret_store;
 
 pub use origin::{OriginMap, ValueOrigin};
 pub use secret::Secret;
+pub use secret_store::{
+    EncryptedFileSecretStore, EnvSecretStore, KeychainSecretStore, SecretError, SecretRef,
+    SecretStore, SecretStores, backend_by_name,
+};
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

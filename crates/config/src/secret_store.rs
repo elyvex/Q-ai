@@ -1,0 +1,287 @@
+//! Secret storage abstraction (D0.5 / P0-T14–T16).
+//!
+//! Secret **values** never live in SQLite; what persists is a [`SecretRef`]
+//! (`secret://<backend>/<path...>`). Backends:
+//!
+//! - [`EnvSecretStore`] — reads `QAI_SECRET_<KEY>` from the environment (the
+//!   Phase 0 default, and the only backend with no external dependency).
+//! - [`KeychainSecretStore`] / [`EncryptedFileSecretStore`] — abstracted behind
+//!   the same trait; their concrete OS-crypto implementations require the
+//!   `keyring` / `age` crates and return [`SecretError::Unsupported`] until
+//!   those dependencies are added (Phase 1).
+
+use async_trait::async_trait;
+use std::collections::BTreeMap;
+use std::fmt;
+use thiserror::Error;
+
+use crate::Secret;
+
+/// A reference to a secret, of the form `secret://<backend>/<seg>/<seg>...`.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SecretRef {
+    backend: String,
+    segments: Vec<String>,
+}
+
+/// A malformed secret reference or a backend failure.
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+pub enum SecretError {
+    /// The reference is not `secret://<backend>/<path>`.
+    #[error("invalid secret reference: {0}")]
+    InvalidRef(String),
+    /// The secret does not exist in the backend.
+    #[error("secret not found: {0}")]
+    NotFound(String),
+    /// The backend exists but the requested operation is unsupported.
+    #[error("secret backend unsupported: {0}")]
+    Unsupported(String),
+    /// A backend-specific failure.
+    #[error("secret backend error: {0}")]
+    Backend(String),
+}
+
+impl SecretRef {
+    /// Parse `secret://<backend>/<segment>/<segment>...`.
+    pub fn parse(input: &str) -> Result<Self, SecretError> {
+        let rest = input
+            .strip_prefix("secret://")
+            .ok_or_else(|| SecretError::InvalidRef(input.to_string()))?;
+        let mut parts = rest.split('/').filter(|s| !s.is_empty());
+        let backend =
+            parts.next().ok_or_else(|| SecretError::InvalidRef(input.to_string()))?.to_string();
+        let segments: Vec<String> = parts.map(String::from).collect();
+        if segments.is_empty() {
+            return Err(SecretError::InvalidRef(input.to_string()));
+        }
+        Ok(Self { backend, segments })
+    }
+
+    /// The backend scheme (e.g. `env`, `keychain`, `encrypted_file`).
+    pub fn backend(&self) -> &str {
+        &self.backend
+    }
+
+    /// The path segments after the backend.
+    pub fn segments(&self) -> &[String] {
+        &self.segments
+    }
+
+    /// The environment variable name for the `env` backend
+    /// (`QAI_SECRET_<SEGMENTS_UPPER_UNDERSCORE>`).
+    pub fn env_var(&self) -> String {
+        let joined = self.segments.join("_").to_uppercase().replace(['-', '.'], "_");
+        format!("QAI_SECRET_{joined}")
+    }
+}
+
+impl fmt::Display for SecretRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "secret://{}/{}", self.backend, self.segments.join("/"))
+    }
+}
+
+/// Storage backend for secrets.
+#[async_trait]
+pub trait SecretStore: Send + Sync {
+    /// Retrieve a secret value.
+    async fn get(&self, r: &SecretRef) -> Result<Secret<String>, SecretError>;
+    /// Store a secret value.
+    async fn put(&self, r: &SecretRef, v: Secret<String>) -> Result<(), SecretError>;
+    /// Delete a secret value.
+    async fn delete(&self, r: &SecretRef) -> Result<(), SecretError>;
+    /// List references only — never values.
+    async fn list_refs(&self) -> Result<Vec<SecretRef>, SecretError>;
+    /// The backend name.
+    fn backend_name(&self) -> &'static str;
+}
+
+/// Environment-variable secret backend.
+///
+/// Reads `QAI_SECRET_<KEY>`; read-only (writing to the process environment is
+/// not a durable or safe operation, so `put`/`delete` report `Unsupported`).
+#[derive(Debug, Default, Clone)]
+pub struct EnvSecretStore;
+
+#[async_trait]
+impl SecretStore for EnvSecretStore {
+    async fn get(&self, r: &SecretRef) -> Result<Secret<String>, SecretError> {
+        let name = r.env_var();
+        match std::env::var(&name) {
+            Ok(value) => Ok(Secret::new(value)),
+            Err(_) => Err(SecretError::NotFound(r.to_string())),
+        }
+    }
+
+    async fn put(&self, _r: &SecretRef, _v: Secret<String>) -> Result<(), SecretError> {
+        Err(SecretError::Unsupported("env backend is read-only".to_string()))
+    }
+
+    async fn delete(&self, _r: &SecretRef) -> Result<(), SecretError> {
+        Err(SecretError::Unsupported("env backend is read-only".to_string()))
+    }
+
+    async fn list_refs(&self) -> Result<Vec<SecretRef>, SecretError> {
+        let mut refs = Vec::new();
+        for (key, _) in std::env::vars() {
+            if let Some(rest) = key.strip_prefix("QAI_SECRET_") {
+                let mut reference = SecretRef {
+                    backend: "env".to_string(),
+                    segments: rest.to_lowercase().split('_').map(String::from).collect(),
+                };
+                reference.segments.retain(|s| !s.is_empty());
+                if !reference.segments.is_empty() {
+                    refs.push(reference);
+                }
+            }
+        }
+        refs.sort();
+        Ok(refs)
+    }
+
+    fn backend_name(&self) -> &'static str {
+        "env"
+    }
+}
+
+/// OS keychain secret backend (Secret Service / macOS Keychain / Windows
+/// Credential Manager). Requires the `keyring` crate — not yet a dependency.
+#[derive(Debug, Default, Clone)]
+pub struct KeychainSecretStore;
+
+#[async_trait]
+impl SecretStore for KeychainSecretStore {
+    async fn get(&self, _r: &SecretRef) -> Result<Secret<String>, SecretError> {
+        Err(SecretError::Unsupported(
+            "keychain backend requires the `keyring` crate (Phase 1)".to_string(),
+        ))
+    }
+    async fn put(&self, _r: &SecretRef, _v: Secret<String>) -> Result<(), SecretError> {
+        Err(SecretError::Unsupported(
+            "keychain backend requires the `keyring` crate (Phase 1)".to_string(),
+        ))
+    }
+    async fn delete(&self, _r: &SecretRef) -> Result<(), SecretError> {
+        Err(SecretError::Unsupported(
+            "keychain backend requires the `keyring` crate (Phase 1)".to_string(),
+        ))
+    }
+    async fn list_refs(&self) -> Result<Vec<SecretRef>, SecretError> {
+        Err(SecretError::Unsupported(
+            "keychain backend requires the `keyring` crate (Phase 1)".to_string(),
+        ))
+    }
+    fn backend_name(&self) -> &'static str {
+        "keychain"
+    }
+}
+
+/// age/XChaCha20-Poly1305 encrypted-file secret backend. Requires the `age`
+/// crate — not yet a dependency.
+#[derive(Debug, Default, Clone)]
+pub struct EncryptedFileSecretStore;
+
+#[async_trait]
+impl SecretStore for EncryptedFileSecretStore {
+    async fn get(&self, _r: &SecretRef) -> Result<Secret<String>, SecretError> {
+        Err(SecretError::Unsupported(
+            "encrypted_file backend requires the `age` crate (Phase 1)".to_string(),
+        ))
+    }
+    async fn put(&self, _r: &SecretRef, _v: Secret<String>) -> Result<(), SecretError> {
+        Err(SecretError::Unsupported(
+            "encrypted_file backend requires the `age` crate (Phase 1)".to_string(),
+        ))
+    }
+    async fn delete(&self, _r: &SecretRef) -> Result<(), SecretError> {
+        Err(SecretError::Unsupported(
+            "encrypted_file backend requires the `age` crate (Phase 1)".to_string(),
+        ))
+    }
+    async fn list_refs(&self) -> Result<Vec<SecretRef>, SecretError> {
+        Err(SecretError::Unsupported(
+            "encrypted_file backend requires the `age` crate (Phase 1)".to_string(),
+        ))
+    }
+    fn backend_name(&self) -> &'static str {
+        "encrypted_file"
+    }
+}
+
+/// Select a backend by name.
+pub fn backend_by_name(name: &str) -> Result<Box<dyn SecretStore>, SecretError> {
+    match name {
+        "env" => Ok(Box::new(EnvSecretStore)),
+        "keychain" => Ok(Box::new(KeychainSecretStore)),
+        "encrypted_file" => Ok(Box::new(EncryptedFileSecretStore)),
+        other => Err(SecretError::Unsupported(format!("unknown backend `{other}`"))),
+    }
+}
+
+/// A convenience registry of named backends.
+#[derive(Default)]
+pub struct SecretStores {
+    stores: BTreeMap<String, Box<dyn SecretStore>>,
+}
+
+impl SecretStores {
+    /// Register a backend under its [`SecretStore::backend_name`].
+    pub fn register(&mut self, store: Box<dyn SecretStore>) {
+        self.stores.insert(store.backend_name().to_string(), store);
+    }
+
+    /// Look up a backend by name.
+    pub fn get(&self, backend: &str) -> Option<&dyn SecretStore> {
+        self.stores.get(backend).map(|b| b.as_ref())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_a_reference() {
+        let r = SecretRef::parse("secret://env/openai/default").unwrap();
+        assert_eq!(r.backend(), "env");
+        assert_eq!(r.segments(), &["openai", "default"]);
+        assert_eq!(r.env_var(), "QAI_SECRET_OPENAI_DEFAULT");
+        assert_eq!(r.to_string(), "secret://env/openai/default");
+    }
+
+    #[test]
+    fn rejects_malformed_references() {
+        for bad in ["env/openai", "secret://env", "secret://", "openai"] {
+            assert!(SecretRef::parse(bad).is_err(), "{bad} must be rejected");
+        }
+    }
+
+    #[tokio::test]
+    async fn env_store_reports_not_found_for_missing_keys() {
+        let store = EnvSecretStore;
+        let r = SecretRef::parse("secret://env/qai-test/missing").unwrap();
+        let err = store.get(&r).await.unwrap_err();
+        assert!(matches!(err, SecretError::NotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn env_store_is_read_only() {
+        let store = EnvSecretStore;
+        let r = SecretRef::parse("secret://env/qai-test/x").unwrap();
+        let err = store.put(&r, Secret::new("v".to_string())).await.unwrap_err();
+        assert!(matches!(err, SecretError::Unsupported(_)));
+    }
+
+    #[tokio::test]
+    async fn unbacked_backends_report_unsupported() {
+        let r = SecretRef::parse("secret://keychain/openai/default").unwrap();
+        assert!(matches!(KeychainSecretStore.get(&r).await, Err(SecretError::Unsupported(_))));
+        assert!(matches!(EncryptedFileSecretStore.get(&r).await, Err(SecretError::Unsupported(_))));
+    }
+
+    #[tokio::test]
+    async fn backend_lookup_by_name() {
+        assert_eq!(backend_by_name("env").unwrap().backend_name(), "env");
+        assert!(backend_by_name("nope").is_err());
+    }
+}

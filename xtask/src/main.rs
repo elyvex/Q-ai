@@ -15,6 +15,7 @@ use std::process::ExitCode;
 
 mod arch;
 mod ci;
+mod coverage;
 mod migrate;
 mod schema;
 
@@ -41,6 +42,12 @@ enum Commands {
     },
     /// Emit JSON Schemas into docs/schemas (idempotent).
     GenSchema,
+    /// Enforce per-crate coverage thresholds against an LCOV report.
+    CoverageGate {
+        /// Path to the LCOV report produced by `cargo llvm-cov`.
+        #[arg(value_name = "LCOV")]
+        path: std::path::PathBuf,
+    },
 }
 
 fn run(cli: Cli) -> Result<(), anyhow::Error> {
@@ -50,6 +57,7 @@ fn run(cli: Cli) -> Result<(), anyhow::Error> {
         Commands::Migrate => migrate::apply(),
         Commands::MigrateCheck { dir } => migrate::run(dir.as_deref()),
         Commands::GenSchema => schema::run(),
+        Commands::CoverageGate { path } => coverage::run(&path),
     }
 }
 

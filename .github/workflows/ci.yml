@@ -119,6 +119,9 @@ jobs:
       - name: generate coverage
         run: cargo llvm-cov --workspace --lcov --output-path lcov.info
 
+      - name: enforce coverage gate
+        run: cargo run -q -p xtask -- coverage-gate lcov.info
+
       - name: upload coverage
         uses: actions/upload-artifact@v4
         with:

@@ -15,37 +15,51 @@ use sqlx::Row;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use storage::error::StorageError;
 
-/// A discovered migration: version, filename stem, and the `.up.sql` path.
+/// A discovered migration: version, filename stem, and up (and optional down) paths.
 #[derive(Debug, Clone)]
 pub struct MigrationFile {
     pub version: u32,
     pub name: String,
     pub path: PathBuf,
+    pub down_path: Option<PathBuf>,
 }
 
-/// Discover `NNNN_name.up.sql` files in `dir`, ordered by version.
+/// Discover `NNNN_name.up.sql` (+ optional `NNNN_name.down.sql`) files, ordered
+/// by version.
 pub fn discover_migrations(dir: &Path) -> Result<Vec<MigrationFile>, StorageError> {
-    let mut found = Vec::new();
+    let mut found: BTreeMap<u32, MigrationFile> = BTreeMap::new();
     let entries = std::fs::read_dir(dir).map_err(|_| StorageError::StorageUnavailable)?;
     for entry in entries.flatten() {
         let path = entry.path();
         let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
             continue;
         };
-        if !name.ends_with(".up.sql") {
+        let is_down = name.ends_with(".down.sql");
+        let is_up = !is_down && name.ends_with(".up.sql");
+        if !(is_up || is_down) {
             continue;
         }
-        let stem = name.strip_suffix(".up.sql").unwrap_or(name);
+        let stem =
+            name.strip_suffix(".down.sql").or_else(|| name.strip_suffix(".up.sql")).unwrap_or(name);
         let Some((ver, _rest)) = stem.split_once('_') else {
             continue;
         };
         let version: u32 = ver
             .parse()
             .map_err(|_| StorageError::MigrationRequired { at_schema: 0, required: 0 })?;
-        found.push(MigrationFile { version, name: stem.to_string(), path });
+        let entry = found.entry(version).or_insert_with(|| MigrationFile {
+            version,
+            name: stem.to_string(),
+            path: PathBuf::new(),
+            down_path: None,
+        });
+        if is_down {
+            entry.down_path = Some(path);
+        } else {
+            entry.path = path;
+        }
     }
-    found.sort_by_key(|m| m.version);
-    Ok(found)
+    Ok(found.into_values().collect())
 }
 
 fn sha256_file_hex(path: &Path) -> Result<String, StorageError> {
@@ -241,6 +255,37 @@ pub async fn verify_checksums(
     Ok(ChecksumReport { valid: mismatches.is_empty(), mismatches, missing_on_disk })
 }
 
+/// Revert the most recently applied migration using its `.down.sql` file.
+///
+/// Deletes the `schema_migrations` bookkeeping row first (the down SQL may drop
+/// the bookkeeping table itself), then executes the down SQL. Returns the
+/// reverted version, or `None` if nothing is applied.
+pub async fn revert_last_migration(
+    db_path: &str,
+    migrations_dir: &Path,
+) -> Result<Option<u32>, StorageError> {
+    let pool = connect_rw(db_path).await?;
+    let already = applied_versions(&pool).await?;
+    let Some(version) = already.keys().next_back().copied() else {
+        return Ok(None);
+    };
+    let discovered = discover_migrations(migrations_dir)?;
+    let down = discovered
+        .iter()
+        .find(|m| m.version == version)
+        .and_then(|m| m.down_path.clone())
+        .ok_or(StorageError::MigrationRequired { at_schema: version, required: version })?;
+    let sql = std::fs::read_to_string(&down).map_err(|_| StorageError::StorageUnavailable)?;
+
+    sqlx::query("DELETE FROM schema_migrations WHERE version = ?")
+        .bind(version as i64)
+        .execute(&pool)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+    sqlx::raw_sql(&sql).execute(&pool).await.map_err(|_| StorageError::StorageUnavailable)?;
+    Ok(Some(version))
+}
+
 /// A consistent SQLite backup via `VACUUM INTO` (ADR-0001 §7).
 ///
 /// Fails if `dest` already exists.
@@ -274,6 +319,48 @@ mod tests {
 
     fn write_migration(dir: &Path, version: u32, name: &str, body: &str) {
         std::fs::write(dir.join(format!("{version:04}_{name}.up.sql")), body).unwrap();
+    }
+
+    fn write_down(dir: &Path, version: u32, name: &str, body: &str) {
+        std::fs::write(dir.join(format!("{version:04}_{name}.down.sql")), body).unwrap();
+    }
+
+    async fn has_table(db_path: &str, table: &str) -> bool {
+        let pool = connect_rw(db_path).await.unwrap();
+        let exists = table_exists(&pool, table).await.unwrap();
+        pool.close().await;
+        exists
+    }
+
+    #[tokio::test]
+    async fn down_migrations_restore_schema() {
+        let dir = tempdir().unwrap();
+        let mig = dir.path().join("migrations");
+        std::fs::create_dir_all(&mig).unwrap();
+        write_migration(&mig, 1, "core", "CREATE TABLE t1 (id TEXT PRIMARY KEY);");
+        write_down(&mig, 1, "core", "DROP TABLE IF EXISTS t1;");
+        write_migration(&mig, 2, "more", "CREATE TABLE t2 (id TEXT PRIMARY KEY);");
+        write_down(&mig, 2, "more", "DROP TABLE IF EXISTS t2;");
+        let dbp = dir.path().join("qai.db");
+        let db = dbp.to_str().unwrap();
+
+        // Nothing applied yet → revert is a no-op.
+        assert_eq!(revert_last_migration(db, &mig).await.unwrap(), None);
+
+        apply_migrations(db, &mig).await.unwrap();
+        assert!(has_table(db, "t1").await && has_table(db, "t2").await);
+
+        assert_eq!(revert_last_migration(db, &mig).await.unwrap(), Some(2));
+        assert!(!has_table(db, "t2").await);
+        assert!(has_table(db, "t1").await);
+
+        assert_eq!(revert_last_migration(db, &mig).await.unwrap(), Some(1));
+        assert!(!has_table(db, "t1").await);
+
+        // Re-applying restores the schema.
+        let v = apply_migrations(db, &mig).await.unwrap();
+        assert_eq!(v, 2);
+        assert!(has_table(db, "t1").await && has_table(db, "t2").await);
     }
 
     #[tokio::test]

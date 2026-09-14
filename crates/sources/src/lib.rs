@@ -346,6 +346,27 @@ impl ManifestParser {
             }
         }
     }
+
+    /// Ingest a local manifest into a `Staged` source version.
+    ///
+    /// Performs schema + semantic validation and signature policy enforcement
+    /// (D0.10). The returned version is in the `Staged` state, ready for the
+    /// approval workflow.
+    pub fn ingest_local(
+        &self,
+        json: &str,
+        signature: Option<&str>,
+    ) -> Result<SourceVersion, SourceError> {
+        let manifest = self.parse(json)?;
+        self.validate_schema(&manifest)?;
+        self.validate_semantic(&manifest)?;
+        self.verify_signature(&manifest, signature)?;
+        let mut version = manifest.sources.into_iter().next().ok_or_else(|| {
+            SourceError::ManifestValidationError("manifest contains no sources".to_string())
+        })?;
+        version.state = SourceState::Staged;
+        Ok(version)
+    }
 }
 
 // ─── GenealogyResolver ──────────────────────────
@@ -773,6 +794,42 @@ mod tests {
         tampered.sources.push(base_version());
 
         let err = parser.verify_signature(&tampered, Some(&signature)).unwrap_err();
+        assert!(matches!(err, SourceError::SignatureVerificationFailed(_)));
+    }
+
+    #[test]
+    fn signed_local_manifest_ingests_to_staged() {
+        let parser = ManifestParser::new(false);
+        let mut manifest = sample_manifest();
+        manifest.sources.push(base_version());
+        let signature = format!("sha256:{}", parser.manifest_hash(&manifest).unwrap().hex);
+        let json = serde_json::to_string(&manifest).unwrap();
+        let version = parser.ingest_local(&json, Some(&signature)).unwrap();
+        assert_eq!(version.state, SourceState::Staged);
+    }
+
+    #[test]
+    fn tampered_local_manifest_does_not_ingest() {
+        let parser = ManifestParser::new(false);
+        let mut signed = sample_manifest();
+        signed.sources.push(base_version());
+        let signature = format!("sha256:{}", parser.manifest_hash(&signed).unwrap().hex);
+
+        let mut tampered = signed.clone();
+        tampered.sources.push(base_version());
+        let json = serde_json::to_string(&tampered).unwrap();
+
+        let err = parser.ingest_local(&json, Some(&signature)).unwrap_err();
+        assert!(matches!(err, SourceError::SignatureVerificationFailed(_)));
+    }
+
+    #[test]
+    fn unsigned_local_manifest_rejected_under_remote_policy() {
+        let parser = ManifestParser::new(false);
+        let mut manifest = sample_manifest();
+        manifest.sources.push(base_version());
+        let json = serde_json::to_string(&manifest).unwrap();
+        let err = parser.ingest_local(&json, None).unwrap_err();
         assert!(matches!(err, SourceError::SignatureVerificationFailed(_)));
     }
 

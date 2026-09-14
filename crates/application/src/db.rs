@@ -84,6 +84,43 @@ pub async fn backup_database(cfg: &Config, dest: &str) -> Result<(), StorageErro
     migrate::backup(&cfg.storage.sqlite.path, dest).await
 }
 
+/// Restore from a backup after verifying its integrity and migration checksums.
+///
+/// The backup (produced by `VACUUM INTO`) is a complete, standalone snapshot, so
+/// copying it into place is safe — unlike copying a live WAL database (ADR-0001 §7).
+/// The current database is moved aside as `<path>.pre-restore` rather than deleted.
+pub async fn restore_database(
+    cfg: &Config,
+    backup: &str,
+    migrations_dir: &Path,
+) -> Result<(), StorageError> {
+    // 1. The backup must exist and be a valid, checksum-consistent database.
+    let report = migrate::verify_checksums(backup, migrations_dir).await?;
+    if !report.valid {
+        return Err(StorageError::MigrationChecksumMismatch {
+            version: report.mismatches.first().copied().unwrap_or(0),
+        });
+    }
+    let probe = SqliteDatabase::open_read_only(backup).await?;
+    let integrity = probe.probe_scalar("PRAGMA integrity_check").await.ok().flatten();
+    if !integrity.as_deref().map(|s| s.eq_ignore_ascii_case("ok")).unwrap_or(false) {
+        return Err(StorageError::StorageUnavailable);
+    }
+    drop(probe);
+
+    // 2. Swap in the verified snapshot.
+    let target = &cfg.storage.sqlite.path;
+    if Path::new(target).exists() {
+        let aside = format!("{target}.pre-restore");
+        std::fs::rename(target, &aside).map_err(|_| StorageError::StorageUnavailable)?;
+    }
+    // Remove stale WAL/SHM from the previous database.
+    let _ = std::fs::remove_file(format!("{target}-wal"));
+    let _ = std::fs::remove_file(format!("{target}-shm"));
+    std::fs::copy(backup, target).map_err(|_| StorageError::StorageUnavailable)?;
+    Ok(())
+}
+
 /// Probe database health read-only. Never mutates; never errors.
 pub async fn probe_database(cfg: &Config) -> DbProbe {
     let mut probe = DbProbe::default();
@@ -208,5 +245,33 @@ mod tests {
         let dest = dir.path().join("bk.db");
         backup_database(&cfg, dest.to_str().unwrap()).await.unwrap();
         assert!(dest.exists());
+    }
+
+    #[tokio::test]
+    async fn restore_verifies_and_swaps_in_a_backup() {
+        let dir = tempdir().unwrap();
+        let mut cfg = Config::default();
+        cfg.storage.sqlite.path = dir.path().join("qai.db").display().to_string();
+        migrate_database(&cfg, &migrations_dir()).await.unwrap();
+
+        let backup = dir.path().join("bk.db");
+        backup_database(&cfg, backup.to_str().unwrap()).await.unwrap();
+
+        // Corrupt the live database, then restore the verified snapshot.
+        std::fs::write(&cfg.storage.sqlite.path, b"not a database").unwrap();
+        restore_database(&cfg, backup.to_str().unwrap(), &migrations_dir()).await.unwrap();
+
+        let probe = probe_database(&cfg).await;
+        assert!(probe.reachable && probe.integrity_ok);
+    }
+
+    #[tokio::test]
+    async fn restore_rejects_a_missing_backup() {
+        let dir = tempdir().unwrap();
+        let mut cfg = Config::default();
+        cfg.storage.sqlite.path = dir.path().join("qai.db").display().to_string();
+        let missing = dir.path().join("nope.db");
+        let err = restore_database(&cfg, missing.to_str().unwrap(), &migrations_dir()).await;
+        assert!(err.is_err());
     }
 }

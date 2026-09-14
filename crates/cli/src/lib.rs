@@ -395,10 +395,16 @@ fn handle_db(action: DbAction, cfg: &Config, json: bool) -> i32 {
                 eprintln!("refusing to restore without --yes");
                 return exit_code::USAGE;
             }
-            // Restore verifies checksums + schema before swapping (Phase 1+).
-            let _ = path;
-            println!("restore is available in Phase 1; backups are verified with `qai db verify`");
-            exit_code::OK
+            match block_on(application::db::restore_database(cfg, &path, &migrations_dir)) {
+                Ok(()) => {
+                    println!("restored from {path} (previous database kept as .pre-restore)");
+                    exit_code::OK
+                }
+                Err(e) => {
+                    eprintln!("restore failed: {e}");
+                    exit_code::INTERNAL
+                }
+            }
         }
     }
 }
@@ -420,3 +426,39 @@ fn phase_stub(name: &str, phase: u8) -> i32 {
 }
 
 // exit codes and dispatch complete
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn serve_defaults_to_loopback() {
+        let cli = Cli::try_parse_from(["qai", "serve"]).unwrap();
+        match cli.command {
+            Commands::Serve { bind } => {
+                assert!(
+                    bind.starts_with("127.0.0.1") || bind.starts_with("[::1]"),
+                    "serve must default to loopback, got `{bind}`"
+                );
+            }
+            _ => panic!("expected Serve command"),
+        }
+    }
+
+    #[test]
+    fn default_config_binds_loopback_and_validates() {
+        let cfg = Config::default();
+        assert_eq!(cfg.server.bind, "127.0.0.1");
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn non_loopback_bind_without_tls_fails_validation() {
+        let mut cfg = Config::default();
+        cfg.server.bind = "0.0.0.0".into();
+        cfg.server.tls = "disabled".into();
+        let err = cfg.validate().unwrap_err();
+        assert!(err.to_string().contains("0.0.0.0"), "error must name the offending bind: {err}");
+    }
+}
