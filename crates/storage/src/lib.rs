@@ -56,22 +56,12 @@ pub struct DbHealth {
 impl DbHealth {
     /// Create a healthy status.
     pub fn ok(backend: DbBackend, schema_version: u32) -> Self {
-        Self {
-            healthy: true,
-            backend,
-            schema_version,
-            message: "ok".to_string(),
-        }
+        Self { healthy: true, backend, schema_version, message: "ok".to_string() }
     }
 
     /// Create an unhealthy status.
     pub fn fail(backend: DbBackend, schema_version: u32, message: String) -> Self {
-        Self {
-            healthy: false,
-            backend,
-            schema_version,
-            message,
-        }
+        Self { healthy: false, backend, schema_version, message }
     }
 }
 
