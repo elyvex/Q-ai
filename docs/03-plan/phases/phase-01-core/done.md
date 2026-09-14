@@ -416,7 +416,81 @@ estimate — an under-recorded sprint is how the next phase inherits a wrong cap
   rest are Accepted where no external input is required
 - **Notes:** See §4 for the ADR ledger.
 
-**Entry format (repeat per task)**
+### P1-T25 — `quran.import` job with 13 checkpoints, cancellation, resume
+- **Deliverable:** D1.3
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** working tree
+- **Evidence:** `crates/quran-corpus/src/import.rs` (driver) +
+  `crates/application/src/quran.rs` (`QuranImportHandler`, kind `quran.import`);
+  `cargo test -p application --test quran_import` 8/8 green
+- **DoD:** ✅ all items
+- **Notes:** Deterministic in `(run_id, manifest)`; every run starts by clearing
+  its own staging, so retry-after-crash is a clean restart — restart *is* resume.
+  Checkpoints serve progress/cancellation/`stop_after` (also the CLI dry-run
+  mechanism), not transaction boundaries. Idempotent on
+  `(source_version_id, adapter_version, parser_version)` via the job key.
+  First real writer of hash-chained audit events app-wide (via the new
+  `application::audit_bridge`).
+
+### P1-T27 — Edition differ (char-level) + `DifferenceReport`
+- **Deliverable:** D1.3
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** working tree
+- **Evidence:** `quran_corpus::differ` unit tests; difference report persisted at
+  every import and asserted in the e2e test
+- **DoD:** ✅ all items
+- **Notes:** Ayah-aligned by identity; changed ranges in new-text character
+  offsets via `similar`; metadata folds into a boolean. ADR-0109 accepted.
+
+### P1-T28 — Activation transaction + rollback + `corpus_generation`
+- **Deliverable:** D1.3
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** working tree
+- **Evidence:** repo-level tests (M6) + `activation_service_requires_a_granted_approval`
+  + `rollback_service_restores_the_prior_version`
+- **DoD:** ✅ all items
+- **Notes:** AC-P1-03 enforced in `application::quran`: activation/rollback require
+  a **granted** approval whose `subject_urn` equals the exact edition URN, and the
+  audit event commits in the same transaction. The importer never activates (I5/I7).
+
+### P1-T29 — Crash-at-each-checkpoint test matrix (13 cases)
+- **Deliverable:** D1.13
+- **Completed:** 2026-09-14
+- **Owner:** agent (QA)
+- **PR / commit:** working tree
+- **Evidence:** `crash_matrix_all_thirteen_checkpoints_leave_active_untouched`:
+  active pointer absent after all 13 prefixes; retry completes to `Staged`
+- **DoD:** ✅ all items
+- **Notes:** Satisfies AC-P1-10's negative guarantee structurally (canonical tables
+  are unreachable before activation) plus AC-P1-11 via
+  `cancel_cleans_staging_and_marks_cancelled`.
+
+### P1-T26 — Round-trip verifier (reference comparator partial)
+- **Deliverable:** D1.4
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** working tree
+- **Evidence:** `roundtrip_verified` reconstructs every staged ayah and recomputes
+  `text_hash` (QV-014 half) and `token_order_hash` (QV-024) from stored rows
+- **DoD:** ⚠️ exceptions: QV-015 is a recorded **skip** (Info finding) — no reference
+  corpus is configured (blocker B2 / ADR-0114 Draft pending human sign-off)
+- **Notes:** Fail-closed on mismatch. The skip is explicit in every validation
+  report, never a silent pass.
+
+### P1-T31 — ADR-0106 / 0107 / 0108 / 0109 (+ full Phase-1 set)
+- **Deliverable:** ADR
+- **Completed:** 2026-09-14
+- **Owner:** agent (DOC)
+- **PR / commit:** working tree
+- **Evidence:** `docs/02-architecture/decisions/ADR-0101…0114` (14 files)
+- **DoD:** ⚠️ exceptions: ADR-0101/0114 stay **Draft** pending human sign-off;
+  ADR-0111/0112/0113 are drafts until their deliverables land (M9/M8)
+- **Notes:** 0102–0110 Accepted where implementation exists. User-supplied public
+  dataset candidates (2026-09-14) recorded in ADR-0101 as surveyed-but-unverified.
+  See §4 ledger.
 ```
 ### P1-Tnn — <task title>
 - **Deliverable:** D1.x
@@ -557,6 +631,21 @@ _None accepted yet._
 - **Scope impact:** numbering only; table/trigger contents follow plan §6. Task-board
   text still uses the plan numbers; this entry is the authoritative mapping.
 - **Phase-2 impact:** later migrations continue from 0013.
+- **Approved by:** agent (owner to ratify)
+
+### DEV-03 — Division numbers are global per kind (ruku, rub cumulative)
+- **Date:** 2026-09-14
+- **Plan reference:** plan.md §6 (`quran_divisions` PK) / D1.3 / P1-T25
+- **Planned:** DDL with `PRIMARY KEY (edition_id, kind, number)`; no explicit numbering rule
+- **Delivered:** range kinds (`juz`…`page`) run-length encoded with globally unique
+  numbers per kind; `sajdah` numbered by occurrence. Fixture `ruku`/`rub` values
+  are globally cumulative (per-surah ruku would collide on the PK and merge
+  unrelated runs).
+- **Reason:** the PK admits exactly one row per `(kind, number)`; per-surah
+  numbering would collide and corrupt ranges. Surah-scoped ruku resolution stays
+  available via the ayah rows' `ruku` column (reader-level, M8).
+- **Scope impact:** numbering interpretation only; DDL unchanged.
+- **Phase-2 impact:** division consumers must treat `(kind, number)` as global.
 - **Approved by:** agent (owner to ratify)
 
 Log anything delivered differently from `plan.md`. Deviations are expected and fine —
