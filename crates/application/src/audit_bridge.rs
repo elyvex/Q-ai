@@ -13,10 +13,8 @@
 //! - a stored `agent` actor (which the audit enum cannot represent) reads back
 //!   as `System` with the stored id as its name.
 
-use audit::{
-    Actor, AuditAction, AuditError, AuditEvent, AuditOutcome, HashChainWriter,
-};
 use audit::AuditRepository as _;
+use audit::{Actor, AuditAction, AuditError, AuditEvent, AuditOutcome, HashChainWriter};
 use domain::{AuditEventId, ContentHash, HashAlgorithm, PrincipalId, SubjectRef, Timestamp};
 use storage::repository::AuditEvent as AuditRow;
 
@@ -70,7 +68,9 @@ fn parse_outcome(raw: &str) -> Result<AuditOutcome, AuditError> {
 
 fn actor_parts(actor: &Actor) -> (String, Option<String>) {
     match actor {
-        Actor::Principal { principal_id } => ("principal".to_string(), Some(principal_id.to_string())),
+        Actor::Principal { principal_id } => {
+            ("principal".to_string(), Some(principal_id.to_string()))
+        }
         Actor::System { name } => ("system".to_string(), Some(name.clone())),
         Actor::Job { job_id } => ("job".to_string(), Some(job_id.clone())),
     }
@@ -87,17 +87,14 @@ fn parse_actor(kind: &str, id: Option<&str>) -> Result<Actor, AuditError> {
             })
         }
         // `agent` has no audit-enum spelling; it reads back as a named system.
-        "system" | "agent" => {
-            Ok(Actor::System { name: id.unwrap_or("system").to_string() })
-        }
+        "system" | "agent" => Ok(Actor::System { name: id.unwrap_or("system").to_string() }),
         "job" => Ok(Actor::Job { job_id: id.unwrap_or_default().to_string() }),
         other => Err(storage_error(format!("unknown actor kind `{other}`"))),
     }
 }
 
 fn parse_timestamp(raw: &str) -> Result<Timestamp, AuditError> {
-    raw.parse::<Timestamp>()
-        .map_err(|_| storage_error(format!("bad timestamp `{raw}`")))
+    raw.parse::<Timestamp>().map_err(|_| storage_error(format!("bad timestamp `{raw}`")))
 }
 
 fn parse_json(raw: &Option<String>) -> Result<Option<serde_json::Value>, AuditError> {
@@ -170,10 +167,7 @@ impl audit::AuditRepository for StorageAuditBridge<'_> {
         Ok(())
     }
 
-    async fn list_by_subject(
-        &self,
-        subject: &SubjectRef,
-    ) -> Result<Vec<AuditEvent>, AuditError> {
+    async fn list_by_subject(&self, subject: &SubjectRef) -> Result<Vec<AuditEvent>, AuditError> {
         let rows = self.inner.list_by_subject(&subject.0).await?;
         rows.iter().map(Self::from_row).collect()
     }
@@ -258,21 +252,15 @@ mod tests {
             before: None,
             after: None,
             request_id: None,
-            prev_chain_hash: ContentHash {
-                algorithm: HashAlgorithm::Sha256,
-                hex: "00".repeat(32),
-            },
-            chain_hash: ContentHash {
-                algorithm: HashAlgorithm::Sha256,
-                hex: "ff".repeat(32),
-            },
+            prev_chain_hash: ContentHash { algorithm: HashAlgorithm::Sha256, hex: "00".repeat(32) },
+            chain_hash: ContentHash { algorithm: HashAlgorithm::Sha256, hex: "ff".repeat(32) },
         }
     }
 
     #[test]
     fn rows_roundtrip_through_the_bridge() {
-        let row = StorageAuditBridge::to_row(&event("00000000-0000-0000-0000-000000000001"))
-            .unwrap();
+        let row =
+            StorageAuditBridge::to_row(&event("00000000-0000-0000-0000-000000000001")).unwrap();
         assert_eq!(row.actor_kind, "job");
         assert_eq!(row.action, "source_staged");
         assert_eq!(row.outcome, "allowed");

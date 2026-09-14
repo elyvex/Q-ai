@@ -196,10 +196,8 @@ impl QuranRepository for SqliteQuranRepository {
         .fetch_optional(&mut **tx)
         .await
         .map_err(map_sqlx_error)?;
-        Ok(row.map(|r| StagedEditionRef {
-            run_id: r.get("run_id"),
-            edition_id: r.get("edition_id"),
-        }))
+        Ok(row
+            .map(|r| StagedEditionRef { run_id: r.get("run_id"), edition_id: r.get("edition_id") }))
     }
 
     async fn insert_stg_edition(
@@ -407,11 +405,7 @@ impl QuranRepository for SqliteQuranRepository {
             "quran_stg_editions",
         ] {
             let sql = format!("DELETE FROM {table} WHERE import_run_id = ?");
-            sqlx::query(&sql)
-                .bind(run_id)
-                .execute(&mut **tx)
-                .await
-                .map_err(map_sqlx_error)?;
+            sqlx::query(&sql).bind(run_id).execute(&mut **tx).await.map_err(map_sqlx_error)?;
         }
         Ok(())
     }

@@ -27,10 +27,10 @@ use storage::{
     error::StorageError,
     quran::QuranRepository,
     repository::{
-        ApprovalRow, AuditEvent, AuditRepository, ChainVerificationResult, GenerationRow, JobRecord,
-        JobRepository, NewOutboxEvent, OutboxEventRow, OutboxRepository, ProvenanceRecord,
-        ProvenanceRepository, ReviewRecord, SettingRow, SettingsRepository, SourceRepository,
-        SourceRow, SourceVersionRow, StateTransitionRow, TombstoneRow,
+        ApprovalRow, AuditEvent, AuditRepository, ChainVerificationResult, GenerationRow,
+        JobRecord, JobRepository, NewOutboxEvent, OutboxEventRow, OutboxRepository,
+        ProvenanceRecord, ProvenanceRepository, ReviewRecord, SettingRow, SettingsRepository,
+        SourceRepository, SourceRow, SourceVersionRow, StateTransitionRow, TombstoneRow,
     },
 };
 use tokio::sync::Mutex;

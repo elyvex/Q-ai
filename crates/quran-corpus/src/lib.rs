@@ -30,9 +30,7 @@ pub mod unicode;
 pub mod validation;
 
 pub use adapters::{CsvAdapter, EditionAdapter, JsonAdapter, parse_with_adapter};
-pub use differ::{
-    AyahChange, ChangeKind, DIFFER_NAME, DIFFER_VERSION, EditionDiff, diff_ayahs,
-};
+pub use differ::{AyahChange, ChangeKind, DIFFER_NAME, DIFFER_VERSION, EditionDiff, diff_ayahs};
 pub use error::{CorpusError, codes};
 pub use format::{
     AyahSource, EditionMeta, EditionSource, ExpectedCounts, FORMAT_TAG, FORMAT_VERSION,

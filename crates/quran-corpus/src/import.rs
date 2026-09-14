@@ -34,16 +34,14 @@ use crate::format::EditionSource;
 use crate::hashing::{AyahLayout, TokenOrder, structure_hash, tagged, text_hash, token_order_hash};
 use crate::tokenize::{TokenizedAyah, reconstruct, tokenize};
 use crate::unicode::{find_forbidden, normalization_form};
-use crate::validation::{
-    Finding, Outcome, Severity, ValidationReport, validate_edition,
-};
+use crate::validation::{Finding, Outcome, Severity, ValidationReport, validate_edition};
+use storage::Database;
 use storage::error::StorageError;
 use storage::quran::{
     AyahRow, DifferenceReportRow, DivisionRow, ImportRunRow, QuranEditionRow, SeparatorRow,
     SurahRow, TokenRow, ValidationReportRow,
 };
 use storage::repository::ProvenanceRecord;
-use storage::Database;
 
 /// One of the 13 §34 checkpoints, in pipeline order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -348,10 +346,7 @@ impl<'a> Driver<'a> {
         match uow.quran().get_import_run(&run_id).await.map_err(storage_err)? {
             Some(_) => {
                 uow.quran().clear_staging(&run_id).await.map_err(storage_err)?;
-                uow.quran()
-                    .set_import_run_state(&run_id, "Running")
-                    .await
-                    .map_err(storage_err)?;
+                uow.quran().set_import_run_state(&run_id, "Running").await.map_err(storage_err)?;
             }
             None => {
                 uow.quran()
@@ -429,10 +424,7 @@ impl<'a> Driver<'a> {
                 ))
                 .await
                 .map_err(storage_err)?;
-            uow.quran()
-                .set_import_run_state(self.run_id(), "Failed")
-                .await
-                .map_err(storage_err)?;
+            uow.quran().set_import_run_state(self.run_id(), "Failed").await.map_err(storage_err)?;
             uow.commit().await.map_err(storage_err)?;
             return Err(CorpusError::ValidationFailed {
                 run_id: self.run_id().to_string(),
@@ -457,8 +449,7 @@ impl<'a> Driver<'a> {
         let version = doc.edition.version.to_string();
         let texts: Vec<&str> = doc.ayahs.iter().map(|ayah| ayah.text.as_str()).collect();
         let text_hash = text_hash(&slug, &version, &texts);
-        let surahs: Vec<(u16, u16)> =
-            doc.surahs.iter().map(|s| (s.number, s.ayah_count)).collect();
+        let surahs: Vec<(u16, u16)> = doc.surahs.iter().map(|s| (s.number, s.ayah_count)).collect();
         let layouts: Vec<AyahLayout> = doc
             .ayahs
             .iter()
@@ -660,12 +651,11 @@ impl<'a> Driver<'a> {
                 .await
                 .map_err(storage_err)?;
             for token in &computed.tokens {
-                let position = u16::try_from(token.position).map_err(|_| {
-                    CorpusError::ImportFailed {
+                let position =
+                    u16::try_from(token.position).map_err(|_| CorpusError::ImportFailed {
                         step: "staged",
                         detail: format!("token position {} exceeds u16", token.position),
-                    }
-                })?;
+                    })?;
                 global_token += 1;
                 let mut surface_hasher = Sha256::new();
                 surface_hasher.update(token.surface.as_bytes());
@@ -706,7 +696,6 @@ impl<'a> Driver<'a> {
                     .map_err(storage_err)?;
             }
         }
-
         for division in build_divisions(&doc, &edition_id, &provenance_id) {
             uow.quran().insert_stg_division(&run_id, division).await.map_err(storage_err)?;
         }
@@ -727,18 +716,17 @@ impl<'a> Driver<'a> {
         if staged.len() != doc.ayahs.len() {
             return Err(CorpusError::ImportFailed {
                 step: "roundtrip",
-                detail: format!(
-                    "staged {} ayahs, expected {}",
-                    staged.len(),
-                    doc.ayahs.len()
-                ),
+                detail: format!("staged {} ayahs, expected {}", staged.len(), doc.ayahs.len()),
             });
         }
         let mut texts = Vec::with_capacity(staged.len());
         let mut order_parts: Vec<(u16, u32, u32, String)> = Vec::new();
         for row in &staged {
-            let tokens =
-                uow.quran().list_stg_tokens(&run_id, &edition_id, row.surah, row.ayah).await.map_err(storage_err)?;
+            let tokens = uow
+                .quran()
+                .list_stg_tokens(&run_id, &edition_id, row.surah, row.ayah)
+                .await
+                .map_err(storage_err)?;
             let separators = uow
                 .quran()
                 .list_stg_separators(&run_id, &edition_id, row.surah, row.ayah)
@@ -789,9 +777,7 @@ impl<'a> Driver<'a> {
             .collect();
 
         // QV-014 (half) + QV-024: hashes reproduce from stored rows.
-        if text_hash(&doc.edition.slug, &doc.edition.version.to_string(), &texts)
-            != expected_text
-        {
+        if text_hash(&doc.edition.slug, &doc.edition.version.to_string(), &texts) != expected_text {
             return Err(CorpusError::ImportFailed {
                 step: "roundtrip",
                 detail: "text_hash recomputed from staged rows differs (QV-014)".to_string(),
@@ -802,8 +788,7 @@ impl<'a> Driver<'a> {
         {
             return Err(CorpusError::ImportFailed {
                 step: "roundtrip",
-                detail: "token_order_hash recomputed from staged rows differs (QV-024)"
-                    .to_string(),
+                detail: "token_order_hash recomputed from staged rows differs (QV-024)".to_string(),
             });
         }
         Ok(())
@@ -888,10 +873,8 @@ impl<'a> Driver<'a> {
             .map_err(storage_err)?;
 
         let findings = std::mem::take(&mut self.findings);
-        let fatal_count =
-            findings.iter().filter(|f| f.severity == Severity::Fatal).count() as u32;
-        let error_count =
-            findings.iter().filter(|f| f.severity == Severity::Error).count() as u32;
+        let fatal_count = findings.iter().filter(|f| f.severity == Severity::Fatal).count() as u32;
+        let error_count = findings.iter().filter(|f| f.severity == Severity::Error).count() as u32;
         let warning_count =
             findings.iter().filter(|f| f.severity == Severity::Warning).count() as u32;
         let outcome = if fatal_count > 0 || error_count > 0 {
@@ -954,11 +937,7 @@ impl<'a> Driver<'a> {
 /// markers become one row per occurrence (number = occurrence index). Ruku
 /// numbers must already be globally unique (see DEV-03): per-surah ruku would
 /// collide on `(edition, kind, number)`.
-fn build_divisions(
-    doc: &EditionSource,
-    edition_id: &str,
-    provenance_id: &str,
-) -> Vec<DivisionRow> {
+fn build_divisions(doc: &EditionSource, edition_id: &str, provenance_id: &str) -> Vec<DivisionRow> {
     let mut divisions = Vec::new();
     let mut global = 0_i64;
     let mut globals: Vec<i64> = Vec::with_capacity(doc.ayahs.len());

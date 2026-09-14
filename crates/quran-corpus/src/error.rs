@@ -21,20 +21,15 @@ pub mod codes {
     /// No adapter is registered under the requested name.
     pub const UNKNOWN_ADAPTER: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 202);
     /// A registered adapter failed to parse its input.
-    pub const ADAPTER_FAILED: DiagnosticCode =
-        DiagnosticCode::new("QAI-QUR", 203);
+    pub const ADAPTER_FAILED: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 203);
     /// Content validation found `Fatal` findings; the edition cannot stage.
-    pub const VALIDATION_FAILED: DiagnosticCode =
-        DiagnosticCode::new("QAI-QUR", 204);
+    pub const VALIDATION_FAILED: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 204);
     /// The import was cancelled; staging was cleaned up.
-    pub const IMPORT_CANCELLED: DiagnosticCode =
-        DiagnosticCode::new("QAI-QUR", 205);
+    pub const IMPORT_CANCELLED: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 205);
     /// An import step failed after validation (round-trip, diff, state).
-    pub const IMPORT_FAILED: DiagnosticCode =
-        DiagnosticCode::new("QAI-QUR", 206);
+    pub const IMPORT_FAILED: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 206);
     /// The storage backend failed during import.
-    pub const STORAGE_FAILED: DiagnosticCode =
-        DiagnosticCode::new("QAI-QUR", 207);
+    pub const STORAGE_FAILED: DiagnosticCode = DiagnosticCode::new("QAI-QUR", 207);
 }
 /// Errors originating in the corpus pipeline.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
