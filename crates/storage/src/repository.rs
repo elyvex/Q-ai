@@ -320,6 +320,123 @@ pub struct SettingRow {
     pub updated_by: Option<String>,
 }
 
+// ─── Outbox / generations / tombstones (D0.18, ADR-0702) ─────────────
+
+/// Repository for the cross-store consistency primitives.
+///
+/// Manages `corpus_generations`, `outbox_events`, and `tombstones`. Every
+/// mutation here participates in the caller's [`UnitOfWork`], so a
+/// projection-relevant change and its outbox row commit atomically.
+#[async_trait]
+pub trait OutboxRepository: Send + Sync {
+    /// Allocate the next generation number for `scope` (monotonic, never regresses).
+    async fn allocate_generation(
+        &mut self,
+        _scope: &str,
+        _reason: &str,
+    ) -> Result<GenerationRow, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// The highest allocated generation for `scope`, if any.
+    async fn current_generation(
+        &self,
+        _scope: &str,
+    ) -> Result<Option<GenerationRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Enqueue an outbox event. Duplicate `(operation, idempotency_key)` yields
+    /// [`StorageError::Conflict`] (idempotent no-op at the call site).
+    async fn enqueue(&mut self, _event: NewOutboxEvent) -> Result<String, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Claim up to `limit` pending events for `owner` (lease acquisition).
+    async fn claim_pending(
+        &mut self,
+        _owner: &str,
+        _limit: u32,
+    ) -> Result<Vec<OutboxEventRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Mark a claimed event dispatched.
+    async fn mark_dispatched(&mut self, _id: &str) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Mark a claimed event failed (dead-letter candidate).
+    async fn mark_failed(&mut self, _id: &str, _reason: &str) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// List events in a given state (oldest first).
+    async fn list_by_state(&self, _state: &str) -> Result<Vec<OutboxEventRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Insert a tombstone (write-before-visibility, ADR-0702 §9).
+    async fn insert_tombstone(&mut self, _tombstone: TombstoneRow) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// List tombstones that have not yet propagated.
+    async fn list_pending_tombstones(&self) -> Result<Vec<TombstoneRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+}
+
+/// A row in `corpus_generations`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GenerationRow {
+    pub id: String,
+    pub scope: String,
+    pub number: u64,
+    pub reason: String,
+    pub created_at: String,
+}
+
+/// A new outbox event to persist.
+#[derive(Debug, Clone)]
+pub struct NewOutboxEvent {
+    pub scope: String,
+    pub target_generation: String,
+    pub operation: String,
+    pub subject_urn: String,
+    pub idempotency_key: String,
+    pub payload_json: String,
+}
+
+/// A row in `outbox_events`.
+#[derive(Debug, Clone)]
+pub struct OutboxEventRow {
+    pub id: String,
+    pub scope: String,
+    pub target_generation: String,
+    pub operation: String,
+    pub subject_urn: String,
+    pub idempotency_key: String,
+    pub payload_json: String,
+    pub state: String,
+    pub lease_owner: Option<String>,
+    pub lease_expires_at: Option<String>,
+    pub attempts: u32,
+    pub created_at: String,
+    pub dispatched_at: Option<String>,
+}
+
+/// A row in `tombstones`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TombstoneRow {
+    pub id: String,
+    pub subject_urn: String,
+    pub reason: String,
+    pub effective_at: String,
+    pub created_by: Option<String>,
+    pub propagation_state: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

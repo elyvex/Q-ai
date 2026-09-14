@@ -128,6 +128,22 @@ typed_id! {
     /// Identifies a source-version activation or rollback approval. PRD §22.3.
     pub struct ActivationApprovalId;
 }
+typed_id! {
+    /// Identifies a monotonic corpus generation. PRD §76, ADR-0702 §2.
+    pub struct CorpusGenerationId;
+}
+typed_id! {
+    /// Identifies a dependency snapshot (placeholder until Phase 1/2). ADR-0702 §2.
+    pub struct DependencySnapshotId;
+}
+typed_id! {
+    /// Identifies an outbox event. ADR-0702 §3.
+    pub struct OutboxEventId;
+}
+typed_id! {
+    /// Identifies a tombstone. ADR-0702 §9.
+    pub struct TombstoneId;
+}
 
 /// Round-tripping through the display/parse + serialization forms.
 #[cfg(test)]

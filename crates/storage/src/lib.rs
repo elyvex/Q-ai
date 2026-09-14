@@ -16,6 +16,7 @@
 
 pub mod error;
 pub mod repository;
+pub mod workflows;
 
 use std::fmt;
 
@@ -121,6 +122,12 @@ pub trait UnitOfWork: Send {
 
     /// Return the settings repository for this transaction.
     fn settings(&mut self) -> &mut dyn repository::SettingsRepository;
+
+    /// Return the outbox/generations/tombstones repository for this transaction.
+    ///
+    /// Every projection-relevant write must enqueue its outbox row through this
+    /// repository before the unit of work commits (ADR-0001 §6, ADR-0702 §3).
+    fn outbox(&mut self) -> &mut dyn repository::OutboxRepository;
 
     /// Commit the transaction, persisting all changes.
     async fn commit(self: Box<Self>) -> Result<(), error::StorageError>;

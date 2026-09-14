@@ -24,9 +24,10 @@ use storage::{
     Database, DbBackend, DbHealth, ReadTx, UnitOfWork,
     error::StorageError,
     repository::{
-        AuditEvent, AuditRepository, ChainVerificationResult, JobRecord, JobRepository,
-        ProvenanceRecord, ProvenanceRepository, ReviewRecord, SettingRow, SettingsRepository,
-        SourceRepository, SourceRow, SourceVersionRow, StateTransitionRow,
+        AuditEvent, AuditRepository, ChainVerificationResult, GenerationRow, JobRecord,
+        JobRepository, NewOutboxEvent, OutboxEventRow, OutboxRepository, ProvenanceRecord,
+        ProvenanceRepository, ReviewRecord, SettingRow, SettingsRepository, SourceRepository,
+        SourceRow, SourceVersionRow, StateTransitionRow, TombstoneRow,
     },
 };
 use tokio::sync::Mutex;
@@ -219,6 +220,7 @@ pub struct SqliteUnitOfWork {
     audit: SqliteAuditRepository,
     jobs: SqliteJobRepository,
     settings: SqliteSettingsRepository,
+    outbox: SqliteOutboxRepository,
 }
 
 impl SqliteUnitOfWork {
@@ -227,12 +229,12 @@ impl SqliteUnitOfWork {
         let shared: SharedTx = Arc::new(Mutex::new(tx));
         Ok(Self {
             tx: shared.clone(),
-
             sources: SqliteSourceRepository::new(shared.clone()),
             provenance: SqliteProvenanceRepository::new(shared.clone()),
             audit: SqliteAuditRepository::new(shared.clone()),
             jobs: SqliteJobRepository::new(shared.clone()),
             settings: SqliteSettingsRepository::new(shared.clone()),
+            outbox: SqliteOutboxRepository::new(shared),
         })
     }
 }
@@ -259,18 +261,22 @@ impl UnitOfWork for SqliteUnitOfWork {
         &mut self.settings
     }
 
+    fn outbox(&mut self) -> &mut dyn OutboxRepository {
+        &mut self.outbox
+    }
+
     async fn commit(self: Box<Self>) -> Result<(), StorageError> {
-        let Self { tx, sources, provenance, audit, jobs, settings } = *self;
+        let Self { tx, sources, provenance, audit, jobs, settings, outbox } = *self;
         // Drop the repository Arc clones so `tx` is the sole owner.
-        drop((sources, provenance, audit, jobs, settings));
+        drop((sources, provenance, audit, jobs, settings, outbox));
         let mutex = Arc::try_unwrap(tx).map_err(|_| StorageError::StorageBusy)?;
         let txn = mutex.into_inner();
         txn.commit().await.map_err(|_| StorageError::StorageUnavailable)
     }
 
     async fn rollback(self: Box<Self>) -> Result<(), StorageError> {
-        let Self { tx, sources, provenance, audit, jobs, settings } = *self;
-        drop((sources, provenance, audit, jobs, settings));
+        let Self { tx, sources, provenance, audit, jobs, settings, outbox } = *self;
+        drop((sources, provenance, audit, jobs, settings, outbox));
         let mutex = Arc::try_unwrap(tx).map_err(|_| StorageError::StorageBusy)?;
         let txn = mutex.into_inner();
         txn.rollback().await.map_err(|_| StorageError::StorageUnavailable)
@@ -911,6 +917,263 @@ impl SettingsRepository for SqliteSettingsRepository {
                 updated_by: r.get("updated_by"),
             })
             .collect())
+    }
+}
+
+// ─── Outbox / generations / tombstones ──────────────────────────────────
+
+pub(crate) struct SqliteOutboxRepository {
+    tx: SharedTx,
+}
+
+impl SqliteOutboxRepository {
+    pub(crate) fn new(tx: SharedTx) -> Self {
+        Self { tx }
+    }
+}
+
+fn map_generation_row(r: sqlx::sqlite::SqliteRow) -> GenerationRow {
+    GenerationRow {
+        id: r.get("id"),
+        scope: r.get("scope"),
+        number: r.get::<i64, _>("number") as u64,
+        reason: r.get("reason"),
+        created_at: r.get("created_at"),
+    }
+}
+
+fn map_outbox_row(r: sqlx::sqlite::SqliteRow) -> OutboxEventRow {
+    OutboxEventRow {
+        id: r.get("id"),
+        scope: r.get("scope"),
+        target_generation: r.get("target_generation"),
+        operation: r.get("operation"),
+        subject_urn: r.get("subject_urn"),
+        idempotency_key: r.get("idempotency_key"),
+        payload_json: r.get("payload_json"),
+        state: r.get("state"),
+        lease_owner: r.get("lease_owner"),
+        lease_expires_at: r.get("lease_expires_at"),
+        attempts: r.get::<i64, _>("attempts") as u32,
+        created_at: r.get("created_at"),
+        dispatched_at: r.get("dispatched_at"),
+    }
+}
+
+fn map_tombstone_row(r: sqlx::sqlite::SqliteRow) -> TombstoneRow {
+    TombstoneRow {
+        id: r.get("id"),
+        subject_urn: r.get("subject_urn"),
+        reason: r.get("reason"),
+        effective_at: r.get("effective_at"),
+        created_by: r.get("created_by"),
+        propagation_state: r.get("propagation_state"),
+    }
+}
+
+const OUTBOX_COLUMNS: &str = "id, scope, target_generation, operation, subject_urn, \
+     idempotency_key, payload_json, state, lease_owner, lease_expires_at, attempts, \
+     created_at, dispatched_at";
+
+#[async_trait]
+impl OutboxRepository for SqliteOutboxRepository {
+    async fn allocate_generation(
+        &mut self,
+        scope: &str,
+        reason: &str,
+    ) -> Result<GenerationRow, StorageError> {
+        let mut tx = self.tx.lock().await;
+        // The single write connection serializes this read-then-insert, so the
+        // number is monotonic. (PostgreSQL equivalent: `SELECT ... FOR UPDATE`.)
+        let current = sqlx::query(
+            "SELECT number FROM corpus_generations WHERE scope = ? ORDER BY number DESC LIMIT 1",
+        )
+        .bind(scope)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+        let next: i64 = current.map(|r| r.get::<i64, _>("number")).unwrap_or(0) + 1;
+
+        let id = domain::CorpusGenerationId::new().to_string();
+        let created_at = now_rfc3339();
+        sqlx::query(
+            "INSERT INTO corpus_generations (id, scope, number, reason, created_at)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(&id)
+        .bind(scope)
+        .bind(next)
+        .bind(reason)
+        .bind(&created_at)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(GenerationRow {
+            id,
+            scope: scope.to_string(),
+            number: next as u64,
+            reason: reason.to_string(),
+            created_at,
+        })
+    }
+
+    async fn current_generation(
+        &self,
+        scope: &str,
+    ) -> Result<Option<GenerationRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query(
+            "SELECT id, scope, number, reason, created_at FROM corpus_generations
+             WHERE scope = ? ORDER BY number DESC LIMIT 1",
+        )
+        .bind(scope)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+        Ok(row.map(map_generation_row))
+    }
+
+    async fn enqueue(&mut self, event: NewOutboxEvent) -> Result<String, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let id = domain::OutboxEventId::new().to_string();
+        sqlx::query(
+            "INSERT INTO outbox_events
+                (id, scope, target_generation, operation, subject_urn, idempotency_key,
+                 payload_json, state, attempts, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending', 0, ?)",
+        )
+        .bind(&id)
+        .bind(&event.scope)
+        .bind(&event.target_generation)
+        .bind(&event.operation)
+        .bind(&event.subject_urn)
+        .bind(&event.idempotency_key)
+        .bind(&event.payload_json)
+        .bind(now_rfc3339())
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(id)
+    }
+
+    async fn claim_pending(
+        &mut self,
+        owner: &str,
+        limit: u32,
+    ) -> Result<Vec<OutboxEventRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(&format!(
+            "SELECT {OUTBOX_COLUMNS} FROM outbox_events WHERE state = 'Pending' \
+             ORDER BY created_at ASC LIMIT ?"
+        ))
+        .bind(limit as i64)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+        let claimed: Vec<OutboxEventRow> = rows.into_iter().map(map_outbox_row).collect();
+        if claimed.is_empty() {
+            return Ok(claimed);
+        }
+        let lease_expires = (time::OffsetDateTime::now_utc() + time::Duration::minutes(5))
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap_or_default();
+        for event in &claimed {
+            sqlx::query(
+                "UPDATE outbox_events
+                 SET state = 'Claimed', lease_owner = ?, lease_expires_at = ?,
+                     attempts = attempts + 1
+                 WHERE id = ? AND state = 'Pending'",
+            )
+            .bind(owner)
+            .bind(&lease_expires)
+            .bind(&event.id)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        }
+        Ok(claimed
+            .into_iter()
+            .map(|mut e| {
+                e.state = "Claimed".to_string();
+                e.lease_owner = Some(owner.to_string());
+                e.lease_expires_at = Some(lease_expires.clone());
+                e.attempts += 1;
+                e
+            })
+            .collect())
+    }
+
+    async fn mark_dispatched(&mut self, id: &str) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query(
+            "UPDATE outbox_events
+             SET state = 'Dispatched', dispatched_at = ?, lease_owner = NULL, lease_expires_at = NULL
+             WHERE id = ?",
+        )
+        .bind(now_rfc3339())
+        .bind(id)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn mark_failed(&mut self, id: &str, reason: &str) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query(
+            "UPDATE outbox_events SET state = 'Failed', payload_json = json_set(payload_json, '$.failure_reason', ?)
+             WHERE id = ?",
+        )
+        .bind(reason)
+        .bind(id)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn list_by_state(&self, state: &str) -> Result<Vec<OutboxEventRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(&format!(
+            "SELECT {OUTBOX_COLUMNS} FROM outbox_events WHERE state = ? ORDER BY created_at ASC"
+        ))
+        .bind(state)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+        Ok(rows.into_iter().map(map_outbox_row).collect())
+    }
+
+    async fn insert_tombstone(&mut self, tombstone: TombstoneRow) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query(
+            "INSERT INTO tombstones
+                (id, subject_urn, reason, effective_at, created_by, propagation_state)
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&tombstone.id)
+        .bind(&tombstone.subject_urn)
+        .bind(&tombstone.reason)
+        .bind(&tombstone.effective_at)
+        .bind(&tombstone.created_by)
+        .bind(&tombstone.propagation_state)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn list_pending_tombstones(&self) -> Result<Vec<TombstoneRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT id, subject_urn, reason, effective_at, created_by, propagation_state
+             FROM tombstones WHERE propagation_state = 'Pending' ORDER BY effective_at ASC",
+        )
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(|_| StorageError::StorageUnavailable)?;
+        Ok(rows.into_iter().map(map_tombstone_row).collect())
     }
 }
 

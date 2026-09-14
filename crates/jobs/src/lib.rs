@@ -23,6 +23,37 @@ use async_trait::async_trait;
 use std::fmt;
 use storage::repository::JobRecord;
 
+// ─── Job kinds ───────────────────────────────────────────────
+
+/// Phase 0 job kinds (plan D0.9). Stable strings; handlers register by kind.
+pub mod kinds {
+    /// Background integrity scan.
+    pub const SYSTEM_INTEGRITY_SCAN: &str = "system.integrity_scan";
+    /// SQLite VACUUM maintenance.
+    pub const SYSTEM_VACUUM: &str = "system.vacuum";
+    /// No-op handler used to exercise the job machinery.
+    pub const SYSTEM_NOOP_TEST: &str = "system.noop_test";
+    /// Generic outbox relay (T64). Reuses the outbox lease semantics.
+    pub const SYSTEM_OUTBOX_RELAY: &str = "system.outbox_relay";
+    /// Validate a source manifest.
+    pub const SOURCE_VALIDATE_MANIFEST: &str = "source.validate_manifest";
+    /// Compute and verify content hashes.
+    pub const SOURCE_COMPUTE_HASHES: &str = "source.compute_hashes";
+    /// Verify the audit hash chain.
+    pub const AUDIT_VERIFY_CHAIN: &str = "audit.verify_chain";
+
+    /// Every Phase 0 job kind.
+    pub const ALL: [&str; 7] = [
+        SYSTEM_INTEGRITY_SCAN,
+        SYSTEM_VACUUM,
+        SYSTEM_NOOP_TEST,
+        SYSTEM_OUTBOX_RELAY,
+        SOURCE_VALIDATE_MANIFEST,
+        SOURCE_COMPUTE_HASHES,
+        AUDIT_VERIFY_CHAIN,
+    ];
+}
+
 // ─── JobState ────────────────────────────────────────────────
 
 /// The state of a background job.
@@ -378,5 +409,12 @@ mod tests {
         let outcome = JobOutcome::failure();
         assert!(!outcome.success);
         assert!(outcome.result.is_none());
+    }
+
+    #[test]
+    fn job_kinds_are_unique_and_stable() {
+        let unique: std::collections::HashSet<&str> = kinds::ALL.iter().copied().collect();
+        assert_eq!(unique.len(), kinds::ALL.len(), "job kinds must be unique");
+        assert!(kinds::ALL.contains(&"system.outbox_relay"));
     }
 }
