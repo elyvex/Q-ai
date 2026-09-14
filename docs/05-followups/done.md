@@ -10,7 +10,7 @@
 |---|---|---|
 | Format | `cargo fmt --all -- --check` | ✅ clean |
 | Lint | `cargo clippy --workspace --all-targets -- -D warnings` | ✅ 0 errors, 0 warnings |
-| Tests | `cargo test --workspace` | ✅ **209 passing, 0 failing** |
+| Tests | `cargo test --workspace` | ✅ **229 passing, 0 failing** |
 | Architecture | `cargo xtask arch-check` | ✅ no forbidden edges |
 | Migrations | `cargo xtask migrate-check` | ✅ 6 ordered, checksums stable |
 | ADRs | `cargo xtask adr-lint` | ✅ 12 present, Accepted, complete |
@@ -22,12 +22,16 @@
 - **D0.2** domain model: IDs, primitives, `DataLayer`/`TrustLevel`/`VerificationStatus`, `ContentHash` + canonical JSON, `DerivationVersions`, `CorpusGeneration`.
 - **D0.3** diagnostic error codes (`QAI-<NS>-nnnn`), uniqueness tested.
 - **D0.4** layered config (CLI>Env>File>Defaults), `ValueOrigin`, validation.
-- **D0.5** `Secret<T>` redaction + `SecretStore` (env real; keychain/age abstracted).
+- **D0.5** `Secret<T>` redaction + `SecretStore`: env, **XChaCha20-Poly1305 encrypted file**,
+  and OS keychain (`keychain` feature).
 - **D0.6** storage traits + SQLite backend (dual pools, all repositories real).
 - **D0.7** migration framework: apply / checksum-verify / status / backup (`VACUUM INTO`) / **down-migrations**.
-- **D0.8** observability: subscriber, span conventions, metric catalog, telemetry denylist.
-- **D0.9** jobs: types, repository, cancellation, checkpoints, lease reaping.
-- **D0.10** sources: state machine, manifest parse/validate/sign, genealogy, ingest.
+- **D0.8** observability: subscriber, span conventions, metric catalog, telemetry denylist,
+  opt-in OTLP exporter (`otlp` feature).
+- **D0.9** jobs: types, repository, **in-process worker pool** (registry, retry/backoff,
+  dead-lettering), cancellation, checkpoints, lease reaping.
+- **D0.10** sources: state machine, manifest parse/validate/sign (**real ed25519**),
+  genealogy, ingest.
 - **D0.11** provenance model, `ApprovalToken`, `CanonicalWriter`, DB triggers.
 - **D0.12** audit model, hash-chain writer/verifier, append-only triggers.
 - **D0.13** CLI skeleton + `qai` binary + real `db` commands.
@@ -57,7 +61,7 @@
 | AC-P0-14 | ✅ | `cli` `doctor_is_read_only`, `json_document_matches_the_documented_schema_shape`; `docs/schemas/doctor.v1.schema.json` |
 | AC-P0-15 | ✅ | `testkit/tests/{secret_leak,security_path_guard,security_archive_guard,security_ssrf_guard}.rs` |
 | AC-P0-16 | ✅ | `cli` `serve_defaults_to_loopback`, `non_loopback_bind_without_tls_fails_validation` |
-| AC-P0-17 | 🔶 PARTIAL | `testkit/tests/error_codes.rs` uniqueness/format PASS; not every error enum implements `Diagnostic` |
+| AC-P0-17 | ✅ | `testkit/tests/diagnostics.rs` (every error type implements `Diagnostic`, codes unique, renderings stable) + `testkit/tests/error_codes.rs` |
 | AC-P0-18 | ✅ | `observability` telemetry tests + `testkit/tests/telemetry_privacy.rs` |
 | AC-P0-19 | ✅ | `cargo xtask adr-lint` (12 ADRs, Accepted, all §48 fields) |
 | AC-P0-20 | ✅ | `docs/architecture/*`, 5 runbooks, `CONTRIBUTING.md`, `.env.example`, `examples/config/default.toml` |
@@ -68,20 +72,18 @@
 | AC-P0-25 | ✅ | `storage-sqlite/tests/tombstone_before_visibility.rs` |
 | AC-P0-26 | ✅ | `cli` `outbox_checks_report_backlog_without_mutation` + `doctor_is_read_only` |
 
-**22 PASS · 4 PARTIAL · 0 FAIL.** The four partials are environmental (3-OS CI run,
-coverage measurement) or scope (universal `Diagnostic` impls), not correctness failures.
+**24 PASS · 2 PARTIAL · 0 FAIL.** The two partials are environmental: the 3-OS CI
+run and coverage measurement both require a CI runner (`cargo llvm-cov` is not
+installable in the local sandbox). No correctness criterion is unmet.
 
 ## Known limitations
 
-- Manifest signatures verify a SHA-256 detached hash, not ed25519 (the
-  `ed25519-dalek` crate is not available in this environment); the policy path
-  and tamper detection are real and tested.
-- Keychain / age-encrypted secret backends are abstracted but return
-  `Unsupported` until the `keyring` / `age` crates are added.
-- No in-process job worker pool yet (T37); jobs are driven through the
-  repository + cooperative cancellation, which is what the Phase-0 guarantees
-  and tests exercise.
-- Coverage percentages and the 3-OS matrix must be confirmed by a CI run.
+- The 3-OS matrix (AC-P0-01) and coverage percentages (AC-P0-22) must be
+  confirmed by a CI run; `xtask coverage-gate` enforces the thresholds there.
+- The keychain (`keychain`) and OTLP (`otlp`) backends are feature-gated off by
+  default (platform dependencies / large dependency tree); both compile and are
+  covered by tests when enabled.
+- The 7-step exit-gate walkthrough still needs to be recorded on a clean machine.
 
 ## Recommended next phase
 
