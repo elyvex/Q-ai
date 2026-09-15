@@ -7,11 +7,11 @@
 
 use std::collections::BTreeMap;
 
-use quran_search::{
-    CommitStamp, Diagnostic as _, FieldId, Filter, FtsBackend, FtsDoc, FtsQuery, FtsSchema,
-    FullTextIndex, Fts5Index, IndexManifest, ResultOrder, SearchOpts, SemVer, TokenizerFamily,
-};
 use quran_normalization::{ProfileId, ProfileRegistry};
+use quran_search::{
+    CommitStamp, Diagnostic as _, FieldId, Filter, Fts5Index, FtsBackend, FtsDoc, FtsQuery,
+    FtsSchema, FullTextIndex, IndexManifest, ResultOrder, SearchOpts, SemVer, TokenizerFamily,
+};
 
 fn v1() -> SemVer {
     SemVer::new(1, 0, 0)
@@ -101,9 +101,7 @@ fn schema() -> FtsSchema {
     }
 }
 
-async fn staged(
-    docs: Vec<FtsDoc>,
-) -> (tempfile::TempDir, Fts5Index, IndexManifest, CommitStamp) {
+async fn staged(docs: Vec<FtsDoc>) -> (tempfile::TempDir, Fts5Index, IndexManifest, CommitStamp) {
     let dir = tempfile::tempdir().unwrap();
     let manifest = manifest(docs.len() as u64);
     let index = Fts5Index::stage(dir.path(), manifest.clone(), family()).await.unwrap();
@@ -221,11 +219,7 @@ async fn phrase_boolean_all_and_filters() {
     assert_eq!(found.hits[0].doc_id, "d3");
 
     // Limit truncates and reports it; relevance order carries scores.
-    let opts = SearchOpts {
-        limit: 1,
-        order: ResultOrder::Relevance,
-        ..SearchOpts::default()
-    };
+    let opts = SearchOpts { limit: 1, order: ResultOrder::Relevance, ..SearchOpts::default() };
     let found = index.search(&FtsQuery::All, &opts).await.unwrap();
     assert_eq!(found.hits.len(), 1);
     assert!(found.truncated);
@@ -237,7 +231,8 @@ async fn regex_guards_and_expansion() {
     let docs = vec![doc("d1", 1, 1, 1, "الرحمن الرحيم"), doc("d2", 1, 2, 2, "الحمد لله")];
     let (_dir, index, _, _) = staged(docs).await;
 
-    let anchored = FtsQuery::Regex { field: "text_bare".to_string(), pattern: "^ا?ل?رحم".to_string() };
+    let anchored =
+        FtsQuery::Regex { field: "text_bare".to_string(), pattern: "^ا?ل?رحم".to_string() };
     let found = index.search(&anchored, &SearchOpts::default()).await.unwrap();
     assert_eq!(found.total_matches, 1);
     assert_eq!(found.hits[0].doc_id, "d1");
