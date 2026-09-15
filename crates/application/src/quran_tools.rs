@@ -33,17 +33,18 @@ async fn backend_meta(
     reference: &QuranRef,
 ) -> Result<BackendMeta, ToolError> {
     let edition = reader.get_edition(reference.edition()).await.map_err(tool_error)?;
-    let mut uow = reader
-        .database()
-        .write()
-        .await
-        .map_err(|err| ToolError::Backend { code: "QAI-QUR-0310".into(), detail: err.to_string() })?;
-    let generation = uow
-        .quran()
-        .get_active()
-        .await
-        .map_err(|err| ToolError::Backend { code: "QAI-QUR-0310".into(), detail: err.to_string() })?;
-    uow.rollback().await.map_err(|err| ToolError::Backend { code: "QAI-QUR-0310".into(), detail: err.to_string() })?;
+    let mut uow = reader.database().write().await.map_err(|err| ToolError::Backend {
+        code: "QAI-QUR-0310".into(),
+        detail: err.to_string(),
+    })?;
+    let generation = uow.quran().get_active().await.map_err(|err| ToolError::Backend {
+        code: "QAI-QUR-0310".into(),
+        detail: err.to_string(),
+    })?;
+    uow.rollback().await.map_err(|err| ToolError::Backend {
+        code: "QAI-QUR-0310".into(),
+        detail: err.to_string(),
+    })?;
     Ok(BackendMeta {
         edition_version: edition.version.to_string(),
         edition_slug: edition.slug.clone(),
