@@ -12,7 +12,7 @@
 workspace = { allow = [] }
 
 [application]
-workspace = { allow = ["domain", "storage", "storage-sqlite", "provenance", "audit", "jobs", "sources", "config", "observability", "quran-core", "quran-corpus", "quran-normalization", "citations", "tools", "tool-registry"] }
+workspace = { allow = ["domain", "storage", "storage-sqlite", "provenance", "audit", "jobs", "sources", "config", "observability", "quran-core", "quran-corpus", "quran-normalization", "quran-search", "citations", "tools", "tool-registry"] }
 
 [storage]
 workspace = { allow = ["domain"] }
