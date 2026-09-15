@@ -19,9 +19,10 @@
 
 use std::collections::HashMap;
 
+use quran_normalization::{NormalizationTrace, ProfileRegistry, RuleId, SemVer};
 use quran_search::{
-    FieldId, Filter, FtsQuery, FullTextIndex, Fts5Index, IndexError, IndexManifest,
-    NormalizationTrace, ResultOrder, RuleId, ScoreExplain, SearchHit, SearchHitParts, SemVer,
+    Diagnostic as SearchDiagnostic, FieldId, Filter, FtsQuery, FullTextIndex, Fts5Index,
+    IndexError, IndexManifest, ResultOrder, ScoreExplain, SearchHit, SearchHitParts,
     TokenizerFamily, Warning,
 };
 use storage::Database as _;
@@ -182,7 +183,7 @@ impl storage::error::Diagnostic for SearchError {
 struct Serving {
     index: Fts5Index,
     manifest: IndexManifest,
-    family: TokenizerFamily,
+    edition_id: String,
     edition_id: String,
     edition_slug: String,
     edition_version: String,
@@ -238,8 +239,9 @@ async fn open_serving(
             detail: err.to_string(),
         })
     })?;
+    let ladder = manifest.tokenizer_version;
     let index =
-        Fts5Index::open(data_dir, pointer.generation as u64, manifest.clone(), family.clone())
+        Fts5Index::open(data_dir, pointer.generation as u64, manifest.clone(), family)
             .await
             .map_err(SearchError::Index)?;
 
@@ -278,7 +280,6 @@ async fn open_serving(
     Ok(Serving {
         index,
         manifest: manifest.clone(),
-        family,
         edition_id: edition.id.clone(),
         edition_slug: edition.slug.clone(),
         edition_version: edition.version.clone(),
@@ -731,6 +732,9 @@ pub async fn search_exact(
 }
 
 /// Profile selector for normalized search: registry id or adhoc rule list.
+///
+/// Typed so `profile + rules` can never be constructed (the plan's "never
+/// both" rule holds by construction, not by runtime check).
 pub enum NormalizedProfile {
     /// Registry profile (latest or pinned).
     Registry(quran_normalization::ProfileId, Option<SemVer>),
