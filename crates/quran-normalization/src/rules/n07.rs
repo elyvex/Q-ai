@@ -1,7 +1,7 @@
 //! N07 `normalize_wasla` — ٱ U+0671 → ا U+0627. Very common in Uthmani
 //! text. 1:1 substitution. Idempotent.
 
-use crate::rule::{NormalizationRule, NormalizedText, RuleId, RuleKind};
+use crate::rule::{NormalizationRule, NormalizedText, RuleId, RuleKind, SemVer};
 use crate::rules::{CharOut, transform};
 
 /// See the [module](crate::rules) documentation.
@@ -13,8 +13,8 @@ impl NormalizationRule for NormalizeWasla {
         RuleId::N07
     }
 
-    fn version(&self) -> &'static str {
-        "1.0.0"
+    fn version(&self) -> SemVer {
+        SemVer::new(1, 0, 0)
     }
 
     fn description(&self) -> &'static str {

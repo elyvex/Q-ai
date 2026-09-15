@@ -10,7 +10,7 @@
 //! Off in exact profiles (L0/L1). Digits are never stripped here (N13 folds
 //! them). Pure deletion. Idempotent.
 
-use crate::rule::{NormalizationRule, NormalizedText, RuleId, RuleKind};
+use crate::rule::{NormalizationRule, NormalizedText, RuleId, RuleKind, SemVer};
 use crate::rules::{CharOut, transform};
 
 /// True for code points removed by N12.
@@ -42,8 +42,8 @@ impl NormalizationRule for StripPunctuation {
         RuleId::N12
     }
 
-    fn version(&self) -> &'static str {
-        "1.0.0"
+    fn version(&self) -> SemVer {
+        SemVer::new(1, 0, 0)
     }
 
     fn description(&self) -> &'static str {

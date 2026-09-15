@@ -4,7 +4,7 @@
 //! space is removed here; other whitespace was already collapsed by N01.
 //! Pure deletion. Idempotent.
 
-use crate::rule::{NormalizationRule, NormalizedText, RuleId, RuleKind};
+use crate::rule::{NormalizationRule, NormalizedText, RuleId, RuleKind, SemVer};
 use crate::rules::{CharOut, transform};
 
 /// See the [module](crate::rules) documentation.
@@ -16,8 +16,8 @@ impl NormalizationRule for RemoveSpaces {
         RuleId::N17
     }
 
-    fn version(&self) -> &'static str {
-        "1.0.0"
+    fn version(&self) -> SemVer {
+        SemVer::new(1, 0, 0)
     }
 
     fn description(&self) -> &'static str {

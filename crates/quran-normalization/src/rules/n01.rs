@@ -4,7 +4,7 @@
 //! `char::is_whitespace` (covers tab, newline, NBSP, etc.), so queries pasted
 //! from any source collapse identically.
 
-use crate::rule::{NormalizationRule, NormalizedText, RuleId, RuleKind};
+use crate::rule::{NormalizationRule, NormalizedText, RuleId, RuleKind, SemVer};
 use crate::span::SpanMap;
 
 /// See the [module](crate::rules) documentation.
@@ -16,8 +16,8 @@ impl NormalizationRule for WhitespaceCollapse {
         RuleId::N01
     }
 
-    fn version(&self) -> &'static str {
-        "1.0.0"
+    fn version(&self) -> SemVer {
+        SemVer::new(1, 0, 0)
     }
 
     fn description(&self) -> &'static str {

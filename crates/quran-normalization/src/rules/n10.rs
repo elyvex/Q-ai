@@ -14,7 +14,7 @@
 //! destroy information, so they pass through (a future `contains_heuristic`
 //! flag may note their presence; pending ADR-0204). 1:1. Idempotent.
 
-use crate::rule::{NormalizationRule, NormalizedText, RuleId, RuleKind};
+use crate::rule::{NormalizationRule, NormalizedText, RuleId, RuleKind, SemVer};
 use crate::rules::{CharOut, transform};
 
 /// See the [module](crate::rules) documentation.
@@ -26,8 +26,8 @@ impl NormalizationRule for NormalizePersianCodepoints {
         RuleId::N10
     }
 
-    fn version(&self) -> &'static str {
-        "1.0.0"
+    fn version(&self) -> SemVer {
+        SemVer::new(1, 0, 0)
     }
 
     fn description(&self) -> &'static str {

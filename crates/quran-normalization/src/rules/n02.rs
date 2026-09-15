@@ -1,6 +1,6 @@
 //! N02 `strip_tatweel` — remove U+0640 (ـ). Pure deletion. Idempotent.
 
-use crate::rule::{NormalizationRule, NormalizedText, RuleId, RuleKind};
+use crate::rule::{NormalizationRule, NormalizedText, RuleId, RuleKind, SemVer};
 use crate::rules::{CharOut, transform};
 
 /// See the [module](crate::rules) documentation.
@@ -12,8 +12,8 @@ impl NormalizationRule for StripTatweel {
         RuleId::N02
     }
 
-    fn version(&self) -> &'static str {
-        "1.0.0"
+    fn version(&self) -> SemVer {
+        SemVer::new(1, 0, 0)
     }
 
     fn description(&self) -> &'static str {
