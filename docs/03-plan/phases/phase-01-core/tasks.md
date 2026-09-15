@@ -162,7 +162,7 @@ adversarial corpora are rejected with the right codes, and activation requires h
 | P1-T39 | API v1 handlers + response envelope + ETag/caching | D1.7 | T32–T37 | 3.0 | BE | ☐ |
 | P1-T40 | API OpenAPI spec + contract tests + error-body conformance | D1.7 | T39 | 2.0 | BE | ☐ |
 | P1-T41 | Performance benchmarks + threshold gates (table in D1.6) | D1.6 | T35 | 2.0 | QA | ☑ |
-| P1-T42 | ADR-0112 / 0113 | ADR | T35, T37 | 1.0 | DOC | ◐ |
+| P1-T42 | ADR-0112 / 0113 | ADR | T35, T37 | 1.0 | DOC | ☑ |
 
 > **T33 must respect the declared boundary and `max_ayahs`.** Context is retrieved by
 > **canonical structure** (surah/juz/ruku/page), never arbitrary chunking (§11.4). Random
