@@ -39,8 +39,8 @@ impl NormalizationRule for DedupeRepeatedLetters {
                 j += 1;
             }
             // Run is chars[i..j]; keep at most the first two.
-            for k in (i + 2)..j {
-                keep[k] = false;
+            for slot in keep.iter_mut().take(j).skip(i + 2) {
+                *slot = false;
             }
             i = j;
         }
