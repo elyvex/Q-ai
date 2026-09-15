@@ -152,12 +152,12 @@ impl Fts5Index {
                 .map(|c| format!("{c} UNINDEXED")),
         );
         columns.push("revelation UNINDEXED".to_string());
-        let ddl = format!("CREATE TABLE ayah_fts USING fts5({})", columns.join(", "));
+        let ddl = format!("CREATE TABLE IF NOT EXISTS ayah_fts USING fts5({})", columns.join(", "));
         sqlx::query(&ddl).execute(&self.pool).await.map_err(|err| IndexError::BuildFailed {
             stage: "create".to_string(),
             detail: err.to_string(),
         })?;
-        sqlx::query("CREATE VIRTUAL TABLE vocab USING fts5vocab(ayah_fts, 'row')")
+        sqlx::query("CREATE VIRTUAL TABLE IF NOT EXISTS vocab USING fts5vocab(ayah_fts, 'row')")
             .execute(&self.pool)
             .await
             .map_err(|err| IndexError::BuildFailed {
@@ -470,21 +470,7 @@ impl FullTextIndex for Fts5Index {
     async fn create(&self, _schema: &FtsSchema) -> Result<(), IndexError> {
         // Tables exist from `stage`; recreate idempotently for reopened
         // instances (the schema is fixed in Phase 2).
-        sqlx::query(
-            "CREATE TABLE IF NOT EXISTS ayah_fts USING fts5(
-                doc_id UNINDEXED, text_exact, text_ws, text_marks, text_bare,
-                text_hamza, text_folded, text_affix, roots, lemmas, stems,
-                pos_tags, patterns, surah UNINDEXED, ayah UNINDEXED,
-                global_index UNINDEXED, juz UNINDEXED, page UNINDEXED,
-                generation UNINDEXED, revelation UNINDEXED)",
-        )
-        .execute(&self.pool)
-        .await
-        .map_err(|err| IndexError::BuildFailed {
-            stage: "create".to_string(),
-            detail: err.to_string(),
-        })?;
-        Ok(())
+        self.create_tables().await
     }
 
     async fn add_batch(&self, docs: Vec<FtsDoc>) -> Result<(), IndexError> {
@@ -603,15 +589,19 @@ impl FullTextIndex for Fts5Index {
         if !dir.exists() {
             return Ok(0);
         }
-        let removed = self
-            .manifest
-            .doc_count
-            .min(u64::try_from(i64::MAX).unwrap_or(u64::MAX));
+        // Count inside the target generation before removing it.
+        let path = Self::db_path(&self.root, generation);
+        let pool = Self::connect(&path, false).await?;
+        let removed: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM ayah_fts").fetch_one(&pool).await.map_err(
+                |err| IndexError::BuildFailed { stage: "delete".to_string(), detail: err.to_string() },
+            )?;
+        pool.close().await;
         std::fs::remove_dir_all(&dir).map_err(|err| IndexError::BuildFailed {
             stage: "delete".to_string(),
             detail: err.to_string(),
         })?;
-        Ok(if generation == self.manifest.corpus_generation { removed } else { 0 })
+        Ok(removed.max(0) as u64)
     }
 
     async fn stats(&self) -> Result<FtsStats, IndexError> {
