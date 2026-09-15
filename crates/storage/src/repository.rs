@@ -69,6 +69,11 @@ pub trait SourceRepository: Send + Sync {
     async fn get_approval(&self, _id: &str) -> Result<Option<ApprovalRow>, StorageError> {
         Err(StorageError::StorageUnavailable)
     }
+
+    /// Insert a principal row, or leave the existing one untouched.
+    async fn upsert_principal(&mut self, _principal: PrincipalRow) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
 }
 
 /// A row in the `sources` table.
@@ -106,10 +111,23 @@ pub struct StateTransitionRow {
     pub occurred_at: String,
 }
 
+/// A row in the `principals` table (identity is Phase-11 owned; this is the
+/// interim local-user record applications need for FK targets).
+#[derive(Debug, Clone)]
+pub struct PrincipalRow {
+    /// Principal id.
+    pub id: String,
+    /// Principal kind (`local_user`, `system`, …).
+    pub kind: String,
+    /// Display name.
+    pub display_name: String,
+    /// Creation timestamp.
+    pub created_at: String,
+}
+
 /// A row in the `approvals` table.
 #[derive(Debug, Clone)]
-pub struct ApprovalRow {
-    pub id: String,
+pub struct ApprovalRow {    pub id: String,
     pub subject_urn: String,
     pub kind: String,
     pub requested_by: Option<String>,
