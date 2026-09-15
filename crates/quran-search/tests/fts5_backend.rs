@@ -121,10 +121,12 @@ fn term(field: &str, term: &str) -> FtsQuery {
 
 #[tokio::test]
 async fn term_round_trip_count_stats_verify() {
+    // Note: wasla (ٱ) folds only at L4, so bare-field data below uses bare
+    // alef; wasla coverage lives on `text_hamza` in `normalization_on_both_paths`.
     let docs = vec![
-        doc("d1", 1, 1, 1, "بِسْمِ ٱللَّهِ"),
+        doc("d1", 1, 1, 1, "بِسْمِ اللَّهِ"),
         doc("d2", 1, 2, 2, "ٱلْحَمْدُ لِلَّهِ"),
-        doc("d3", 112, 1, 100, "قُلْ هُوَ ٱللَّهُ أَحَدٌ"),
+        doc("d3", 112, 1, 100, "قُلْ هُوَ اللَّهُ أَحَدٌ"),
     ];
     let (_dir, index, manifest, _) = staged(docs).await;
     assert_eq!(index.backend(), FtsBackend::Fts5);
@@ -153,17 +155,19 @@ async fn term_round_trip_count_stats_verify() {
 
 /// Index path AND query path normalize: diacriticized docs match bare
 /// queries, and bare docs match diacriticized queries. Bypassing either
-/// side breaks one direction.
+/// side breaks one direction. Wasla folds at L4, so the wasla pair runs on
+/// `text_hamza` while the diacritic pair runs on `text_bare`.
 #[tokio::test]
 async fn normalization_on_both_paths() {
     let docs = vec![
-        doc("diac", 1, 1, 1, "ٱلرَّحْمَٰنِ"),
+        doc("diac", 1, 1, 1, "الرَّحْمَنِ"),
         doc("bare", 1, 2, 2, "الرحمن"),
+        doc("wasla", 1, 3, 3, "ٱلرَّحْمَٰنِ"),
     ];
     let (_dir, index, _, _) = staged(docs).await;
 
     // Query normalized (diacritics in query still match).
-    let found = index.search(&term("text_bare", "ٱلرَّحْمَٰنِ"), &SearchOpts::default()).await.unwrap();
+    let found = index.search(&term("text_bare", "الرَّحْمَنِ"), &SearchOpts::default()).await.unwrap();
     assert_eq!(found.total_matches, 2);
     // Documents normalized (bare query matches diacriticized doc).
     let found = index.search(&term("text_bare", "الرحمن"), &SearchOpts::default()).await.unwrap();
@@ -172,6 +176,9 @@ async fn normalization_on_both_paths() {
     let found = index.search(&term("text_exact", "الرحمن"), &SearchOpts::default()).await.unwrap();
     assert_eq!(found.total_matches, 1);
     assert_eq!(found.hits[0].doc_id, "bare");
+    // Wasla-insensitivity lives one rung up, on the hamza field.
+    let found = index.search(&term("text_hamza", "الرحمن"), &SearchOpts::default()).await.unwrap();
+    assert_eq!(found.total_matches, 3);
     // A term normalizing to empty matches nothing (never everything).
     let found = index.search(&term("text_bare", "ً"), &SearchOpts::default()).await.unwrap();
     assert_eq!(found.total_matches, 0);
@@ -254,9 +261,13 @@ async fn regex_guards_and_expansion() {
 #[tokio::test]
 async fn tokenizer_mismatch_and_generation_lifecycle() {
     let dir = tempfile::tempdir().unwrap();
-    // Family version disagrees with the manifest: refuse to stage.
-    let bad_family = TokenizerFamily::new(&ProfileRegistry::new(), SemVer::new(9, 9, 9)).unwrap();
-    let err = Fts5Index::stage(dir.path(), manifest(0), bad_family).await.unwrap_err();
+    // Unknown ladder versions fail at family construction.
+    let err = TokenizerFamily::new(&ProfileRegistry::new(), SemVer::new(9, 9, 9)).unwrap_err();
+    assert_eq!(err.code(), quran_search::codes::BUILD_FAILED);
+    // Family version disagreeing with the manifest refuses to stage.
+    let mut mismatched = manifest(0);
+    mismatched.tokenizer_version = SemVer::new(9, 9, 9);
+    let err = Fts5Index::stage(dir.path(), mismatched, family()).await.unwrap_err();
     assert_eq!(err.code(), quran_search::codes::MANIFEST_MISMATCH);
 
     // Deleting a missing generation is a no-op zero.
