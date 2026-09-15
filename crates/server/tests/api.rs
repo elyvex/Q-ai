@@ -242,6 +242,8 @@ async fn openapi_spec_covers_every_route() {
         "/api/v1/quran/tokens/{reference}",
         "/api/v1/quran/resolve",
         "/api/v1/quran/citations/{id}",
+        "/api/v1/quran/normalization/preview",
+        "/api/v1/quran/normalization/profiles",
         "/debug/read/{edition}/{surah}",
     ] {
         assert!(paths.contains_key(path), "spec missing {path}");
@@ -357,5 +359,100 @@ async fn debug_reader_is_labelled_rtl_without_persistence() {
     assert!(text.contains("dir=\"rtl\""), "correct RTL");
     assert!(text.contains("quran:test@0.1.0:1:1"));
     assert_eq!(headers.get("content-type").unwrap(), "text/html; charset=utf-8");
+    handle.abort();
+}
+
+async fn post_json(addr: &str, path: &str, body: &serde_json::Value) -> (StatusCode, Vec<u8>) {
+    let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let payload = serde_json::to_string(body).unwrap();
+    let request = format!(
+        "POST {path} HTTP/1.1\r\nhost: x\r\nconnection: close\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n{payload}",
+        payload.len()
+    );
+    stream.write_all(request.as_bytes()).await.unwrap();
+    let mut bytes = Vec::new();
+    stream.read_to_end(&mut bytes).await.unwrap();
+    let text = String::from_utf8_lossy(&bytes).into_owned();
+    let (head, body) = text.split_once("\r\n\r\n").unwrap_or((&text, ""));
+    let status_line = head.lines().next().unwrap_or("");
+    let status: u16 = status_line.split_whitespace().nth(1).unwrap_or("0").parse().unwrap_or(0);
+    (StatusCode::from_u16(status).unwrap(), body.as_bytes().to_vec())
+}
+
+#[tokio::test]
+async fn normalization_preview_matches_cli_pipeline() {
+    let (addr, handle) = serve_once().await;
+
+    // Default profile (latest L3): derived text plus the full trace.
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/normalization/preview",
+        &serde_json::json!({"text": "بِسْمِ"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let value = body_json(&body);
+    assert_envelope(&value);
+    assert_eq!(value["data"]["output"], "بسم");
+    assert_eq!(value["data"]["profile"], "L3.diacritics@1.0.0");
+    assert_eq!(value["data"]["trace"]["profile"], "L3.diacritics@1.0.0");
+    assert_eq!(value["data"]["trace"]["contains_heuristic_rules"], false);
+
+    // Byte-identical trace to the application pipeline the CLI uses (AC-P2-39).
+    let expected = application::quran_normalize::preview(
+        &application::quran_normalize::builtin_registry(),
+        "بِسْمِ",
+        application::quran_normalize::ProfileId::L3,
+        None,
+    )
+    .unwrap();
+    let expected_trace = serde_json::to_value(&expected.trace).unwrap();
+    assert_eq!(value["data"]["trace"], expected_trace);
+
+    // Adhoc rule lists and the heuristic label.
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/normalization/preview",
+        &serde_json::json!({"text": "والكتب", "profile": "L7.affix@1.0.0"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let value = body_json(&body);
+    assert_eq!(value["data"]["output"], "الكتب");
+    assert_eq!(value["data"]["trace"]["contains_heuristic_rules"], true);
+
+    // Profile and rules together are a 400 with a namespaced code.
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/normalization/preview",
+        &serde_json::json!({"text": "x", "profile": "L3.diacritics", "rules": "N01"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body_json(&body)["error"]["code"], "QAI-NORM-0005");
+
+    // Unknown profiles are a 400 naming the profile.
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/normalization/preview",
+        &serde_json::json!({"text": "x", "profile": "L9.nope"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body_json(&body)["error"]["code"], "QAI-NORM-0002");
+    handle.abort();
+}
+
+#[tokio::test]
+async fn normalization_profiles_lists_ladder() {
+    let (addr, handle) = serve_once().await;
+    let (status, _, body) = get(&addr, "/api/v1/quran/normalization/profiles", &[]).await;
+    assert_eq!(status, StatusCode::OK);
+    let value = body_json(&body);
+    assert_envelope(&value);
+    let profiles = value["data"]["profiles"].as_array().unwrap();
+    assert_eq!(profiles.len(), 9);
+    assert_eq!(profiles[3]["id"], "L3.diacritics");
     handle.abort();
 }
