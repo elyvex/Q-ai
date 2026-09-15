@@ -1,7 +1,7 @@
 # Phase 1 — Completion Ledger
 
 **Phase:** P1 — Canonical Quran Core
-**Status:** 🟡 In Progress — 41 / 68 task rows ☑ · 10 / 21 acceptance criteria partial · 0 / 14 ADRs Accepted · 6 / 6 migrations applied
+**Status:** 🟡 In Progress — 43 / 65 task rows ☑ · 18 / 21 acceptance criteria partial (automated-green, ritual pending) · 10 / 14 ADRs Accepted · 6 / 6 migrations applied
 **Started:** 2026-09-14
 **Completed:** —
 
@@ -49,16 +49,16 @@ with what evidence.
 | 1.1 — Domain & Addressing | 9 | 9 | 19.5 | — | ☑ |
 | 1.2 — Import & Validation | 17 | 16 | 42.0 | — | ◐ |
 | 1.3 — Reader, Translations, API | 11 | 6 | 21.5 | — | ◐ |
-| 1.4 — Tools, Citations, CLI, Doctor | 11 | 9 | 21.5 | — | ◐ |
-| 1.5 — Debug Reader, Hardening, Exit | 10 | 0 | 15.0 | — | ☐ |
-| **Total** | **68** | **41** | **131.0** | **—** | **60%** |
+| 1.4 — Tools, Citations, CLI, Doctor | 11 | 10 | 21.5 | — | ◐ |
+| 1.5 — Debug Reader, Hardening, Exit | 7 | 1 | 15.0 | — | ☐ |
+| **Total** | **65** | **43** | **131.0** | **—** | **66%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
 | Deliverables (D1.1–D1.14) | 0 | 14 |
 | Acceptance criteria (AC-P1-01…21) fully verified | 0 | 21 |
-| Acceptance criteria partial (automated-green, ritual pending) | 10 | 21 |
-| ADRs accepted | 0 | 14 |
+| Acceptance criteria partial (automated-green, ritual pending) | 18 | 21 |
+| ADRs accepted | 10 | 14 |
 | Migrations applied (`0007`–`0012`) | 6 | 6 |
 | Required test suites green | 0 | 15 |
 | D1.14 documents published | 5 | 5 |
@@ -729,7 +729,7 @@ the implementer.
 
 ## 4. Accepted ADRs
 
-_None accepted yet._
+**10 Accepted**, 4 Draft (0101, 0111, 0112, 0114 pending owners/deliverables).
 
 **Entry format**
 
@@ -747,20 +747,20 @@ _None accepted yet._
 
 | ADR | Title | Blocking for | Status |
 |---|---|---|---|
-| ADR-0101 | Initial Quran dataset, script, riwayah, and license | **everything** | ☐ |
-| ADR-0102 | Quran addressing scheme & reference grammar | D1.1 | ☐ |
-| ADR-0103 | Verse-numbering scheme handling and alternate-numbering strategy | D1.1, D1.5 | ☐ |
-| ADR-0104 | Unicode policy (normalization, allowed blocks, forbidden code points, graphemes) | D1.4 | ☐ |
-| ADR-0105 | Canonical tokenization rule (whitespace-preserving surface tokenization) | D1.3 | ☐ |
-| ADR-0106 | Canonical text storage layout (row-per-ayah vs blob+index) | D1.5 | ☐ |
-| ADR-0107 | Atomic activation & rollback (staging + pointer flip + generation counter) | D1.3 | ☐ |
-| ADR-0108 | Corpus hashing scheme (`text_hash` / `structure_hash` / `token_order_hash`) | D1.3, D1.4 | ☐ |
-| ADR-0109 | Edition difference algorithm for canonical text | D1.3 | ☐ |
-| ADR-0110 | Basmala representation policy | D1.1 | ☐ |
-| ADR-0111 | Citation identity and deep-link URL/URN format | D1.9 | ☐ |
-| ADR-0112 | Translation alignment and attribution model | D1.4 | ☐ |
-| ADR-0113 | Canonical lookup caching & invalidation | D1.6 | ☐ |
-| ADR-0114 | Reference-corpus comparison procedure and who signs off | D1.4 | ☐ |
+| ADR-0101 | Initial Quran dataset, script, riwayah, and license | **everything** | | 📝 Draft |
+| ADR-0102 | Quran addressing scheme & reference grammar | D1.1 | | ✅ Accepted |
+| ADR-0103 | Verse-numbering scheme handling and alternate-numbering strategy | D1.1, D1.5 | | ✅ Accepted |
+| ADR-0104 | Unicode policy (normalization, allowed blocks, forbidden code points, graphemes) | D1.4 | | ✅ Accepted |
+| ADR-0105 | Canonical tokenization rule (whitespace-preserving surface tokenization) | D1.3 | | ✅ Accepted |
+| ADR-0106 | Canonical text storage layout (row-per-ayah vs blob+index) | D1.5 | | ✅ Accepted |
+| ADR-0107 | Atomic activation & rollback (staging + pointer flip + generation counter) | D1.3 | | ✅ Accepted |
+| ADR-0108 | Corpus hashing scheme (`text_hash` / `structure_hash` / `token_order_hash`) | D1.3, D1.4 | | ✅ Accepted |
+| ADR-0109 | Edition difference algorithm for canonical text | D1.3 | | ✅ Accepted |
+| ADR-0110 | Basmala representation policy | D1.1 | | ✅ Accepted |
+| ADR-0111 | Citation identity and deep-link URL/URN format | D1.9 | | 📝 Draft |
+| ADR-0112 | Translation alignment and attribution model | D1.4 | | 📝 Draft |
+| ADR-0113 | Canonical lookup caching & invalidation | D1.6 | | ✅ Accepted |
+| ADR-0114 | Reference-corpus comparison procedure and who signs off | D1.4 | | 📝 Draft |
 
 > **Religious-source and licensing sections are substantive for Phase 1**, not boilerplate.
 > ADR-0101, 0104, 0105, 0110, and 0114 directly determine whether text or metadata can be
