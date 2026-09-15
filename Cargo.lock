@@ -135,6 +135,7 @@ dependencies = [
  "jobs",
  "lru",
  "observability",
+ "proptest",
  "provenance",
  "quran-core",
  "quran-corpus",
