@@ -168,6 +168,14 @@ pub enum ActivationError {
         /// Edition version.
         version: String,
     },
+    /// That version is already active.
+    #[error("{slug}@{version} is already active")]
+    AlreadyActive {
+        /// Edition slug.
+        slug: String,
+        /// Edition version.
+        version: String,
+    },
     /// Storage failure.
     #[error("storage failed: {0}")]
     Storage(String),
@@ -189,6 +197,7 @@ impl storage::error::Diagnostic for ActivationError {
             Self::ApprovalNotGranted { .. } => 301,
             Self::ApprovalSubjectMismatch { .. } => 302,
             Self::NotStaged { .. } => 303,
+            Self::AlreadyActive { .. } => 313,
             Self::Storage(_) => 304,
             Self::Audit(_) => 305,
         };
@@ -343,7 +352,13 @@ pub async fn rollback_edition(
         .quran()
         .rollback_edition(slug, version, &invoked_by.to_string(), approval_id, &at.to_string())
         .await
-        .map_err(ActivationError::storage)?;
+        .map_err(|err| match err {
+            StorageError::Conflict => ActivationError::AlreadyActive {
+                slug: slug.to_string(),
+                version: version.to_string(),
+            },
+            other => ActivationError::storage(other),
+        })?;
     let edition = uow
         .quran()
         .get_edition_by_slug_version(slug, version)
