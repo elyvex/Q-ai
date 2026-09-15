@@ -236,6 +236,38 @@ pub struct TranslationPassageRow {
     pub provenance_id: String,
 }
 
+/// One seeded normalization rule (migration `0013`, append-only).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NormalizationRuleRow {
+    /// Short id (`N01`…`N22`).
+    pub rule_id: String,
+    /// Implementation version (`MAJOR.MINOR.PATCH`).
+    pub version: String,
+    /// `deterministic` or `heuristic`.
+    pub kind: String,
+    /// Human description of the effect.
+    pub description: String,
+}
+
+/// One normalization profile version (migration `0013`, append-only).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NormalizationProfileRow {
+    /// Ladder id (`L0.exact`…`L8.fuzzy`).
+    pub profile_id: String,
+    /// Profile version (`MAJOR.MINOR.PATCH`).
+    pub version: String,
+    /// PRD §8.2 label.
+    pub label: String,
+    /// Ordered rule ids as a JSON array.
+    pub rules_json: String,
+    /// Whether an index field is built from this profile.
+    pub indexed: bool,
+    /// Whether results must render the heuristic-matched label.
+    pub heuristic: bool,
+    /// Experimental, off-by-default profiles.
+    pub experimental: bool,
+}
+
 // ─── Repository trait ─────────────────────────────────────────────────────
 
 /// Repository for the canonical Quran corpus.
@@ -244,7 +276,8 @@ pub struct TranslationPassageRow {
 /// `quran_ayahs`, `quran_tokens`, `quran_token_separators`, `quran_segments`,
 /// `quran_divisions`, the `quran_stg_*` staging mirrors, `quran_import_runs`,
 /// `validation_reports`, `difference_reports`, `citations`,
-/// `translation_editions`, and `translation_passages`.
+/// `translation_editions`, and `translation_passages`, plus the Phase-2
+/// normalization catalog (`normalization_rules`, `normalization_profiles`).
 #[async_trait]
 pub trait QuranRepository: Send + Sync {
     /// Record a new import run.
@@ -600,6 +633,38 @@ pub trait QuranRepository: Send + Sync {
 
     /// List translation editions ordered by slug and version.
     async fn list_translation_editions(&self) -> Result<Vec<TranslationEditionRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    // ─── Phase 2 — normalization catalog (migration 0013, append-only) ──
+
+    /// List seeded normalization rules ordered by rule id and version.
+    async fn list_normalization_rules(&self) -> Result<Vec<NormalizationRuleRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// List normalization profile versions ordered by profile id and version.
+    async fn list_normalization_profiles(
+        &self,
+    ) -> Result<Vec<NormalizationProfileRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Fetch one normalization profile version.
+    async fn get_normalization_profile(
+        &self,
+        _profile_id: &str,
+        _version: &str,
+    ) -> Result<Option<NormalizationProfileRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Register a new normalization profile version (new keys only; the
+    /// append-only trigger rejects rewrites of seeded rows).
+    async fn insert_normalization_profile(
+        &mut self,
+        _row: NormalizationProfileRow,
+    ) -> Result<(), StorageError> {
         Err(StorageError::StorageUnavailable)
     }
 }
