@@ -12,11 +12,18 @@
 //! vector-store crate (enforced by `cargo xtask arch-check`, AC-P2-36).
 
 pub mod error;
+pub mod pipeline;
+pub mod profile;
 pub mod rule;
 pub mod rules;
+pub(crate) mod semver_serde;
 pub mod span;
+pub mod trace;
 
 pub use error::{Diagnostic, DiagnosticCode, NormalizationError, codes};
-pub use rule::{NormalizationRule, NormalizedText, RuleId, RuleKind};
-pub use rules::all_rules;
+pub use pipeline::NormalizationPipeline;
+pub use profile::{Profile, ProfileId, ProfileRegistry};
+pub use rule::{NormalizationRule, NormalizedText, RuleId, RuleKind, SemVer};
+pub use rules::{all_rules, by_id, heuristic_rules};
 pub use span::{CanonicalSpan, SpanMap, SpanSegment};
+pub use trace::{NormalizationTrace, RuleApplication};
