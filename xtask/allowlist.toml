@@ -12,7 +12,7 @@
 workspace = { allow = [] }
 
 [application]
-workspace = { allow = ["domain", "storage", "storage-sqlite", "provenance", "audit", "jobs", "sources", "config", "observability", "quran-core", "quran-corpus", "citations", "tools", "tool-registry"] }
+workspace = { allow = ["domain", "storage", "storage-sqlite", "provenance", "audit", "jobs", "sources", "config", "observability", "quran-core", "quran-corpus", "quran-normalization", "citations", "tools", "tool-registry"] }
 
 [storage]
 workspace = { allow = ["domain"] }
@@ -36,7 +36,12 @@ workspace = { allow = ["domain", "storage", "provenance"] }
 workspace = { allow = ["application", "config", "observability", "server"] }
 
 [server]
-workspace = { allow = ["application", "config", "observability", "tool-registry", "citations", "quran-core"] }
+# `server` is the HTTP interface layer. It is allowed `storage` + `tools` only
+# because `ReaderBackend` implements the API backend on top of the reader's
+# database handle and propagates `tools::ToolError`. This is a known layering
+# smell: prefer reaching these through `application` re-exports. Recorded as a
+# Phase-1 follow-up (see docs/plans/handoff-p1-to-p2.md §5).
+workspace = { allow = ["application", "config", "observability", "tool-registry", "tools", "storage", "citations", "quran-core"] }
 
 [observability]
 workspace = { allow = [] }
