@@ -156,7 +156,7 @@ adversarial corpora are rejected with the right codes, and activation requires h
 | P1-T33 | `get_context` with boundary logic + caps | D1.6 | T32 | 2.0 | BE | ☑ |
 | P1-T34 | Division lookups (juz/hizb/rub/manzil/page/ruku/sajdah) | D1.6 | T13 | 1.5 | BE | ☑ |
 | P1-T35 | Caching layer keyed by corpus generation + consistency tests | D1.6 | T32 | 2.0 | BE | ☑ |
-| P1-T36 | Migration `0013` + translation import job + alignment validation | D1.4 | T12 | 2.5 | BE | ☐ |
+| P1-T36 | Migration `0013` + translation import job + alignment validation | D1.4 | T12 | 2.5 | BE | ☑ |
 | P1-T37 | `AyahView` / `AttributedTranslation` types + principle-5 guard tests | D1.6 | T36 | 1.5 | BE | ☑ |
 | P1-T38 | Word-gloss dataset import (optional path) | D1.4 | T36 | 1.5 | DATA | ☐ |
 | P1-T39 | API v1 handlers + response envelope + ETag/caching | D1.7 | T32–T37 | 3.0 | BE | ☐ |
