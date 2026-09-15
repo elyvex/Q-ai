@@ -6,7 +6,7 @@
 
 use proptest::prelude::*;
 use quran_normalization::rule::{NormalizedText, RuleId};
-use quran_normalization::rules::{all_rules, by_id};
+use quran_normalization::rules::{all_rules, by_id, heuristic_rules};
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
@@ -16,7 +16,7 @@ proptest! {
     /// with the emitted SpanMap.
     #[test]
     fn no_panic_on_arbitrary_unicode(s in "\\PC*") {
-        for rule in all_rules() {
+        for rule in all_rules().into_iter().chain(heuristic_rules()) {
             let out = rule.apply(&NormalizedText::from_plain(&s));
             prop_assert_eq!(
                 out.text().chars().count() as u32,
@@ -32,7 +32,7 @@ proptest! {
     /// Every deterministic rule claiming idempotency honors it on fuzz input.
     #[test]
     fn idempotent_on_arbitrary_unicode(s in "\\PC*") {
-        for rule in all_rules() {
+        for rule in all_rules().into_iter().chain(heuristic_rules()) {
             prop_assert!(
                 rule.is_idempotent(),
                 "{} must declare idempotency",
@@ -52,7 +52,7 @@ proptest! {
         // rule-local containment: the mapped-back hull re-applied contains
         // the derived text. Checked on ASCII-only input where NFC is fixed-point.
         let ascii_only = s.is_ascii();
-        for rule in all_rules() {
+        for rule in all_rules().into_iter().chain(heuristic_rules()) {
             if rule.id() == RuleId::N16 && !ascii_only {
                 continue;
             }
@@ -187,8 +187,14 @@ fn seed_registry_covers_n01_through_n17() {
         assert_eq!(rule.id(), expected);
         assert!(by_id(expected).is_some());
     }
-    // Heuristic and reserved ids have no deterministic implementation.
-    for n in 18..=24 {
+    // Heuristic ids resolve through the same lookup; reserved ids do not.
+    assert_eq!(heuristic_rules().len(), 5);
+    for n in 18..=22 {
+        let id = RuleId::parse(&format!("N{n:02}")).unwrap();
+        let rule = by_id(id).expect("heuristic rule must resolve");
+        assert_eq!(rule.kind(), quran_normalization::rule::RuleKind::Heuristic);
+    }
+    for n in 23..=24 {
         assert!(by_id(RuleId::parse(&format!("N{n:02}")).unwrap()).is_none());
     }
 }
