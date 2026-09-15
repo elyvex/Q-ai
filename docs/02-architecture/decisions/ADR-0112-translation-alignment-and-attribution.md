@@ -1,6 +1,6 @@
-# ADR-0112 — Translation Alignment and Attribution Model (Draft)
+# ADR-0112 — Translation Alignment and Attribution Model
 
-- Status: **Draft** (accepted with translation import, P1-T36/T37)
+- Status: **Accepted** (translation import + type guards shipped, P1-T36/T37; accepted 2026-09-15)
 - Phase: 1 — Canonical Quran Core
 - Date: 2026-09-14
 - Related decisions: ADR-0103
@@ -26,4 +26,9 @@ align to a specific Arabic edition's numbering (ADR-0103) rather than floating f
 ## Consequences
 
 - Type guards in `quran-core` (M9, P1-T37); DB CHECK already covers storage.
-- Accepted when translation import lands.
+- Accepted with translation import (P1-T36) and the type guards (P1-T37).
+  Evidence: `import_translations` enforces attribution (principle 5),
+  structural alignment (aligned edition + per-passage ayah existence,
+  non-empty, unique, atomic), and writes a provenance record
+  (`crates/application/tests/quran_translation.rs` 9/9 green); read-time
+  alignment is re-checked by the reader before serving a translation.
