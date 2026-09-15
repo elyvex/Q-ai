@@ -139,6 +139,7 @@ dependencies = [
  "quran-core",
  "quran-corpus",
  "quran-normalization",
+ "quran-search",
  "serde",
  "serde_json",
  "sources",
@@ -1852,6 +1853,7 @@ version = "0.0.0"
 dependencies = [
  "async-trait",
  "domain",
+ "quran-normalization",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
