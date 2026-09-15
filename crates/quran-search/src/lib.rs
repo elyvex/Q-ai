@@ -12,6 +12,7 @@ pub mod error;
 pub mod index;
 pub mod model;
 pub mod skeleton;
+pub mod tokenizer;
 
 pub use domain::SemVer;
 pub use error::{Diagnostic, DiagnosticCode, IndexError, codes};
@@ -21,3 +22,4 @@ pub use model::{
     FtsResults, FtsSchema, FtsStats, IndexManifest, ResultOrder, SearchOpts,
 };
 pub use skeleton::{BuiltSkeleton, ayah_skeleton, skeletons_for_surah};
+pub use tokenizer::{ArTokenizer, INDEXED_FIELDS, TokenizerFamily, profile_for_field};
