@@ -299,8 +299,23 @@ fn db_path_for(cfg: &Config, data_dir: Option<&str>) -> String {
     }
 }
 
-fn loads_or_default(cli: &Cli) -> Config {
-    let mut cfg = match cli.config.as_ref() {
+/// Locate the migrations directory: explicit CWD layout first, then the
+/// compile-time workspace layout (covers tests and installed binaries run
+/// outside the repo root).
+fn migrations_dir() -> std::path::PathBuf {
+    let from_cwd = std::path::PathBuf::from("migrations/sqlite");
+    if from_cwd.is_dir() {
+        return from_cwd;
+    }
+    let from_manifest =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../migrations/sqlite");
+    if from_manifest.is_dir() {
+        return from_manifest;
+    }
+    from_cwd
+}
+
+fn loads_or_default(cli: &Cli) -> Config {    let mut cfg = match cli.config.as_ref() {
         Some(path) => {
             let overrides = std::collections::BTreeMap::new();
             config::Config::load(Some(path), "QAI", &overrides).map(|(c, _)| c).unwrap_or_default()
@@ -354,7 +369,7 @@ fn handle_config_validate(file: Option<&std::path::Path>) -> i32 {
 }
 
 fn handle_db(action: DbAction, cfg: &Config, json: bool) -> i32 {
-    let migrations_dir = std::path::PathBuf::from("migrations/sqlite");
+    let migrations_dir = migrations_dir();
     match action {
         DbAction::Migrate => {
             match block_on(application::db::migrate_database(cfg, &migrations_dir)) {
