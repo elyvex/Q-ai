@@ -34,13 +34,9 @@ use crate::tokenizer::{INDEXED_FIELDS, TokenizerFamily};
 const TEXT_COLUMNS: [&str; 7] = INDEXED_FIELDS;
 /// Lexicon columns (populated from M4; empty strings until then).
 const LEX_COLUMNS: [&str; 5] = ["roots", "lemmas", "stems", "pos_tags", "patterns"];
-/// I16 budgets.
-const MAX_PATTERN_LEN: usize = 512;
+/// I16 budgets (construction budgets live in [`crate::regex`]).
 const MAX_REGEX_EXPANSION: usize = 128;
 const MAX_VOCAB_SCAN: usize = 50_000;
-/// NFA/DFA construction budgets (bytes).
-const NFA_SIZE_LIMIT: usize = 1024 * 1024;
-const DFA_SIZE_LIMIT: usize = 4 * 1024 * 1024;
 
 /// FTS5-backed [`FullTextIndex`], bound to one generation directory.
 #[derive(Debug)]
@@ -383,28 +379,9 @@ fn quote_phrase_term(term: &str) -> String {
     term.replace('"', "\"\"")
 }
 
-/// Compile a pattern with the I16 DFA-only engine and budgets.
+/// Compile a pattern through the single DFA engine ([`crate::regex`]).
 fn compile_dfa(pattern: &str) -> Result<regex_automata::dfa::regex::Regex, IndexError> {
-    use regex_automata::dfa::{dense, regex};
-    use regex_automata::nfa::thompson;
-    if pattern.len() > MAX_PATTERN_LEN {
-        return Err(IndexError::QueryRejected {
-            detail: format!("pattern exceeds {MAX_PATTERN_LEN} characters"),
-        });
-    }
-    let stripped = pattern.strip_prefix('^').unwrap_or(pattern);
-    if stripped.starts_with(".*") || stripped.starts_with(".+") {
-        return Err(IndexError::QueryRejected {
-            detail: "unanchored leading .* is rejected; anchor the pattern instead".to_string(),
-        });
-    }
-    let mut builder = regex::Builder::new();
-    builder
-        .dense(dense::Config::new().minimize(true).dfa_size_limit(Some(DFA_SIZE_LIMIT)))
-        .thompson(thompson::Config::new().nfa_size_limit(Some(NFA_SIZE_LIMIT)));
-    builder
-        .build(pattern)
-        .map_err(|err| IndexError::QueryRejected { detail: format!("invalid pattern: {err}") })
+    crate::regex::compile_dfa(pattern)
 }
 
 /// Metadata column allowlist for range queries.
