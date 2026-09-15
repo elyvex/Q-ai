@@ -46,6 +46,10 @@ const DFA_SIZE_LIMIT: usize = 4 * 1024 * 1024;
 #[derive(Debug)]
 pub struct Fts5Index {
     root: PathBuf,
+    /// Build generation backing this instance (`gen-<N>` directory).
+    /// Independent from `manifest.corpus_generation`: several builds may
+    /// target one corpus generation (retained for single-step rollback).
+    generation: u64,
     manifest: IndexManifest,
     family: TokenizerFamily,
     pool: SqlitePool,
@@ -82,6 +86,7 @@ impl Fts5Index {
     /// when the directory cannot be prepared.
     pub async fn stage(
         root: &Path,
+        generation: u64,
         manifest: IndexManifest,
         family: TokenizerFamily,
     ) -> Result<Self, IndexError> {
@@ -94,7 +99,7 @@ impl Fts5Index {
                 ),
             });
         }
-        let dir = Self::gen_dir(root, manifest.corpus_generation);
+        let dir = Self::gen_dir(root, generation);
         if dir.exists() {
             std::fs::remove_dir_all(&dir).map_err(|err| IndexError::BuildFailed {
                 stage: "stage".to_string(),
@@ -105,8 +110,8 @@ impl Fts5Index {
             stage: "stage".to_string(),
             detail: err.to_string(),
         })?;
-        let pool = Self::connect(&Self::db_path(root, manifest.corpus_generation), true).await?;
-        let index = Self { root: root.to_path_buf(), manifest, family, pool };
+        let pool = Self::connect(&Self::db_path(root, generation), true).await?;
+        let index = Self { root: root.to_path_buf(), generation, manifest, family, pool };
         index.create_tables().await?;
         let manifest_json = serde_json::to_string_pretty(&index.manifest).map_err(|err| {
             IndexError::BuildFailed { stage: "stage".to_string(), detail: err.to_string() }
@@ -125,10 +130,11 @@ impl Fts5Index {
     /// database is missing.
     pub async fn open(
         root: &Path,
+        generation: u64,
         manifest: IndexManifest,
         family: TokenizerFamily,
     ) -> Result<Self, IndexError> {
-        let path = Self::db_path(root, manifest.corpus_generation);
+        let path = Self::db_path(root, generation);
         if !path.exists() {
             return Err(IndexError::BuildFailed {
                 stage: "open".to_string(),
@@ -136,7 +142,7 @@ impl Fts5Index {
             });
         }
         let pool = Self::connect(&path, false).await?;
-        Ok(Self { root: root.to_path_buf(), manifest, family, pool })
+        Ok(Self { root: root.to_path_buf(), generation, manifest, family, pool })
     }
 
     async fn create_tables(&self) -> Result<(), IndexError> {
@@ -584,7 +590,7 @@ impl FullTextIndex for Fts5Index {
                 detail: err.to_string(),
             })?;
         Ok(CommitStamp {
-            generation: self.manifest.corpus_generation,
+            generation: self.generation,
             doc_count: doc_count.max(0) as u64,
             content_hash: self.manifest.content_hash.clone(),
         })
@@ -682,7 +688,7 @@ impl FullTextIndex for Fts5Index {
         Ok(FtsStats {
             backend: FtsBackend::Fts5,
             doc_count: doc_count.max(0) as u64,
-            generation: self.manifest.corpus_generation,
+            generation: self.generation,
         })
     }
 
