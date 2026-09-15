@@ -46,12 +46,12 @@ with what evidence.
 |---|---|---|---|---|---|
 | X — External-lead-time decisions | 5 | 0 | — | — | ☐ |
 | 1.0 — Data & Decisions | 5 | 1 | 11.5 | — | ◐ |
-| 1.1 — Domain & Addressing | 9 | 5 | 19.5 | — | ◐ |
-| 1.2 — Import & Validation | 17 | 14 | 42.0 | — | ◐ |
-| 1.3 — Reader, Translations, API | 11 | 0 | 21.5 | — | ☐ |
+| 1.1 — Domain & Addressing | 9 | 6 | 19.5 | — | ◐ |
+| 1.2 — Import & Validation | 17 | 16 | 42.0 | — | ◐ |
+| 1.3 — Reader, Translations, API | 11 | 6 | 21.5 | — | ◐ |
 | 1.4 — Tools, Citations, CLI, Doctor | 11 | 0 | 21.5 | — | ☐ |
 | 1.5 — Debug Reader, Hardening, Exit | 7 | 0 | 15.0 | — | ☐ |
-| **Total** | **60 + 5** | **20** | **131.0** | **—** | **31%** |
+| **Total** | **60 + 5** | **33** | **131.0** | **—** | **51%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -416,82 +416,161 @@ estimate — an under-recorded sprint is how the next phase inherits a wrong cap
   rest are Accepted where no external input is required
 - **Notes:** See §4 for the ADR ledger.
 
-### P1-T25 — `quran.import` job with 13 checkpoints, cancellation, resume
-- **Deliverable:** D1.3
+### P1-T32 — `QuranReader` implementation
+- **Deliverable:** D1.6
 - **Completed:** 2026-09-14
 - **Owner:** agent (BE)
 - **PR / commit:** working tree
-- **Evidence:** `crates/quran-corpus/src/import.rs` (driver) +
-  `crates/application/src/quran.rs` (`QuranImportHandler`, kind `quran.import`);
-  `cargo test -p application --test quran_import` 8/8 green
+- **Evidence:** `application::quran_reader::QuranReaderService` + trait;
+  `cargo test -p application --test quran_reader` 9/9 green
 - **DoD:** ✅ all items
-- **Notes:** Deterministic in `(run_id, manifest)`; every run starts by clearing
-  its own staging, so retry-after-crash is a clean restart — restart *is* resume.
-  Checkpoints serve progress/cancellation/`stop_after` (also the CLI dry-run
-  mechanism), not transaction boundaries. Idempotent on
-  `(source_version_id, adapter_version, parser_version)` via the job key.
-  First real writer of hash-chained audit events app-wide (via the new
-  `application::audit_bridge`).
+- **Notes:** Reads go through the unit of work read-only; a dedicated read-pool
+  path is deferred (single-writer pool serializes concurrent readers in v1).
+  Reference expansion covers ayah/range/surah/division/token; bare edition refs
+  are rejected. Storage rows map to typed domain values with corruption surfacing
+  as constraint diagnostics.
 
-### P1-T27 — Edition differ (char-level) + `DifferenceReport`
-- **Deliverable:** D1.3
+### P1-T33 — `get_context` with boundary logic + caps
+- **Deliverable:** D1.6
 - **Completed:** 2026-09-14
 - **Owner:** agent (BE)
 - **PR / commit:** working tree
-- **Evidence:** `quran_corpus::differ` unit tests; difference report persisted at
-  every import and asserted in the e2e test
+- **Evidence:** `context_respects_boundaries_and_caps` (surah clip, juz clip,
+  `max_ayahs` trim-after-then-before)
 - **DoD:** ✅ all items
-- **Notes:** Ayah-aligned by identity; changed ranges in new-text character
-  offsets via `similar`; metadata folds into a boolean. ADR-0109 accepted.
+- **Notes:** Focal = the ayah (or range start); context never crosses the declared
+  boundary; the hard cap trims after-first, then before. Surah-scoped ruku
+  resolves via ayah rows; global ruku/page/juz via the divisions table.
 
-### P1-T28 — Activation transaction + rollback + `corpus_generation`
-- **Deliverable:** D1.3
+### P1-T34 — Division lookups
+- **Deliverable:** D1.6
 - **Completed:** 2026-09-14
 - **Owner:** agent (BE)
 - **PR / commit:** working tree
-- **Evidence:** repo-level tests (M6) + `activation_service_requires_a_granted_approval`
-  + `rollback_service_restores_the_prior_version`
+- **Evidence:** `ranges_surahs_and_divisions_expand` (juz 1 = 8 ayahs, juz 2 = 6)
 - **DoD:** ✅ all items
-- **Notes:** AC-P1-03 enforced in `application::quran`: activation/rollback require
-  a **granted** approval whose `subject_urn` equals the exact edition URN, and the
-  audit event commits in the same transaction. The importer never activates (I5/I7).
+- **Notes:** All seven kinds resolve to global ranges through `quran_divisions`.
 
-### P1-T29 — Crash-at-each-checkpoint test matrix (13 cases)
-- **Deliverable:** D1.13
+### P1-T35 — Generation-keyed cache + consistency test
+- **Deliverable:** D1.6
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** working tree
+- **Evidence:** `cache_serves_no_stale_text_after_activation` (v1→v2 activation
+  changes served text + reference)
+- **DoD:** ✅ all items
+- **Notes:** `lru` keyed by `(edition, version, generation, ref, options)`;
+  generation bump invalidates wholesale. ADR-0113 accepted.
+
+### P1-T37 — `AyahView` / `AttributedTranslation` + principle-5 guards
+- **Deliverable:** D1.6
+- **Completed:** 2026-09-14 (types + guards; T36/T38 import jobs stay in M9)
+- **Owner:** agent (BE)
+- **PR / commit:** working tree
+- **Evidence:** `quran_core::view` unit tests (translator/edition required)
+- **DoD:** ✅ all items
+- **Notes:** Structural principle 5: no variant puts a translation in `canonical`.
+  Word glosses return `None` until a gloss dataset is imported (T38, optional).
+
+### P1-T41 — Performance smoke
+- **Deliverable:** D1.6
 - **Completed:** 2026-09-14
 - **Owner:** agent (QA)
 - **PR / commit:** working tree
-- **Evidence:** `crash_matrix_all_thirteen_checkpoints_leave_active_untouched`:
-  active pointer absent after all 13 prefixes; retry completes to `Staged`
+- **Evidence:** `lookup_performance_smoke` (2000 warm lookups, avg < 5 ms budget)
 - **DoD:** ✅ all items
-- **Notes:** Satisfies AC-P1-10's negative guarantee structurally (canonical tables
-  are unreachable before activation) plus AC-P1-11 via
-  `cancel_cleans_staging_and_marks_cancelled`.
+- **Notes:** Coarse smoke, not a benchmark harness; generous budget avoids flakes.
+  Cold-path and longest-surah timings belong to the M10 soak.
 
-### P1-T26 — Round-trip verifier (reference comparator partial)
-- **Deliverable:** D1.4
-- **Completed:** 2026-09-14
-- **Owner:** agent (BE)
-- **PR / commit:** working tree
-- **Evidence:** `roundtrip_verified` reconstructs every staged ayah and recomputes
-  `text_hash` (QV-014 half) and `token_order_hash` (QV-024) from stored rows
-- **DoD:** ⚠️ exceptions: QV-015 is a recorded **skip** (Info finding) — no reference
-  corpus is configured (blocker B2 / ADR-0114 Draft pending human sign-off)
-- **Notes:** Fail-closed on mismatch. The skip is explicit in every validation
-  report, never a silent pass.
-
-### P1-T31 — ADR-0106 / 0107 / 0108 / 0109 (+ full Phase-1 set)
+### P1-T42 — ADR-0112 / ADR-0113 (partial)
 - **Deliverable:** ADR
 - **Completed:** 2026-09-14
 - **Owner:** agent (DOC)
 - **PR / commit:** working tree
-- **Evidence:** `docs/02-architecture/decisions/ADR-0101…0114` (14 files)
-- **DoD:** ⚠️ exceptions: ADR-0101/0114 stay **Draft** pending human sign-off;
-  ADR-0111/0112/0113 are drafts until their deliverables land (M9/M8)
-- **Notes:** 0102–0110 Accepted where implementation exists. User-supplied public
-  dataset candidates (2026-09-14) recorded in ADR-0101 as surveyed-but-unverified.
-  See §4 ledger.
-```
+- **Evidence:** ADR-0113 flipped to Accepted (cache implemented + tested)
+- **DoD:** ⚠️ exceptions: ADR-0112 stays Draft until translation import (P1-T36, M9)
+- **Notes:** —
+
+### P1-T11 — ADR-0102 / 0103 / 0105
+- **Deliverable:** ADR
+- **Completed:** 2026-09-14
+- **Owner:** agent (DOC)
+- **PR / commit:** working tree
+- **Evidence:** `docs/02-architecture/decisions/ADR-0102…0105` (Accepted)
+- **DoD:** ✅ all items
+- **Notes:** Grammar frozen with golden set + round-trip property; numbering
+  per-edition (I3); Unicode policy enforced by QV-007/008/009; lossless
+  whitespace-preserving tokenization with byte-equality gate.
+
+### P1-T04 — ADR-0101 / 0104 / 0110 (partial)
+- **Deliverable:** ADR
+- **Completed:** 2026-09-14
+- **Owner:** agent (DOC)
+- **PR / commit:** working tree
+- **Evidence:** ADR-0104 + ADR-0110 Accepted; ADR-0101 Draft with surveyed
+  candidates (local + user-supplied public projects, all unverified)
+- **DoD:** ⚠️ exceptions: ADR-0101 stays Draft — dataset selection and licensing
+  are owner decisions (blocker B1, swimlane P1-X01/X02)
+- **Notes:** —
+
+### P1-T43 — `ToolResult` contract + reproducibility checksum
+- **Deliverable:** D1.8
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** working tree
+- **Evidence:** `tools` crate unit tests (determinism, sensitivity, codes)
+- **DoD:** ✅ all items
+- **Notes:** Phase-1 covers deterministic inputs only; model/prompt fields are
+  `None` until Phase 9. Checksum binds tool, query, editions, and generation.
+
+### P1-T44 — Minimal tool registry + two read-only tools
+- **Deliverable:** D1.8
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** working tree
+- **Evidence:** `tool-registry` unit tests + `application/tests/quran_tools.rs`
+  against the real reader
+- **DoD:** ✅ all items
+- **Notes:** Registry depends on a `QuranBackend` trait (implemented by the
+  application layer) so dependency direction stays legal. Malformed input is a
+  typed `InvalidInput`; nothing is ever synthesized.
+
+### P1-T45 — Tool conformance + no-fabrication tests
+- **Deliverable:** D1.13
+- **Completed:** 2026-09-14
+- **Owner:** agent (QA)
+- **PR / commit:** working tree
+- **Evidence:** `get_ayah_tool_conforms_and_cites`, `get_context_tool_conforms`,
+  `no_fabrication_on_missing_references`, checksum determinism across calls
+- **DoD:** ✅ all items
+- **Notes:** AC-P1-15 automated-green (ritual pending). `QuranQuotation::new`
+  stays constructor-guarded; tools only quote what the reader returns.
+
+### P1-T46 — `citations` crate: resolver + persistence
+- **Deliverable:** D1.9
+- **Completed:** 2026-09-14
+- **Owner:** agent (BE)
+- **PR / commit:** working tree
+- **Evidence:** `citations` unit tests (all verdicts) +
+  `citations_resolve_verify_and_persist` (resolve → persist → re-read → re-verify)
+- **DoD:** ✅ all items
+- **Notes:** Resolver reads through a `CitationSource` trait; persistence goes
+  through the `citations` table with `content_hash` + `ingestion_version`.
+  v1 verifies single ayahs; ranges are hard `LocationNotFound` (safe direction).
+
+### P1-T47 — Deep links + resolver endpoint + round-trip tests
+- **Deliverable:** D1.9
+- **Completed:** 2026-09-14 (crate-level; HTTP endpoint lands with API v1)
+- **Owner:** agent (BE)
+- **PR / commit:** working tree
+- **Evidence:** `links_render` + deep links asserted on every resolution
+- **DoD:** ⚠️ exceptions: the HTTP resolver endpoint (`GET /citations/:id`) is
+  deferred to the API surface (M9b); formats are frozen now
+- **Notes:** `/read/{slug}@{version}/{s}:{a}` + `qai://quran/…` URN. ADR-0111 stays
+  Draft until the endpoint lands.
+
+**Entry format (repeat per task)**
+
 ### P1-Tnn — <task title>
 - **Deliverable:** D1.x
 - **Completed:** YYYY-MM-DD
@@ -552,13 +631,13 @@ the implementer.
 | AC-P1-12 | 🎥 300 golden references parse; malformed inputs return coded errors, never panic | partial — automated | agent | `crates/quran-core/tests/reference_grammar.rs`; 331 cases |
 | AC-P1-13 | `parse(serialize(ref)) == ref` for all variants | partial — automated | agent | `roundtrip_parse_serialize` proptest |
 | AC-P1-14 | Quran read API v1 envelope, meta, ETag, content-language, error body | — | — | — |
-| AC-P1-15 | Tool §12 contract conformance + deterministic checksum + no fabrication | — | — | — |
+| AC-P1-15 | Tool §12 contract conformance + deterministic checksum + no fabrication | partial — automated | agent | `application/tests/quran_tools.rs` |
 | AC-P1-16 | CLI conventions + snapshots incl. RTL sanity | — | — | — |
 | AC-P1-17 | `doctor --quran` 19 checks, read-only, `--deep` < 30 s, JSON schema | — | — | — |
 | AC-P1-18 | Debug reader RTL, labelled, no persistence, excluded from nav | — | — | — |
-| AC-P1-19 | No stale text served after activation (generation-keyed cache) | — | — | — |
+| AC-P1-19 | No stale text served after activation (generation-keyed cache) | partial — automated | agent | `cache_serves_no_stale_text_after_activation` |
 | AC-P1-20 | 14 ADRs accepted §48-complete; 5 D1.14 docs published | — | — | — |
-| AC-P1-21 | Citation resolver verdicts + persisted citation re-verification | — | — | — |
+| AC-P1-21 | Citation resolver verdicts + persisted citation re-verification | partial — automated | agent | `citations` unit + `citations_resolve_verify_and_persist` |
 
 ---
 
