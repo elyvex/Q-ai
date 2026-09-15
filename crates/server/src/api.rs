@@ -259,12 +259,10 @@ fn json_response<T: Serialize>(
 
 fn ok_envelope<T: Serialize>(data: T, meta: Meta, headers: &HeaderMap) -> Response {
     // Conditional requests: matching ETag short-circuits the body.
-    if let (Some(sent), Some(current)) = (headers.get("if-none-match"), etag_for(&meta)) {
-        if sent == current {
-            return StatusCode::NOT_MODIFIED.into_response();
-        }
-    }
     let etag = etag_for(&meta);
+    if etag.as_ref().is_some_and(|current| headers.get("if-none-match") == Some(current)) {
+        return StatusCode::NOT_MODIFIED.into_response();
+    }
     json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, etag, true)
 }
 
@@ -669,44 +667,6 @@ pub async fn serve(addr: &str, state: AppState) -> Result<(), crate::ServerError
     axum::serve(listener, router(state)).await.map_err(crate::ServerError::from)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn envelope_meta_serializes_with_required_keys() {
-        let meta = empty_meta();
-        let value = serde_json::to_value(&meta).unwrap();
-        for key in [
-            "edition",
-            "corpus_generation",
-            "canonical_reference",
-            "deep_link",
-            "execution_time_ms",
-            "reproducibility",
-            "warnings",
-        ] {
-            assert!(value.get(key).is_some(), "missing meta key {key}");
-        }
-    }
-
-    #[test]
-    fn tool_status_mapping() {
-        assert_eq!(
-            tool_status(&ToolError::InvalidInput { tool: "t", detail: "d".into() }),
-            StatusCode::BAD_REQUEST
-        );
-        assert_eq!(
-            tool_status(&ToolError::Backend { code: "QAI-QUR-0307".into(), detail: "d".into() }),
-            StatusCode::NOT_FOUND
-        );
-        assert_eq!(
-            tool_status(&ToolError::Backend { code: "QAI-QUR-0310".into(), detail: "d".into() }),
-            StatusCode::INTERNAL_SERVER_ERROR
-        );
-    }
-}
-
 /// Application-backed implementation of [`QuranApiBackend`].
 pub struct ReaderBackend {
     reader: std::sync::Arc<application::quran_reader::QuranReaderService>,
@@ -913,5 +873,43 @@ impl QuranApiBackend for ReaderBackend {
             code: err.code().to_string(),
             detail: err.to_string(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn envelope_meta_serializes_with_required_keys() {
+        let meta = empty_meta();
+        let value = serde_json::to_value(&meta).unwrap();
+        for key in [
+            "edition",
+            "corpus_generation",
+            "canonical_reference",
+            "deep_link",
+            "execution_time_ms",
+            "reproducibility",
+            "warnings",
+        ] {
+            assert!(value.get(key).is_some(), "missing meta key {key}");
+        }
+    }
+
+    #[test]
+    fn tool_status_mapping() {
+        assert_eq!(
+            tool_status(&ToolError::InvalidInput { tool: "t", detail: "d".into() }),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            tool_status(&ToolError::Backend { code: "QAI-QUR-0307".into(), detail: "d".into() }),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            tool_status(&ToolError::Backend { code: "QAI-QUR-0310".into(), detail: "d".into() }),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
     }
 }
