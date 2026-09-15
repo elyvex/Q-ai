@@ -118,6 +118,7 @@ impl storage::error::Diagnostic for IndexBuildError {
                     IE::BuildFailed { .. } => 3,
                     IE::ManifestMismatch { .. } => 4,
                     IE::CanonicalChanged { .. } => 5,
+                    IE::InvalidHit { .. } => 6,
                 };
                 storage::error::DiagnosticCode::new("QAI-IDX", number)
             }
