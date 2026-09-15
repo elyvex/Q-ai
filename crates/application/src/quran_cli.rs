@@ -138,6 +138,7 @@ pub async fn cmd_get(
     reference: &str,
     translations: Option<&str>,
     tokens: bool,
+    glosses: bool,
 ) -> CommandOutput {
     use crate::quran_reader::QuranReader;
     let db = match open_db(db_path).await {
@@ -155,7 +156,7 @@ pub async fn cmd_get(
             .filter(|part| !part.trim().is_empty())
             .map(|part| part.trim().to_string())
             .collect(),
-        glosses: false,
+        glosses,
         tokens,
     };
     let view = match reader(&db).get_ayah(&parsed, &options).await {
@@ -168,6 +169,13 @@ pub async fn cmd_get(
     let mut human = format!("{}\n— {}", view.canonical.arabic_text(), view.canonical.reference());
     for translation in &view.translations {
         human.push_str(&format!("\n[{}] {}", translation.translator(), translation.text()));
+    }
+    if let Some(glosses) = &view.word_glosses {
+        for gloss in glosses {
+            // Position is not carried in `AttributedGloss`; the dataset id keeps
+            // each gloss attributed while the JSON carries the full rows.
+            human.push_str(&format!("\n[{}] {}", gloss.dataset, gloss.gloss));
+        }
     }
     CommandOutput::ok(human, serde_json::to_value(&view).unwrap_or_default())
 }
@@ -1066,6 +1074,81 @@ pub async fn cmd_translation_show(db_path: &str, slug: &str) -> CommandOutput {
         ),
         None => CommandOutput::err(exit::NOT_FOUND, format!("no translation `{slug}`")),
     }
+}
+
+/// `quran gloss import`.
+pub async fn cmd_gloss_import(db_path: &str, manifest: &str) -> CommandOutput {
+    let text = match std::fs::read_to_string(manifest) {
+        Ok(text) => text,
+        Err(err) => {
+            return CommandOutput::err(exit::USAGE, format!("cannot read `{manifest}`: {err}"));
+        }
+    };
+    let db = match open_db(db_path).await {
+        Ok(db) => Arc::new(db),
+        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+    };
+    let at = now_rfc3339();
+    if let Err(output) = ensure_principal_or_err(&db, &at).await {
+        return output;
+    }
+    let principal: domain::PrincipalId = match LOCAL_PRINCIPAL.parse() {
+        Ok(principal) => principal,
+        Err(_) => return CommandOutput::err(exit::INTERNAL, "bad local principal".to_string()),
+    };
+    let at_ts = match at.parse::<domain::Timestamp>() {
+        Ok(at) => at,
+        Err(_) => return CommandOutput::err(exit::INTERNAL, "bad timestamp".to_string()),
+    };
+    // The gloss dataset source row (provisioned like imports).
+    if let Err(output) = ensure_gloss_source(&db, &text, &at).await {
+        return output;
+    }
+    match super::quran::import_glosses(&*db, &text, &principal, &at_ts).await {
+        Ok(count) => CommandOutput::ok(
+            format!("imported {count} glosses\n"),
+            serde_json::json!({"count": count}),
+        ),
+        Err(err) => {
+            let (exit, message) = map_activation_error(err);
+            CommandOutput::err(exit, message)
+        }
+    }
+}
+
+async fn ensure_gloss_source(
+    db: &Arc<SqliteDatabase>,
+    manifest_text: &str,
+    at: &str,
+) -> Result<(), CommandOutput> {
+    let manifest: super::quran::GlossManifest = serde_json::from_str(manifest_text)
+        .map_err(|err| CommandOutput::err(exit::VALIDATION, format!("bad manifest: {err}")))?;
+    let mut uow = db
+        .write()
+        .await
+        .map_err(|err: StorageError| CommandOutput::err(exit::INTERNAL, err.to_string()))?;
+    if uow
+        .sources()
+        .get(&manifest.dataset.id)
+        .await
+        .map_err(|err: StorageError| CommandOutput::err(exit::INTERNAL, err.to_string()))?
+        .is_none()
+    {
+        uow.sources()
+            .insert_source(storage::repository::SourceRow {
+                id: manifest.dataset.id.clone(),
+                title: manifest.dataset.id.clone(),
+                content_type: "quran_gloss".to_string(),
+                language: None,
+                created_at: at.to_string(),
+            })
+            .await
+            .map_err(|err: StorageError| CommandOutput::err(exit::INTERNAL, err.to_string()))?;
+    }
+    uow.commit()
+        .await
+        .map_err(|err: StorageError| CommandOutput::err(exit::INTERNAL, err.to_string()))?;
+    Ok(())
 }
 
 fn now_rfc3339() -> String {
