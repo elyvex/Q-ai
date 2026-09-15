@@ -287,11 +287,7 @@ pub trait QuranRepository: Send + Sync {
 
     /// Set a canonical edition's lifecycle status (human-gated maintenance;
     /// identity and hashes stay trigger-guarded).
-    async fn set_edition_status(
-        &mut self,
-        _id: &str,
-        _status: &str,
-    ) -> Result<(), StorageError> {
+    async fn set_edition_status(&mut self, _id: &str, _status: &str) -> Result<(), StorageError> {
         Err(StorageError::StorageUnavailable)
     }
 
