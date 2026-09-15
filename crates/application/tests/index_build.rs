@@ -12,7 +12,7 @@ use std::sync::atomic::AtomicBool;
 use application::quran::activate_edition;
 use application::quran_forms::{RebuildParams, rebuild_forms};
 use application::quran_index::{
-    IndexBuildParams, QURAN_AYAH_INDEX_ID, QURAN_INDEX_BUILD_KIND, IndexBuildHandler,
+    IndexBuildParams, IndexBuildHandler, QURAN_AYAH_INDEX_ID,
 };
 use domain::{PrincipalId, Timestamp};
 use jobs::{JobContext, JobHandler};
