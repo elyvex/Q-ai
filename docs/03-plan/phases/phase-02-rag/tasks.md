@@ -144,8 +144,8 @@ before opening the sprint.
 | ID | Task | Deliv. | Depends | Est | Role | Status |
 |---|---|---|---|---|---|---|
 | P2-T40 | `SearchHit`, `ScoreExplain`, unified result assembly + canonical-span attach | D2.5 | T14,T30 | 2.5 | BE | ☑ |
-| P2-T41 | `quran.search_exact` (+ zero-result normalization hint) | D2.5 | T40 | 2.0 | SRCH | ☐ |
-| P2-T42 | `quran.search_normalized` incl. ad-hoc rule sets + `explain` | D2.5 | T41 | 3.0 | SRCH | ☐ |
+| P2-T41 | `quran.search_exact` (+ zero-result normalization hint) | D2.5 | T40 | 2.0 | SRCH | ☑ |
+| P2-T42 | `quran.search_normalized` incl. ad-hoc rule sets + `explain` | D2.5 | T41 | 3.0 | SRCH | ☑ |
 | P2-T43 | `quran.search_phrase` (ordered/near/unordered, slop) | D2.5 | T41 | 2.5 | SRCH | ☐ |
 | P2-T44 | `quran.search_concatenated`: candidate gen → verify → segmentation explanation | D2.4 | T36,T40 | 4.5 | SRCH | ☐ |
 | P2-T45 | Cross-ayah window dedup + `spans_ayah_boundary` labeling | D2.4 | T44 | 2.0 | SRCH | ☐ |
