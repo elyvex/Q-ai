@@ -1,0 +1,137 @@
+# Handoff — Phase 1 → Phase 2
+
+> **From:** Phase 1 — Canonical Quran Core (in progress, ~60% of task rows ☑)
+> **To:** Phase 2 — Quran Search, Normalization & Linguistics
+> **Author:** Phase-1 agent (owner to ratify)
+> **Date:** 2026-09-15
+> **Plan source of truth:** `docs/03-plan/phases/phase-01-core/plan.md`;
+> deviations are recorded in `docs/03-plan/phases/phase-01-core/done.md` §5 and
+> carried here in §6.
+
+> **Verification caveat.** The last *complete* Phase-1 gate run was green
+> (`cargo test --workspace` = 387 passing; `clippy -D warnings`, `fmt`,
+> `xtask arch-check`, `xtask migrate-check` clean). At handoff time a concurrent
+> Phase-2 writer held the build lock and had added `0013_quran_normalization`,
+> so the final re-run of the full suite is **pending**; the Phase-1-specific
+> suites (`quran_*`, `cli` snapshots, `server` API) are green in isolation.
+
+Phase 2 must **not re-invent** the following assets. Extend them.
+
+## 1. Assets Phase 2 inherits
+
+| Asset | Location | Phase 2 usage |
+|---|---|---|
+| Numbering newtypes + enums | `crates/quran-core/src/{numbers,enums}.rs` | Never re-derive `surah`/`ayah` from strings; use `SurahNumber`/`AyahNumber` |
+| Edition / surah / ayah / segment / token structs | `crates/quran-core/src/{edition,structure}.rs` | Search hits carry the same edition identity |
+| `QuranQuotation` + constructor guard | `crates/quran-core/src/quotation.rs` | The only allowed carrier of quoted canonical text (I6) |
+| `AyahView` / `AttributedTranslation` / `ContextBoundary` | `crates/quran-core/src/view.rs` | Read surfaces; reuse instead of new DTOs |
+| Reference grammar (parse/serialize) | `crates/quran-core/src/reference/{parser,serializer}.rs` | Parse user queries into references; never regex an ayah |
+| Frozen hashing recipes | `crates/quran-corpus/src/hashing.rs` | `text_hash` / `structure_hash` / `token_order_hash`; do not fork |
+| Tokenizer + offsets | `crates/quran-corpus/src/tokenize.rs` | Char-level surface tokens with grapheme-mapped offsets |
+| Unicode auditor + normalization surface | `crates/quran-corpus/src/unicode.rs` | Phase-2 rule catalog builds on this |
+| Validator registry + QV-001…028 | `crates/quran-corpus/src/validation.rs`, `crates/sources/src/registry.rs` | Add Phase-2 validators to the same registry |
+| Importer (13 checkpoints) + differ | `crates/quran-corpus/src/{import,differ}.rs` | Ingest new editions; do not write canonical rows another way |
+| `QuranRepository` traits + SQLite impl | `crates/storage/src/quran.rs`, `crates/storage-sqlite/src/quran.rs` | Extend for index/search tables |
+| `QuranReader` + generation-keyed cache | `crates/application/src/quran_reader.rs` | Index freshness keys on `corpus_generation` |
+| Application services (import/activate/rollback/translations) | `crates/application/src/quran.rs` | Same approval-gated canonical write path |
+| Tool contract + registry | `crates/tools/src/lib.rs`, `crates/tool-registry/src/lib.rs` | New tools conform to `ToolResult`/`ReproducibilityData` |
+| Citation resolver + deep links | `crates/citations/src/lib.rs`, `crates/quran-core/src/reference/serializer.rs` | Citation identity is frozen (ADR-0111) |
+| API v1 + OpenAPI | `crates/server/src/api.rs`, `docs/08-api/quran-v1-openapi.json` | Add endpoints under the same envelope; update the spec |
+| `doctor` + check registry | `crates/cli/src/doctor.rs`, `crates/application/src/quran_doctor.rs` | Add search/normalization checks; keep it read-only |
+| `quran-normalization` (Phase-2 M1a/M1b, in progress) | `crates/quran-normalization/src/*` | The rule catalog (`N01`–`N22`), `SpanMap` (I10), pipeline, L0–L8 profiles |
+
+## 2. Interfaces to build against
+
+- **Storage:** implement repository traits; never bypass `UnitOfWork`. A
+  projection-relevant write enqueues its outbox row through `UnitOfWork::outbox()`
+  in the same transaction (`crates/storage/src/workflows.rs`).
+- **Canonical writes:** only through the importer → `Staged` → approval → activation
+  path. `ApprovalToken` exists only from a persisted human `ApprovalRecord`; the
+  importer itself holds no token (I5/I7).
+- **Reader:** go through `QuranReader` so caching and generation semantics are shared;
+  do not read canonical tables directly from a tool or endpoint.
+- **Tools:** every tool returns `ToolResult` with a deterministic reproducibility
+  checksum and typed errors; requesting a non-existent reference must be a typed
+  error, never a synthesized result.
+- **API:** reuse the response envelope (`meta` + `data`) and the Phase-0 `Diagnostic`
+  error body; extend `docs/08-api/quran-v1-openapi.json` and keep the route-coverage
+  test green.
+- **CLI:** verbs after nouns, `--json` on every read command, destructive verbs confirm
+  unless `--yes`, plus the Phase-0 exit-code table.
+- **Normalization:** the L0–L8 profile ladder and `NormalizationPipeline` live in
+  `crates/application/src/quran_normalize.rs`; search indexing must pin a profile
+  version and record it in provenance.
+
+## 3. Invariants Phase 2 is bound by
+
+| ID | Invariant | Enforcement |
+|---|---|---|
+| I1 | Canonical tables are insert-only | DB triggers + `crates/storage-sqlite/tests/quran.rs` |
+| I2 | No LLM/embeddings/retrieval/vector-store dependency in `quran-core` / `quran-corpus` | `xtask arch-check` + `xtask/allowlist.toml` |
+| I3 | `edition_id` is part of every canonical key | DDL PKs |
+| I5 | Import cannot activate; a human approval is required | `application::quran` activation service |
+| I6 | Quotation only via `QuranQuotation` | Constructor visibility |
+| I7 | Activation is a single transaction + generation bump | `rollback_edition`/`activate` services |
+| I10 | Normalization spans are composable and reversible | `quran-normalization` `SpanMap` |
+
+Also: the reader cache is keyed on `(edition_id, version, corpus_generation, ref,
+options_hash)` — a generation change must invalidate wholesale (AC-P1-19). `doctor`
+must remain strictly read-only (Phase-0 AC-P0-14).
+
+## 4. Constraints carried forward
+
+- `domain`/`quran-core` dependency sets are enforced by `cargo xtask arch-check`
+  against `xtask/allowlist.toml` (name-keyed; register new crates there, fail-closed).
+- Migrations are append-only and checksummed (`migrations/sqlite/checksums.json`);
+  `xtask migrate-check` requires versions contiguous from 1. Phase 2 continues from
+  `0013`.
+- Canonical rows are insert-only (DB triggers); deactivation uses tombstones.
+- Secrets never persist in SQLite — store `SecretRef`s only.
+- Timestamps are UTC RFC3339; hashes are lowercase `sha256:<hex>`.
+- Divisions are numbered **globally per kind** (`(kind, number)` PK) — see DEV-03.
+
+## 5. Known limitations / deferred items
+
+| Item | Owner | Notes |
+|---|---|---|
+| ADR-0101 dataset + license + named editorial reviewer | Swimlane X (owner) | Engineering runs on the synthetic `test-edition-min` fixture; ADR-0101 stays Draft (OWN-01) |
+| ADR-0114 reference corpus + sign-off procedure | Swimlane X (owner) | QV-015 is skip-when-unconfigured, never a silent pass (OWN-02) |
+| ADR-0111 / ADR-0112 | Phase 1/2 | Stay Draft until the resolver endpoint / translation alignment surface is signed off |
+| Estimate gap 82 ed vs 131.0 ed summed | phase owner | Proceeded incrementally; no silent compression (OWN-03) |
+| axum + tower-http | phase owner | Adopted provisionally for API v1; ADR still to ratify (OWN-04) |
+| Phase-0 exit discrepancy | phase owner | `status.md` lists outstanding Phase-0 items while the build prompt declared Phase 0 complete (OWN-05) |
+| XML adapter shape | Phase 2+ | JSON + CSV only; the `Adapter` trait supports adding XML unchanged (DEV-01) |
+| `doctor --quran --deep` < 30 s timing + JSON schema-validation test | Phase 1 exit | 19 checks and read-only open are verified; the timing assertion and a machine schema check are unverified (P1-T52 ◐) |
+| `cli` snapshot coverage for `diff`/`rollback`/`context`/`surah` | Phase 1 exit | `read_flow.trycmd` covers the read/import/activate/translation path (P1-T50) |
+| Phase-0 `application/src/db.rs` schema-version tests | done | Now derive the expected version from `migrations/sqlite/` instead of hard-coding it |
+| `server` → `storage` / `server` → `tools` layering edge | Phase 3 / server hardening | `ReaderBackend` uses the `storage::Database` trait and `tools::ToolError` directly; allowlisted to keep `arch-check` green (OWN-06). Route through `application` re-exports and tighten the allowlist |
+
+## 6. Deviations Phase 2 must honour
+
+- **DEV-01** — No XML adapter; JSON + CSV prove adapter extensibility.
+- **DEV-02** — Phase-1 migrations are `0007`–`0012` (not the plan's `0010`–`0015`);
+  `migrate-check` requires contiguity. Phase 2 continues from `0013`.
+- **DEV-03** — Division numbers are globally unique per kind (`ruku`/`rub` cumulative);
+  per-surah ruku stays available via the ayah `ruku` column.
+
+## 7. Suggested first Phase-2 tasks
+
+1. Read `docs/03-plan/phases/phase-02-rag/execution-plan.md`; it reconciles the
+   migration mapping (`0013`–`0018`) and the FTS5-first fallback (DEV-05).
+2. Land the normalization catalog/profile seed and bind it to the code ladder with a
+   test (`tests/normalization_seed.rs`) so migration seed and code cannot drift.
+3. Build the first search index *from the reader*, keyed on `corpus_generation`, and
+   prove no stale hits after activation.
+4. Add search/normalization checks to the existing `doctor` registry rather than a
+   parallel doctor.
+5. Extend the API v1 envelope + OpenAPI spec for search; keep the route-coverage test.
+
+## 8. Phase-1 closure state at handoff
+
+- 41 / 68 task rows ☑; 10 / 21 acceptance criteria partial (automated-green, ritual
+  pending); 0 / 14 ADRs Accepted (0101/0111/0112/0114 Draft, others Proposed); 6 / 6
+  Phase-1 migrations applied and checksummed.
+- Phase-1 exit gate (`done.md` §8) is **not** signed: it requires the Swimlane-X
+  decisions, 15 green suites, the 9-step ritual recording, and the D1.14 docs.
+- Phase 2 is not blocked by the *engineering* of Phase 1 — only by the owner/editorial
+  decisions above, which have external lead time and should be started now.
