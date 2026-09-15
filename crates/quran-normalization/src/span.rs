@@ -31,6 +31,29 @@ pub struct CanonicalSpan {
     pub exact: bool,
 }
 
+impl CanonicalSpan {
+    /// Byte range of [`Self::char_range`] inside `text` (char-indexed).
+    ///
+    /// Returns `None` when the range exceeds the text. Highlight renderers
+    /// slice canonical text with the result; token ranges ride alongside on
+    /// the owning hit type.
+    #[must_use]
+    pub fn byte_range_in(&self, text: &str) -> Option<Range<u32>> {
+        let total_chars = text.chars().count() as u32;
+        if self.char_range.start > total_chars || self.char_range.end > total_chars {
+            return None;
+        }
+        let byte_of = |idx: u32| {
+            if idx == total_chars {
+                Some(text.len() as u32)
+            } else {
+                text.char_indices().nth(idx as usize).map(|(byte, _)| byte as u32)
+            }
+        };
+        Some(byte_of(self.char_range.start)?..byte_of(self.char_range.end)?)
+    }
+}
+
 /// One grouped segment: a contiguous derived range mapping to a contiguous
 /// canonical range, with the rule that produced the mapping.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
