@@ -239,6 +239,19 @@ impl NormalizedText {
     pub fn is_empty(&self) -> bool {
         self.text.is_empty()
     }
+
+    /// Assemble derived text with its offset map (rule implementations only).
+    ///
+    /// In debug builds, panics when the text length disagrees with the map's
+    /// derived side; release builds accept it (the map is advisory there).
+    pub(crate) fn from_parts(text: String, spans: SpanMap) -> Self {
+        debug_assert_eq!(
+            text.chars().count() as u32,
+            spans.derived_len(),
+            "NormalizedText text/map length mismatch"
+        );
+        Self { text, spans }
+    }
 }
 
 /// Implementation contract for a single normalization rule (`plan.md` §3.2).
