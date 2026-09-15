@@ -125,9 +125,68 @@ async fn context_respects_boundaries_and_caps() {
     assert_eq!(view.before.len(), 2, "clipped at the juz-2 start");
 }
 
+/// §5.4 bullet 4 as a property over every ayah and a matrix of specs: context
+/// never crosses the declared boundary, never exceeds `max_ayahs`, never
+/// requests more than `before`/`after`, and always yields a contiguous window
+/// with the focal inside it.
 #[tokio::test]
-async fn resolve_parses_and_bounds_checks() {
+async fn context_invariants_hold_for_every_ayah_and_spec() {
     let (_dir, _db, reader, _path) = active_reader().await;
+    let boundaries = [ContextBoundary::Surah, ContextBoundary::Juz];
+    let matrix: [(u16, u16, u16); 6] =
+        [(0, 0, 1), (1, 1, 3), (3, 3, 4), (5, 5, 10), (2, 0, 2), (0, 2, 2)];
+
+    for surah in 1..=5u16 {
+        for ayah in 1..=6u16 {
+            let Ok(reference) = quran_core::parse(&format!("{surah}:{ayah}")) else {
+                continue;
+            };
+            for boundary in boundaries {
+                for (before, after, max_ayahs) in matrix {
+                    let spec = ContextSpec {
+                        before,
+                        after,
+                        boundary,
+                        include_surah_header: false,
+                        max_ayahs,
+                    };
+                    let view = reader.get_context(&reference, &spec).await.unwrap();
+                    let total = 1 + view.before.len() + view.after.len();
+                    let cap = usize::from(max_ayahs.max(1));
+                    assert!(total <= cap, "{surah}:{ayah} {boundary:?} {spec:?}: {total} > {cap}");
+                    assert!(view.before.len() <= usize::from(before));
+                    assert!(view.after.len() <= usize::from(after));
+
+                    let (lo, hi) = view.global_range;
+                    assert!(lo <= hi, "empty/inverted window");
+                    assert_eq!(usize::try_from(hi - lo + 1).unwrap(), total, "non-contiguous window");
+
+                    let focal = &view.focal.canonical;
+                    for member in view.before.iter().chain(view.after.iter()) {
+                        match boundary {
+                            ContextBoundary::Surah => {
+                                assert_eq!(
+                                    member.canonical.surah_number(),
+                                    focal.surah_number(),
+                                    "{surah}:{ayah}: context crossed a surah boundary"
+                                );
+                            }
+                            ContextBoundary::Juz => {
+                                if let (Some(a), Some(b)) = (member.canonical.juz(), focal.juz()) {
+                                    assert_eq!(a, b, "{surah}:{ayah}: context crossed a juz boundary");
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn resolve_parses_and_bounds_checks() {    let (_dir, _db, reader, _path) = active_reader().await;
     let resolved = reader.resolve("2:255").await.unwrap_err();
     assert!(matches!(resolved, ReaderError::AyahNotFound(_)));
     let resolved = reader.resolve("quran:juz:1").await.unwrap();
