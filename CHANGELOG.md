@@ -47,6 +47,14 @@ All notable changes to Q-ai are documented here.
   `quran_skeletons` (migration `0014`, numbering per DEV-04) with
   FK-to-canonical enforcement, Layer D stamps, and surah-scoped window
   CHECKs; FTS5 availability probe (`fts5_available`) as the M2 entry gate.
+- **quran-search** (M2): `skeletons_for_surah` (ayah + surah-scoped 3-ayah
+  windows from joined raw texts) and `QAI-IDX-0005 CanonicalChanged`
+  (MV-018's fatal code, reused by M4).
+- **application** (M2): `quran.forms.rebuild` job (resolve → MV-018 pre →
+  load → per-surah build → single tx with MV-018 post → commit;
+  content-addressed Layer-D provenance, cancel-safe, idempotent) with
+  `FormsRebuildHandler`, `verify_canonical_unchanged` (+ in-transaction
+  variant), and `qai quran forms rebuild`.
 
 ### Added — Phase 1 Canonical Quran Core (in progress)
 - **cli**: read verbs `quran get/context/surah/division/resolve` and lifecycle verbs
@@ -54,10 +62,13 @@ All notable changes to Q-ai are documented here.
   with `--json`, destructive verbs gated on `--yes`; `quran translation import` now
   writes an attributed provenance row (principle 5) instead of pointing at a principal.
 - **cli**: `doctor --quran` runs 19 checks against a read-only database handle with
-  `--deep` full-corpus verification; JSON output conforms to
-  `docs/schemas/doctor.v1.schema.json`.
+  `--deep` full-corpus verification; `--quran --json` now emits one merged
+  `{"checks":[...]}` document validating against `docs/schemas/doctor.v1.schema.json`
+  (previously two concatenated JSON documents).
 - **cli (tests)**: `read_flow.trycmd` snapshot suite (trycmd) covering migrate → import →
-  activate → RTL reading + provenance → attributed translations → error exits.
+  activate → RTL reading + provenance → `surah`/`context`/`division`/`resolve` → attributed
+  translations → v2 import/validate/diff → activate gen 2 → rollback gen 3 → `hashes` →
+  error exits.
 - **config**: `QAI_DATA_DIR` now configures the database and object-store paths, not just
   the database file (previously the two diverged).
 - **quran-corpus**: 13-checkpoint importer driver, char-level differ, frozen
@@ -66,6 +77,10 @@ All notable changes to Q-ai are documented here.
   hash-chained audit bridge, deterministic `QuranReader` + generation-keyed cache.
 - **storage**: `QuranRepository` (staging, atomic activation, reads, reports,
   citations, translations), approval rows, audit sequence queries.
+- **docs (D1.14)**: five Phase-1 documents published —
+  `quran-corpus-architecture.md`, `quran-adapter-authoring.md`,
+  `quran-citation-spec.md` under `docs/07-technical/`, and
+  `quran-import-runbook.md`, `quran-rollback-runbook.md` under `docs/10-operations/`.
 - **docs**: ADR-0101…0114 (0101/0114 + 0111/0112 drafts pending owners/deliverables).
 - **arch-check**: `[server]` allowlist now names `storage` + `tools` (both already
   declared deps of `crates/server`); recorded as a layering follow-up (OWN-06) rather
