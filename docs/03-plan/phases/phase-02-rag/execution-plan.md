@@ -544,3 +544,44 @@ quran-normalization` as the next command.
   profile/rule seeding repos (`storage`, `storage-sqlite`), `normalize
   --explain` CLI, preview endpoints; next command
   `cargo test -p quran-normalization`.
+
+---
+
+## 21. Session checkpoint — 2026-09-15 (M1c complete: T19/T23/T24 done)
+
+- **Completed:** migration `0013_quran_normalization` (22 rules + 9 profiles
+  seeded, 4 append-only triggers), `QuranRepository` catalog methods +
+  SQLite impl, `application::quran_normalize` (built-in + DB-row registries,
+  preview/adhoc/spec parsing, rule metas), `qai quran normalize`
+  (`--explain` with per-rule steps, `--list-profiles`, `--show-rule`,
+  adhoc `--rules`, reserved-rule note), server preview + profiles endpoints
+  with byte-identical CLI/API traces, OpenAPI entries, `RuleId::name()`,
+  `Pipeline::apply_detailed`, `ProfileId` stable string serde.
+- **Tasks flipped ☑ (first Phase-2 completions):** P2-T19, P2-T23, P2-T24
+  (evidence in `done.md` §2). DEV-06 recorded (triggers report QAI-NORM-0003).
+  Remaining Sprint 2.1: T13–T18/T20–T22 (foundation + rules, implemented but
+  unflipped pending M1b review pass).
+- **Verification (all green in scope):** `cargo test -p quran-normalization`
+  76/76; `-p application --test normalization_seed` 3/3;
+  `-p application --lib quran_normalize` 4/4; `-p storage` 5/5;
+  `-p storage-sqlite --lib` 10/10; `-p server` 3 lib + 8 api (incl. 2 new);
+  `-p cli --test quran` 2/2 fns, all trycmd cases (incl. new
+  `normalize.trycmd`, 10 cases); `migrate-check` OK (13);
+  `clippy -p {quran-normalization,storage,storage-sqlite,server}` clean.
+- **Bugs found by the new tests (all fixed):** `db migrate` not idempotent
+  across two trycmd files sharing one dir (parallel race) → harness gives
+  each file its own temp DB; `? <status>` must precede trycmd output;
+  `ProfileId` derived serde emitted variant names → manual string serde;
+  server InvalidMapping → 400 (usage), matching CLI exit 2.
+- **Workspace gates still blocked by concurrent work (untouched):**
+  `arch-check` FAIL on `server -> storage/tools`; workspace clippy red only
+  on `application/quran_cli.rs:742`; `cargo test --workspace` stops in the
+  concurrent `jobs` Worker timing flake. `cargo deny` unavailable.
+- **Fallout applied to concurrent files (minimal, noted):**
+  `read_flow.trycmd` 12→13, `sqlite_database_health` 12→13, OpenAPI +2 paths,
+  trycmd route list +2, harness per-file DBs. Restored a `fmt --all` hunk in
+  `application/src/quran.rs` byte-for-byte.
+- **No ADRs this session. cargo-deny unavailable (not installed).**
+- **Next concrete action (M2 start):** FTS5 compile-option probe, then
+  `0014_quran_forms` + `forms.rebuild` + `FullTextIndex` trait; next command
+  `cargo test -p quran-normalization`.
