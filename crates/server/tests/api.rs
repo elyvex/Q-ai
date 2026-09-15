@@ -250,6 +250,86 @@ async fn openapi_spec_covers_every_route() {
     }
 }
 
+#[tokio::test]
+async fn openapi_spec_schemas_resolve_and_cover_json_responses() {
+    let spec: serde_json::Value = serde_json::from_str(OPENAPI_SPEC).unwrap();
+    let schemas = spec["components"]["schemas"].as_object().expect("components.schemas");
+    for name in ["EditionMeta", "Meta", "Envelope", "Diagnostic"] {
+        assert!(schemas.contains_key(name), "missing schema {name}");
+    }
+    // The contract keys asserted behaviorally in `assert_envelope` are required
+    // by the machine-readable schemas too (T40 spec depth).
+    let meta_required = schemas["Meta"]["required"].as_array().unwrap();
+    for key in [
+        "edition",
+        "corpus_generation",
+        "canonical_reference",
+        "deep_link",
+        "execution_time_ms",
+        "reproducibility",
+        "warnings",
+    ] {
+        assert!(meta_required.iter().any(|v| v == key), "Meta missing required {key}");
+    }
+    let edition_required = schemas["EditionMeta"]["required"].as_array().unwrap();
+    for key in ["slug", "version", "text_hash", "script", "riwayah", "numbering_scheme"] {
+        assert!(edition_required.iter().any(|v| v == key), "EditionMeta missing required {key}");
+    }
+
+    // Every local `$ref` resolves inside the document.
+    fn resolve<'a>(spec: &'a serde_json::Value, pointer: &str) -> &'a serde_json::Value {
+        assert!(pointer.starts_with("#/"), "only local refs supported: {pointer}");
+        let mut node = spec;
+        for part in pointer[2..].split('/') {
+            node = &node[part];
+        }
+        assert!(!node.is_null(), "unresolvable $ref {pointer}");
+        node
+    }
+    fn collect_refs(value: &serde_json::Value, out: &mut Vec<String>) {
+        match value {
+            serde_json::Value::Object(map) => {
+                if let Some(reference) = map.get("$ref").and_then(|r| r.as_str()) {
+                    out.push(reference.to_string());
+                }
+                for nested in map.values() {
+                    collect_refs(nested, out);
+                }
+            }
+            serde_json::Value::Array(items) => {
+                for nested in items {
+                    collect_refs(nested, out);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut refs = Vec::new();
+    collect_refs(&spec, &mut refs);
+    assert!(!refs.is_empty(), "spec has no $refs");
+    for reference in &refs {
+        resolve(&spec, reference);
+    }
+
+    // Every application/json response carries a schema.
+    for (path, ops) in spec["paths"].as_object().unwrap() {
+        for (method, op) in ops.as_object().unwrap() {
+            if method == "parameters" {
+                continue;
+            }
+            for (code, response) in op["responses"].as_object().unwrap() {
+                let Some(content) = response.get("content") else {
+                    continue;
+                };
+                let Some(json) = content.get("application/json") else {
+                    continue;
+                };
+                assert!(json.get("schema").is_some(), "{method} {path} {code} has no schema");
+            }
+        }
+    }
+}
+
 fn assert_envelope(value: &serde_json::Value) {
     assert_eq!(value["api_version"], "v1");
     assert!(value.get("data").is_some());

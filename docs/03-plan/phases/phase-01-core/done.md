@@ -48,10 +48,10 @@ with what evidence.
 | 1.0 — Data & Decisions | 5 | 1 | 11.5 | — | ◐ |
 | 1.1 — Domain & Addressing | 9 | 9 | 19.5 | — | ☑ |
 | 1.2 — Import & Validation | 17 | 16 | 42.0 | — | ◐ |
-| 1.3 — Reader, Translations, API | 11 | 9 | 21.5 | — | ◐ |
+| 1.3 — Reader, Translations, API | 11 | 10 | 21.5 | — | ◐ |
 | 1.4 — Tools, Citations, CLI, Doctor | 11 | 11 | 21.5 | — | ☑ |
 | 1.5 — Debug Reader, Hardening, Exit | 7 | 2 | 15.0 | — | ☐ |
-| **Total** | **65** | **48** | **131.0** | **—** | **74%** |
+| **Total** | **65** | **49** | **131.0** | **—** | **75%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -523,6 +523,23 @@ estimate — an under-recorded sprint is how the next phase inherits a wrong cap
 - **DoD:** ✅ all items for the handler contract
 - **Notes:** Per-endpoint OpenAPI schema detail (machine-readable `components`)
   is P1-T40, not this task.
+
+### P1-T40 — API OpenAPI spec depth + contract tests
+- **Deliverable:** D1.7
+- **Completed:** 2026-09-15 (machine-readable envelope/meta/diagnostic schemas)
+- **Owner:** agent (BE)
+- **PR / commit:** working tree
+- **Evidence:** `docs/08-api/quran-v1-openapi.json` now carries
+  `components.schemas` (`EditionMeta`, `Meta`, `Envelope`, `Diagnostic`) with
+  `content: application/json` + `$ref` on every JSON response (26 refs, all
+  resolve; ETag/`Content-Language` headers documented on `getAyah`);
+  `crates/server/tests/api.rs::openapi_spec_schemas_resolve_and_cover_json_responses`
+  green (9/9 server api tests); verified in an isolated worktree at the last
+  green base because the shared tree's `application` lib had a concurrent
+  in-progress breakage
+- **DoD:** ✅ all items for the contract layer
+- **Notes:** `data` payloads stay descriptively typed (domain-serialized shapes
+  are covered by behavioral contract tests, not duplicated as schemas).
 
 ### P1-T57 — Property-test suite (§5.4): randomized context matrix
 - **Deliverable:** D1.13

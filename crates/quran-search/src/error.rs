@@ -97,6 +97,8 @@ pub mod codes {
     /// Canonical text changed under a build (MV-018). Always fatal: no
     /// derived artifact may ship, and the build must stop, not warn.
     pub const CANONICAL_CHANGED: DiagnosticCode = DiagnosticCode::new("QAI-IDX", 5);
+    /// A search hit failed assembly validation (trace/span/quotation fault).
+    pub const INVALID_HIT: DiagnosticCode = DiagnosticCode::new("QAI-IDX", 6);
     /// Index is stale relative to corpus/profile/dataset inputs (warning,
     /// never an error: drift is reported, never auto-repaired).
     pub const STALE_INDEX: DiagnosticCode = DiagnosticCode::new("QAI-IDX", 101);
@@ -146,6 +148,16 @@ pub enum IndexError {
         /// Recomputed hash actually found.
         actual_hash: String,
     },
+    /// A search hit failed assembly validation.
+    ///
+    /// Empty token lists, out-of-range spans, bad numbers or hashes, or a
+    /// quotation the Phase-1 constructor rejects. Hits are fail-closed: no
+    /// unverifiable hit is ever returned (AC-P2-12 mechanism).
+    #[error("invalid search hit: {detail}")]
+    InvalidHit {
+        /// What failed validation.
+        detail: String,
+    },
 }
 
 impl Diagnostic for IndexError {
@@ -156,6 +168,7 @@ impl Diagnostic for IndexError {
             Self::BuildFailed { .. } => codes::BUILD_FAILED,
             Self::ManifestMismatch { .. } => codes::MANIFEST_MISMATCH,
             Self::CanonicalChanged { .. } => codes::CANONICAL_CHANGED,
+            Self::InvalidHit { .. } => codes::INVALID_HIT,
         }
     }
 
@@ -170,6 +183,7 @@ impl Diagnostic for IndexError {
             Self::CanonicalChanged { edition_urn, .. } => {
                 Some(format!("canonical text of {edition_urn}"))
             }
+            Self::InvalidHit { .. } => None,
             Self::QueryRejected { .. } | Self::ManifestMismatch { .. } => None,
         }
     }
@@ -191,6 +205,9 @@ impl Diagnostic for IndexError {
             Self::CanonicalChanged { .. } => {
                 "Treat as an integrity incident: do not rebuild over it, investigate the canonical store first.".to_string()
             }
+            Self::InvalidHit { .. } => {
+                "Fix the assembling tool: hits must carry a trace, a span inside the text, and valid references.".to_string()
+            }
         })
     }
 
@@ -200,6 +217,7 @@ impl Diagnostic for IndexError {
             Self::BuildFailed { .. } => "qai quran index rebuild --all".to_string(),
             Self::BackendUnavailable { .. }
             | Self::CanonicalChanged { .. }
+            | Self::InvalidHit { .. }
             | Self::ManifestMismatch { .. } => "qai doctor --indexes".to_string(),
         })
     }
@@ -227,6 +245,7 @@ mod tests {
         assert_eq!(rendered[0], "QAI-IDX-0001");
         assert_eq!(codes::STALE_INDEX.to_string(), "QAI-IDX-0101");
         assert_eq!(codes::CANONICAL_CHANGED.to_string(), "QAI-IDX-0005");
+        assert_eq!(codes::INVALID_HIT.to_string(), "QAI-IDX-0006");
     }
 
     #[test]

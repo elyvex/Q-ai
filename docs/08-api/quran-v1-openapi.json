@@ -25,21 +25,40 @@
           {"name": "status", "in": "query", "schema": {"type": "string"}},
           {"name": "language", "in": "query", "schema": {"type": "string"}}
         ],
-        "responses": {"200": {"description": "envelope of edition descriptors"}}
+        "responses": {
+          "200": {
+            "description": "envelope of edition descriptors",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+          }
+        }
       }
     },
     "/api/v1/quran/editions/{slug}": {
       "get": {
         "operationId": "getEdition",
         "parameters": [{"name": "slug", "in": "path", "required": true, "schema": {"type": "string"}}],
-        "responses": {"200": {"description": "envelope of one edition"}, "404": {"description": "diagnostic body"}}
+        "responses": {
+          "200": {
+            "description": "envelope of one edition",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+          },
+          "404": {
+            "description": "diagnostic body",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+          }
+        }
       }
     },
     "/api/v1/quran/surahs": {
       "get": {
         "operationId": "listSurahs",
         "parameters": [{"name": "edition", "in": "query", "schema": {"type": "string"}}],
-        "responses": {"200": {"description": "envelope of surah descriptors"}}
+        "responses": {
+          "200": {
+            "description": "envelope of surah descriptors",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+          }
+        }
       }
     },
     "/api/v1/quran/surahs/{number}": {
@@ -49,7 +68,16 @@
           {"name": "number", "in": "path", "required": true, "schema": {"type": "integer"}},
           {"name": "edition", "in": "query", "schema": {"type": "string"}}
         ],
-        "responses": {"200": {"description": "envelope of surah + ayah texts"}, "404": {"description": "diagnostic body"}}
+        "responses": {
+          "200": {
+            "description": "envelope of surah + ayah texts",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+          },
+          "404": {
+            "description": "diagnostic body",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+          }
+        }
       }
     },
     "/api/v1/quran/ayahs/{reference}": {
@@ -63,9 +91,23 @@
           {"name": "tokens", "in": "query", "schema": {"type": "boolean"}}
         ],
         "responses": {
-          "200": {"description": "envelope of ayah views; ETag from (text_hash, corpus_generation)"},
-          "400": {"description": "diagnostic body"},
-          "404": {"description": "diagnostic body"}
+          "200": {
+            "description": "envelope of ayah views; ETag from (text_hash, corpus_generation)",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}},
+            "headers": {
+              "ETag": {"description": "sha256 over (text_hash, corpus_generation)", "schema": {"type": "string"}},
+              "Content-Language": {"description": "response language (ar for Arabic)", "schema": {"type": "string"}}
+            }
+          },
+          "304": {"description": "not modified (If-None-Match)"},
+          "400": {
+            "description": "diagnostic body",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+          },
+          "404": {
+            "description": "diagnostic body",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+          }
         }
       }
     },
@@ -79,7 +121,20 @@
           {"name": "boundary", "in": "query", "schema": {"type": "string", "enum": ["surah", "juz", "ruku", "page", "none"]}},
           {"name": "max_ayahs", "in": "query", "schema": {"type": "integer"}}
         ],
-        "responses": {"200": {"description": "envelope of context view"}, "400": {"description": "diagnostic body"}, "404": {"description": "diagnostic body"}}
+        "responses": {
+          "200": {
+            "description": "envelope of context view",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+          },
+          "400": {
+            "description": "diagnostic body",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+          },
+          "404": {
+            "description": "diagnostic body",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+          }
+        }
       }
     },
     "/api/v1/quran/divisions/{kind}/{number}": {
@@ -90,7 +145,16 @@
           {"name": "number", "in": "path", "required": true, "schema": {"type": "integer"}},
           {"name": "edition", "in": "query", "schema": {"type": "string"}}
         ],
-        "responses": {"200": {"description": "envelope of ayah references+texts"}, "404": {"description": "diagnostic body"}}
+        "responses": {
+          "200": {
+            "description": "envelope of ayah references+texts",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+          },
+          "404": {
+            "description": "diagnostic body",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+          }
+        }
       }
     },
     "/api/v1/quran/tokens/{reference}": {
@@ -100,21 +164,52 @@
           {"name": "reference", "in": "path", "required": true, "schema": {"type": "string"}},
           {"name": "edition", "in": "query", "schema": {"type": "string"}}
         ],
-        "responses": {"200": {"description": "envelope of token rows"}, "404": {"description": "diagnostic body"}}
+        "responses": {
+          "200": {
+            "description": "envelope of token rows",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+          },
+          "404": {
+            "description": "diagnostic body",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+          }
+        }
       }
     },
     "/api/v1/quran/resolve": {
       "get": {
         "operationId": "resolveReference",
         "parameters": [{"name": "ref", "in": "query", "required": true, "schema": {"type": "string"}}],
-        "responses": {"200": {"description": "envelope of canonical reference"}, "400": {"description": "diagnostic body"}, "404": {"description": "diagnostic body"}}
+        "responses": {
+          "200": {
+            "description": "envelope of canonical reference",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+          },
+          "400": {
+            "description": "diagnostic body",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+          },
+          "404": {
+            "description": "diagnostic body",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+          }
+        }
       }
     },
     "/api/v1/quran/citations/{id}": {
       "get": {
         "operationId": "resolveCitation",
         "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}],
-        "responses": {"200": {"description": "envelope of resolved citation"}, "404": {"description": "diagnostic body"}}
+        "responses": {
+          "200": {
+            "description": "envelope of resolved citation",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+          },
+          "404": {
+            "description": "diagnostic body",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+          }
+        }
       }
     },
     "/api/v1/quran/normalization/preview": {
@@ -122,14 +217,28 @@
         "operationId": "previewNormalization",
         "description": "Normalize text through a profile (default latest L3.diacritics) or an explicit rule list; returns derived text with its NormalizationTrace. Same pipeline as the CLI (AC-P2-39).",
         "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["text"], "properties": {"text": {"type": "string"}, "profile": {"type": "string"}, "rules": {"type": "string"}}}}}},
-        "responses": {"200": {"description": "envelope of preview with trace"}, "400": {"description": "diagnostic body"}}
+        "responses": {
+          "200": {
+            "description": "envelope of preview with trace",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+          },
+          "400": {
+            "description": "diagnostic body",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+          }
+        }
       }
     },
     "/api/v1/quran/normalization/profiles": {
       "get": {
         "operationId": "listNormalizationProfiles",
         "description": "Seeded normalization profile catalog (L0-L8).",
-        "responses": {"200": {"description": "envelope of profile catalog"}}
+        "responses": {
+          "200": {
+            "description": "envelope of profile catalog",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+          }
+        }
       }
     },
     "/debug/read/{edition}/{surah}": {
@@ -141,6 +250,66 @@
           {"name": "surah", "in": "path", "required": true, "schema": {"type": "integer"}}
         ],
         "responses": {"200": {"description": "HTML"}}
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "EditionMeta": {
+        "type": "object",
+        "description": "Edition descriptor carried in every envelope (AC-P1-14).",
+        "required": ["slug", "version", "text_hash", "script", "riwayah", "numbering_scheme"],
+        "properties": {
+          "slug": {"type": "string"},
+          "version": {"type": "string"},
+          "text_hash": {"type": "string", "description": "hex sha256 of the canonical text"},
+          "script": {"type": "string"},
+          "riwayah": {"type": ["string", "null"]},
+          "numbering_scheme": {"type": "string"}
+        }
+      },
+      "Meta": {
+        "type": "object",
+        "description": "Envelope metadata (AC-P1-14).",
+        "required": ["edition", "corpus_generation", "canonical_reference", "deep_link", "execution_time_ms", "reproducibility", "warnings"],
+        "properties": {
+          "edition": {"$ref": "#/components/schemas/EditionMeta"},
+          "corpus_generation": {"type": "integer"},
+          "canonical_reference": {"type": "string"},
+          "deep_link": {"type": "string"},
+          "execution_time_ms": {"type": "number"},
+          "reproducibility": {"type": ["object", "null"], "description": "checksum record (checksum key always present when computed)"},
+          "warnings": {"type": "array", "items": {"type": "string"}}
+        }
+      },
+      "Envelope": {
+        "type": "object",
+        "description": "Stable response envelope: api_version + data + meta.",
+        "required": ["api_version", "data", "meta"],
+        "properties": {
+          "api_version": {"type": "string", "const": "v1"},
+          "data": {"description": "endpoint payload (array, object, or value; see the operation description)"},
+          "meta": {"$ref": "#/components/schemas/Meta"}
+        }
+      },
+      "Diagnostic": {
+        "type": "object",
+        "description": "Phase-0 Diagnostic error body (AC-P1-14).",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "summary", "why"],
+            "properties": {
+              "code": {"type": "string", "description": "namespaced code, e.g. QAI-QUR-0307"},
+              "summary": {"type": "string"},
+              "location": {"type": ["string", "null"]},
+              "why": {"type": "array", "items": {"type": "string"}},
+              "remedy": {"type": ["string", "null"]},
+              "next_command": {"type": ["string", "null"]}
+            }
+          }
+        }
       }
     }
   }
