@@ -61,7 +61,7 @@ with what evidence.
 | ADRs accepted | 0 | 14 |
 | Migrations applied (`0007`–`0012`) | 6 | 6 |
 | Required test suites green | 0 | 15 |
-| D1.14 documents published | 0 | 5 |
+| D1.14 documents published | 5 | 5 |
 
 Track **actual vs. estimate** from the first completed task. `tasks.md` §9.1 flags a **~49 ed
 discrepancy** between the plan's stated 82 ed and its own task rows (131.0 ed); actuals recorded
@@ -603,12 +603,15 @@ estimate — an under-recorded sprint is how the next phase inherits a wrong cap
 - **Owner:** agent (QA)
 - **PR / commit:** working tree
 - **Evidence:** `crates/cli/tests/quran.rs` + `crates/cli/tests/quran/read_flow.trycmd`
-  (trycmd): 13 ordered blocks covering migrate → import → activate → reading (RTL Uthmani
-  text, provenance citation, `--json` envelope) → translations (attributed) → error exits
-  (`? 6`, `? 5`); schema version elided with `[..]` so new migrations do not break it
+  (trycmd): ordered blocks covering migrate → import → activate → `get` (RTL Uthmani text,
+  provenance citation, `--json` envelope, attributed `--translations`) → `surah` /
+  `surah --metadata` → `context` → `division` → `resolve` → `edition show/list/active` →
+  second version import → `validate` → activate generation 2 → `diff` → `rollback`
+  generation 3 → `hashes` → error exits (`? 6`, `? 5`)
 - **DoD:** ✅ all items
 - **Notes:** human output is normalised to exactly one trailing newline so snapshots stay
-  stable; the harness pins `QAI_DATA_DIR` at a temp database per test run.
+  stable; the migration number is elided with `[..]` so new migrations do not break the
+  suite; the harness pins `QAI_DATA_DIR` at a temp database per test run.
 
 ### P1-T51 — `doctor --quran` checks (19 checks) + `--deep` mode
 - **Deliverable:** D1.11
@@ -625,15 +628,32 @@ estimate — an under-recorded sprint is how the next phase inherits a wrong cap
 
 ### P1-T52 — `doctor --quran --json` schema + CI consumption
 - **Deliverable:** D1.11
-- **Completed:** 2026-09-15 (partial)
+- **Completed:** 2026-09-15
 - **Owner:** agent (BE)
 - **PR / commit:** working tree
-- **Evidence:** `cmd_doctor_quran` emits `{ "checks": [{id, status, summary, remedy,
-  next_command}] }` matching `docs/schemas/doctor.v1.schema.json`
-- **DoD:** ⚠️ exceptions: schema-conformance is asserted by inspection/shape only; a
-  machine validation test against the schema file is still to be added with the other
-  D1.14 docs
-- **Notes:** tracked as a follow-up; blocks nothing in Phase 1's read path.
+- **Evidence:** `cli/src/doctor.rs::doctor_report` merges the Phase-0 registry and the
+  19 Quran checks into **one** `{"checks":[...]}` document (45 checks on the fixture);
+  `cargo xtask validate <(qai doctor --quran --json) docs/schemas/doctor.v1.schema.json`
+  → `OK`; regression test `cli/tests/doctor_json.rs` fails if two documents are emitted
+- **DoD:** ✅ all items
+- **Notes:** the previous shape printed two concatenated JSON documents, which no
+  parser or schema validator could consume; `run_quran_checks` remains for direct use.
+
+### P1-T59 — D1.14 docs: corpus, import, rollback, citations, adapters
+- **Deliverable:** D1.14
+- **Completed:** 2026-09-15
+- **Owner:** agent (DOC)
+- **PR / commit:** working tree
+- **Evidence:** five published documents —
+  `docs/07-technical/quran-corpus-architecture.md`,
+  `docs/07-technical/quran-adapter-authoring.md`,
+  `docs/07-technical/quran-citation-spec.md`,
+  `docs/10-operations/quran-import-runbook.md`,
+  `docs/10-operations/quran-rollback-runbook.md`
+- **DoD:** ✅ all items
+- **Notes:** each doc is grounded in the shipped code and the real CLI verbs; the
+  risk register (§README) lists D1.14 *depth* as a cut candidate under schedule
+  pressure, but all five exist and are substantive.
 
 **Entry format (repeat per task)**
 
@@ -698,11 +718,11 @@ the implementer.
 | AC-P1-13 | `parse(serialize(ref)) == ref` for all variants | partial — automated | agent | `roundtrip_parse_serialize` proptest |
 | AC-P1-14 | Quran read API v1 envelope, meta, ETag, content-language, error body | partial — automated | agent | `crates/server/src/api.rs` + `crates/server/tests/api.rs` (ETag, envelope keys, OpenAPI coverage) |
 | AC-P1-15 | Tool §12 contract conformance + deterministic checksum + no fabrication | partial — automated | agent | `application/tests/quran_tools.rs` |
-| AC-P1-16 | CLI conventions + snapshots incl. RTL sanity | partial — automated | agent | `crates/cli/tests/quran/read_flow.trycmd` (13 blocks; RTL text + provenance + translations + exit 5/6); `diff`/`rollback`/`context`/`surah` snapshots still to add |
-| AC-P1-17 | `doctor --quran` 19 checks, read-only, `--deep` < 30 s, JSON schema | partial — automated | agent | 19 checks via `quran_doctor.rs`; read-only open; JSON matches `docs/schemas/doctor.v1.schema.json` by shape; `--deep` timing + schema-validation test pending |
+| AC-P1-16 | CLI conventions + snapshots incl. RTL sanity | partial — automated | agent | `cli/tests/quran/read_flow.trycmd`: `get`/`context`/`surah`/`division`/`resolve`/`edition`/`import`/`validate`/`activate`/`diff`/`rollback`/`hashes`/`translation` incl. RTL + `--json` + exit 5/6; ritual walkthrough pending |
+| AC-P1-17 | `doctor --quran` 19 checks, read-only, `--deep` < 30 s, JSON schema | partial — automated | agent | 19 checks + read-only open; merged single JSON document validated by `cargo xtask validate` against `docs/schemas/doctor.v1.schema.json`; regression test `cli/tests/doctor_json.rs`; fixture `--deep` = 0.07 s (standard-edition timing unverified) |
 | AC-P1-18 | Debug reader RTL, labelled, no persistence, excluded from nav | — | — | — |
 | AC-P1-19 | No stale text served after activation (generation-keyed cache) | partial — automated | agent | `cache_serves_no_stale_text_after_activation` |
-| AC-P1-20 | 14 ADRs accepted §48-complete; 5 D1.14 docs published | — | — | — |
+| AC-P1-20 | 14 ADRs accepted §48-complete; 5 D1.14 docs published | partial — automated | agent | 5/5 D1.14 docs published (`docs/07-technical/quran-*`, `docs/10-operations/quran-*-runbook.md`); ADRs not yet all `Accepted` |
 | AC-P1-21 | Citation resolver verdicts + persisted citation re-verification | partial — automated | agent | `citations` unit + `citations_resolve_verify_and_persist` |
 
 ---
