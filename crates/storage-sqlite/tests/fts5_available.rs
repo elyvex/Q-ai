@@ -12,17 +12,14 @@ async fn fts5_is_compiled_in() {
     let pool = sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(1)
         .connect_with(
-            sqlx::sqlite::SqliteConnectOptions::new()
-                .filename(&path)
-                .create_if_missing(true),
+            sqlx::sqlite::SqliteConnectOptions::new().filename(&path).create_if_missing(true),
         )
         .await
         .unwrap();
-    let used: i64 =
-        sqlx::query_scalar("SELECT sqlite_compileoption_used('ENABLE_FTS5')")
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let used: i64 = sqlx::query_scalar("SELECT sqlite_compileoption_used('ENABLE_FTS5')")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(used, 1, "SQLite must be built with FTS5 (M2 FTS5-first backend)");
     pool.close().await;
 }
@@ -35,9 +32,7 @@ async fn fts5_indexes_and_matches_arabic() {
     let pool = sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(1)
         .connect_with(
-            sqlx::sqlite::SqliteConnectOptions::new()
-                .filename(&path)
-                .create_if_missing(true),
+            sqlx::sqlite::SqliteConnectOptions::new().filename(&path).create_if_missing(true),
         )
         .await
         .unwrap();
@@ -60,12 +55,13 @@ async fn fts5_indexes_and_matches_arabic() {
     // Highlight introspection (needed later for highlight ranges) works.
     // Note: `offsets()` is context-restricted in current SQLite; `highlight()`
     // is the supported path and is what M3 highlighting will use.
-    let marked: String =
-        sqlx::query_scalar("SELECT highlight(probe_fts, 0, '[', ']') FROM probe_fts WHERE probe_fts MATCH ?")
-            .bind("اللَّهِ")
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let marked: String = sqlx::query_scalar(
+        "SELECT highlight(probe_fts, 0, '[', ']') FROM probe_fts WHERE probe_fts MATCH ?",
+    )
+    .bind("اللَّهِ")
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     assert!(marked.contains('[') && marked.contains(']'), "highlight() must mark the match");
     pool.close().await;
 }
