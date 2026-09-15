@@ -1405,8 +1405,8 @@ pub async fn cmd_index_rebuild(
     index: Option<&str>,
     edition: Option<&str>,
 ) -> CommandOutput {
-    use std::sync::atomic::AtomicBool;
     use super::quran_index::{IndexBuildError, IndexBuildParams, QURAN_AYAH_INDEX_ID};
+    use std::sync::atomic::AtomicBool;
 
     let index_id = index.unwrap_or(QURAN_AYAH_INDEX_ID).to_string();
     let db = match open_db(db_path).await {
@@ -1531,11 +1531,13 @@ pub async fn cmd_index_verify(db_path: &str, index: Option<&str>) -> CommandOutp
         Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
     };
     let root = super::quran_index::index_root_for_db(db_path);
-    let index = match quran_search::Fts5Index::open(&root, pointer.generation as u64, manifest, family).await
-    {
-        Ok(index) => index,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
-    };
+    let index =
+        match quran_search::Fts5Index::open(&root, pointer.generation as u64, manifest, family)
+            .await
+        {
+            Ok(index) => index,
+            Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        };
     let report = match quran_search::FullTextIndex::verify(&index).await {
         Ok(report) => report,
         Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
@@ -1546,7 +1548,11 @@ pub async fn cmd_index_verify(db_path: &str, index: Option<&str>) -> CommandOutp
             pointer.generation, report.doc_count
         )
     } else {
-        format!("index {index_id} generation {} FAILED: {}", pointer.generation, report.findings.join("; "))
+        format!(
+            "index {index_id} generation {} FAILED: {}",
+            pointer.generation,
+            report.findings.join("; ")
+        )
     };
     let json = serde_json::json!({
         "index_id": index_id,
@@ -1555,9 +1561,5 @@ pub async fn cmd_index_verify(db_path: &str, index: Option<&str>) -> CommandOutp
         "doc_count": report.doc_count,
         "findings": report.findings,
     });
-    CommandOutput {
-        exit: if report.ok { exit::OK } else { exit::VALIDATION },
-        human,
-        json,
-    }
+    CommandOutput { exit: if report.ok { exit::OK } else { exit::VALIDATION }, human, json }
 }
