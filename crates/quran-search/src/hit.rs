@@ -74,6 +74,18 @@ impl Warning {
     }
 }
 
+/// One segment of a concatenated match: which query part each canonical
+/// token explains (plan §4.4 segmentation explanation, required by §8.3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Segmentation {
+    /// Slice of the (spaceless) query skeleton explained by this token.
+    pub query_part: String,
+    /// 1-based canonical token position.
+    pub canonical_token: u16,
+    /// Canonical token surface.
+    pub canonical_surface: String,
+}
+
 /// Canonical context for assembling one hit.
 ///
 /// Tools gather this from readers and repositories (edition/surah rows plus
@@ -111,6 +123,8 @@ pub struct SearchHitParts {
     pub score_explain: Option<ScoreExplain>,
     /// Exact ordered rule set applied (I9 — mandatory, never optional).
     pub explanation: NormalizationTrace,
+    /// Concatenated-match segmentation (empty for all other tools).
+    pub segmentation: Vec<Segmentation>,
     /// Advisories.
     pub warnings: Vec<Warning>,
 }
@@ -130,6 +144,7 @@ pub struct SearchHit {
     score: Option<f32>,
     score_explain: Option<ScoreExplain>,
     explanation: NormalizationTrace,
+    segmentation: Vec<Segmentation>,
     warnings: Vec<Warning>,
 }
 
@@ -198,6 +213,7 @@ impl SearchHit {
             score: parts.score,
             score_explain: parts.score_explain,
             explanation: parts.explanation,
+            segmentation: parts.segmentation,
             warnings: parts.warnings,
         })
     }
@@ -254,6 +270,12 @@ impl SearchHit {
     #[must_use]
     pub fn explanation(&self) -> &NormalizationTrace {
         &self.explanation
+    }
+
+    /// Concatenated-match segmentation (empty for all other tools).
+    #[must_use]
+    pub fn segmentation(&self) -> &[Segmentation] {
+        &self.segmentation
     }
 
     /// Advisories.
@@ -320,6 +342,11 @@ pub(crate) fn sample_parts() -> SearchHitParts {
             }],
         )
         .expect("sample trace is valid"),
+        segmentation: vec![Segmentation {
+            query_part: "بسمالله".to_string(),
+            canonical_token: 1,
+            canonical_surface: "بِسْمِ".to_string(),
+        }],
         warnings: vec![],
     }
 }
