@@ -55,6 +55,12 @@ All notable changes to Q-ai are documented here.
   content-addressed Layer-D provenance, cancel-safe, idempotent) with
   `FormsRebuildHandler`, `verify_canonical_unchanged` (+ in-transaction
   variant), and `qai quran forms rebuild`.
+- **application** (M2): `quran.index.build` job (resolve → MV-018 pre →
+  stage → chunked ayah-doc build from stored forms → commit → counted
+  manifest → verify → MV-018 post → single-transaction pointer flip with
+  run supersede) with `IndexBuildHandler` and `qai quran index
+  rebuild/verify`; `0015_quran_indexes` (pointers + build runs, DEV-07
+  numbering); `Fts5Index` explicit build generations for retention.
 - **quran-search** (M2): `Fts5Index` FTS5 adapter (generation directories,
   transactioned batches, term/phrase/boolean/range/all queries, metadata
   filters, exact counts, DFA-only regex over the term dictionary with I16
