@@ -1,0 +1,17 @@
+{
+  "translation": {
+    "slug": "en-test",
+    "version": "1.0.0",
+    "name": "Test English gloss (non-canonical sample)",
+    "translator": "Test Translator",
+    "language": "en",
+    "aligned_edition": "test-edition-min@0.1.0",
+    "numbering_scheme": "hafs",
+    "spdx_id": null
+  },
+  "passages": [
+    {"surah": 1, "ayah": 1, "text": "test words one one"},
+    {"surah": 1, "ayah": 2, "text": "test words one two"},
+    {"surah": 2, "ayah": 1, "text": "test words two one"}
+  ]
+}
