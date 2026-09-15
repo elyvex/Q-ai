@@ -62,6 +62,12 @@ pub enum Commands {
         /// Only tool checks.
         #[arg(long)]
         tools: bool,
+        /// Quran corpus checks.
+        #[arg(long)]
+        quran: bool,
+        /// Full-corpus deep mode for Quran checks.
+        #[arg(long)]
+        deep: bool,
         /// Print the repair plan without executing.
         #[arg(long)]
         repair_preview: bool,
@@ -211,9 +217,13 @@ pub fn dispatch(cli: Cli) -> i32 {
             }
             exit_code::OK
         }
-        Commands::Doctor { json, repair_preview, .. } => {
+        Commands::Doctor { json, repair_preview, quran, deep, .. } => {
             let probe = block_on(application::db::probe_database(&cfg));
-            doctor::run_checks(&cfg, &probe, json || cli.json, repair_preview)
+            let mut code = doctor::run_checks(&cfg, &probe, json || cli.json, repair_preview);
+            if quran {
+                code = code.max(block_on(doctor::run_quran_checks(&cfg, json || cli.json, deep)));
+            }
+            code
         }
         Commands::Config { action } => match action {
             ConfigAction::Show { explain, defaults, json } => {
