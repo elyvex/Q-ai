@@ -659,7 +659,7 @@ fn scan_match(
             (0, query.chars().count() as u32)
         }
     };
-    let span = derived.0.spans().to_canonical(start..end);
+    let span = derived.spans().to_canonical(start..end);
     // Tokens overlapping the canonical span.
     let matched: Vec<usize> = tokens
         .iter()
@@ -1116,7 +1116,8 @@ pub async fn search_phrase(
         timeout_ms: 10_000,
         explain: params.explain,
     };
-    let total_prefilter = serving.index.count(&prefilter).await.map_err(SearchError::Index)?;
+    // Recall prefilter from the positional index (precision total comes
+    // from verification below, never from this count).
     let mut candidates = Vec::new();
     let mut offset = 0u32;
     loop {
@@ -1217,8 +1218,11 @@ fn query_trigrams(skeleton: &str) -> Vec<String> {
     chars.windows(3).map(|window| window.iter().collect()).collect()
 }
 
-/// One segment of a concatenated match (see [`quran_search::Segmentation`]).
-fn segment_concatenated(
+/// Segment a verified concatenated match into per-token query parts.
+///
+/// Public so tools and tests share the exact segmentation the service
+/// returns (no second implementation to drift).
+pub fn segment_concatenated(
     query_skeleton: &str,
     span: &quran_normalization::CanonicalSpan,
     map: &quran_normalization::SpanMap,
@@ -1376,18 +1380,20 @@ pub async fn search_concatenated(
 /// Verify one ayah against a skeleton query: exact substring in derived
 /// space, canonical span via the pipeline map, re-normalization check, and
 /// token segmentation.
-fn verify_concatenated(
+///
+/// Public so the M3 tools and harnesses reuse the single verify path.
+pub fn verify_concatenated(
     pipeline: &quran_normalization::NormalizationPipeline,
     ayah_text: &str,
     tokens: &[storage::quran::TokenRow],
     query_skeleton: &str,
 ) -> Option<AyahMatch> {
-    let derived = pipeline.apply(ayah_text);
+    let derived = pipeline.apply(ayah_text).0;
     let text = derived.text();
     let byte = text.find(query_skeleton)?;
     let start = text[..byte].chars().count() as u32;
     let end = start + query_skeleton.chars().count() as u32;
-    let span = derived.0.spans().to_canonical(start..end);
+    let span = derived.spans().to_canonical(start..end);
     // Re-normalization check (plan §3.4 property 5): the sliced canonical
     // text must reproduce the matched derived substring.
     let slice: String = ayah_text
@@ -1398,7 +1404,7 @@ fn verify_concatenated(
         })
         .map(|(_, ch)| ch)
         .collect();
-    let reapplied = pipeline.apply(&slice);
+    let reapplied = pipeline.apply(&slice).0;
     if reapplied.text() != query_skeleton {
         return None;
     }
@@ -1418,4 +1424,72 @@ fn verify_concatenated(
     let segmentation =
         segment_concatenated(query_skeleton, &span, derived.spans(), derived_len, tokens);
     Some(AyahMatch { span, matched, segmentation })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tokens_of(text: &str) -> Vec<(std::ops::Range<u32>, String)> {
+        derived_tokens(text).into_iter().map(|(range, token)| (range, token.to_string())).collect()
+    }
+
+    #[test]
+    fn ordered_modes_respect_gaps() {
+        let tokens = tokens_of("a b c d");
+        let terms = ["b".to_string(), "d".to_string()];
+        assert!(find_term_sequence(
+            &tokens.iter().map(|(range, token)| (range.clone(), token.as_str())).collect::<Vec<_>>(),
+            &terms,
+            PhraseMode::OrderedExact,
+            0
+        )
+        .is_none());
+        let (start, end) = find_term_sequence(
+            &tokens.iter().map(|(range, token)| (range.clone(), token.as_str())).collect::<Vec<_>>(),
+            &terms,
+            PhraseMode::OrderedNear,
+            1,
+        )
+        .expect("one gap allowed");
+        assert_eq!((start, end), (2, 7));
+        assert!(find_term_sequence(
+            &tokens.iter().map(|(range, token)| (range.clone(), token.as_str())).collect::<Vec<_>>(),
+            &terms,
+            PhraseMode::OrderedNear,
+            0,
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn unordered_mode_ignores_order_within_window() {
+        let tokens = tokens_of("x c a b y");
+        let terms = ["a".to_string(), "b".to_string(), "c".to_string()];
+        // Window of 3 + slop 1 covers positions 1..=4.
+        let (start, end) = find_term_sequence(
+            &tokens.iter().map(|(range, token)| (range.clone(), token.as_str())).collect::<Vec<_>>(),
+            &terms,
+            PhraseMode::UnorderedNear,
+            1,
+        )
+        .expect("all terms within window");
+        assert_eq!((start, end), (2, 9));
+        // Without slop the window of exactly 3 still covers them.
+        assert!(find_term_sequence(
+            &tokens.iter().map(|(range, token)| (range.clone(), token.as_str())).collect::<Vec<_>>(),
+            &terms,
+            PhraseMode::UnorderedNear,
+            0,
+        )
+        .is_some());
+    }
+
+    #[test]
+    fn derived_token_offsets_track_characters() {
+        let tokens = derived_tokens("بسم الله");
+        assert_eq!(tokens.len(), 2);
+        assert_eq!(tokens[0].0, 0..3);
+        assert_eq!(tokens[1].0, 4..8);
+    }
 }
