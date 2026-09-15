@@ -99,6 +99,31 @@ quran:test-edition-min@0.1.0:3:3 ثُشأوَ ويتَسا ساَ نَبل هم�
 
 ```
 
+## Translations
+
+A translation is stored attributed (principle 5) and only rendered when
+explicitly requested, so quotation and translation are never conflated.
+
+```console
+$ qai quran translation import ../../fixtures/quran/test-translation-min.json
+imported translation tr-en-test-1.0.0
+
+```
+
+```console
+$ qai quran translation list
+en-test@1.0.0 — Test Translator [en]
+
+```
+
+```console
+$ qai quran get 1:1 --translations en-test
+أوَيت تَساكُن كن لهُم ثُشأوَ
+— quran:test-edition-min@0.1.0:1:1
+[Test Translator] test words one one
+
+```
+
 ## Errors
 
 Activating an edition that is no longer staged is a conflict (exit 6); the
