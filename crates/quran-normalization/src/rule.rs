@@ -10,6 +10,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub use domain::SemVer;
+
 use crate::error::NormalizationError;
 use crate::span::SpanMap;
 
@@ -262,8 +264,8 @@ pub trait NormalizationRule: Send + Sync {
     /// Stable catalog id.
     fn id(&self) -> RuleId;
 
-    /// Rule implementation version (`MAJOR.MINOR.PATCH`).
-    fn version(&self) -> &'static str;
+    /// Rule implementation version.
+    fn version(&self) -> SemVer;
 
     /// One-line human description of the effect.
     fn description(&self) -> &'static str;
