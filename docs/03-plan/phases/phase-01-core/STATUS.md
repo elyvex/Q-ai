@@ -12,7 +12,7 @@
 
 | Dimension | State |
 |---|---|
-| Task rows (excluding 3 sequencing notes) | **47 ☑ / 2 ◐ / 16 ☐** of 65 |
+| Task rows (excluding 3 sequencing notes) | **48 ☑ / 2 ◐ / 15 ☐** of 65 |
 | Acceptance criteria | **10 ◐ / 11 ☐** of 21 (none marked fully verified — rituals pending) |
 | ADRs | **12 Accepted**, 2 Draft (0101, 0114) |
 | Phase-1 migrations | **6 / 6** (`0007`–`0012`); workspace now at 14 (Phase-2 added `0013`–`0014`) |
@@ -20,7 +20,7 @@
 | Gate | `clippy -D warnings` clean · `cargo test --workspace` 135 suites ok · `arch-check` OK · `migrate-check` OK · `fmt` clean for Phase-1 files |
 
 Remaining task IDs: `P1-X01..X05`, `P1-T01`, `P1-T02`, `P1-T03`, `P1-T26◐`,
-`P1-T38`, `P1-T39`, `P1-T40`, `P1-T54`, `P1-T55`,
+`P1-T38`, `P1-T40`, `P1-T54`, `P1-T55`,
 `P1-T56`, `P1-T58`, `P1-T60` (and `P1-T04◐`).
 
 ## 1. Implemented (by surface)
@@ -114,7 +114,7 @@ board was not flipped.
 | Task | What remains |
 |---|---|
 | `P1-T38` | Word-gloss dataset import (table + reader field exist; no importer/CLI path) |
-| `P1-T39`, `P1-T40` | API v1 handlers + OpenAPI spec **exist**; remaining work is depth (per-endpoint schema detail) and flipping the ledger |
+| `P1-T40` | OpenAPI spec route coverage exists but has no machine-readable per-endpoint schemas; add `components` + `$ref`s and a resolvability test |
 | `P1-T54` | Debug reader exists with RTL + label; **missing the web font**, and the ledger is still ☐ |
 | `P1-T56` | Golden-set expansion to §5.2 edge cases — **blocked on a real dataset** (ADR-0101); must not be filled with fabricated scripture |
 | `P1-T58` | Full-corpus soak (import → validate → activate → 10k lookups → `doctor --deep`) — needs a standard edition to be meaningful |
@@ -193,3 +193,7 @@ Targeted verification (2026-09-15, T42, docs-only):
 ADR-0112 acceptance condition (P1-T36/T37) confirmed — `import_translations`
 structural alignment suite 9/9 green, `AttributedTranslation` type guards in
 `quran-core`, read-time alignment re-check in the reader.
+
+Targeted verification (2026-09-15, T39):
+`cargo test -p server` green (3 unit + 8 integration, incl. envelope/ETag/
+diagnostic/route coverage).

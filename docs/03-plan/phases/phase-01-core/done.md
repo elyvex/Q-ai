@@ -48,10 +48,10 @@ with what evidence.
 | 1.0 — Data & Decisions | 5 | 1 | 11.5 | — | ◐ |
 | 1.1 — Domain & Addressing | 9 | 9 | 19.5 | — | ☑ |
 | 1.2 — Import & Validation | 17 | 16 | 42.0 | — | ◐ |
-| 1.3 — Reader, Translations, API | 11 | 8 | 21.5 | — | ◐ |
+| 1.3 — Reader, Translations, API | 11 | 9 | 21.5 | — | ◐ |
 | 1.4 — Tools, Citations, CLI, Doctor | 11 | 11 | 21.5 | — | ☑ |
 | 1.5 — Debug Reader, Hardening, Exit | 7 | 2 | 15.0 | — | ☐ |
-| **Total** | **65** | **47** | **131.0** | **—** | **72%** |
+| **Total** | **65** | **48** | **131.0** | **—** | **74%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -509,6 +509,20 @@ estimate — an under-recorded sprint is how the next phase inherits a wrong cap
   staged) and every passage must name a real ayah of it, be non-empty, and be
   unique. Attribution is required (principle 5) with a provenance record. A
   rejected import is atomic — no partial edition is left behind.
+
+### P1-T39 — API v1 handlers + envelope + ETag
+- **Deliverable:** D1.7
+- **Completed:** 2026-09-15 (handlers + stable envelope; OpenAPI schema depth stays in P1-T40)
+- **Owner:** agent (BE)
+- **PR / commit:** working tree
+- **Evidence:** `crates/server/src/api.rs` (`/api/v1/quran/…` routes, `Envelope` +
+  `Meta` + `Diagnostic` body, ETag from `(text_hash, corpus_generation)` with
+  `If-None-Match` 304, `Content-Language`); `crates/server/tests/api.rs` 8/8 green
+  (`ayah_envelope_carries_meta_etag_and_language`, `errors_use_the_diagnostic_body`,
+  `listings_divisions_tokens_resolve_citations`, route coverage)
+- **DoD:** ✅ all items for the handler contract
+- **Notes:** Per-endpoint OpenAPI schema detail (machine-readable `components`)
+  is P1-T40, not this task.
 
 ### P1-T57 — Property-test suite (§5.4): randomized context matrix
 - **Deliverable:** D1.13
