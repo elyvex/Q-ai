@@ -12,7 +12,7 @@
 
 | Dimension | State |
 |---|---|
-| Task rows (excluding 3 sequencing notes) | **49 ☑ / 2 ◐ / 14 ☐** of 65 |
+| Task rows (excluding 3 sequencing notes) | **50 ☑ / 2 ◐ / 13 ☐** of 65 |
 | Acceptance criteria | **10 ◐ / 11 ☐** of 21 (none marked fully verified — rituals pending) |
 | ADRs | **12 Accepted**, 2 Draft (0101, 0114) |
 | Phase-1 migrations | **6 / 6** (`0007`–`0012`); workspace now at 14 (Phase-2 added `0013`–`0014`) |
@@ -20,7 +20,7 @@
 | Gate | `clippy -D warnings` clean · `cargo test --workspace` 135 suites ok · `arch-check` OK · `migrate-check` OK · `fmt` clean for Phase-1 files |
 
 Remaining task IDs: `P1-X01..X05`, `P1-T01`, `P1-T02`, `P1-T03`, `P1-T26◐`,
-`P1-T38`, `P1-T54`, `P1-T55`,
+`P1-T54`, `P1-T55`,
 `P1-T56`, `P1-T58`, `P1-T60` (and `P1-T04◐`).
 
 ## 1. Implemented (by surface)
@@ -63,6 +63,10 @@ Remaining task IDs: `P1-X01..X05`, `P1-T01`, `P1-T02`, `P1-T03`, `P1-T26◐`,
 - Translation import with structural attribution (principle 5) and structural
   alignment (aligned edition + per-passage ayah must exist; non-empty, unique;
   atomic on rejection).
+- Word-gloss import (`import_glosses`, token-granularity alignment,
+  `scholarly_annotation` provenance) with reader serving (`word_glosses` when
+  requested, edition-scoped, dataset-attributed) and CLI (`quran gloss import`,
+  `quran get --glosses`).
 
 ### 1.5 Surfaces — `crates/{tools,tool-registry,citations,cli,server}` (Sprints 1.3–1.4)
 - **Tools:** `ToolResult`/`ReproducibilityData` contract + registry with
@@ -76,7 +80,7 @@ Remaining task IDs: `P1-X01..X05`, `P1-T01`, `P1-T02`, `P1-T03`, `P1-T26◐`,
   `/debug/read/{edition}/{surah}` (RTL, labelled, no persistence).
 - **CLI** (`crates/cli`): every read verb (`get/context/surah/division/resolve`),
   lifecycle verbs (`import/validate/activate/rollback/diff/deprecate/edition/
-  translation/hashes`), `--json` on reads, `--yes` on destructive verbs, Phase-0
+  translation/gloss/hashes`), `--json` on reads, `--yes` on destructive verbs, Phase-0
   exit-code table; trycmd snapshot suite with RTL assertions and error exits.
 - **Doctor:** `qai doctor --quran` (19 checks, read-only, `--deep`) and a single
   merged `--json` document that validates against `doctor.v1.schema.json`.
@@ -113,7 +117,6 @@ board was not flipped.
 ### 3.2 Engineering work still open
 | Task | What remains |
 |---|---|
-| `P1-T38` | Word-gloss dataset import (table + reader field exist; no importer/CLI path) |
 | `P1-T54` | Debug reader exists with RTL + label; **missing the web font**, and the ledger is still ☐ |
 | `P1-T56` | Golden-set expansion to §5.2 edge cases — **blocked on a real dataset** (ADR-0101); must not be filled with fabricated scripture |
 | `P1-T58` | Full-corpus soak (import → validate → activate → 10k lookups → `doctor --deep`) — needs a standard edition to be meaningful |
@@ -203,3 +206,10 @@ green base (incl. the new `$ref`-resolvability + JSON-schema-coverage test);
 spec JSON validated (26 refs resolve, 24 JSON responses carry schemas).
 The shared tree could not run it directly because a concurrent Phase-2 writer
 had broken `application` (E0004 in `quran_index.rs`) at HEAD.
+
+Targeted verification (2026-09-15, T38):
+storage `quran.rs` 9/9 · application `quran_gloss` 11/11 + `quran_reader`
+12/12 (incl. gloss serving) + `quran_import`/`quran_tools`/`quran_translation`
+green · CLI trycmd 2/2 (incl. gloss import + `get --glosses`) · rustfmt clean ·
+clippy shows no lints in T38 files. Run in an isolated worktree at HEAD
+because the shared tree's `quran-search` had concurrent uncommitted breakage.
