@@ -1,50 +1,148 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!-- Sync Impact Report (remove before commit):
+Version change: (none) → 1.0.0 (initial ratification)
+- Modified principles: template slots [PRINCIPLE_1..5_NAME] → I–VII concrete Q-ai principles
+- Added sections: "Technology Stack & Architectural Constraints", "Development Workflow & Quality Gates"
+- Removed sections: none (renamed Section 2/3 placeholders)
+- Follow-up TODOs: none — all placeholders resolved
+-->
+# Q-ai Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Canonical Text Integrity (NON-NEGOTIABLE)
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+Quran Arabic text, surah order, verse identifiers, canonical token order,
+edition identity, and recitation identity MUST NEVER be generated or
+corrected by an LLM. Canonical tables are insert-only; every canonical
+change requires a new source version, checksum validation, structural
+validation (QV rules), a difference report, human approval
+(`ApprovalToken` / approval-gated activation), and an audit event.
+Rationale: exact text before generated interpretation (PRD §2.1, §7.3).
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### II. Layered Trust and Provenance (NON-NEGOTIABLE)
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+Data MUST be separated into Layer A (canonical source text), Layer B
+(publisher/dataset metadata), Layer C (scholarly annotation), Layer D
+(computational annotation with algorithm, version, confidence, timestamp,
+input version, verification status), and Layer E (user/AI notes)
+(PRD §6). AI-generated material MUST NEVER be visually or structurally
+confused with canonical text or verified scholarship. Every
+non-structural graph edge MUST carry source, author-or-algorithm,
+version, confidence, verification status, and timestamp; computational
+suggestions MUST NOT become verified edges without explicit human review
+(PRD §10.3, §10.6). Narrator identity MUST NEVER be silently merged
+(PRD §15.3).
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### III. Traceability and Reproducibility
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+Every factual claim MUST be traceable to source ID, edition, exact
+location, quoted passage, content hash, and ingestion version, with
+claim-level citations validated before presentation (PRD §21). No model
+may fabricate a verse, hadith, chain, grading, or citation. Every tool
+result MUST include the tool result contract (`tool_name`,
+`tool_version`, query, normalization rules, edition id/version, results,
+references, confidence, warnings, timing, reproducibility data), and
+every research query/plan/report MUST produce a reproducibility checksum
+(PRD §12–12.1). Quran quotations MUST come from canonical retrieval,
+never from model memory.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### IV. Scholarly Honesty (NON-NEGOTIABLE)
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+Disputed claims MUST be labeled disputed; contradictory tafsir, grading,
+and scholarly views MUST be presented side-by-side with attribution,
+never merged into one system-endorsed conclusion or AI-synthesized
+resolution (PRD §2.6–2.8, §2.17–2.19, §21.4). Hadith gradings MUST record
+grader, methodology, exact term, source, and date — never a single
+universal `authentic` Boolean (PRD §14.4). Translations MUST NOT be
+presented as the original; lineage (translation/summary/abridgment)
+MUST be transitive and the actually-quoted lineage member cited
+(PRD §2.5, §22.6). Q-ai assists research; it MUST NOT claim religious
+authority, issue binding rulings, or present conclusions as scholarly
+consensus without evidence.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### V. Test-First and Quality Gates (NON-NEGOTIABLE)
+
+Red-Green-Refactor is mandatory for behavior changes: write or update
+tests, confirm they fail, then implement. Every change MUST pass before
+merge: `cargo fmt --all -- --check`, `cargo clippy --workspace
+--all-targets -- -D warnings`, `cargo test --workspace`,
+`cargo run -p xtask -- arch-check`, `cargo run -p xtask -- migrate-check`,
+plus the `qai db migrate/status/verify/backup` and `qai doctor` smoke
+path. Canonical/import paths require adversarial fixtures with specific
+rule IDs, property tests (roundtrip, never-panic, invariant) where
+applicable, and integration suites via `crates/testkit`. No phase exits
+with red gates or unverified acceptance criteria.
+
+### VI. Local-First Security, Deny-by-Default
+
+Local data remains local unless the user explicitly enables a remote
+provider. Agents and tools use deny-by-default permissions; internet
+sources are untrusted until validated and MUST NEVER become active on
+LLM recommendation alone (PRD §2.10, §2.16, §22.3). Enforce the
+`domain` security guards (path containment, archive limits, SSRF /
+resolved-IP checks, input caps, HTML sanitization), `Secret<T>` handling
+(no `Debug` leaks), TLS/domain-allowlist/size-limit/staged-index/
+rollback update safety, and ACL-aware retrieval. `unsafe_code = "forbid"`
+workspace-wide with zero allowlisted exceptions.
+
+### VII. Simplicity and Architecture Discipline
+
+Start simple (YAGNI); no organizational-only crates. Respect the
+workspace dependency layering enforced by `cargo xtask arch-check`
+(`server` → `application` → domain/storage/tools, never sideways);
+route new cross-crate access through `application` and record any
+temporary allowlist as a follow-up with an owner. Record significant
+decisions as ADRs under `docs/02-architecture/decisions/`
+(`ADR-nnnn-title.md`). Prefer SQLite-adjacent, zero-extra-dependency
+solutions (e.g. adjacency tables + bounded CTEs per ADR-0202) unless a
+spike with benchmarks justifies an accelerator. Search normalization
+MUST NEVER modify displayed canonical text.
+
+## Technology Stack & Architectural Constraints
+
+**Language/Version**: Rust (workspace `resolver = "2"`, edition 2021+;
+see `rust-toolchain.toml`). **Primary dependencies**: tokio, axum +
+tower-http (API v1), sqlx/SQLite (+ FTS5), clap (CLI), tracing +
+OpenTelemetry, unicode-segmentation / unicode-normalization,
+regex-automata (DFA-only), csv, similar, lru. **Storage**: SQLite with
+checksummed, contiguous migrations (`migrations/`, `VACUUM INTO`
+backups); canonical tables insert-only via triggers. **Testing**: `cargo
+test --workspace`, trycmd CLI snapshots, insta snapshots, proptest,
+`testkit` fixtures. **Target platforms**: local-first CLI (`qai`), TUI
+(ratatui/crossterm), server (`/healthz`, `/readyz`, API v1), library
+crates per surface. **Constraints**: `<30s` `doctor --quran --deep` on a
+standard edition (pending real dataset per ADR-0101); bounded regex and
+graph queries (resource-limited, N-hop caps); RTL-correct display with
+Web GUI authoritative for rich reading. **Scale/scope**: 114 surah /
+6236-ayah-class canonical corpus, multi-collection hadith/tafsir/
+scripture graphs. Migrations MUST remain contiguous; `arch-check`
+violations MUST be fixed or ADR-justified, never silently allowlisted.
+
+## Development Workflow & Quality Gates
+
+Spec-Kit flow is constitution → `/speckit-specify` (WHAT/WHY, no tech
+stack) → `/speckit-clarify` (max 3 NEEDS CLARIFICATION, optional) →
+`/speckit-plan` (research.md → data-model.md, contracts/, quickstart.md)
+→ `/speckit-checklist` (optional) → `/speckit-analyze` (optional) →
+`/speckit-tasks` (story-ordered, independently testable) →
+`/speckit-implement`. Every implementation task MUST have a TASK-ID
+(`TASK-nnn-slug.md`); never modify the master plan without
+justification; never mark complete until acceptance criteria
+(`AC-Pn-nn`) are satisfied. Completion ritual per task: implement →
+tests → lint/checks → update task doc → phase progress →
+`docs/06-progress/task-done-rollup.md` → follow-ups in
+`docs/05-followups/` → `CHANGELOG.md` when appropriate. All PRs MUST
+verify constitution compliance; complexity MUST be justified in the plan.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution supersedes all other practices on conflict.
+Amendments require a documented Sync Impact Report, a semantic version
+bump (MAJOR: incompatible governance/principle removal or
+redefinition; MINOR: new principle/section or materially expanded
+guidance; PATCH: clarifications/wording), and an ADR or amendment note
+with a migration plan where behavior changes. Use
+`.specify/templates/constitution-template.md` resolution at amendment
+time; write only `.specify/memory/constitution.md`.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2026-09-15 | **Last Amended**: 2026-09-15
