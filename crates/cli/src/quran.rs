@@ -128,6 +128,11 @@ pub enum QuranAction {
         #[command(subcommand)]
         action: FormsAction,
     },
+    /// Search-index management.
+    Index {
+        #[command(subcommand)]
+        action: IndexAction,
+    },
     /// Normalize text through a profile or adhoc rule list (no canonical reads).
     Normalize {
         /// Text to normalize.
@@ -195,6 +200,26 @@ pub enum FormsAction {
     Rebuild {
         /// `slug@version` (must be the active edition).
         edition: String,
+    },
+}
+
+/// Index subcommands.
+#[derive(Subcommand)]
+pub enum IndexAction {
+    /// Build an index generation and atomically activate it.
+    Rebuild {
+        /// Index id (default `quran.ayah.v1`).
+        #[arg(long)]
+        index: Option<String>,
+        /// Edition `slug@version` (default: active edition).
+        #[arg(long)]
+        edition: Option<String>,
+    },
+    /// Verify the serving generation of an index.
+    Verify {
+        /// Index id (default `quran.ayah.v1`).
+        #[arg(long)]
+        index: Option<String>,
     },
 }
 
@@ -287,6 +312,19 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
         QuranAction::Forms { action } => match action {
             FormsAction::Rebuild { edition } => {
                 application::quran_cli::cmd_forms_rebuild(db_path, &edition).await
+            }
+        },
+        QuranAction::Index { action } => match action {
+            IndexAction::Rebuild { index, edition } => {
+                application::quran_cli::cmd_index_rebuild(
+                    db_path,
+                    index.as_deref(),
+                    edition.as_deref(),
+                )
+                .await
+            }
+            IndexAction::Verify { index } => {
+                application::quran_cli::cmd_index_verify(db_path, index.as_deref()).await
             }
         },
         QuranAction::Normalize { text, profile, rules, explain, list_profiles, show_rule } => {
