@@ -1442,7 +1442,7 @@ pub(crate) fn map_sqlx_error(err: sqlx::Error) -> StorageError {
             let msg = db_err.message().to_string();
             if code == "2067" || code == "1555" || msg.contains("UNIQUE") {
                 StorageError::Conflict
-            } else if msg.contains("QAI-QUR-") {
+            } else if msg.contains("QAI-QUR-") || msg.contains("QAI-NORM-") {
                 StorageError::ConstraintViolation { message: msg }
             } else if msg.contains("QAI-PROV") || msg.contains("immutable") {
                 StorageError::ImmutableSourceVersion
@@ -1499,7 +1499,7 @@ mod tests {
         assert_eq!(db.backend(), DbBackend::SQLite);
         let health = db.health().await.unwrap();
         assert!(health.healthy);
-        assert_eq!(health.schema_version, 13);
+        assert_eq!(health.schema_version, 14);
     }
 
     #[tokio::test]
