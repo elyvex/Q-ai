@@ -466,3 +466,41 @@ quran-normalization` as the next command.
 - **Next concrete action (M1b):** implement deterministic rules N01–N17
   (`crates/quran-normalization/src/rules/*.rs`), then N18–N22 + pipeline +
   profiles + trace; next command `cargo test -p quran-normalization`.
+
+---
+
+## 19. Session checkpoint — 2026-09-15 (N01–N17 complete, M1b continued next)
+
+- **Completed:** deterministic rules N01–N17 (`crates/quran-normalization/src/
+  rules/{mod,n01..n17}.rs`, `tests/deterministic_rules.rs`,
+  `unicode-normalization` dep). P2-T16 **partial** (implementations + mapping
+  tables done; pipeline/profile integration pending); T13/T14/T16 stay ☐.
+- **Notable decisions (pending ADR-0204 ratification):** N06 standalone hamza
+  deletes (∅ default); N12 explicit ASCII+Arabic punctuation set v1; N15
+  limited to Forms-B lam-alef ligatures; N04 range subsumes the separately
+  named U+06DD/U+06E5/U+06E6 (documented, not re-listed); N16 full NFC with
+  starter-tracked offsets, cross-checked vs reference NFC (caught + fixed a
+  Hangul-Jamo composition bug and a wrong hand-written expectation via the
+  cross-check); SpanMap tight-hull semantics (containment, not equality —
+  deleted marks excluded from hull, per plan §3.4 property 5 wording).
+- **Crate gates (all green):** `cargo fmt --check` clean; `cargo clippy -p
+  quran-normalization --all-targets -- -D warnings` clean;
+  `cargo test -p quran-normalization` **48 passed / 0 failed**
+  (41 unit + 7 integration: tables, idempotency, hull round-trips, fuzz
+  no-panic/idempotency/round-trip, basmala→bare/skeleton + spaceless-query
+  seed goldens marked pending-linguist).
+- **Workspace gates BLOCKED by concurrent in-flight work (not Phase-2):**
+  `application` lib E0004 (`quran.rs:213` non-exhaustive match on a newly
+  added `ActivationError::AlreadyActive`, concurrent file); `quran_cli.rs:742`
+  clippy `manual_async_fn` (concurrent untracked file); `arch-check` FAIL on
+  `server -> storage` / `server -> tools` edges (concurrent `server/api.rs`).
+  `migrate-check` OK (12 migrations). `cargo test --workspace` cannot link
+  until the E0004 lands fixed — re-run when the concurrent work settles.
+  None of these files were touched; no fix attempted (active author + scope).
+- **Housekeeping:** M1a commits (`922d0f1`, `64ce12a`, `cf48e11`) landed via
+  the concurrent session; working tree coherent, no conflicts.
+- **No task/AC flips, no ADRs, no migrations this session.**
+- **Next concrete action (M1b continued):** heuristic rules N18–N22 +
+  `NormalizationPipeline` + append-only L0–L8 registry + `NormalizationTrace`
+  with trace-less-construction guard; next command
+  `cargo test -p quran-normalization`.
