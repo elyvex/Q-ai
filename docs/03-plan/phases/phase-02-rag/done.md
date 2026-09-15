@@ -1,8 +1,8 @@
 # Phase 2 — Completion Ledger
 
 **Phase:** P2 — Quran Search, Arabic Normalization, Morphology & Word Families
-**Status:** 🔴 Not Started — 0 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 0 / 6 migrations
-**Started:** _not started_
+**Status:** 🟡 In Progress — 3 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 1 / 6 migrations
+**Started:** 2026-09-14
 **Completed:** —
 
 ---
@@ -46,20 +46,20 @@ with what evidence.
 |---|---|---|---|---|---|
 | X — External-lead-time decisions | 5 | 0 | — | — | ☐ |
 | 2.0 — Dataset & Linguistic Decisions | 12 | 0 | 30.5 | — | ☐ |
-| 2.1 — Normalization Engine | 12 | 0 | 28.5 | — | ☐ |
+| 2.1 — Normalization Engine | 12 | 3 | 28.5 | — | ☐ |
 | 2.2 — Derived Forms & FTS Foundation | 15 | 0 | 33.5 | — | ☐ |
 | 2.3 — Search Tools | 17 | 0 | 42.0 | — | ☐ |
 | 2.4 — Morphology Import & Lexicons | 18 | 0 | 45.0 | — | ☐ |
 | 2.5 — Morphology & Family Tools | 19 | 0 | 47.5 | — | ☐ |
 | 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 0 | 51.0 | — | ☐ |
-| **Total** | **114 + 5** | **0** | **278.0** | **—** | **0%** |
+| **Total** | **114 + 5** | **3** | **278.0** | **—** | **3%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
 | Deliverables (D2.1–D2.13) | 0 | 13 |
 | Acceptance criteria (AC-P2-01…50) | 0 | 50 |
 | ADRs accepted (+ 2 reserved) | 0 | 14 + 2 |
-| Migrations applied (`0020`–`0025`) | 0 | 6 |
+| Migrations applied (`0013`–`0018` per DEV-04) | 1 | 6 |
 | Required test suites green | 0 | 17 |
 | D2.13 documents published | 0 | 6 |
 
@@ -91,6 +91,33 @@ _None completed yet._
 ### Sprint 2.0 — Dataset & Linguistic Decisions
 
 ### Sprint 2.1 — Normalization Engine
+
+### P2-T19 — Migration `0013_quran_normalization` + profile/rule seeding
+- **Deliverable:** D2.10
+- **Completed:** 2026-09-15
+- **Owner:** agent (BE)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- migrations/sqlite/0013* crates/storage*/src/quran.rs`)
+- **Evidence:** `migrations/sqlite/0013_quran_normalization.up.sql`; `cargo run -p xtask -- migrate-check` (13 ordered, checksums stable); `crates/application/tests/normalization_seed.rs::seed_matches_code`, `::profile_lifecycle_and_append_only_trigger` (real SQLite: 22 rules + 9 profiles equal code, trigger rejects rewrites with QAI-NORM-0003)
+- **DoD:** ✅ all items / layers: derived-only tables, no canonical touch; typed `StorageError` paths; `arch-check` unaffected (no new workspace edges in storage crates)
+- **Notes:** DEV-04 (numbering `0013`, not `0020`); DEV-06 (trigger reports QAI-NORM-0003, not QAI-NORM-0001). Required `read_flow.trycmd` + `sqlite_database_health` version bumps 12→13 (fallout, same commit scope).
+
+### P2-T23 — `qai quran normalize --explain` + `--list-profiles` + `--show-rule`
+- **Deliverable:** D2.12
+- **Completed:** 2026-09-15
+- **Owner:** agent (BE)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/cli/src/quran.rs crates/application/src/quran_cli.rs crates/application/src/quran_normalize.rs`)
+- **Evidence:** `crates/cli/tests/quran/normalize.trycmd` (10 snapshot cases: list/show/explain/adhoc/usage + reserved-rule note), `cargo test -p cli --test quran` green; `crates/application/src/quran_normalize.rs` unit tests (spec parsing, preview trace)
+- **DoD:** ✅ all items / defines AC-P2-38 evidence (rule-by-rule `--explain` with heuristic flags); exit codes per CLI contract (0/2/5/70)
+- **Notes:** definitions served from seeded rows (proves seed per call), implementations from code; reserved N23/N24 handled without an implementation. Harness split to one temp DB per trycmd file (parallel-safety fix).
+
+### P2-T24 — `POST /normalization/preview` + `GET /normalization/profiles`
+- **Deliverable:** D2.11
+- **Completed:** 2026-09-15
+- **Owner:** agent (BE)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/server/src/api.rs`)
+- **Evidence:** `crates/server/tests/api.rs::normalization_preview_matches_cli_pipeline` (incl. AC-P2-39 byte-identical trace vs the CLI pipeline path), `::normalization_profiles_lists_ladder`; OpenAPI entries in `docs/08-api/quran-v1-openapi.json` (coverage test extended)
+- **DoD:** ✅ all items / envelope + `QAI-NORM-*` error bodies; no new workspace edges (server renders via `application::quran_normalize` re-exports)
+- **Notes:** none.
 
 ### Sprint 2.2 — Derived Forms & FTS Foundation
 
@@ -225,7 +252,15 @@ _None accepted yet._
 
 ## 5. Deviations From Plan
 
-_None recorded yet._
+### DEV-06 — Append-only triggers report QAI-NORM-0003, not QAI-NORM-0001
+- **Date:** 2026-09-15
+- **Plan reference:** README §7 (`0020` trigger `QAI-NORM-0001`) / P2-T19
+- **Planned:** append-only trigger named `QAI-NORM-0001`
+- **Delivered:** four triggers (`trg_normalization_{rules,profiles}_no_{update,delete}`) raising `QAI-NORM-0003`
+- **Reason:** `QAI-NORM-0001` is already the `UnknownRule` error code; reusing it for immutability violations would conflate two failure modes. `QAI-NORM-0003` (`ProfileImmutable`) matches the violation semantics.
+- **Scope impact:** error-code documentation only; enforcement identical
+- **Phase-3 impact:** none; handoff records the code mapping
+- **Approved by:** agent (owner to ratify)
 
 Log anything delivered differently from `plan.md`. Deviations are expected and fine —
 **undocumented** deviations are the problem, because Phase 3 inherits these indexes and
