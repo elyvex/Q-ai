@@ -686,6 +686,63 @@ pub fn run_quran_checks(cfg: &Config, json: bool, deep: bool) -> i32 {
     output.exit
 }
 
+fn render_human(results: &[CheckResult]) -> String {
+    let mut out = String::new();
+    for r in results {
+        out.push_str(&format!("[{}] {} — {}\n", r.status.label(), r.id, r.summary));
+        if let Some(rem) = &r.remedy {
+            out.push_str(&format!("      remedy: {rem}\n"));
+        }
+        if let Some(cmd) = &r.next_command {
+            out.push_str(&format!("      next: {cmd}\n"));
+        }
+    }
+    out
+}
+
+fn quran_report(cfg: &Config, deep: bool) -> Option<(serde_json::Value, String, i32)> {
+    let path = cfg.storage.sqlite.path.clone();
+    let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().ok()?;
+    let output = runtime.block_on(application::quran_cli::cmd_doctor_quran(&path, deep));
+    Some((output.json, output.human, output.exit))
+}
+
+/// Build the complete doctor report in one pass: the Phase-0 registry, plus the
+/// Quran corpus checks when `quran` is set. Returns the merged JSON document,
+/// the merged human text, and the process exit code.
+///
+/// Merging matters: `--json` must emit **one** JSON document that validates
+/// against `docs/schemas/doctor.v1.schema.json` (AC-P1-17), not two documents
+/// printed back to back.
+pub fn doctor_report(
+    cfg: &Config,
+    probe: &DbProbe,
+    quran: bool,
+    deep: bool,
+) -> (serde_json::Value, String, i32) {
+    let results = checks(cfg, probe);
+    let mut doc = checks_json(&results);
+    let mut human = render_human(&results);
+    let mut code = if results.iter().any(|r| r.status == CheckStatus::Fail) {
+        exit_code::VALIDATION
+    } else {
+        exit_code::OK
+    };
+    if quran {
+        match quran_report(cfg, deep) {
+            Some((qdoc, qhuman, qcode)) => {
+                let mut merged = doc["checks"].as_array().cloned().unwrap_or_default();
+                merged.extend(qdoc["checks"].as_array().cloned().unwrap_or_default());
+                doc = serde_json::json!({ "checks": merged });
+                human.push_str(&qhuman);
+                code = code.max(qcode);
+            }
+            None => code = code.max(exit_code::INTERNAL),
+        }
+    }
+    (doc, human, code)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
