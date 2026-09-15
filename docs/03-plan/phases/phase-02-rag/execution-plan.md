@@ -504,3 +504,43 @@ quran-normalization` as the next command.
   `NormalizationPipeline` + append-only L0–L8 registry + `NormalizationTrace`
   with trace-less-construction guard; next command
   `cargo test -p quran-normalization`.
+
+---
+
+## 20. Session checkpoint — 2026-09-15 (M1b core complete: N18–N22 + trace + profiles + pipeline)
+
+- **Completed:** heuristic rules N18–N22 (`rules/n18..n22.rs`, `transform_mask`,
+  fixpoint edge-strip semantics with ≥2-char letter guards, N22 run-collapse;
+  `heuristic_rules()` registry, `by_id` covers N01–N22), `QAI-NORM-0006`
+  `EmptyProfile`, `NormalizationTrace` (ordered applications, derived
+  heuristic flag, empty-label rejection, JSON round-trip), append-only
+  `ProfileRegistry` (v1 L0–L8 ladders exactly per plan §3.3, immutability +
+  no-silent-fallback tests), shared `NormalizationPipeline` (profile +
+  `adhoc:<sha12>` builds, text+trace returned together), rule versions typed
+  `domain::SemVer` with string wire form. P2-T16/T18/T20 **partial**; all
+  tasks stay ☐.
+- **Notable corrections during implementation:** N20 expectation fixed to
+  fixpoint (`ككتاب`→`تاب`); N04 dropped unreachable re-listed codepoints
+  (range subsumes them); pipeline L7 test documents single-pass order
+  (`والكتابه`→`الكتاب`: N18 runs before N19 exposes the article).
+- **Crate gates (all green):** `cargo fmt --check` clean; `cargo clippy -p
+  quran-normalization --all-targets -- -D warnings` clean;
+  `cargo test -p quran-normalization` **76 passed / 0 failed**
+  (63 unit + 7 deterministic_rules + 6 normalization_pipeline).
+- **Workspace gates still blocked by concurrent work (untouched):**
+  `arch-check` FAIL on `server -> storage/tools` (concurrent `server/api.rs`);
+  workspace clippy red only on `application/quran_cli.rs:742`
+  `manual_async_fn` (concurrent file); `cargo test --workspace` stops in
+  `jobs::worker::runs_a_job_to_success` (Idle vs Succeeded — timing flake in
+  the concurrent session's new Worker code). E0004 from the previous session
+  is fixed upstream. `migrate-check` OK. Re-run workspace gates when the
+  concurrent tree settles.
+- **Workflow note:** the owner is committing Phase-2 files as they land
+  (12 normalization commits this session); remaining uncommitted Phase-2
+  content at checkpoint time: `tests/normalization_pipeline.rs`,
+  CHANGELOG M1b entry, this section. No conflicts encountered.
+- **No task/AC flips, no ADRs, no migrations this session.**
+- **Next concrete action (M1c):** migration `0013_quran_normalization` +
+  profile/rule seeding repos (`storage`, `storage-sqlite`), `normalize
+  --explain` CLI, preview endpoints; next command
+  `cargo test -p quran-normalization`.
