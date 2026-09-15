@@ -20,9 +20,12 @@
   (`import/validate/activate/rollback/diff/edition/translation`), every read command
   `--json`, destructive verbs gated on `--yes`, Phase-0 exit-code table.
 - P1-T50 — `cli/tests/quran/read_flow.trycmd` (trycmd): migrate → import → activate →
-  RTL read + provenance → attributed translations → error exits.
-- P1-T51/T52 — `doctor --quran` 19 checks + `--deep`, read-only DB open, JSON shape
-  matching `docs/schemas/doctor.v1.schema.json`.
+  RTL read + provenance → `surah`/`context`/`division`/`resolve` → attributed translations
+  → import v2 → `validate` → `diff` → `rollback` → `hashes` → error exits 5/6.
+- P1-T51/T52 — `doctor --quran` 19 checks + `--deep`, read-only DB open; `--quran --json`
+  now emits one merged `{"checks":[...]}` document (45 checks) that passes
+  `cargo xtask validate` against `docs/schemas/doctor.v1.schema.json`
+  (regression-guarded by `cli/tests/doctor_json.rs`; previously two concatenated docs).
 - Fixed three end-to-end defects: `QAI_DATA_DIR` ignored by config resolution,
   translation import violating the `provenance_records` FK, and doubled trailing
   newline in CLI human output.
@@ -32,6 +35,11 @@
   (`quran_import.rs`), collapsible `if` (server `api.rs` + test), items-after-test-module
   (`server/api.rs`, `cli/doctor.rs`); `application/src/db.rs` schema-version assertions
   now derive the version from `migrations/sqlite/` instead of hard-coding it.
+
+**Docs (D1.14)**
+- P1-T59 — five published documents: `docs/07-technical/quran-corpus-architecture.md`,
+  `quran-adapter-authoring.md`, `quran-citation-spec.md`; and
+  `docs/10-operations/quran-import-runbook.md`, `quran-rollback-runbook.md`.
 
 ### Session: 2026-09-14 — M7 importer + M8 reader
 
