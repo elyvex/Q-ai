@@ -28,8 +28,7 @@ use storage::{
     quran::QuranRepository,
     repository::{
         ApprovalRow, AuditEvent, AuditRepository, ChainVerificationResult, GenerationRow,
-        PrincipalRow,
-        JobRecord, JobRepository, NewOutboxEvent, OutboxEventRow, OutboxRepository,
+        JobRecord, JobRepository, NewOutboxEvent, OutboxEventRow, OutboxRepository, PrincipalRow,
         ProvenanceRecord, ProvenanceRepository, ReviewRecord, SettingRow, SettingsRepository,
         SourceRepository, SourceRow, SourceVersionRow, StateTransitionRow, TombstoneRow,
     },
@@ -477,7 +476,8 @@ impl SourceRepository for SqliteSourceRepository {
         Ok(())
     }
 
-    async fn get_approval(&self, id: &str) -> Result<Option<ApprovalRow>, StorageError> {        let mut tx = self.tx.lock().await;
+    async fn get_approval(&self, id: &str) -> Result<Option<ApprovalRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
         let row = sqlx::query("SELECT * FROM approvals WHERE id = ?")
             .bind(id)
             .fetch_optional(&mut **tx)
