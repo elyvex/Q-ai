@@ -475,9 +475,7 @@ pub async fn validate_staged(
         uow.quran().list_stg_ayahs(&staged.run_id).await.map_err(ActivationError::storage)?;
     let mut findings = Vec::new();
     let stats: quran_core::EditionStatistics = serde_json::from_str(&edition.statistics_json)
-        .map_err(|err| {
-            ActivationError::Storage(format!("stored statistics are corrupt: {err}"))
-        })?;
+        .map_err(|err| ActivationError::Storage(format!("stored statistics are corrupt: {err}")))?;
     if ayahs.len() as u32 != stats.ayah_count {
         findings.push(quran_corpus::Finding::new(
             "QV-004",
@@ -517,10 +515,16 @@ pub async fn validate_staged(
         ));
     }
     uow.rollback().await.map_err(ActivationError::storage)?;
-    let fatal = findings.iter().filter(|finding| finding.severity == quran_corpus::Severity::Fatal).count() as u32;
-    let error = findings.iter().filter(|finding| finding.severity == quran_corpus::Severity::Error).count() as u32;
-    let warning =
-        findings.iter().filter(|finding| finding.severity == quran_corpus::Severity::Warning).count() as u32;
+    let fatal =
+        findings.iter().filter(|finding| finding.severity == quran_corpus::Severity::Fatal).count()
+            as u32;
+    let error =
+        findings.iter().filter(|finding| finding.severity == quran_corpus::Severity::Error).count()
+            as u32;
+    let warning = findings
+        .iter()
+        .filter(|finding| finding.severity == quran_corpus::Severity::Warning)
+        .count() as u32;
     Ok(quran_corpus::ValidationReport {
         subject_urn: format!("quran-staged:{slug}@{version}"),
         validator: quran_corpus::VALIDATOR_NAME.to_string(),
@@ -616,23 +620,19 @@ pub async fn import_translations(
                 .find_staged_edition(aligned_slug, aligned_version)
                 .await
                 .map_err(ActivationError::storage)?
-                .ok_or_else(|| {
-                    ActivationError::NotStaged {
-                        slug: aligned_slug.to_string(),
-                        version: aligned_version.to_string(),
-                    }
+                .ok_or_else(|| ActivationError::NotStaged {
+                    slug: aligned_slug.to_string(),
+                    version: aligned_version.to_string(),
                 })?;
             staged.edition_id
         }
     };
     // Every passage must name a real ayah (checked against canonical when active).
     for passage in &manifest.passages {
-        SurahNumber::new(passage.surah).map_err(|_| {
-            ActivationError::Storage(format!("bad surah {}", passage.surah))
-        })?;
-        AyahNumber::new(passage.ayah).map_err(|_| {
-            ActivationError::Storage(format!("bad ayah {}", passage.ayah))
-        })?;
+        SurahNumber::new(passage.surah)
+            .map_err(|_| ActivationError::Storage(format!("bad surah {}", passage.surah)))?;
+        AyahNumber::new(passage.ayah)
+            .map_err(|_| ActivationError::Storage(format!("bad ayah {}", passage.ayah)))?;
         if passage.text.trim().is_empty() {
             return Err(ActivationError::Storage(format!(
                 "empty translation for {}:{}",
@@ -707,7 +707,10 @@ pub async fn deprecate_edition(
             slug: slug.to_string(),
             version: version.to_string(),
         })?;
-    uow.quran().set_edition_status(&edition.id, "Deprecated").await.map_err(ActivationError::storage)?;
+    uow.quran()
+        .set_edition_status(&edition.id, "Deprecated")
+        .await
+        .map_err(ActivationError::storage)?;
     audit_activation(
         &mut *uow,
         AuditAction::SourceRolledBack,
@@ -760,10 +763,8 @@ pub async fn run_import_job(
     let worker = Worker::new(queue.clone(), registry, "qai-cli");
     worker.run_until_idle().await?;
     // Read the terminal state through the queue.
-    let job = queue
-        .get(&job_id)
-        .await?
-        .ok_or_else(|| jobs::JobError::NotFound { id: job_id.clone() })?;
+    let job =
+        queue.get(&job_id).await?.ok_or_else(|| jobs::JobError::NotFound { id: job_id.clone() })?;
     match job.state.as_str() {
         "Succeeded" => Ok(jobs::JobOutcome { success: true, result: Some(job_id) }),
         "Cancelled" => Err(jobs::JobError::Cancelled { id: job_id }),
