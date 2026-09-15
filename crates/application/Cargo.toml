@@ -11,6 +11,7 @@ storage = { path = "../storage" }
 storage-sqlite = { path = "../storage-sqlite" }
 provenance = { path = "../provenance" }
 audit = { path = "../audit" }
+quran-normalization = { path = "../quran-normalization" }
 jobs = { path = "../jobs" }
 sources = { path = "../sources" }
 observability = { path = "../observability" }
