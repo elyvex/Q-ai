@@ -323,7 +323,14 @@ fn loads_or_default(cli: &Cli) -> Config {
         }
         None => Config::default(),
     };
-    if let Some(dir) = &cli.data_dir {
+    // `--data-dir` wins; otherwise honor `QAI_DATA_DIR`; otherwise the config
+    // file's own `app.data_dir`/`storage.*` values. The three storage paths are
+    // kept in sync so the database, objects and secrets all live under it.
+    let data_dir = cli
+        .data_dir
+        .clone()
+        .or_else(|| std::env::var("QAI_DATA_DIR").ok().filter(|dir| !dir.is_empty()));
+    if let Some(dir) = data_dir {
         cfg.app.data_dir = dir.clone();
         cfg.storage.sqlite.path = format!("{dir}/qai.db");
         cfg.storage.objects.root = format!("{dir}/objects");
