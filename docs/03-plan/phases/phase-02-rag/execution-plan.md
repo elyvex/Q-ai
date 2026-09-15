@@ -60,10 +60,10 @@ from 1; verified green 2026-09-14). Mapping (see §11 DEV-04):
 |---|---|---|
 | `0020_quran_normalization` | `0013_quran_normalization` | rules + profiles + append-only trigger |
 | `0021_quran_forms` | `0014_quran_forms` | token/ayah forms + skeletons |
-| `0022_quran_lexicon` | `0015_quran_lexicon` | datasets, roots, lemmas, analyses, morphemes, derivations, family |
-| `0023_quran_indexes` | `0016_quran_indexes` | index pointers + build runs |
-| `0024_quran_morphology_staging` | `0017_quran_morphology_staging` | `morph_stg_*` mirrors |
-| `0025_quran_search_cache` | `0018_quran_search_cache` | generation-keyed result cache |
+| `0023_quran_indexes` | `0015_quran_indexes` | index pointers + build runs (DEV-07: physical order wins over the DEV-04 map) |
+| `0022_quran_lexicon` | TBD at M4 (next free ≥ `0016`) | datasets, roots, lemmas, analyses, morphemes, derivations, family |
+| `0024_quran_morphology_staging` | TBD at M4 | `morph_stg_*` mirrors |
+| `0025_quran_search_cache` | TBD at M3 | generation-keyed result cache |
 
 ### 1.5 Which Phase-2 crates contain real code?
 
@@ -684,3 +684,35 @@ quran-normalization` as the next command.
 - **Next concrete action (M2 continued):** `0016_quran_indexes` +
   `index_pointers` (P2-T33) + `quran.index.build` job with staging →
   verify → atomic flip (P2-T34); next command `cargo test -p quran-search`.
+
+---
+
+## 25. Session checkpoint — 2026-09-15 (M2: T33/T34 done)
+
+- **Completed:** `0015_quran_indexes` (pointers + runs; DEV-07: physical
+  contiguity wins over the DEV-04 map — lexicon/staging/cache take next
+  free numbers), pointer/run repos + SQLite impl, `Fts5Index` explicit
+  build generations (dir key separated from `manifest.corpus_generation`),
+  `quran.index.build` core + handler + `qai quran index rebuild/verify`.
+- **Tasks flipped ☑:** P2-T33, P2-T34 (evidence in `done.md` §2).
+- **Verification (all green in scope):** `index_build.rs` 4/4 (activate +
+  serve at gen 1, flip + retain + supersede at gen 2, cancel-untouched,
+  handler contract); CLI snapshots 2/2 (rebuild gen-1/gen-2 flip with a
+  manifest hash pinned after proving it identical across fresh databases);
+  `migrate-check` OK (15); `arch-check` OK; per-crate clippy clean.
+- **Design points:** manifest hash binds edition identity (slug@version),
+  not the run-surrogate edition id; ayah docs feed stored forms
+  (exact/canonical + L1 live, affix deferred to the token index);
+  `text_affix` empty on ayah docs until `quran.token.v1` lands; pointer is
+  the only mutable catalog row (documented in-migration).
+- **Repaired mid-session:** orphaned `TokenFormRow` header (re-added +
+  `cargo check` clean); clobbered allowlist section (restored + verified);
+  merged done.md line (split + verified); CHANGELOG forms/index entries
+  spliced by a bad replacement (reconstructed + verified). Lesson
+  re-learned: never send identical old/new strings to the edit tool, and
+  always re-read after structural edits.
+- **Follow-ups (not this session):** token-level index, retention GC +
+  single-step rollback CLI (T35), crash/cancel matrix (T37), cold-rebuild
+  benchmark (T38), ADRs 0201-annex/0208/0213 (T39).
+- **Next concrete action (M3 start):** `SearchHit` + `ScoreExplain` + unified
+  result assembly (P2-T40); next command `cargo test -p quran-search`.
