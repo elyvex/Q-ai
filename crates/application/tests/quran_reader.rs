@@ -5,121 +5,19 @@
 //! approval, then exercises lookup, context, divisions, resolve, caching, and
 //! a performance smoke.
 
-use std::sync::Arc;
+#[path = "common/mod.rs"]
+mod common;
+
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
-use application::quran_reader::{
-    EditionFilter, QuranReader, QuranReaderService, ReaderError,
+use application::quran_reader::{EditionFilter, QuranReader, ReaderError};
+use common::{
+    BASE_MANIFEST, CREATED_AT, LICENSE_JSON, PRINCIPAL, SLUG, SOURCE_VERSION_ID, VERSION,
+    active_reader, principal, timestamp,
 };
-use domain::{PrincipalId, Timestamp};
-use quran_core::{
-    AyahOptions, ContextBoundary, ContextSpec, EditionSelector, QuranRef,
-};
-use quran_corpus::import::{ImportInput, ImportOptions, ImportOutcome, ImportProgress, run_import};
-use quran_corpus::sha256_hex;
-use storage::Database as _;
-use storage_sqlite::SqliteDatabase;
-use tempfile::tempdir;
-
-const BASE_MANIFEST: &str =
-    include_str!("../../../fixtures/quran/test-edition-min/manifest.json");
-const RUN_ID: &str = "11111111-2222-4333-8444-555555555555";
-const PRINCIPAL: &str = "00000000-0000-0000-0000-000000000001";
-const CREATED_AT: &str = "2026-09-14T00:00:00Z";
-const SLUG: &str = "test-edition-min";
-const VERSION: &str = "0.1.0";
-const LICENSE_JSON: &str = "{\"status\":\"PublicDomain\",\"spdx_id\":null,\"name\":null,\
-                              \"url\":null,\"attribution_required\":false,\
-                              \"redistribution_allowed\":true,\"export_allowed\":true,\
-                              \"notes\":null}";
-
-fn principal() -> PrincipalId {
-    PRINCIPAL.parse().unwrap()
-}
-
-fn timestamp() -> Timestamp {
-    Timestamp::from_ymd_hms(2026, 9, 14, 0, 0, 0).unwrap()
-}
-
-async fn active_reader() -> (tempfile::TempDir, Arc<SqliteDatabase>, QuranReaderService, String) {
-    let dir = tempdir().unwrap();
-    let path = dir.path().join("qai.db");
-    let path_str = path.to_str().unwrap().to_string();
-    let repo_root =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../migrations/sqlite");
-    storage_sqlite::migrate::apply_migrations(&path_str, &repo_root).await.unwrap();
-    let db = Arc::new(SqliteDatabase::new(&path_str, 4, true).await.unwrap());
-
-    let seed = sqlx::sqlite::SqlitePoolOptions::new()
-        .max_connections(1)
-        .connect_with(
-            sqlx::sqlite::SqliteConnectOptions::new().filename(&path_str).foreign_keys(true),
-        )
-        .await
-        .unwrap();
-    for sql in [
-        format!(
-            "INSERT INTO principals (id, kind, display_name, created_at)
-             VALUES ('{PRINCIPAL}', 'local_user', 'Test', '{CREATED_AT}')"
-        ),
-        "INSERT INTO sources (id, title, content_type, created_at, updated_at)
-         VALUES ('src-1', 'Test source', 'quran_edition', '2026-09-14T00:00:00Z', '2026-09-14T00:00:00Z')"
-            .to_string(),
-        "INSERT INTO source_versions
-            (id, source_id, version, schema_version, state, trust_level,
-             license_status, license_json, created_at)
-         VALUES ('sv-1', 'src-1', '0.1.0', 1, 'Staged', 'ImportedUnverified',
-                 'PublicDomain', '{}', '2026-09-14T00:00:00Z')"
-            .to_string(),
-        format!(
-            "INSERT INTO approvals
-                (id, subject_urn, kind, requested_by, decided_by, decision,
-                 request_payload, requested_at, decided_at)
-             VALUES ('appr-1', 'quran-edition:{SLUG}@{VERSION}', 'CanonicalChange',
-                     '{PRINCIPAL}', '{PRINCIPAL}', 'approved', '{{}}', '{CREATED_AT}', '{CREATED_AT}')"
-        ),
-    ] {
-        sqlx::query(&sql).execute(&seed).await.unwrap();
-    }
-    seed.close().await;
-
-    let manifest_hash = sha256_hex(BASE_MANIFEST.as_bytes());
-    let outcome = run_import(
-        &*db,
-        &ImportInput {
-            run_id: RUN_ID.into(),
-            job_id: None,
-            source_version_id: "sv-1".into(),
-            adapter: "json".into(),
-            manifest_text: BASE_MANIFEST.into(),
-            declared_manifest_hash: Some(manifest_hash),
-            invoked_by: PRINCIPAL.into(),
-            license_status: "PublicDomain".into(),
-            license_json: LICENSE_JSON.into(),
-            created_at: CREATED_AT.into(),
-        },
-        &ImportOptions::default(),
-        &AtomicBool::new(false),
-        ImportProgress::new(),
-    )
-    .await
-    .expect("import completes");
-    assert!(matches!(outcome, ImportOutcome::Completed(_)));
-    let generation = application::quran::activate_edition(
-        &*db,
-        SLUG,
-        VERSION,
-        &principal(),
-        "appr-1",
-        &timestamp(),
-    )
-    .await
-    .expect("activation completes");
-    assert_eq!(generation, 1);
-    let reader = QuranReaderService::new(db.clone());
-    (dir, db, reader, path_str)
-}
+use quran_core::{AyahOptions, ContextBoundary, ContextSpec, EditionSelector, QuranRef};
+use quran_corpus::import::{ImportInput, ImportOptions, ImportProgress, run_import};
 
 fn plain() -> AyahOptions {
     AyahOptions { translations: Vec::new(), glosses: false, tokens: false }
@@ -162,13 +60,9 @@ async fn missing_references_are_typed_errors() {
     let err =
         reader.get_ayah(&quran_core::parse("quran:juz:99").unwrap(), &plain()).await.unwrap_err();
     assert!(matches!(err, ReaderError::DivisionNotFound(_)));
-    let options = AyahOptions {
-        translations: vec!["en-missing".to_string()],
-        glosses: false,
-        tokens: false,
-    };
-    let err =
-        reader.get_ayah(&quran_core::parse("1:1").unwrap(), &options).await.unwrap_err();
+    let options =
+        AyahOptions { translations: vec!["en-missing".to_string()], glosses: false, tokens: false };
+    let err = reader.get_ayah(&quran_core::parse("1:1").unwrap(), &options).await.unwrap_err();
     assert!(matches!(err, ReaderError::TranslationNotFound(_)));
 }
 
@@ -182,10 +76,7 @@ async fn ranges_surahs_and_divisions_expand() {
 
     let surah = reader
         .get_ayahs(
-            &QuranRef::Surah {
-                edition: EditionSelector::Active,
-                surah: "3".parse().unwrap(),
-            },
+            &QuranRef::Surah { edition: EditionSelector::Active, surah: "3".parse().unwrap() },
             &plain(),
         )
         .await
@@ -210,8 +101,7 @@ async fn context_respects_boundaries_and_caps() {
         max_ayahs: 10,
     };
     // Ayah (2,2) is the last of surah 2: one ayah before it, none after (clipped).
-    let view =
-        reader.get_context(&quran_core::parse("2:2").unwrap(), &spec).await.unwrap();
+    let view = reader.get_context(&quran_core::parse("2:2").unwrap(), &spec).await.unwrap();
     assert_eq!(view.focal.canonical.reference(), "quran:test-edition-min@0.1.0:2:2");
     assert!(view.surah.is_some());
     assert_eq!(view.before.len(), 1);
@@ -222,7 +112,8 @@ async fn context_respects_boundaries_and_caps() {
     let view = reader.get_context(&quran_core::parse("2:2").unwrap(), &capped).await.unwrap();
     assert_eq!(1 + view.before.len() + view.after.len(), 2);
 
-    // Juz boundary: (3,1) is the first ayah of juz 2 in the fixture.
+    // Juz boundary: (4,2) is global 11 inside juz 2 (globals 9–14), so only
+    // two of the five requested predecessors are served.
     let juz_spec = ContextSpec {
         before: 5,
         after: 0,
@@ -230,8 +121,8 @@ async fn context_respects_boundaries_and_caps() {
         include_surah_header: false,
         max_ayahs: 20,
     };
-    let view = reader.get_context(&quran_core::parse("3:2").unwrap(), &juz_spec).await.unwrap();
-    assert_eq!(view.before.len(), 1, "clipped at the juz-2 start");
+    let view = reader.get_context(&quran_core::parse("4:2").unwrap(), &juz_spec).await.unwrap();
+    assert_eq!(view.before.len(), 2, "clipped at the juz-2 start");
 }
 
 #[tokio::test]
@@ -273,7 +164,7 @@ async fn cache_serves_no_stale_text_after_activation() {
         &ImportInput {
             run_id: run_id.into(),
             job_id: None,
-            source_version_id: "sv-1".into(),
+            source_version_id: SOURCE_VERSION_ID.into(),
             adapter: "json".into(),
             manifest_text: v2_manifest,
             declared_manifest_hash: None,
@@ -293,9 +184,7 @@ async fn cache_serves_no_stale_text_after_activation() {
         let seed = sqlx::sqlite::SqlitePoolOptions::new()
             .max_connections(1)
             .connect_with(
-                sqlx::sqlite::SqliteConnectOptions::new()
-                    .filename(&path)
-                    .foreign_keys(true),
+                sqlx::sqlite::SqliteConnectOptions::new().filename(&path).foreign_keys(true),
             )
             .await
             .unwrap();
