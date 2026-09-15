@@ -252,7 +252,11 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
     if json {
         println!("{}", serde_json::to_string_pretty(&output.json).unwrap_or_default());
     } else {
-        println!("{}", output.human);
+        // Human output ends with exactly one newline: command handlers may
+        // append one themselves, so strip a single trailing newline before the
+        // printer adds it back.
+        let human = output.human.strip_suffix('\n').unwrap_or(&output.human);
+        println!("{human}");
     }
     output.exit
 }
