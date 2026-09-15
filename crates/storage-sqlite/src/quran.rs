@@ -11,9 +11,9 @@ use sqlx::Row;
 use storage::error::StorageError;
 use storage::quran::{
     ActiveEditionRow, AyahFormRow, AyahRow, CitationRow, DifferenceReportRow, DivisionRow,
-    ImportRunRow, NormalizationProfileRow, NormalizationRuleRow, QuranEditionRow, QuranRepository,
-    SeparatorRow, SkeletonRow, StagedEditionRef, SurahRow, TokenFormRow, TokenRow,
-    TranslationEditionRow, TranslationPassageRow, ValidationReportRow,
+    ImportRunRow, IndexBuildRunRow, IndexPointerRow, NormalizationProfileRow, NormalizationRuleRow,
+    QuranEditionRow, QuranRepository, SeparatorRow, SkeletonRow, StagedEditionRef, SurahRow,
+    TokenFormRow, TokenRow, TranslationEditionRow, TranslationPassageRow, ValidationReportRow,
 };
 
 use super::{SharedTx, map_sqlx_error};
@@ -1520,6 +1520,127 @@ impl QuranRepository for SqliteQuranRepository {
         }
         Ok(())
     }
+
+    async fn get_index_pointer(
+        &self,
+        index_id: &str,
+    ) -> Result<Option<IndexPointerRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query(
+            "SELECT index_id, generation, manifest_json, updated_at, updated_by
+             FROM index_pointers WHERE index_id = ?",
+        )
+        .bind(index_id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(row.map(|r| IndexPointerRow {
+            index_id: r.get("index_id"),
+            generation: r.get("generation"),
+            manifest_json: r.get("manifest_json"),
+            updated_at: r.get("updated_at"),
+            updated_by: r.get("updated_by"),
+        }))
+    }
+
+    async fn upsert_index_pointer(&mut self, row: IndexPointerRow) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query(
+            "INSERT INTO index_pointers (index_id, generation, manifest_json, updated_at, updated_by)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT (index_id) DO UPDATE SET
+                generation = excluded.generation,
+                manifest_json = excluded.manifest_json,
+                updated_at = excluded.updated_at,
+                updated_by = excluded.updated_by",
+        )
+        .bind(&row.index_id)
+        .bind(row.generation)
+        .bind(&row.manifest_json)
+        .bind(&row.updated_at)
+        .bind(&row.updated_by)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn insert_build_run(&mut self, row: IndexBuildRunRow) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query(
+            "INSERT INTO index_build_runs
+                (id, index_id, generation, corpus_generation, state, doc_count,
+                 manifest_hash, error, started_at, finished_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&row.id)
+        .bind(&row.index_id)
+        .bind(row.generation)
+        .bind(row.corpus_generation)
+        .bind(&row.state)
+        .bind(row.doc_count)
+        .bind(&row.manifest_hash)
+        .bind(&row.error)
+        .bind(&row.started_at)
+        .bind(&row.finished_at)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn set_build_run_state(
+        &mut self,
+        id: &str,
+        state: &str,
+        doc_count: i64,
+        manifest_hash: &str,
+        error: Option<&str>,
+        finished_at: &str,
+    ) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query(
+            "UPDATE index_build_runs
+             SET state = ?, doc_count = ?, manifest_hash = ?, error = ?, finished_at = ?
+             WHERE id = ?",
+        )
+        .bind(state)
+        .bind(doc_count)
+        .bind(manifest_hash)
+        .bind(error)
+        .bind(finished_at)
+        .bind(id)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn list_build_runs(&self, index_id: &str) -> Result<Vec<IndexBuildRunRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT id, index_id, generation, corpus_generation, state, doc_count,
+                    manifest_hash, error, started_at, finished_at
+             FROM index_build_runs WHERE index_id = ? ORDER BY generation",
+        )
+        .bind(index_id)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows.iter().map(decode_build_run).collect())
+    }
+
+    async fn max_build_generation(&self, index_id: &str) -> Result<i64, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let max: Option<i64> = sqlx::query_scalar(
+            "SELECT MAX(generation) FROM index_build_runs WHERE index_id = ?",
+        )
+        .bind(index_id)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(max.unwrap_or(0))
+    }
 }
 
 fn decode_token_form(row: &sqlx::sqlite::SqliteRow) -> TokenFormRow {
@@ -1582,5 +1703,20 @@ fn decode_profile(row: &sqlx::sqlite::SqliteRow) -> NormalizationProfileRow {
         indexed: row.get::<i64, _>("indexed") != 0,
         heuristic: row.get::<i64, _>("heuristic") != 0,
         experimental: row.get::<i64, _>("experimental") != 0,
+    }
+}
+
+fn decode_build_run(row: &sqlx::sqlite::SqliteRow) -> IndexBuildRunRow {
+    IndexBuildRunRow {
+        id: row.get("id"),
+        index_id: row.get("index_id"),
+        generation: row.get("generation"),
+        corpus_generation: row.get("corpus_generation"),
+        state: row.get("state"),
+        doc_count: row.get("doc_count"),
+        manifest_hash: row.get("manifest_hash"),
+        error: row.get("error"),
+        started_at: row.get("started_at"),
+        finished_at: row.get("finished_at"),
     }
 }
