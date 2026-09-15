@@ -114,6 +114,7 @@ dependencies = [
  "provenance",
  "quran-core",
  "quran-corpus",
+ "serde",
  "serde_json",
  "sources",
  "sqlx",
@@ -125,6 +126,7 @@ dependencies = [
  "tool-registry",
  "tools",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
