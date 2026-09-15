@@ -35,15 +35,13 @@ async fn deep_scan_of_the_fixture_has_no_failures() {
     // Exactly the 19 corpus checks, in the documented set (AC-P1-17).
     assert_eq!(checks.len(), 19, "expected 19 doctor checks, got {}", checks.len());
 
-    let failures: Vec<&str> = checks
-        .iter()
-        .filter(|c| c.status == CheckLevel::Fail)
-        .map(|c| c.id)
-        .collect();
+    let failures: Vec<&str> =
+        checks.iter().filter(|c| c.status == CheckLevel::Fail).map(|c| c.id).collect();
     assert!(failures.is_empty(), "fixture edition must not fail any check: {failures:?}");
 
     // The token round-trip is the point of `--deep`: it must pass on the fixture.
-    let roundtrip = checks.iter().find(|c| c.id == "quran.token_roundtrip").expect("roundtrip check");
+    let roundtrip =
+        checks.iter().find(|c| c.id == "quran.token_roundtrip").expect("roundtrip check");
     assert_eq!(roundtrip.status, CheckLevel::Pass, "{}", roundtrip.summary);
 
     // Non-passing checks here are the two owner-gated ones, never silent passes.
