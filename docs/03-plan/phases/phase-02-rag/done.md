@@ -1,7 +1,7 @@
 # Phase 2 — Completion Ledger
 
 **Phase:** P2 — Quran Search, Arabic Normalization, Morphology & Word Families
-**Status:** 🟡 In Progress — 11 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 2 / 6 migrations
+**Status:** 🟡 In Progress — 13 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 3 / 6 migrations
 **Started:** 2026-09-14
 **Completed:** —
 
@@ -47,19 +47,19 @@ with what evidence.
 | X — External-lead-time decisions | 5 | 0 | — | — | ☐ |
 | 2.0 — Dataset & Linguistic Decisions | 12 | 0 | 30.5 | — | ☐ |
 | 2.1 — Normalization Engine | 12 | 3 | 28.5 | — | ☐ |
-| 2.2 — Derived Forms & FTS Foundation | 15 | 8 | 33.5 | — | ☐ |
+| 2.2 — Derived Forms & FTS Foundation | 15 | 10 | 33.5 | — | ☐ |
 | 2.3 — Search Tools | 17 | 0 | 42.0 | — | ☐ |
 | 2.4 — Morphology Import & Lexicons | 18 | 0 | 45.0 | — | ☐ |
 | 2.5 — Morphology & Family Tools | 19 | 0 | 47.5 | — | ☐ |
 | 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 0 | 51.0 | — | ☐ |
-| **Total** | **114 + 5** | **11** | **278.0** | **—** | **10%** |
+| **Total** | **114 + 5** | **13** | **278.0** | **—** | **11%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
 | Deliverables (D2.1–D2.13) | 0 | 13 |
 | Acceptance criteria (AC-P2-01…50) | 0 | 50 |
 | ADRs accepted (+ 2 reserved) | 0 | 14 + 2 |
-| Migrations applied (`0013`–`0018` per DEV-04) | 2 | 6 |
+| Migrations applied (`0013`–`0018` per DEV-04) | 3 | 6 |
 | Required test suites green | 0 | 17 |
 | D2.13 documents published | 0 | 6 |
 
@@ -193,6 +193,24 @@ _None completed yet._
 - **DoD:** ✅ all items / R6 locked by wiring proof, not just function equality (a bypass on either path fails one direction)
 - **Notes:** deterministic char-stride sampling (no RNG seed to manage); wasla pairs deliberately excluded from the bare-field loop (ladder-correct: wasla folds at L4, covered per field in the backend suite).
 
+### P2-T33 — Migration `0015_quran_indexes` + `index_pointers` + build-run tracking
+- **Deliverable:** D2.10
+- **Completed:** 2026-09-15
+- **Owner:** agent (BE)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- migrations/sqlite/0015* crates/storage*/src/quran.rs`)
+- **Evidence:** `migrations/sqlite/0015_quran_indexes.up.sql`; `cargo run -p xtask -- migrate-check` (15 ordered, checksums stable); pointer upsert/get + run insert/state/list/max round-trips inside `crates/application/tests/index_build.rs`
+- **DoD:** ✅ all items / pointer is the only mutable catalog row (documented in-migration); run states CHECK-constrained; UNIQUE(index_id, generation)
+- **Notes:** DEV-04 numbering revised by DEV-07 (physical contiguity wins: indexes take `0015`, lexicon/staging/cache shift to M3/M4).
+
+### P2-T34 — `quran.index.build` job: staging dir → verify → atomic pointer flip
+- **Deliverable:** D2.10
+- **Completed:** 2026-09-15
+- **Owner:** agent (SRCH)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/application/src/quran_index.rs`)
+- **Evidence:** `crates/application/src/quran_index.rs` (resolve → MV-018 pre → stage → chunked build from stored forms → commit → counted-manifest reopen → verify → MV-018 post → single-tx flip); `IndexBuildHandler` (`quran.index.build`); `crates/application/tests/index_build.rs` 4/4 (activate+serve, flip+retain+supersede, cancel-untouched, handler contract); `qai quran index rebuild/verify` trycmd (gen-1/gen-2 flip, deterministic manifest hash pinned); live CLI proof (14 docs, byte-identical reruns)
+- **DoD:** ✅ all items / partial builds never serve (pointer-only activation); previous generation retained; exact doc counts; MV-018 both ends
+- **Notes:** `Fts5Index` now takes an explicit build generation (dir key) separate from `manifest.corpus_generation` (multi-build retention required it). Manifest hash binds edition identity (slug@version), not the run-surrogate edition id — verified identical across fresh databases. Token-level index (`quran.token.v1`) and retention GC are follow-ups (T35/next session).
+
 ### Sprint 2.3 — Search Tools
 
 ### Sprint 2.4 — Morphology Import & Lexicons
@@ -323,6 +341,16 @@ _None accepted yet._
 ---
 
 ## 5. Deviations From Plan
+
+### DEV-07 — Migration numbering follows physical build order, not the DEV-04 map
+- **Date:** 2026-09-15
+- **Plan reference:** DEV-04 mapping (`0020`–`0025` → `0013`–`0018`) / P2-T33
+- **Planned:** `0015` reserved for the M4 lexicon migration
+- **Delivered:** `0015_quran_indexes` (indexes built in M2, before M4 exists); `migrate-check` contiguity from 1 leaves no gaps, so physical order wins
+- **Reason:** holding `0015` empty for a future phase would break contiguity today for a mapping table that was always logical
+- **Scope impact:** numbering only; M4 lexicon/staging and M3 cache take the next free numbers (`0016`+); `execution-plan.md` §1.4 mapping updated
+- **Phase-3 impact:** none beyond reading the ledger for the true number-to-content map
+- **Approved by:** agent (owner to ratify)
 
 ### DEV-06 — Append-only triggers report QAI-NORM-0003, not QAI-NORM-0001
 - **Date:** 2026-09-15
