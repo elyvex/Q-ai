@@ -80,12 +80,12 @@ with a recorded fallback), ADR-0206 is `Reserved`, and both golden sets exist wi
 | P2-T16 | Implement deterministic rules N01–N17 | D2.1 | T14 | 5.0 | BE | ☐ |
 | P2-T17 | Implement heuristic rules N18–N22 with `RuleKind::Heuristic` tagging | D2.1 | T16 | 2.5 | BE | ☐ |
 | P2-T18 | `NormalizationPipeline` + profile registry + immutability enforcement | D2.1 | T16 | 2.5 | BE | ☐ |
-| P2-T19 | Migration `0020_quran_normalization` + profile/rule seeding | D2.10 | T18 | 1.5 | BE | ☐ |
+| P2-T19 | Migration `0020_quran_normalization` + profile/rule seeding | D2.10 | T18 | 1.5 | BE | ☑ |
 | P2-T20 | `NormalizationTrace` type + no-default-constructor guard | D2.1 | T18 | 1.0 | BE | ☐ |
 | P2-T21 | Golden-set test harness; all 2,000 pairs green | D2.13 | T11,T18 | 2.5 | QA | ☐ |
 | P2-T22 | Idempotency + associativity + fuzz (no panic on any Unicode input) | D2.13 | T18 | 2.0 | QA | ☐ |
-| P2-T23 | `qai quran normalize --explain` + `--list-profiles` + `--show-rule` | D2.12 | T18 | 2.0 | BE | ☐ |
-| P2-T24 | `POST /normalization/preview` + `GET /normalization/profiles` | D2.11 | T23 | 1.5 | BE | ☐ |
+| P2-T23 | `qai quran normalize --explain` + `--list-profiles` + `--show-rule` | D2.12 | T18 | 2.0 | BE | ☑ |
+| P2-T24 | `POST /normalization/preview` + `GET /normalization/profiles` | D2.11 | T23 | 1.5 | BE | ☑ |
 
 > **T14 is the highest-risk pure-logic item in the phase.** `to_canonical(to_derived(r)) ⊇ r`,
 > grapheme-boundary safety, composition associativity, L0 identity, and re-normalization
