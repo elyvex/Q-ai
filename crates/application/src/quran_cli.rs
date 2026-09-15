@@ -405,19 +405,28 @@ fn read_manifest(path: &str) -> Result<String, CommandOutput> {
 
 /// Ensure the catalog source + version rows the importer FKs into.
 async fn ensure_source_version(
-    db: &SqliteDatabase,
+    db: &Arc<SqliteDatabase>,
     slug: &str,
     version: &str,
     at: &str,
 ) -> Result<String, CommandOutput> {
+    ensure_principal_or_err(db, at).await?;
+    // The source row keeps a stable human id; every import mints a FRESH version
+    // row id (a bare UUID): each import is a new catalog version, and the reader
+    // maps version ids back to typed UUIDs.
     let source_id = format!("src-{slug}");
-    let version_id = format!("sv-{slug}-{version}");
-    let mut uow = db.write().await.map_err(|err: StorageError| {
-        CommandOutput::err(exit::INTERNAL, err.to_string())
-    })?;
-    if uow.sources().get(&source_id).await.map_err(|err: StorageError| {
-        CommandOutput::err(exit::INTERNAL, err.to_string())
-    })?.is_none() {
+    let version_id = uuid::Uuid::new_v4().to_string();
+    let mut uow = db
+        .write()
+        .await
+        .map_err(|err: StorageError| CommandOutput::err(exit::INTERNAL, err.to_string()))?;
+    if uow
+        .sources()
+        .get(&source_id)
+        .await
+        .map_err(|err: StorageError| CommandOutput::err(exit::INTERNAL, err.to_string()))?
+        .is_none()
+    {
         uow.sources()
             .insert_source(storage::repository::SourceRow {
                 id: source_id.clone(),
@@ -429,32 +438,33 @@ async fn ensure_source_version(
             .await
             .map_err(|err: StorageError| CommandOutput::err(exit::INTERNAL, err.to_string()))?;
     }
-    let versions = uow.sources().list_versions(&source_id).await.map_err(|err: StorageError| {
-        CommandOutput::err(exit::INTERNAL, err.to_string())
-    })?;
-    if !versions.iter().any(|row| row.version == version) {
-        uow.sources()
-            .insert_version(storage::repository::SourceVersionRow {
-                id: version_id.clone(),
-                source_id: source_id.clone(),
-                version: version.to_string(),
-                state: "Staged".to_string(),
-                trust_level: "ImportedUnverified".to_string(),
-                license_status: "Unknown".to_string(),
-                content_hash: None,
-                manifest_blob_id: None,
-            })
-            .await
-            .map_err(|err: StorageError| CommandOutput::err(exit::INTERNAL, err.to_string()))?;
-    }
-    uow.commit().await.map_err(|err: StorageError| {
-        CommandOutput::err(exit::INTERNAL, err.to_string())
-    })?;
+    // Every import mints a fresh version row: each import is a new catalog version.
+    uow.sources()
+        .insert_version(storage::repository::SourceVersionRow {
+            id: version_id.clone(),
+            source_id: source_id.clone(),
+            version: version.to_string(),
+            state: "Staged".to_string(),
+            trust_level: "ImportedUnverified".to_string(),
+            license_status: "Unknown".to_string(),
+            content_hash: None,
+            manifest_blob_id: None,
+        })
+        .await
+        .map_err(|err: StorageError| CommandOutput::err(exit::INTERNAL, err.to_string()))?;
+    uow.commit()
+        .await
+        .map_err(|err: StorageError| CommandOutput::err(exit::INTERNAL, err.to_string()))?;
     Ok(version_id)
 }
 
 /// `quran import`.
-pub async fn cmd_import(db_path: &str, manifest: &str, adapter: &str, dry_run: bool) -> CommandOutput {
+pub async fn cmd_import(
+    db_path: &str,
+    manifest: &str,
+    adapter: &str,
+    dry_run: bool,
+) -> CommandOutput {
     let text = match read_manifest(manifest) {
         Ok(text) => text,
         Err(output) => return output,
@@ -495,6 +505,10 @@ pub async fn cmd_import(db_path: &str, manifest: &str, adapter: &str, dry_run: b
         Ok(db) => Arc::new(db),
         Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
     };
+    let at = now_rfc3339();
+    if let Err(output) = ensure_principal_or_err(&db, &at).await {
+        return output;
+    }
     // Slug/version come from the manifest itself.
     let doc: quran_corpus::EditionSource = match serde_json::from_str(&text) {
         Ok(doc) => doc,
