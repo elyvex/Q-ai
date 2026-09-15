@@ -238,7 +238,6 @@ async fn open_serving(
             detail: err.to_string(),
         })
     })?;
-    let ladder = manifest.tokenizer_version;
     let index =
         Fts5Index::open(data_dir, pointer.generation as u64, manifest.clone(), family)
             .await
@@ -342,6 +341,7 @@ async fn assemble_hit(
     span: quran_normalization::CanonicalSpan,
     matched: &[usize],
     tokens: &[storage::quran::TokenRow],
+    segmentation: Vec<quran_search::Segmentation>,
     score: Option<f32>,
     score_explain: Option<ScoreExplain>,
     trace: NormalizationTrace,
@@ -376,7 +376,7 @@ async fn assemble_hit(
     if let Some(stale) = serving.stale.clone() {
         warnings.push(stale);
     }
-    SearchHit::new(quran_search::SearchHitParts {
+    SearchHit::new(SearchHitParts {
         edition: quran_core::EditionRef {
             slug: serving.edition_slug.clone(),
             version: edition_version,
@@ -396,6 +396,7 @@ async fn assemble_hit(
         score,
         score_explain,
         explanation: trace,
+        segmentation,
         warnings,
     })
     .map_err(SearchError::Index)
@@ -437,19 +438,33 @@ struct Candidate {
     score: Option<f32>,
 }
 
+/// One verified ayah match: canonical span, token indexes, and optional
+/// concatenated-match segmentation.
+struct AyahMatch {
+    span: quran_normalization::CanonicalSpan,
+    matched: Vec<usize>,
+    segmentation: Vec<quran_search::Segmentation>,
+}
+
 /// Shared driver: match per candidate ayah, assemble hits in canonical
 /// order, and report the exact total the caller counted separately.
-async fn run_search(
-    db: &SqliteDatabase,
-    serving: &Serving,
+/// Shared assembly context for one tool call.
+struct RunContext<'a> {
+    db: &'a SqliteDatabase,
+    serving: &'a Serving,
     trace: NormalizationTrace,
-    params: &SearchParams,
-    field: &str,
+    params: &'a SearchParams,
+    field: &'a str,
     stats_docs: u64,
+}
+
+async fn run_search(
+    ctx: &RunContext<'_>,
     candidates: Vec<Candidate>,
     total_matches: u64,
-    match_one: impl Fn(&str, &[storage::quran::TokenRow]) -> Option<(quran_normalization::CanonicalSpan, Vec<usize>)>,
+    match_one: impl Fn(&str, &[storage::quran::TokenRow]) -> Option<AyahMatch>,
 ) -> Result<SearchOutput, SearchError> {
+    let (db, serving, params) = (ctx.db, ctx.serving, ctx.params);
     let mut ordered = candidates;
     ordered.sort_by_key(|candidate| (candidate.surah, candidate.ayah));
     ordered.dedup_by_key(|candidate| (candidate.surah, candidate.ayah));
@@ -470,7 +485,7 @@ async fn run_search(
             .map_err(SearchError::storage)?;
         uow.rollback().await.map_err(SearchError::storage)?;
         let Some(ayah_row) = ayah_row else { continue };
-        let Some((span, matched)) = match_one(&ayah_row.text, &tokens) else { continue };
+        let Some(matched) = match_one(&ayah_row.text, &tokens) else { continue };
         // Scores exist only on the relevance path (whole-token + explain);
         // scan modes always serve canonical order without scores.
         let (score, score_explain) = match (params.explain, candidate.score) {
@@ -478,9 +493,9 @@ async fn run_search(
                 Some(score),
                 Some(ScoreExplain::for_hit(
                     quran_search::FtsBackend::Fts5,
-                    field.to_string(),
+                    ctx.field.to_string(),
                     score,
-                    stats_docs,
+                    ctx.stats_docs,
                     ResultOrder::Relevance,
                 )),
             ),
@@ -492,12 +507,13 @@ async fn run_search(
                 serving,
                 candidate.surah,
                 candidate.ayah,
-                span,
-                &matched,
+                matched.span,
+                &matched.matched,
                 &tokens,
+                matched.segmentation,
                 score,
                 score_explain,
-                trace.clone(),
+                ctx.trace.clone(),
             )
             .await?,
         );
@@ -509,7 +525,7 @@ async fn run_search(
         hits,
         total_matches,
         truncated,
-        rule_set: trace.profile.clone(),
+        rule_set: ctx.trace.profile.clone(),
         generation: serving.generation,
         warnings: serving.stale.clone().into_iter().collect(),
     })
@@ -531,7 +547,6 @@ async fn whole_token_candidates(
     filters: &[Filter],
     explain: bool,
 ) -> Result<(Vec<Candidate>, u64), SearchError> {
-    use quran_search::FtsQuery;
     let order = if explain { ResultOrder::Relevance } else { ResultOrder::CanonicalOrder };
     let opts = quran_search::SearchOpts {
         limit: 1000,
@@ -614,7 +629,7 @@ fn scan_match(
     tokens: &[storage::quran::TokenRow],
     query: &str,
     mode: MatchMode,
-) -> Option<(quran_normalization::CanonicalSpan, Vec<usize>)> {
+) -> Option<AyahMatch> {
     let derived = pipeline.apply(ayah_text).0;
     let text = derived.text();
     let (start, end) = match mode {
@@ -658,7 +673,7 @@ fn scan_match(
     if matched.is_empty() {
         return None;
     }
-    Some((span, matched))
+    Some(AyahMatch { span, matched, segmentation: Vec::new() })
 }
 
 /// `quran.search_exact` (P2-T41): no linguistic expansion beyond L0/L1.
@@ -698,13 +713,16 @@ pub async fn search_exact(
         }
     };
 
-    let mut output = run_search(
+    let ctx = RunContext {
         db,
-        &serving,
+        serving: &serving,
         trace,
         params,
-        &field_id,
-        stats_docs(&serving).await?,
+        field: &field_id,
+        stats_docs: stats_docs(&serving).await?,
+    };
+    let mut output = run_search(
+        &ctx,
         candidates,
         total_matches,
         |ayah_text, tokens| {
@@ -738,7 +756,7 @@ pub enum NormalizedProfile {
     /// Registry profile (latest or pinned).
     Registry(quran_normalization::ProfileId, Option<SemVer>),
     /// Explicit rule list (adhoc pipeline over a superset scan).
-    Adhoc(Vec<quran_normalization::RuleId>),
+    Adhoc(Vec<RuleId>),
 }
 
 /// `quran.search_normalized` (P2-T42): profile or explicit rules, never both.
@@ -791,13 +809,16 @@ pub async fn search_normalized(
                     (found, total)
                 }
             };
-            run_search(
+            let ctx = RunContext {
                 db,
-                &serving,
+                serving: &serving,
                 trace,
                 params,
-                &field,
-                stats_docs(&serving).await?,
+                field: &field,
+                stats_docs: stats_docs(&serving).await?,
+            };
+            run_search(
+                &ctx,
                 candidates,
                 total_matches,
                 |ayah_text, tokens| match params.mode {
@@ -816,7 +837,9 @@ pub async fn search_normalized(
             let total = found.len() as u64;
             // Scanned modes always serve canonical order: no backend rank.
             let field = "text_bare".to_string();
-            run_search(db, &serving, trace, params, &field, 0, found, total, |ayah_text, tokens| {
+            let ctx =
+                RunContext { db, serving: &serving, trace, params, field: &field, stats_docs: 0 };
+            run_search(&ctx, found, total, |ayah_text, tokens| {
                 scan_match(&pipeline, ayah_text, tokens, &normalized, params.mode)
             })
             .await
@@ -844,17 +867,18 @@ fn verify_whole_token(
     pipeline: &quran_normalization::NormalizationPipeline,
     tokens: &[storage::quran::TokenRow],
     text: &str,
-) -> Option<(quran_normalization::CanonicalSpan, Vec<usize>)> {
+) -> Option<AyahMatch> {
     let matched = whole_token_matches(pipeline, tokens, text);
     let first = *matched.first()?;
     let token = tokens.get(first)?;
-    Some((
-        quran_normalization::CanonicalSpan {
+    Some(AyahMatch {
+        span: quran_normalization::CanonicalSpan {
             char_range: token.char_start as u32..token.char_end as u32,
             exact: true,
         },
         matched,
-    ))
+        segmentation: Vec::new(),
+    })
 }
 
 /// Empty-input trace for a pipeline (traces never depend on input text).
@@ -898,4 +922,554 @@ fn persian_fold_differs(text: &str) -> bool {
     use quran_normalization::{NormalizationRule, NormalizedText};
     let rule = quran_normalization::rules::NormalizePersianCodepoints;
     rule.apply(&NormalizedText::from_plain(text)).text() != text
+}
+
+/// Phrase match mode (plan §5.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PhraseMode {
+    /// Ordered tokens, no gaps.
+    OrderedExact,
+    /// Ordered tokens with up to `slop` intervening tokens between neighbors.
+    OrderedNear,
+    /// All terms within a `terms + slop` token window, any order.
+    UnorderedNear,
+}
+
+/// Derived-text tokens with char ranges (for slop/window verification).
+fn derived_tokens(text: &str) -> Vec<(std::ops::Range<u32>, &str)> {
+    let mut out = Vec::new();
+    let mut byte = 0;
+    let mut char_pos = 0u32;
+    for token in text.split_whitespace() {
+        let relative = text[byte..].find(token).expect("split token is present");
+        let start_byte = byte + relative;
+        char_pos += text[byte..start_byte].chars().count() as u32;
+        let len = token.chars().count() as u32;
+        out.push((char_pos..char_pos + len, token));
+        char_pos += len;
+        byte = start_byte + token.len();
+    }
+    out
+}
+
+/// Locate a term sequence under phrase semantics; returns the derived char
+/// range covering the match.
+fn find_term_sequence(
+    tokens: &[(std::ops::Range<u32>, &str)],
+    terms: &[String],
+    mode: PhraseMode,
+    slop: u32,
+) -> Option<(u32, u32)> {
+    if terms.is_empty() {
+        return None;
+    }
+    match mode {
+        PhraseMode::OrderedExact => find_ordered(tokens, terms, 0),
+        PhraseMode::OrderedNear => find_ordered(tokens, terms, slop),
+        PhraseMode::UnorderedNear => find_unordered(tokens, terms, slop),
+    }
+}
+
+/// Ordered match with per-gap budget (`slop` intervening tokens max).
+fn find_ordered(
+    tokens: &[(std::ops::Range<u32>, &str)],
+    terms: &[String],
+    slop: u32,
+) -> Option<(u32, u32)> {
+    for (start, _) in tokens.iter().enumerate().filter(|(_, (_, text))| *text == terms[0]) {
+        let mut position = start;
+        let mut ok = true;
+        for term in &terms[1..] {
+            let mut next = None;
+            let mut cursor = position + 1;
+            while cursor < tokens.len() && cursor - position - 1 <= slop as usize {
+                if tokens[cursor].1 == term {
+                    next = Some(cursor);
+                    break;
+                }
+                cursor += 1;
+            }
+            match next {
+                Some(found) => position = found,
+                None => {
+                    ok = false;
+                    break;
+                }
+            }
+        }
+        if ok {
+            return Some((tokens[start].0.start, tokens[position].0.end));
+        }
+    }
+    None
+}
+
+/// Unordered match: every term (with multiplicity) inside a
+/// `terms + slop` token window. Greedy distinct assignment; ayahs are short
+/// enough that the window scan stays exact for realistic inputs.
+fn find_unordered(
+    tokens: &[(std::ops::Range<u32>, &str)],
+    terms: &[String],
+    slop: u32,
+) -> Option<(u32, u32)> {
+    let width = terms.len() + slop as usize;
+    if tokens.len() < terms.len() {
+        return None;
+    }
+    for start in 0..=tokens.len() - terms.len().min(tokens.len()) {
+        let end = (start + width).min(tokens.len());
+        let window = &tokens[start..end];
+        let mut used = vec![false; window.len()];
+        let mut first = usize::MAX;
+        let mut last = 0usize;
+        let mut ok = true;
+        for term in terms {
+            match window.iter().enumerate().find(|(index, (_, text))| !used[*index] && *text == term) {
+                Some((index, _)) => {
+                    used[index] = true;
+                    first = first.min(index);
+                    last = last.max(index);
+                }
+                None => {
+                    ok = false;
+                    break;
+                }
+            }
+        }
+        if ok {
+            return Some((window[first].0.start, window[last].0.end));
+        }
+    }
+    None
+}
+
+/// `quran.search_phrase` (P2-T43): ordered/near/unordered phrase search.
+///
+/// Recall comes from the FTS positional index (phrase or NEAR prefilter);
+/// precision comes from Rust verification of exact slop/order semantics over
+/// normalized ayah text, so reported spans always satisfy the mode.
+pub async fn search_phrase(
+    db: &SqliteDatabase,
+    index_root: &std::path::Path,
+    params: &SearchParams,
+    profile: NormalizedProfile,
+    mode: PhraseMode,
+    slop: u32,
+) -> Result<SearchOutput, SearchError> {
+    let serving = open_serving(db, index_root, params.edition.as_deref()).await?;
+    let registry = db_registry(db).await?;
+    let (pipeline, trace, field) = match profile {
+        NormalizedProfile::Registry(id, version) => {
+            let stored = registry.latest(id).map_err(SearchError::Normalization)?;
+            let version = version.unwrap_or(stored.version);
+            let pipeline = quran_normalization::NormalizationPipeline::for_profile(&registry, id, version)
+                .map_err(SearchError::Normalization)?;
+            let trace = empty_trace_for(&pipeline);
+            let field = indexed_field_for(id).ok_or_else(|| {
+                SearchError::Index(IndexError::QueryRejected {
+                    detail: format!("profile {id} has no ayah-level phrase field"),
+                })
+            })?;
+            (pipeline, trace, field)
+        }
+        NormalizedProfile::Adhoc(ids) => {
+            let pipeline = quran_normalization::NormalizationPipeline::adhoc(&ids)
+                .map_err(SearchError::Normalization)?;
+            let trace = empty_trace_for(&pipeline);
+            // Adhoc phrases verify against the most permissive indexed
+            // field, then re-verify with the adhoc rules (same discipline
+            // as adhoc whole-token search).
+            (pipeline, trace, "text_folded".to_string())
+        }
+    };
+
+    // Query terms: normalize the whole query, then split. An empty term list
+    // matches nothing (never everything).
+    let normalized_query = normalize_token(&pipeline, &params.text);
+    let terms: Vec<String> =
+        normalized_query.split_whitespace().map(str::to_string).collect();
+    if terms.is_empty() {
+        return Ok(SearchOutput {
+            hits: Vec::new(),
+            total_matches: 0,
+            truncated: false,
+            rule_set: trace.profile.clone(),
+            generation: serving.generation,
+            warnings: serving.stale.clone().into_iter().collect(),
+        });
+    }
+
+    // Recall prefilter from the positional index.
+    let prefilter = quran_search::FtsQuery::Phrase {
+        field: field.clone(),
+        terms: terms.clone(),
+        slop,
+        ordered: matches!(mode, PhraseMode::OrderedExact) && slop == 0,
+    };
+    let order = if params.explain { ResultOrder::Relevance } else { ResultOrder::CanonicalOrder };
+    let opts = quran_search::SearchOpts {
+        limit: 1000,
+        offset: 0,
+        filters: params.filters.clone(),
+        order,
+        highlight: false,
+        timeout_ms: 10_000,
+        explain: params.explain,
+    };
+    let total_prefilter = serving.index.count(&prefilter).await.map_err(SearchError::Index)?;
+    let mut candidates = Vec::new();
+    let mut offset = 0u32;
+    loop {
+        let mut page_opts = opts.clone();
+        page_opts.offset = offset;
+        let page = serving.index.search(&prefilter, &page_opts).await.map_err(SearchError::Index)?;
+        if page.hits.is_empty() {
+            break;
+        }
+        for hit in &page.hits {
+            let (surah, ayah) =
+                parse_doc_id(&hit.doc_id, &serving.manifest.index_id, &serving.edition_id)?;
+            candidates.push(Candidate { surah, ayah, score: hit.score });
+        }
+        if page.hits.len() < page_opts.limit as usize {
+            break;
+        }
+        offset += page_opts.limit;
+    }
+
+    // Precision: verify exact mode semantics per ayah; the total counts
+    // verified matches only.
+    let mut verified = Vec::new();
+    for candidate in &candidates {
+        let text = uow_text(db, &serving.edition_id, candidate.surah, candidate.ayah).await?;
+        // Verify against normalized ayah text (cheap string pass first).
+        let derived = pipeline.apply(&text);
+        let dtokens = derived_tokens(derived.text());
+        if find_term_sequence(&dtokens, &terms, mode, slop).is_some() {
+            verified.push(Candidate {
+                surah: candidate.surah,
+                ayah: candidate.ayah,
+                score: candidate.score,
+            });
+        }
+    }
+    let total_matches = verified.len() as u64;
+    let ctx = RunContext {
+        db,
+        serving: &serving,
+        trace,
+        params,
+        field: &field,
+        stats_docs: stats_docs(&serving).await?,
+    };
+    run_search(&ctx, verified, total_matches, |ayah_text, tokens| {
+        let derived = pipeline.apply(ayah_text);
+        let dtokens = derived_tokens(derived.text());
+        let (start, end) = find_term_sequence(&dtokens, &terms, mode, slop)?;
+        let span = derived.spans().to_canonical(start..end);
+        let matched: Vec<usize> = tokens
+            .iter()
+            .enumerate()
+            .filter(|(_, token)| {
+                let (token_start, token_end) = (token.char_start as u32, token.char_end as u32);
+                token_start < span.char_range.end && span.char_range.start < token_end
+            })
+            .map(|(index, _)| index)
+            .collect();
+        if matched.is_empty() {
+            return None;
+        }
+        Some(AyahMatch { span, matched, segmentation: Vec::new() })
+    })
+    .await
+}
+
+/// Read one ayah's canonical text (single source of truth for verify passes).
+async fn uow_text(
+    db: &SqliteDatabase,
+    edition_id: &str,
+    surah: u16,
+    ayah: u32,
+) -> Result<String, SearchError> {
+    let mut uow = db.write().await.map_err(SearchError::storage)?;
+    let row = uow
+        .quran()
+        .get_ayah(edition_id, i64::from(surah), i64::from(ayah))
+        .await
+        .map_err(SearchError::storage)?;
+    uow.rollback().await.map_err(SearchError::storage)?;
+    row.map(|row| row.text).ok_or_else(|| {
+        SearchError::Index(IndexError::BuildFailed {
+            stage: "search".to_string(),
+            detail: format!("ayah {surah}:{ayah} vanished mid-search"),
+        })
+    })
+}
+
+/// Character trigrams of a skeleton query (candidate recall, T36 will index
+/// these; until then the same trigrams drive `LIKE` probes over the stored
+/// skeleton strings).
+fn query_trigrams(skeleton: &str) -> Vec<String> {
+    let chars: Vec<char> = skeleton.chars().collect();
+    if chars.len() < 3 {
+        return Vec::new();
+    }
+    chars.windows(3).map(|window| window.iter().collect()).collect()
+}
+
+/// One segment of a concatenated match (see [`quran_search::Segmentation`]).
+fn segment_concatenated(
+    query_skeleton: &str,
+    span: &quran_normalization::CanonicalSpan,
+    map: &quran_normalization::SpanMap,
+    ayah_derived_len: u32,
+    tokens: &[storage::quran::TokenRow],
+) -> Vec<quran_search::Segmentation> {
+    // Char→byte table for slicing the query skeleton.
+    let mut byte_of = vec![0u32];
+    for (byte, _) in query_skeleton.char_indices() {
+        byte_of.push(byte as u32);
+    }
+    byte_of.push(query_skeleton.len() as u32);
+    let slice = |from: u32, to: u32| {
+        query_skeleton
+            .get(byte_of[from as usize] as usize..byte_of[to as usize] as usize)
+            .unwrap_or("")
+            .to_string()
+    };
+    // Invert the derived→canonical map one char at a time (exact for single
+    // chars: every derived char has exactly one canonical image).
+    let derived_len = ayah_derived_len;
+    let mut parts = Vec::new();
+    // Walk the canonical span token by token (token rows are ordered).
+    for token in tokens {
+        let (token_start, token_end) = (token.char_start as u32, token.char_end as u32);
+        if token_end <= span.char_range.start || token_start >= span.char_range.end {
+            continue;
+        }
+        // Derived chars whose image falls inside this token.
+        let mut first: Option<u32> = None;
+        let mut last: u32 = 0;
+        let mut derived = 0u32;
+        while derived < derived_len {
+            let image = map.to_canonical(derived..derived + 1).char_range.start;
+            if image >= token_start.max(span.char_range.start)
+                && image < token_end.min(span.char_range.end)
+            {
+                if first.is_none() {
+                    first = Some(derived);
+                }
+                last = derived + 1;
+            }
+            derived += 1;
+        }
+        if let Some(from) = first {
+            parts.push(quran_search::Segmentation {
+                query_part: slice(from, last),
+                canonical_token: token.position as u16,
+                canonical_surface: token.surface.clone(),
+            });
+        }
+    }
+    parts
+}
+
+/// `quran.search_concatenated` (P2-T44): spaceless queries against the L6
+/// skeleton store, verified and segmented.
+///
+/// Recall comes from trigram probes over stored skeletons; precision comes
+/// from exact substring verification plus re-normalization of the sliced
+/// canonical text (the slice must reproduce the matched derived substring).
+/// Cross-ayah windows (`allow_cross_ayah`) arrive in P2-T45 and are rejected
+/// until then — never silently answered ayah-locally.
+pub async fn search_concatenated(
+    db: &SqliteDatabase,
+    index_root: &std::path::Path,
+    params: &SearchParams,
+    allow_cross_ayah: bool,
+    max_ayah_span: u32,
+) -> Result<SearchOutput, SearchError> {
+    if allow_cross_ayah {
+        return Err(SearchError::Index(IndexError::QueryRejected {
+            detail: format!(
+                "cross-ayah concatenated search (max span {max_ayah_span}) lands in P2-T45; retry with allow_cross_ayah=false"
+            ),
+        }));
+    }
+    let serving = open_serving(db, index_root, params.edition.as_deref()).await?;
+    let registry = db_registry(db).await?;
+    let profile = quran_normalization::ProfileId::L6;
+    let pipeline = quran_normalization::NormalizationPipeline::for_profile(
+        &registry,
+        profile,
+        latest_version(&registry, profile)?,
+    )
+    .map_err(SearchError::Normalization)?;
+    let trace = empty_trace_for(&pipeline);
+
+    // Normalize the query through L6 (spaces vanish here by design).
+    let query_derived = pipeline.apply(&params.text);
+    let query_skeleton = query_derived.text().to_string();
+    if query_skeleton.is_empty() {
+        return Ok(SearchOutput {
+            hits: Vec::new(),
+            total_matches: 0,
+            truncated: false,
+            rule_set: trace.profile.clone(),
+            generation: serving.generation,
+            warnings: serving.stale.clone().into_iter().collect(),
+        });
+    }
+
+    // Candidate generation: every trigram must occur (short queries probe
+    // the whole skeleton directly). Ayah-level rows only until P2-T45.
+    let mut uow = db.write().await.map_err(SearchError::storage)?;
+    let mut ayah_numbers: Vec<(u16, u32)> = Vec::new();
+    // All ayahs with skeletons: probe in Rust (one ordered read; the T36
+    // trigram posting index will replace this scan).
+    let surahs = uow.quran().list_surahs(&serving.edition_id).await.map_err(SearchError::storage)?;
+    uow.rollback().await.map_err(SearchError::storage)?;
+    for surah in &surahs {
+        let mut uow = db.write().await.map_err(SearchError::storage)?;
+        let skeletons =
+            uow.quran().list_skeletons(&serving.edition_id, surah.number).await.map_err(SearchError::storage)?;
+        uow.rollback().await.map_err(SearchError::storage)?;
+        let trigrams = query_trigrams(&query_skeleton);
+        for row in &skeletons {
+            if row.ayah_start != row.ayah_end {
+                continue; // windows belong to P2-T45
+            }
+            let recalled = if trigrams.is_empty() {
+                row.skeleton.contains(&query_skeleton)
+            } else {
+                trigrams.iter().all(|trigram| row.skeleton.contains(trigram))
+            };
+            if recalled {
+                ayah_numbers.push((surah.number as u16, row.ayah_start as u32));
+            }
+        }
+    }
+    // Verify the recall set (recall is not precision): ayahs whose
+    // skeleton contains the trigrams but not the query drop out here.
+    ayah_numbers.sort();
+    ayah_numbers.dedup();
+    let mut verified: Vec<Candidate> = Vec::new();
+    for (surah, ayah) in &ayah_numbers {
+        let text = uow_text(db, &serving.edition_id, *surah, *ayah).await?;
+        let tokens = ayah_tokens(db, &serving.edition_id, *surah, *ayah).await?;
+        if verify_concatenated(&pipeline, &text, &tokens, &query_skeleton).is_some() {
+            verified.push(Candidate { surah: *surah, ayah: *ayah, score: None });
+        }
+    }
+    let total_matches = verified.len() as u64;
+    let field = "skeleton".to_string();
+    let stats = stats_docs(&serving).await?;
+    let ctx =
+        RunContext { db, serving: &serving, trace, params, field: &field, stats_docs: stats };
+    let query_owned = query_skeleton.clone();
+    run_search(&ctx, verified, total_matches, |ayah_text, tokens| {
+        verify_concatenated(&pipeline, ayah_text, tokens, &query_owned)
+    })
+    .await
+}
+
+/// Verify one ayah against a skeleton query: exact substring in derived
+/// space, canonical span via the pipeline map, re-normalization check, and
+/// token segmentation.
+fn verify_concatenated(
+    pipeline: &quran_normalization::NormalizationPipeline,
+    ayah_text: &str,
+    tokens: &[storage::quran::TokenRow],
+    query_skeleton: &str,
+) -> Option<AyahMatch> {
+    let derived = pipeline.apply(ayah_text);
+    let text = derived.text();
+    let byte = text.find(query_skeleton)?;
+    let start = text[..byte].chars().count() as u32;
+    let end = start + query_skeleton.chars().count() as u32;
+    let span = derived.spans().to_canonical(start..end);
+    // Re-normalization check (plan §3.4 property 5): the sliced canonical
+    // text must reproduce the matched derived substring.
+    let slice: String = ayah_text
+        .chars()
+        .enumerate()
+        .filter(|(index, _)| {
+            *index as u32 >= span.char_range.start && (*index as u32) < span.char_range.end
+        })
+        .map(|(_, ch)| ch)
+        .collect();
+    let reapplied = pipeline.apply(&slice);
+    if reapplied.text() != query_skeleton {
+        return None;
+    }
+    let matched: Vec<usize> = tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, token)| {
+            let (token_start, token_end) = (token.char_start as u32, token.char_end as u32);
+            token_start < span.char_range.end && span.char_range.start < token_end
+        })
+        .map(|(index, _)| index)
+        .collect();
+    if matched.is_empty() {
+        return None;
+    }
+    let derived_len = derived.text().chars().count() as u32;
+    let segmentation =
+        segment_concatenated(query_skeleton, &span, derived.spans(), derived_len, tokens);
+    Some(AyahMatch { span, matched, segmentation })
+}
+
+/// Count verified matches (recall prefilter over-counts by design).
+async fn count_verified_concatenated(
+    db: &SqliteDatabase,
+    serving: &Serving,
+    pipeline: &quran_normalization::NormalizationPipeline,
+    query_skeleton: &str,
+) -> Result<u64, SearchError> {
+    let mut uow = db.write().await.map_err(SearchError::storage)?;
+    let surahs = uow.quran().list_surahs(&serving.edition_id).await.map_err(SearchError::storage)?;
+    uow.rollback().await.map_err(SearchError::storage)?;
+    let mut total = 0u64;
+    for surah in &surahs {
+        let mut uow = db.write().await.map_err(SearchError::storage)?;
+        let skeletons = uow
+            .quran()
+            .list_skeletons(&serving.edition_id, surah.number)
+            .await
+            .map_err(SearchError::storage)?;
+        uow.rollback().await.map_err(SearchError::storage)?;
+        let trigrams = query_trigrams(query_skeleton);
+        for row in &skeletons {
+            if row.ayah_start != row.ayah_end {
+                continue;
+            }
+            let recalled = if trigrams.is_empty() {
+                row.skeleton.contains(query_skeleton)
+            } else {
+                trigrams.iter().all(|trigram| row.skeleton.contains(trigram))
+            };
+            if !recalled {
+                continue;
+            }
+            let mut uow = db.write().await.map_err(SearchError::storage)?;
+            let ayah_row = uow
+                .quran()
+                .get_ayah(&serving.edition_id, surah.number, i64::from(row.ayah_start))
+                .await
+                .map_err(SearchError::storage)?;
+            let tokens = uow
+                .quran()
+                .get_tokens(&serving.edition_id, surah.number, i64::from(row.ayah_start))
+                .await
+                .map_err(SearchError::storage)?;
+            uow.rollback().await.map_err(SearchError::storage)?;
+            if let Some(ayah_row) = ayah_row {
+                if verify_concatenated(pipeline, &ayah_row.text, &tokens, query_skeleton).is_some() {
+                    total += 1;
+                }
+            }
+        }
+    }
+    Ok(total)
 }
