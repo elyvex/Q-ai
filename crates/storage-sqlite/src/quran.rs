@@ -14,6 +14,7 @@ use storage::quran::{
     ImportRunRow, IndexBuildRunRow, IndexPointerRow, NormalizationProfileRow, NormalizationRuleRow,
     QuranEditionRow, QuranRepository, SeparatorRow, SkeletonRow, StagedEditionRef, SurahRow,
     TokenFormRow, TokenRow, TranslationEditionRow, TranslationPassageRow, ValidationReportRow,
+    WordGlossRow,
 };
 
 use super::{SharedTx, map_sqlx_error};
@@ -1269,6 +1270,61 @@ impl QuranRepository for SqliteQuranRepository {
                 text_hash: r.get("text_hash"),
                 status: r.get("status"),
                 imported_at: r.get("imported_at"),
+            })
+            .collect())
+    }
+
+    async fn insert_word_gloss(&mut self, row: WordGlossRow) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query(
+            "INSERT INTO word_glosses
+                (gloss_dataset_id, edition_id, surah, ayah, position,
+                 language, gloss, provenance_id)
+             VALUES (?,?,?,?,?,?,?,?)",
+        )
+        .bind(&row.gloss_dataset_id)
+        .bind(&row.edition_id)
+        .bind(row.surah)
+        .bind(row.ayah)
+        .bind(row.position)
+        .bind(&row.language)
+        .bind(&row.gloss)
+        .bind(&row.provenance_id)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn list_word_glosses(
+        &self,
+        edition_id: &str,
+        surah: i64,
+        ayah: i64,
+    ) -> Result<Vec<WordGlossRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT * FROM word_glosses
+             WHERE edition_id = ? AND surah = ? AND ayah = ?
+             ORDER BY gloss_dataset_id, position, language",
+        )
+        .bind(edition_id)
+        .bind(surah)
+        .bind(ayah)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows
+            .iter()
+            .map(|r| WordGlossRow {
+                gloss_dataset_id: r.get("gloss_dataset_id"),
+                edition_id: r.get("edition_id"),
+                surah: r.get("surah"),
+                ayah: r.get("ayah"),
+                position: r.get("position"),
+                language: r.get("language"),
+                gloss: r.get("gloss"),
+                provenance_id: r.get("provenance_id"),
             })
             .collect())
     }
