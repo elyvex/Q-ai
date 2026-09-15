@@ -1,7 +1,7 @@
 # Phase 2 — Completion Ledger
 
 **Phase:** P2 — Quran Search, Arabic Normalization, Morphology & Word Families
-**Status:** 🟡 In Progress — 13 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 3 / 6 migrations
+**Status:** 🟡 In Progress — 14 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 3 / 6 migrations
 **Started:** 2026-09-14
 **Completed:** —
 
@@ -48,11 +48,11 @@ with what evidence.
 | 2.0 — Dataset & Linguistic Decisions | 12 | 0 | 30.5 | — | ☐ |
 | 2.1 — Normalization Engine | 12 | 3 | 28.5 | — | ☐ |
 | 2.2 — Derived Forms & FTS Foundation | 15 | 10 | 33.5 | — | ☐ |
-| 2.3 — Search Tools | 17 | 0 | 42.0 | — | ☐ |
+| 2.3 — Search Tools | 17 | 1 | 42.0 | — | ☐ |
 | 2.4 — Morphology Import & Lexicons | 18 | 0 | 45.0 | — | ☐ |
 | 2.5 — Morphology & Family Tools | 19 | 0 | 47.5 | — | ☐ |
 | 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 0 | 51.0 | — | ☐ |
-| **Total** | **114 + 5** | **13** | **278.0** | **—** | **11%** |
+| **Total** | **114 + 5** | **14** | **278.0** | **—** | **12%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -212,6 +212,15 @@ _None completed yet._
 - **Notes:** `Fts5Index` now takes an explicit build generation (dir key) separate from `manifest.corpus_generation` (multi-build retention required it). Manifest hash binds edition identity (slug@version), not the run-surrogate edition id — verified identical across fresh databases. Token-level index (`quran.token.v1`) and retention GC are follow-ups (T35/next session).
 
 ### Sprint 2.3 — Search Tools
+
+### P2-T40 — `SearchHit`, `ScoreExplain`, unified result assembly + canonical-span attach
+- **Deliverable:** D2.5
+- **Completed:** 2026-09-15
+- **Owner:** agent (BE)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/quran-search/src/hit.rs`)
+- **Evidence:** `crates/quran-search/src/hit.rs` (`SearchHit::new` validating assembly, `ScoreExplain`, `Warning`, `SearchHitParts`); 4 unit tests (reference/quotation/link derivation, traceless/spurious rejection incl. `QAI-IDX-0006`, stale-warning code, JSON round-trip); `CanonicalSpan::byte_range_in` + multibyte tests in `quran-normalization`
+- **DoD:** ✅ all items / private fields + single validating constructor (no trace-less, span-less, or quotation-less hit exists); fail-closed `InvalidHit`; references derived via the Phase-1 grammar (`canonical_form`), never hand-formatted
+- **Notes:** `QAI-IDX-0006 InvalidHit` opened. Token bounds beyond non-emptiness verify downstream (citation resolver, AC-P2-12, M3). Byte ranges derive on demand from canonical text; nothing stores redundant offsets.
 
 ### Sprint 2.4 — Morphology Import & Lexicons
 
