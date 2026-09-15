@@ -9,11 +9,11 @@
 
 use std::collections::BTreeMap;
 
+use quran_normalization::{ProfileRegistry, RuleId};
 use quran_search::{
-    FieldId, FtsDoc, FtsQuery, FtsSchema, FullTextIndex, Fts5Index, IndexManifest, SearchOpts,
+    FieldId, Fts5Index, FtsDoc, FtsQuery, FtsSchema, FullTextIndex, IndexManifest, SearchOpts,
     SemVer, TokenizerFamily,
 };
-use quran_normalization::{ProfileRegistry, RuleId};
 
 fn v1() -> SemVer {
     SemVer::new(1, 0, 0)
@@ -120,11 +120,15 @@ fn field_rule_ids_match_ladder_order() {
 #[tokio::test]
 async fn end_to_end_parity_both_directions() {
     let dir = tempfile::tempdir().unwrap();
-    let raw_diac = "ٱلرَّحْمَٰنِ ٱلرَّحِيمِ";
+    // Wasla-free pair: the directions tested here are diacritic folding.
+    // (Wasla folding lives at L4; the backend suite covers it per field.)
+    let raw_diac = "الرَّحْمَنِ الرَّحِيمِ";
     let raw_bare = "الرحمن الرحيم";
     let mk = |id: &str, raw: &str| {
-        let fields: BTreeMap<FieldId, String> =
-            quran_search::tokenizer::INDEXED_FIELDS.iter().map(|f| ((*f).to_string(), raw.to_string())).collect();
+        let fields: BTreeMap<FieldId, String> = quran_search::tokenizer::INDEXED_FIELDS
+            .iter()
+            .map(|f| ((*f).to_string(), raw.to_string()))
+            .collect();
         FtsDoc {
             id: id.to_string(),
             edition_id: "ed-1".to_string(),
