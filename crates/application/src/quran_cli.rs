@@ -1395,3 +1395,169 @@ pub async fn cmd_forms_rebuild(db_path: &str, edition: &str) -> CommandOutput {
         }
     }
 }
+
+/// `quran index rebuild` — build an index generation and activate it.
+///
+/// Runs the same [`super::quran_index::rebuild_index`] the job handler runs.
+/// The index root sits beside the database file (`<db-dir>/index`).
+pub async fn cmd_index_rebuild(
+    db_path: &str,
+    index: Option<&str>,
+    edition: Option<&str>,
+) -> CommandOutput {
+    use std::sync::atomic::AtomicBool;
+    use super::quran_index::{IndexBuildError, IndexBuildParams, QURAN_AYAH_INDEX_ID};
+
+    let index_id = index.unwrap_or(QURAN_AYAH_INDEX_ID).to_string();
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let (slug, version) = match edition {
+        Some(spec) => match spec.split_once('@') {
+            Some((slug, version)) if !slug.is_empty() && !version.is_empty() => {
+                (slug.to_string(), version.to_string())
+            }
+            _ => return CommandOutput::err(exit::USAGE, "use slug@version".to_string()),
+        },
+        None => {
+            let mut uow = match db.write().await {
+                Ok(uow) => uow,
+                Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+            };
+            let active = match uow.quran().get_active().await {
+                Ok(active) => active,
+                Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+            };
+            let Some(active) = active else {
+                return CommandOutput::err(exit::NOT_FOUND, "no active edition".to_string());
+            };
+            let edition = match uow.quran().get_edition(&active.edition_id).await {
+                Ok(edition) => edition,
+                Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+            };
+            if uow.rollback().await.is_err() {
+                return CommandOutput::err(exit::INTERNAL, "rollback failed".to_string());
+            }
+            let Some(edition) = edition else {
+                return CommandOutput::err(exit::NOT_FOUND, "active edition missing".to_string());
+            };
+            (edition.slug, edition.version)
+        }
+    };
+    let params = IndexBuildParams {
+        index_id: index_id.clone(),
+        edition_slug: slug,
+        edition_version: version,
+        invoked_by: LOCAL_PRINCIPAL.to_string(),
+        run_tag: format!("cli-{}", uuid::Uuid::new_v4()),
+        data_dir: super::quran_index::index_root_for_db(db_path),
+    };
+    match super::quran_index::rebuild_index(&db, &params, &AtomicBool::new(false), |_| {}).await {
+        Ok(report) => {
+            let human = format!(
+                "index {} generation {} active: {} docs (corpus generation {})\nmanifest: {}\nprevious generation: {}",
+                report.index_id,
+                report.generation,
+                report.doc_count,
+                report.corpus_generation,
+                report.manifest_hash,
+                report.previous_generation.map_or("none".to_string(), |g| g.to_string())
+            );
+            let json = serde_json::json!({
+                "index_id": report.index_id,
+                "generation": report.generation,
+                "corpus_generation": report.corpus_generation,
+                "doc_count": report.doc_count,
+                "manifest_hash": report.manifest_hash,
+                "previous_generation": report.previous_generation,
+                "mv018": {
+                    "unchanged": report.mv018.unchanged,
+                    "expected_hash": report.mv018.expected_hash,
+                    "actual_hash": report.mv018.actual_hash,
+                },
+            });
+            CommandOutput::ok(human, json)
+        }
+        Err(error) => {
+            let exit = match &error {
+                IndexBuildError::Cancelled => exit::CANCELLED,
+                IndexBuildError::Forms(forms) => match forms {
+                    super::quran_forms::FormsError::EditionNotFound { .. } => exit::NOT_FOUND,
+                    super::quran_forms::FormsError::NotActive { .. } => exit::CONFLICT,
+                    super::quran_forms::FormsError::Cancelled => exit::CANCELLED,
+                    _ => exit::INTERNAL,
+                },
+                IndexBuildError::Storage(_) | IndexBuildError::Index(_) => exit::INTERNAL,
+            };
+            CommandOutput::err(exit, error.to_string())
+        }
+    }
+}
+
+/// `quran index verify` — verify the serving generation of an index.
+pub async fn cmd_index_verify(db_path: &str, index: Option<&str>) -> CommandOutput {
+    use super::quran_index::QURAN_AYAH_INDEX_ID;
+
+    let index_id = index.unwrap_or(QURAN_AYAH_INDEX_ID);
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let pointer = {
+        let mut uow = match db.write().await {
+            Ok(uow) => uow,
+            Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        };
+        let pointer = match uow.quran().get_index_pointer(index_id).await {
+            Ok(pointer) => pointer,
+            Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        };
+        if uow.rollback().await.is_err() {
+            return CommandOutput::err(exit::INTERNAL, "rollback failed".to_string());
+        }
+        pointer
+    };
+    let Some(pointer) = pointer else {
+        return CommandOutput::err(exit::NOT_FOUND, format!("no pointer for index {index_id}"));
+    };
+    let manifest: quran_search::IndexManifest = match serde_json::from_str(&pointer.manifest_json) {
+        Ok(manifest) => manifest,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let registry = crate::quran_normalize::builtin_registry();
+    let family = match quran_search::TokenizerFamily::new(&registry, manifest.tokenizer_version) {
+        Ok(family) => family,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let root = super::quran_index::index_root_for_db(db_path);
+    let index = match quran_search::Fts5Index::open(&root, pointer.generation as u64, manifest, family).await
+    {
+        Ok(index) => index,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let report = match quran_search::FullTextIndex::verify(&index).await {
+        Ok(report) => report,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let human = if report.ok {
+        format!(
+            "index {index_id} generation {} healthy: {} docs",
+            pointer.generation, report.doc_count
+        )
+    } else {
+        format!("index {index_id} generation {} FAILED: {}", pointer.generation, report.findings.join("; "))
+    };
+    let json = serde_json::json!({
+        "index_id": index_id,
+        "generation": pointer.generation,
+        "ok": report.ok,
+        "doc_count": report.doc_count,
+        "findings": report.findings,
+    });
+    CommandOutput {
+        exit: if report.ok { exit::OK } else { exit::VALIDATION },
+        human,
+        json,
+    }
+}
