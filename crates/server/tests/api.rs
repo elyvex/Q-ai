@@ -172,10 +172,7 @@ impl QuranApiBackend for FakeApi {
 }
 
 fn test_state() -> AppState {
-    AppState {
-        tools: Arc::new(ToolRegistry::new(Arc::new(FakeBackend))),
-        api: Arc::new(FakeApi),
-    }
+    AppState { tools: Arc::new(ToolRegistry::new(Arc::new(FakeBackend))), api: Arc::new(FakeApi) }
 }
 
 async fn serve_once() -> (String, tokio::task::JoinHandle<()>) {
@@ -187,7 +184,11 @@ async fn serve_once() -> (String, tokio::task::JoinHandle<()>) {
     (addr, handle)
 }
 
-async fn get(addr: &str, path: &str, extra_headers: &[(&str, &str)]) -> (StatusCode, HeaderMap, Vec<u8>) {
+async fn get(
+    addr: &str,
+    path: &str,
+    extra_headers: &[(&str, &str)],
+) -> (StatusCode, HeaderMap, Vec<u8>) {
     let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let mut request = format!("GET {path} HTTP/1.1\r\nhost: x\r\nconnection: close\r\n");
@@ -214,19 +215,14 @@ async fn get(addr: &str, path: &str, extra_headers: &[(&str, &str)]) -> (StatusC
             }
         }
     }
-    (
-        StatusCode::from_u16(status).unwrap(),
-        headers,
-        body.as_bytes().to_vec(),
-    )
+    (StatusCode::from_u16(status).unwrap(), headers, body.as_bytes().to_vec())
 }
 
 fn body_json(body: &[u8]) -> serde_json::Value {
     serde_json::from_slice(body).expect("response is JSON")
 }
 
-const OPENAPI_SPEC: &str =
-    include_str!("../../../docs/08-api/quran-v1-openapi.json");
+const OPENAPI_SPEC: &str = include_str!("../../../docs/08-api/quran-v1-openapi.json");
 
 #[tokio::test]
 async fn openapi_spec_covers_every_route() {
