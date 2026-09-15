@@ -10,10 +10,10 @@ use async_trait::async_trait;
 use sqlx::Row;
 use storage::error::StorageError;
 use storage::quran::{
-    ActiveEditionRow, AyahRow, CitationRow, DifferenceReportRow, DivisionRow, ImportRunRow,
-    NormalizationProfileRow, NormalizationRuleRow, QuranEditionRow, QuranRepository, SeparatorRow,
-    StagedEditionRef, SurahRow, TokenRow, TranslationEditionRow, TranslationPassageRow,
-    ValidationReportRow,
+    ActiveEditionRow, AyahFormRow, AyahRow, CitationRow, DifferenceReportRow, DivisionRow,
+    ImportRunRow, NormalizationProfileRow, NormalizationRuleRow, QuranEditionRow, QuranRepository,
+    SeparatorRow, SkeletonRow, StagedEditionRef, SurahRow, TokenFormRow, TokenRow,
+    TranslationEditionRow, TranslationPassageRow, ValidationReportRow,
 };
 
 use super::{SharedTx, map_sqlx_error};
@@ -1346,6 +1346,230 @@ impl QuranRepository for SqliteQuranRepository {
         .await
         .map_err(map_sqlx_error)?;
         Ok(())
+    }
+
+    async fn insert_token_forms(&mut self, rows: Vec<TokenFormRow>) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        for row in &rows {
+            sqlx::query(
+                "INSERT INTO quran_token_forms
+                    (edition_id, surah, ayah, position, simple, bare, hamza_folded, folded,
+                     affix_stripped, transliteration, phonetic, rule_set_id, rule_set_version,
+                     corpus_generation, provenance_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(&row.edition_id)
+            .bind(row.surah)
+            .bind(row.ayah)
+            .bind(row.position)
+            .bind(&row.simple)
+            .bind(&row.bare)
+            .bind(&row.hamza_folded)
+            .bind(&row.folded)
+            .bind(&row.affix_stripped)
+            .bind(&row.transliteration)
+            .bind(&row.phonetic)
+            .bind(&row.rule_set_id)
+            .bind(&row.rule_set_version)
+            .bind(row.corpus_generation)
+            .bind(&row.provenance_id)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        }
+        Ok(())
+    }
+
+    async fn insert_ayah_forms(&mut self, rows: Vec<AyahFormRow>) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        for row in &rows {
+            sqlx::query(
+                "INSERT INTO quran_ayah_forms
+                    (edition_id, surah, ayah, simple, bare, hamza_folded, folded,
+                     transliteration, rule_set_id, rule_set_version,
+                     corpus_generation, provenance_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(&row.edition_id)
+            .bind(row.surah)
+            .bind(row.ayah)
+            .bind(&row.simple)
+            .bind(&row.bare)
+            .bind(&row.hamza_folded)
+            .bind(&row.folded)
+            .bind(&row.transliteration)
+            .bind(&row.rule_set_id)
+            .bind(&row.rule_set_version)
+            .bind(row.corpus_generation)
+            .bind(&row.provenance_id)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        }
+        Ok(())
+    }
+
+    async fn insert_skeletons(&mut self, rows: Vec<SkeletonRow>) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        for row in &rows {
+            sqlx::query(
+                "INSERT INTO quran_skeletons
+                    (edition_id, surah, ayah_start, ayah_end, skeleton,
+                     rule_set_id, rule_set_version, corpus_generation, provenance_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(&row.edition_id)
+            .bind(row.surah)
+            .bind(row.ayah_start)
+            .bind(row.ayah_end)
+            .bind(&row.skeleton)
+            .bind(&row.rule_set_id)
+            .bind(&row.rule_set_version)
+            .bind(row.corpus_generation)
+            .bind(&row.provenance_id)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        }
+        Ok(())
+    }
+
+    async fn list_token_forms(
+        &self,
+        edition_id: &str,
+        surah: i64,
+        ayah: i64,
+    ) -> Result<Vec<TokenFormRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT edition_id, surah, ayah, position, simple, bare, hamza_folded, folded,
+                    affix_stripped, transliteration, phonetic, rule_set_id, rule_set_version,
+                    corpus_generation, provenance_id
+             FROM quran_token_forms
+             WHERE edition_id = ? AND surah = ? AND ayah = ? ORDER BY position",
+        )
+        .bind(edition_id)
+        .bind(surah)
+        .bind(ayah)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows.iter().map(decode_token_form).collect())
+    }
+
+    async fn get_ayah_form(
+        &self,
+        edition_id: &str,
+        surah: i64,
+        ayah: i64,
+    ) -> Result<Option<AyahFormRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query(
+            "SELECT edition_id, surah, ayah, simple, bare, hamza_folded, folded,
+                    transliteration, rule_set_id, rule_set_version,
+                    corpus_generation, provenance_id
+             FROM quran_ayah_forms
+             WHERE edition_id = ? AND surah = ? AND ayah = ?",
+        )
+        .bind(edition_id)
+        .bind(surah)
+        .bind(ayah)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(row.map(|r| decode_ayah_form(&r)))
+    }
+
+    async fn list_skeletons(
+        &self,
+        edition_id: &str,
+        surah: i64,
+    ) -> Result<Vec<SkeletonRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT edition_id, surah, ayah_start, ayah_end, skeleton,
+                    rule_set_id, rule_set_version, corpus_generation, provenance_id
+             FROM quran_skeletons
+             WHERE edition_id = ? AND surah = ? ORDER BY ayah_start, ayah_end",
+        )
+        .bind(edition_id)
+        .bind(surah)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows.iter().map(decode_skeleton).collect())
+    }
+
+    async fn count_token_forms(&self, edition_id: &str) -> Result<i64, StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query_scalar("SELECT COUNT(*) FROM quran_token_forms WHERE edition_id = ?")
+            .bind(edition_id)
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)
+    }
+
+    async fn delete_forms_for_edition(&mut self, edition_id: &str) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        for table in ["quran_token_forms", "quran_ayah_forms", "quran_skeletons"] {
+            sqlx::query(&format!("DELETE FROM {table} WHERE edition_id = ?"))
+                .bind(edition_id)
+                .execute(&mut **tx)
+                .await
+                .map_err(map_sqlx_error)?;
+        }
+        Ok(())
+    }
+}
+
+fn decode_token_form(row: &sqlx::sqlite::SqliteRow) -> TokenFormRow {
+    TokenFormRow {
+        edition_id: row.get("edition_id"),
+        surah: row.get("surah"),
+        ayah: row.get("ayah"),
+        position: row.get("position"),
+        simple: row.get("simple"),
+        bare: row.get("bare"),
+        hamza_folded: row.get("hamza_folded"),
+        folded: row.get("folded"),
+        affix_stripped: row.get("affix_stripped"),
+        transliteration: row.get("transliteration"),
+        phonetic: row.get("phonetic"),
+        rule_set_id: row.get("rule_set_id"),
+        rule_set_version: row.get("rule_set_version"),
+        corpus_generation: row.get("corpus_generation"),
+        provenance_id: row.get("provenance_id"),
+    }
+}
+
+fn decode_ayah_form(row: &sqlx::sqlite::SqliteRow) -> AyahFormRow {
+    AyahFormRow {
+        edition_id: row.get("edition_id"),
+        surah: row.get("surah"),
+        ayah: row.get("ayah"),
+        simple: row.get("simple"),
+        bare: row.get("bare"),
+        hamza_folded: row.get("hamza_folded"),
+        folded: row.get("folded"),
+        transliteration: row.get("transliteration"),
+        rule_set_id: row.get("rule_set_id"),
+        rule_set_version: row.get("rule_set_version"),
+        corpus_generation: row.get("corpus_generation"),
+        provenance_id: row.get("provenance_id"),
+    }
+}
+
+fn decode_skeleton(row: &sqlx::sqlite::SqliteRow) -> SkeletonRow {
+    SkeletonRow {
+        edition_id: row.get("edition_id"),
+        surah: row.get("surah"),
+        ayah_start: row.get("ayah_start"),
+        ayah_end: row.get("ayah_end"),
+        skeleton: row.get("skeleton"),
+        rule_set_id: row.get("rule_set_id"),
+        rule_set_version: row.get("rule_set_version"),
+        corpus_generation: row.get("corpus_generation"),
+        provenance_id: row.get("provenance_id"),
     }
 }
 
