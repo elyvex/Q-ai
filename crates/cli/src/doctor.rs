@@ -804,7 +804,6 @@ mod tests {
     }
 }
 
-
 /// Run the Quran corpus checks (D1.11). The database is opened read-only;
 /// `deep` upgrades the token round-trip to a full-corpus scan.
 pub fn run_quran_checks(cfg: &Config, json: bool, deep: bool) -> i32 {
