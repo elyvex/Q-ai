@@ -20,10 +20,10 @@ use async_trait::async_trait;
 use domain::{Language, SemVer};
 use lru::LruCache;
 use quran_core::{
-    AttributedTranslation, AyahLocation, AyahNumber, AyahOptions, AyahView, BasmalaPolicy,
-    ContextBoundary, ContextSpec, ContextView, EditionRef, EditionSelector, EditionStatus,
-    NumberingScheme, QuotationParts, QuranEdition, QuranQuotation, QuranRef, ResolvedRef,
-    RevelationPlace, Script, Surah, SurahNumber, Token, TokenPosition, UnicodeForm,
+    AttributedGloss, AttributedTranslation, AyahLocation, AyahNumber, AyahOptions, AyahView,
+    BasmalaPolicy, ContextBoundary, ContextSpec, ContextView, EditionRef, EditionSelector,
+    EditionStatus, NumberingScheme, QuotationParts, QuranEdition, QuranQuotation, QuranRef,
+    ResolvedRef, RevelationPlace, Script, Surah, SurahNumber, Token, TokenPosition, UnicodeForm,
 };
 use storage::Database as _;
 use storage::error::StorageError;
@@ -503,8 +503,35 @@ impl QuranReaderService {
         } else {
             None
         };
+        // Word glosses are an optional attributed dataset keyed by the served
+        // edition: only glosses aligned to this edition are returned, each
+        // carrying its dataset id (principle 5).
+        let word_glosses = if options.glosses {
+            let rows = uow
+                .quran()
+                .list_word_glosses(
+                    &edition.id,
+                    i64::from(location.surah.get()),
+                    i64::from(location.ayah.get()),
+                )
+                .await
+                .map_err(ReaderError::from)?;
+            let mut glosses = Vec::with_capacity(rows.len());
+            for row in &rows {
+                glosses.push(AttributedGloss {
+                    dataset: row.gloss_dataset_id.clone(),
+                    language: row.language.parse::<Language>().map_err(|_| {
+                        storage_broken(format!("bad gloss language `{}`", row.language))
+                    })?,
+                    gloss: row.gloss.clone(),
+                });
+            }
+            if glosses.is_empty() { None } else { Some(glosses) }
+        } else {
+            None
+        };
         uow.rollback().await.map_err(ReaderError::from)?;
-        Ok(AyahView { canonical, translations, word_glosses: None, tokens })
+        Ok(AyahView { canonical, translations, word_glosses, tokens })
     }
 
     async fn translation_for(
