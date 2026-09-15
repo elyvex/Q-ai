@@ -10,6 +10,7 @@ pub mod db;
 pub mod job_queue;
 pub mod quran;
 pub mod quran_reader;
+pub mod quran_tools;
 
 pub use config::Config;
 
