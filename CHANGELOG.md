@@ -22,6 +22,13 @@ All notable changes to Q-ai are documented here.
   / `by_id()` registry, 41 unit + 7 integration tests (mapping tables,
   idempotency, hull round-trips, fuzz no-panic, basmala→bare/skeleton and
   spaceless-query seed goldens pending linguist review).
+- **quran-normalization** (M1b continued): heuristic rules N18–N22 (affix
+  strips with ≥2-char guards to fixpoint, N22 repeat-collapse; all
+  `RuleKind::Heuristic`), `NormalizationTrace` with derived heuristic flag
+  and empty-profile rejection (I9 value type), append-only `ProfileRegistry`
+  with the v1 L0–L8 ladder, and the shared `NormalizationPipeline`
+  (profile + `adhoc:<sha12>` builds, text+trace always returned together);
+  rule versions now typed `domain::SemVer`.
 
 ### Added — Phase 1 Canonical Quran Core (in progress)
 - **quran-corpus**: 13-checkpoint importer driver, char-level differ, frozen
