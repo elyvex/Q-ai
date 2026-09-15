@@ -11,6 +11,7 @@
 pub mod error;
 pub mod index;
 pub mod model;
+pub mod skeleton;
 
 pub use domain::SemVer;
 pub use error::{Diagnostic, DiagnosticCode, IndexError, codes};
@@ -19,3 +20,4 @@ pub use model::{
     CommitStamp, FieldId, Filter, FtsBackend, FtsDoc, FtsHit, FtsIntegrityReport, FtsQuery,
     FtsResults, FtsSchema, FtsStats, IndexManifest, ResultOrder, SearchOpts,
 };
+pub use skeleton::{BuiltSkeleton, ayah_skeleton, skeletons_for_surah};
