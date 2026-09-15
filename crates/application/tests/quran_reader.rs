@@ -150,7 +150,12 @@ async fn context_invariants_hold_for_every_ayah_and_spec() {
                         include_surah_header: false,
                         max_ayahs,
                     };
-                    let view = reader.get_context(&reference, &spec).await.unwrap();
+                    let view = match reader.get_context(&reference, &spec).await {
+                        Ok(view) => view,
+                        // Syntactically valid but non-existent locations are skipped.
+                        Err(ReaderError::AyahNotFound(_)) => continue,
+                        Err(error) => panic!("{surah}:{ayah} {boundary:?}: {error}"),
+                    };
                     let total = 1 + view.before.len() + view.after.len();
                     let cap = usize::from(max_ayahs.max(1));
                     assert!(total <= cap, "{surah}:{ayah} {boundary:?} {spec:?}: {total} > {cap}");
