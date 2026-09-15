@@ -95,8 +95,19 @@ impl NormalizationPipeline {
 
     /// Normalize text, returning derived text **and** its trace together.
     pub fn apply(&self, text: &str) -> (NormalizedText, NormalizationTrace) {
+        let (current, trace, _) = self.apply_detailed(text);
+        (current, trace)
+    }
+
+    /// Normalize text, additionally returning the intermediate text after
+    /// each rule (for `--explain` output). Steps are in application order.
+    pub fn apply_detailed(
+        &self,
+        text: &str,
+    ) -> (NormalizedText, NormalizationTrace, Vec<StepOutput>) {
         let mut current = NormalizedText::from_plain(text);
         let mut applications = Vec::with_capacity(self.rules.len());
+        let mut steps = Vec::with_capacity(self.rules.len());
         for entry in &self.rules {
             current = entry.rule.apply(&current);
             applications.push(RuleApplication {
@@ -104,11 +115,21 @@ impl NormalizationPipeline {
                 version: entry.version,
                 kind: entry.kind,
             });
+            steps.push(StepOutput { rule: entry.id, text: current.text().to_string() });
         }
         let trace = NormalizationTrace::new(self.profile_label.clone(), applications)
             .expect("pipeline labels are never blank by construction");
-        (current, trace)
+        (current, trace, steps)
     }
+}
+
+/// Intermediate text after one rule ran (for `--explain` output).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct StepOutput {
+    /// The rule that just ran.
+    pub rule: RuleId,
+    /// Derived text after that rule.
+    pub text: String,
 }
 
 /// Lowercase hex of the digest's first 6 bytes (12 chars).
