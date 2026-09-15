@@ -1,7 +1,7 @@
 # Phase 2 — Completion Ledger
 
 **Phase:** P2 — Quran Search, Arabic Normalization, Morphology & Word Families
-**Status:** 🟡 In Progress — 5 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 2 / 6 migrations
+**Status:** 🟡 In Progress — 8 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 2 / 6 migrations
 **Started:** 2026-09-14
 **Completed:** —
 
@@ -47,12 +47,12 @@ with what evidence.
 | X — External-lead-time decisions | 5 | 0 | — | — | ☐ |
 | 2.0 — Dataset & Linguistic Decisions | 12 | 0 | 30.5 | — | ☐ |
 | 2.1 — Normalization Engine | 12 | 3 | 28.5 | — | ☐ |
-| 2.2 — Derived Forms & FTS Foundation | 15 | 2 | 33.5 | — | ☐ |
+| 2.2 — Derived Forms & FTS Foundation | 15 | 5 | 33.5 | — | ☐ |
 | 2.3 — Search Tools | 17 | 0 | 42.0 | — | ☐ |
 | 2.4 — Morphology Import & Lexicons | 18 | 0 | 45.0 | — | ☐ |
 | 2.5 — Morphology & Family Tools | 19 | 0 | 47.5 | — | ☐ |
 | 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 0 | 51.0 | — | ☐ |
-| **Total** | **114 + 5** | **5** | **278.0** | **—** | **4%** |
+| **Total** | **114 + 5** | **8** | **278.0** | **—** | **7%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -138,6 +138,33 @@ _None completed yet._
 - **Evidence:** `crates/quran-search/src/{error,index,model}.rs`; `cargo test -p quran-search` (error codes, opts ceilings, query/manifest JSON round-trips); `cargo run -p xtask -- arch-check` (no llm/embeddings/retrieval/vector edges)
 - **DoD:** ✅ all items / backend-agnostic port (FTS5 now, Tantivy/OpenSearch named only); exact-count `count()` separate from ranked `search()`; `QAI-IDX-0101` reserved for drift
 - **Notes:** `QAI-IDX-*` error namespace opened (0001–0004 + 0101). FTS5 adapter (P2-T30) and tokenizers (P2-T31) are separate tasks.
+
+### P2-T26 — `quran.forms.rebuild` job: token + ayah forms, all indexed profiles
+- **Deliverable:** D2.2
+- **Completed:** 2026-09-15
+- **Owner:** agent (BE)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/application/src/quran_forms.rs`)
+- **Evidence:** `crates/application/src/quran_forms.rs` (resolve → MV-018 pre → load → per-surah build → single tx with MV-018 post → commit); `FormsRebuildHandler` (`quran.forms.rebuild`, idempotent, checkpoints, cancel-safe); `crates/application/tests/forms_rebuild.rs` 6/6 on real SQLite (full coverage, idempotency + hash stability, MV-018 pass, cancel-commits-nothing, unknown/inactive refusals incl. gen-2 supersede, handler contract); `qai quran forms rebuild` trycmd cases
+- **DoD:** ✅ all items / derived-only writes in one tx; provenance Layer D per build (computational, confidence 1.0); active-edition-only; cancel-safe with zero partial commits
+- **Notes:** provenance ids are content-addressed (edition+generation+derivation hash) so retries converge instead of conflicting. CLI runs the same core inline as the job handler.
+
+### P2-T27 — Skeleton builder (ayah + 3-ayah windows) + span maps
+- **Deliverable:** D2.4
+- **Completed:** 2026-09-15
+- **Owner:** agent (SRCH)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/quran-search/src/skeleton.rs`)
+- **Evidence:** `crates/quran-search/src/skeleton.rs` + 3 unit tests (spaceless output, window coverage/numbering/containment, short-surah edge); windows stored by the rebuild job (18 rows = 14 ayahs + 4 windows on the fixture)
+- **DoD:** ✅ all items / windows normalize joined raw texts (boundary-correct); surah-scoped (CHECK-enforced); span maps recomputed via shared pipeline, not stored (R6 by construction, recorded in `0014` header)
+- **Notes:** cross-ayah dedup + `spans_ayah_boundary` labeling land with concatenated search (P2-T44/T45).
+
+### P2-T28 — MV-018 canonical-unchanged verifier wired into every build job
+- **Deliverable:** D2.10
+- **Completed:** 2026-09-15
+- **Owner:** agent (BE)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/application/src/quran_forms.rs crates/quran-search/src/error.rs`)
+- **Evidence:** `verify_canonical_unchanged` + in-transaction `verify_canonical_unchanged_in` (Phase-1 `text_hash` recipe replayed over ordered canonical rows); `QAI-IDX-0005 CanonicalChanged` (fatal, stops builds); wired pre-write AND pre-commit in `rebuild_forms`; `mv018_passes_with_compared_hashes` + hash-stability assertions in `forms_rebuild.rs`
+- **DoD:** ✅ all items / drift fails the build instead of warning; negative path structurally covered (canonical tables are trigger-guarded, so drift is unreachable except by offline tampering — which the verifier would catch)
+- **Notes:** MV-018 is defined here because the forms job needs it first; M4 (MV-001…018) reuses this verifier and code rather than inventing a second one. Every future build job MUST wire both checks (recorded as a review rule in `execution-plan.md` §23).
 
 ### Sprint 2.3 — Search Tools
 
