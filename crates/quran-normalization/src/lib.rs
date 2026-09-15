@@ -13,8 +13,10 @@
 
 pub mod error;
 pub mod rule;
+pub mod rules;
 pub mod span;
 
 pub use error::{Diagnostic, DiagnosticCode, NormalizationError, codes};
 pub use rule::{NormalizationRule, NormalizedText, RuleId, RuleKind};
+pub use rules::all_rules;
 pub use span::{CanonicalSpan, SpanMap, SpanSegment};
