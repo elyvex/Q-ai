@@ -3,3 +3,18 @@ name = "tool-registry"
 version = "0.0.0"
 edition = "2024"
 publish = false
+
+[dependencies]
+tools = { path = "../tools" }
+quran-core = { path = "../quran-core" }
+domain = { path = "../domain" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true }
