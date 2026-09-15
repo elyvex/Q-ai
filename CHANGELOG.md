@@ -29,8 +29,27 @@ All notable changes to Q-ai are documented here.
   with the v1 L0–L8 ladder, and the shared `NormalizationPipeline`
   (profile + `adhoc:<sha12>` builds, text+trace always returned together);
   rule versions now typed `domain::SemVer`.
+- **quran-normalization** (M1c): migration `0013_quran_normalization`
+  (rules + profiles tables, append-only triggers reporting QAI-NORM-0003,
+  v1 seeds), `QuranRepository` normalization catalog access + SQLite
+  implementation, `application::quran_normalize` services, `qai quran
+  normalize` (`--explain`, `--list-profiles`, `--show-rule`, adhoc `--rules`),
+  server `POST /api/v1/quran/normalization/preview` + `GET
+  /api/v1/quran/normalization/profiles` with byte-identical CLI/API traces
+  (AC-P2-39 evidence), OpenAPI entries.
 
 ### Added — Phase 1 Canonical Quran Core (in progress)
+- **cli**: read verbs `quran get/context/surah/division/resolve` and lifecycle verbs
+  `quran import/validate/activate/rollback/diff/edition/translation`, every read command
+  with `--json`, destructive verbs gated on `--yes`; `quran translation import` now
+  writes an attributed provenance row (principle 5) instead of pointing at a principal.
+- **cli**: `doctor --quran` runs 19 checks against a read-only database handle with
+  `--deep` full-corpus verification; JSON output conforms to
+  `docs/schemas/doctor.v1.schema.json`.
+- **cli (tests)**: `read_flow.trycmd` snapshot suite (trycmd) covering migrate → import →
+  activate → RTL reading + provenance → attributed translations → error exits.
+- **config**: `QAI_DATA_DIR` now configures the database and object-store paths, not just
+  the database file (previously the two diverged).
 - **quran-corpus**: 13-checkpoint importer driver, char-level differ, frozen
   hashing recipes; `QAI-QUR-02xx` diagnostics.
 - **application**: `quran.import` job handler, approval-gated activation/rollback,
@@ -38,6 +57,9 @@ All notable changes to Q-ai are documented here.
 - **storage**: `QuranRepository` (staging, atomic activation, reads, reports,
   citations, translations), approval rows, audit sequence queries.
 - **docs**: ADR-0101…0114 (0101/0114 + 0111/0112 drafts pending owners/deliverables).
+- **arch-check**: `[server]` allowlist now names `storage` + `tools` (both already
+  declared deps of `crates/server`); recorded as a layering follow-up (OWN-06) rather
+  than a silent loosening.
 
 
 - **quran-core** (new crate): pure domain — `SurahNumber`/`AyahNumber`/`TokenPosition`
