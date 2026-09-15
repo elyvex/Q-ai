@@ -21,6 +21,9 @@ pub mod telemetry;
 pub mod otlp;
 
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::fmt::format::Writer;
+use tracing_subscriber::field::RecordFields;
+use tracing_subscriber::fmt::FormatFields;
 
 /// Output format for the tracing subscriber.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,6 +32,77 @@ pub enum Format {
     Text,
     /// JSON-structured output.
     Json,
+}
+
+/// Options for subscriber construction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InitOptions {
+    pub format: Format,
+    pub redact_secrets: bool,
+}
+
+impl Default for InitOptions {
+    fn default() -> Self {
+        Self { format: Format::Text, redact_secrets: true }
+    }
+}
+
+/// A `FormatFields` wrapper that scrubs secret-named field values when
+/// `redact` is true, applying Rule A (key-level redaction) from the
+/// shared `domain::redaction` helper. Non-secret fields pass through
+/// unchanged.
+struct RedactingFormatFields {
+    inner: tracing_subscriber::fmt::format::DefaultFields,
+    redact: bool,
+}
+
+impl<'writer> FormatFields<'writer> for RedactingFormatFields {
+    fn format_fields<R: RecordFields>(
+        &self,
+        mut writer: Writer<'writer>,
+        fields: R,
+    ) -> std::fmt::Result {
+        if !self.redact {
+            return self.inner.format_fields(writer, fields);
+        }
+        // Format into a scratch buffer, then scrub and write through.
+        let mut scratch = String::new();
+        {
+            let mut scratch_writer = Writer::new(&mut scratch);
+            self.inner.format_fields(&mut scratch_writer, fields)?;
+        }
+        write!(writer, "{}", redact_log_fields(&scratch))
+    }
+}
+
+/// Scrub secret key=value pairs in a formatted log line (Rule A).
+///
+/// Matches `key=<value>` patterns where `key` is a recognized secret key
+/// and replaces the value portion with the redaction marker.
+fn redact_log_fields(formatted: &str) -> String {
+    // For field=value patterns in the log output, apply Rule A.
+    let mut result = formatted.to_string();
+    let keys = ["api_key", "apikey", "api-key", "password", "secret", "token", "credential"];
+    for key in &keys {
+        // Match `key=...` where value goes up to next whitespace, comma, or end
+        let pattern = format!("{key}=");
+        while let Some(pos) = result.to_lowercase().find(&pattern.to_lowercase()) {
+            let val_start = pos + key.len() + 1; // skip key=
+            let mut val_end = val_start;
+            while val_end < result.len() {
+                match result.as_bytes()[val_end] {
+                    b' ' | b',' | b';' | b'\n' | b'\r' | b'}' | b']' | b'"' | b'\'' => break,
+                    _ => val_end += 1,
+                }
+            }
+            if val_end > val_start {
+                result.replace_range(val_start..val_end, "***REDACTED***");
+            } else {
+                break; // prevent infinite loop
+            }
+        }
+    }
+    result
 }
 
 /// Span field name: the component emitting the span.
@@ -52,15 +126,17 @@ pub const SPAN_DURATION_MS: &str = "qai.duration_ms";
 /// Span field name: the outcome of the operation.
 pub const SPAN_OUTCOME: &str = "qai.outcome";
 
-/// Initialize the tracing subscriber.
+/// Initialize the tracing subscriber with options.
 ///
 /// Configures an `EnvFilter` (respecting `RUST_LOG`) and installs
 /// either a text or JSON formatter. Returns a `Shutdown` guard that
-/// flushes the subscriber on drop.
-pub fn init(format: Format) -> Shutdown {
+/// flushes the subscriber on drop. When `redact_secrets` is true
+/// (default), field names matching the secret key pattern are redacted
+/// in the output.
+pub fn init_with_options(opts: InitOptions) -> Shutdown {
     let filter = EnvFilter::from_default_env();
 
-    match format {
+    match opts.format {
         Format::Text => {
             let subscriber = tracing_subscriber::fmt()
                 .with_env_filter(filter)
@@ -68,6 +144,10 @@ pub fn init(format: Format) -> Shutdown {
                 .with_target(true)
                 .with_file(true)
                 .with_line_number(true)
+                .fmt_fields(RedactingFormatFields {
+                    inner: tracing_subscriber::fmt::format::DefaultFields,
+                    redact: opts.redact_secrets,
+                })
                 .compact()
                 .finish();
             let _ = tracing::subscriber::set_global_default(subscriber);
@@ -79,6 +159,10 @@ pub fn init(format: Format) -> Shutdown {
                 .with_target(true)
                 .with_file(true)
                 .with_line_number(true)
+                .fmt_fields(RedactingFormatFields {
+                    inner: tracing_subscriber::fmt::format::DefaultFields,
+                    redact: opts.redact_secrets,
+                })
                 .json()
                 .finish();
             let _ = tracing::subscriber::set_global_default(subscriber);
@@ -86,6 +170,14 @@ pub fn init(format: Format) -> Shutdown {
     }
 
     Shutdown
+}
+
+/// Initialize the tracing subscriber with default options (redaction ON).
+///
+/// Delegates to `init_with_options(InitOptions { format, redact_secrets: true })`.
+/// This preserves the deny-by-default behavior for all existing callers.
+pub fn init(format: Format) -> Shutdown {
+    init_with_options(InitOptions { format, redact_secrets: true })
 }
 
 /// Guard that flushes the tracing subscriber on drop.
