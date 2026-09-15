@@ -151,6 +151,7 @@ fn params(text: &str) -> SearchParams {
         limit: 100,
         offset: 0,
         explain: false,
+        highlight: false,
     }
 }
 
@@ -349,4 +350,199 @@ async fn filters_paging_and_explain() {
     let plain =
         search_normalized(&db, &data_dir, &params(&bare), l3()).await.unwrap();
     assert!(plain.hits.iter().all(|hit| hit.score().is_none()));
+}
+
+/// Phrase data from the fixture itself: two consecutive token surfaces of a
+/// multi-token ayah (mechanics goldens, not mushaf goldens).
+async fn phrase_pair(db: &SqliteDatabase) -> (u16, u32, String, String, String) {
+    let mut uow = db.write().await.unwrap();
+    let ayahs = uow.quran().list_ayahs_range("run-search-1", 1, i64::MAX).await.unwrap();
+    uow.rollback().await.unwrap();
+    for ayah in &ayahs {
+        let mut uow = db.write().await.unwrap();
+        let tokens =
+            uow.quran().get_tokens("run-search-1", ayah.surah, ayah.ayah).await.unwrap();
+        uow.rollback().await.unwrap();
+        if tokens.len() >= 3
+            && tokens.iter().take(3).all(|token| {
+                !token.surface.trim().is_empty()
+                    && token.surface.chars().all(|ch| ch.is_alphabetic() || ch == 'ً' || ch == 'ٌ' || ch == 'ٍ' || ch == 'َ' || ch == 'ُ' || ch == 'ِ' || ch == 'ّ' || ch == 'ْ')
+            })
+        {
+            let (first, second, third) =
+                (tokens[0].surface.clone(), tokens[1].surface.clone(), tokens[2].surface.clone());
+            return (
+                ayah.surah as u16,
+                ayah.ayah as u32,
+                format!("{first} {second}"),
+                format!("{first} {third}"),
+                format!("{second} {first}"),
+            );
+        }
+    }
+    panic!("fixture has no three-letter-token ayah");
+}
+
+fn phrase_params(text: &str) -> SearchParams {
+    SearchParams {
+        text: text.to_string(),
+        edition: None,
+        mode: MatchMode::WholeToken,
+        filters: vec![],
+        limit: 100,
+        offset: 0,
+        explain: false,
+        highlight: false,
+    }
+}
+
+/// Ordered-exact phrases match; gaps and reversals discriminate the modes.
+#[tokio::test]
+async fn phrase_modes_discriminate_order_and_gaps() {
+    use application::quran_search::{PhraseMode, search_concatenated, search_phrase};
+    let (_dir, db, data_dir) = searchable_db().await;
+    let (surah, ayah, adjacent, gapped, reversed) = phrase_pair(&db).await;
+    let wanted = format!("quran:test-edition-min@0.1.0:{surah}:{ayah}");
+    let l3 = || NormalizedProfile::Registry(ProfileId::L3, None);
+
+    let found =
+        search_phrase(&db, &data_dir, &phrase_params(&adjacent), l3(), PhraseMode::OrderedExact, 0)
+            .await
+            .unwrap();
+    assert!(found.total_matches >= 1);
+    assert!(found.hits.iter().any(|hit| hit.reference() == wanted));
+    for hit in &found.hits {
+        assert_eq!(hit.explanation().profile, "L3.diacritics@1.0.0");
+    }
+
+    // A gap misses under exact but hits with slop 1.
+    let missed = search_phrase(&db, &data_dir, &phrase_params(&gapped), l3(), PhraseMode::OrderedExact, 0)
+        .await
+        .unwrap();
+    assert_eq!(missed.total_matches, 0);
+    let near = search_phrase(&db, &data_dir, &phrase_params(&gapped), l3(), PhraseMode::OrderedNear, 1)
+        .await
+        .unwrap();
+    assert!(near.total_matches >= 1);
+    assert!(near.hits.iter().any(|hit| hit.reference() == wanted));
+
+    // Reversed order misses under ordered modes but hits unordered.
+    let reversed_exact = search_phrase(
+        &db,
+        &data_dir,
+        &phrase_params(&reversed),
+        l3(),
+        PhraseMode::OrderedExact,
+        0,
+    )
+    .await
+    .unwrap();
+    assert_eq!(reversed_exact.total_matches, 0);
+    let reversed_near = search_phrase(
+        &db,
+        &data_dir,
+        &phrase_params(&reversed),
+        l3(),
+        PhraseMode::UnorderedNear,
+        0,
+    )
+    .await
+    .unwrap();
+    assert!(reversed_near.total_matches >= 1);
+
+    // Empty-after-normalization queries match nothing, never everything.
+    let empty = search_phrase(&db, &data_dir, &phrase_params("ً"), l3(), PhraseMode::OrderedExact, 0)
+        .await
+        .unwrap();
+    assert_eq!(empty.total_matches, 0);
+
+    // Cross-ayah is rejected until P2-T45 (never silently ayah-local).
+    let err = search_concatenated(&db, &data_dir, &phrase_params("abc"), true, 3).await.unwrap_err();
+    assert!(matches!(err, application::quran_search::SearchError::Index(_)));
+}
+
+/// Spaceless queries match with per-token segmentation; every query part
+/// concatenates back to the query skeleton.
+#[tokio::test]
+async fn concatenated_matches_with_segmentation() {
+    use application::quran_search::{search_concatenated, verify_concatenated};
+    let (_dir, db, data_dir) = searchable_db().await;
+
+    // Deterministic basmala case through the real verify path (hand-built
+    // token rows with exact canonical offsets).
+    let text = "بِسْمِ ٱللَّهِ";
+    let tokens = vec![
+        storage::quran::TokenRow {
+            edition_id: "ed".to_string(),
+            surah: 1,
+            ayah: 1,
+            position: 1,
+            surface: "بِسْمِ".to_string(),
+            surface_hash: String::new(),
+            // Grapheme-cluster offsets (ADR-0104): [بِ][سْ][مِ].
+            char_start: 0,
+            char_end: 3,
+            byte_start: 0,
+            byte_end: 12,
+            is_pause_mark: false,
+            global_token_index: 1,
+        },
+        storage::quran::TokenRow {
+            edition_id: "ed".to_string(),
+            surah: 1,
+            ayah: 1,
+            position: 2,
+            surface: "ٱللَّهِ".to_string(),
+            surface_hash: String::new(),
+            // Clusters [ٱ][ل][لَّ][هِ].
+            char_start: 4,
+            char_end: 8,
+            byte_start: 13,
+            byte_end: 27,
+            is_pause_mark: false,
+            global_token_index: 2,
+        },
+    ];
+    let registry = quran_normalization::ProfileRegistry::new();
+    let pipeline = quran_normalization::NormalizationPipeline::for_profile(
+        &registry,
+        ProfileId::L6,
+        SemVer::new(1, 0, 0),
+    )
+    .unwrap();
+    let matched = verify_concatenated(&pipeline, text, &tokens, "بسمالله")
+        .expect("basmala spaceless query verifies");
+    assert_eq!(matched.matched, vec![0, 1]);
+    assert_eq!(matched.span.char_range, 0..13);
+    let parts = &matched.segmentation;
+    assert_eq!(parts.len(), 2);
+    assert_eq!(parts[0].query_part, "بسم");
+    assert_eq!(parts[0].canonical_token, 1);
+    assert_eq!(parts[0].canonical_surface, "بِسْمِ");
+    assert_eq!(parts[1].query_part, "الله");
+    assert_eq!(parts[1].canonical_token, 2);
+    // Parts tile the query skeleton exactly.
+    let tiled: String = parts.iter().map(|part| part.query_part.as_str()).collect();
+    assert_eq!(tiled, "بسمالله");
+    // A wrong skeleton never verifies.
+    assert!(verify_concatenated(&pipeline, text, &tokens, "بسمالرحمن").is_none());
+
+    // End-to-end on fixture data: spaceless first-two-tokens query.
+    let (surah, ayah, adjacent, _, _) = phrase_pair(&db).await;
+    let query: String = adjacent.split_whitespace().collect();
+    let found = search_concatenated(&db, &data_dir, &phrase_params(&query), false, 1)
+        .await
+        .unwrap();
+    assert!(found.total_matches >= 1, "spaceless query must match its ayah");
+    let wanted = format!("quran:test-edition-min@0.1.0:{surah}:{ayah}");
+    let hit = found.hits.iter().find(|hit| hit.reference() == wanted).expect("ayah hit present");
+    assert_eq!(hit.explanation().profile, "L6.skeleton@1.0.0");
+    assert!(!hit.segmentation().is_empty());
+    let tiled: String =
+        hit.segmentation().iter().map(|part| part.query_part.as_str()).collect();
+    let skeleton = pipeline.apply(&query).0.text().to_string();
+    assert_eq!(tiled, skeleton, "parts must tile the query skeleton");
+    // Empty queries match nothing.
+    let empty = search_concatenated(&db, &data_dir, &phrase_params(""), false, 1).await.unwrap();
+    assert_eq!(empty.total_matches, 0);
 }
