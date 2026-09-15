@@ -23,23 +23,14 @@
 
 use std::collections::BTreeMap;
 
-use quran_normalization::{
-    NormalizationPipeline, ProfileId, ProfileRegistry, RuleId, SemVer,
-};
+use quran_normalization::{NormalizationPipeline, ProfileId, ProfileRegistry, RuleId, SemVer};
 
 use crate::error::IndexError;
 use crate::model::FieldId;
 
 /// All indexed text fields in a stable order.
-pub const INDEXED_FIELDS: [&str; 7] = [
-    "text_exact",
-    "text_ws",
-    "text_marks",
-    "text_bare",
-    "text_hamza",
-    "text_folded",
-    "text_affix",
-];
+pub const INDEXED_FIELDS: [&str; 7] =
+    ["text_exact", "text_ws", "text_marks", "text_bare", "text_hamza", "text_folded", "text_affix"];
 
 /// Profile behind each indexed field.
 #[must_use]
@@ -83,9 +74,10 @@ impl ArTokenizer {
             stage: "tokenizer".to_string(),
             detail: format!("unknown indexed field '{field}'"),
         })?;
-        let pipeline = NormalizationPipeline::for_profile(registry, profile, version).map_err(|err| {
-            IndexError::BuildFailed { stage: "tokenizer".to_string(), detail: err.to_string() }
-        })?;
+        let pipeline =
+            NormalizationPipeline::for_profile(registry, profile, version).map_err(|err| {
+                IndexError::BuildFailed { stage: "tokenizer".to_string(), detail: err.to_string() }
+            })?;
         Ok(Self { field: field.to_string(), profile, pipeline })
     }
 
@@ -157,12 +149,12 @@ impl TokenizerFamily {
     ///
     /// Returns [`IndexError::BuildFailed`] for non-indexed fields.
     pub fn tokenize(&self, field: &str, text: &str) -> Result<String, IndexError> {
-        self.get(field)
-            .map(|tokenizer| tokenizer.tokenize(text))
-            .ok_or_else(|| IndexError::BuildFailed {
+        self.get(field).map(|tokenizer| tokenizer.tokenize(text)).ok_or_else(|| {
+            IndexError::BuildFailed {
                 stage: "tokenizer".to_string(),
                 detail: format!("unknown indexed field '{field}'"),
-            })
+            }
+        })
     }
 
     /// Ordered rule ids backing `field` (for trace assembly upstream).
