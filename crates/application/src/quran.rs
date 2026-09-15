@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use audit::{Actor, AuditAction, AuditEvent, AuditOutcome};
-use domain::{AuditEventId, PrincipalId, SubjectRef, Timestamp};
+use domain::{AuditEventId, Language, PrincipalId, SubjectRef, Timestamp};
 use jobs::{JobContext, JobError, JobHandler, JobKind, JobOutcome};
 use quran_corpus::error::QuranDiagnostic as _;
 use quran_corpus::import::{ImportInput, ImportOptions, ImportOutcome, ImportProgress, run_import};
@@ -766,6 +766,231 @@ pub async fn import_translations(
     }
     uow.commit().await.map_err(ActivationError::storage)?;
     Ok(id)
+}
+
+/// Word-gloss import manifest (v1 JSON shape).
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct GlossManifest {
+    /// Gloss dataset metadata.
+    pub dataset: GlossDatasetMeta,
+    /// Word glosses.
+    pub glosses: Vec<WordGlossEntry>,
+}
+
+/// Word-gloss dataset metadata in the manifest.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct GlossDatasetMeta {
+    /// Dataset id; must name an existing `sources` row (provisioned by the
+    /// CLI, mirroring translation source versions).
+    pub id: String,
+    /// Aligned Arabic edition `slug@version`.
+    pub aligned_edition: String,
+}
+
+/// One word gloss aligned to a canonical token position.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct WordGlossEntry {
+    /// Surah number.
+    pub surah: u16,
+    /// Ayah number.
+    pub ayah: u32,
+    /// 1-based token position within the ayah.
+    pub position: u32,
+    /// BCP-47 language.
+    pub language: String,
+    /// Gloss text.
+    pub gloss: String,
+}
+
+/// Import a word-gloss dataset: validate attribution + token alignment, then
+/// store. The dataset is a separate attributed artifact, never canonical text
+/// (principle 5); every gloss must name a real token of the aligned edition.
+pub async fn import_glosses(
+    db: &dyn storage::Database,
+    manifest_text: &str,
+    invoked_by: &PrincipalId,
+    _at: &Timestamp,
+) -> Result<usize, ActivationError> {
+    use quran_core::{AyahNumber, SurahNumber};
+    let manifest: GlossManifest = serde_json::from_str(manifest_text)
+        .map_err(|err| ActivationError::Storage(format!("gloss manifest is not valid: {err}")))?;
+    if manifest.dataset.id.trim().is_empty() {
+        return Err(ActivationError::Storage("gloss dataset requires a non-empty id".to_string()));
+    }
+    let (aligned_slug, aligned_version) =
+        manifest.dataset.aligned_edition.split_once('@').ok_or_else(|| {
+            ActivationError::Storage("aligned_edition must be `slug@version`".to_string())
+        })?;
+    let mut uow = db.write().await.map_err(ActivationError::storage)?;
+    // The dataset must be a catalogued source: glosses are attributed data.
+    let dataset_known =
+        uow.sources().get(&manifest.dataset.id).await.map_err(ActivationError::storage)?.is_some();
+    if !dataset_known {
+        return Err(ActivationError::Storage(format!(
+            "unknown gloss dataset `{}`; provision its source row first",
+            manifest.dataset.id
+        )));
+    }
+    // Alignment target must exist (canonical or staged).
+    let canonical = uow
+        .quran()
+        .get_edition_by_slug_version(aligned_slug, aligned_version)
+        .await
+        .map_err(ActivationError::storage)?;
+    let (aligned_id, staged) = match canonical {
+        Some(row) => (row.id, None),
+        None => {
+            let staged = uow
+                .quran()
+                .find_staged_edition(aligned_slug, aligned_version)
+                .await
+                .map_err(ActivationError::storage)?
+                .ok_or_else(|| ActivationError::NotStaged {
+                    slug: aligned_slug.to_string(),
+                    version: aligned_version.to_string(),
+                })?;
+            let edition_id = staged.edition_id.clone();
+            let run_id = staged.run_id.clone();
+            (edition_id, Some(run_id))
+        }
+    };
+    // Token counts per ayah, so every gloss names a real token position.
+    // Unique ayahs are read once; positions are validated against the count.
+    let mut ayahs: std::collections::HashSet<(u16, u32)> = std::collections::HashSet::new();
+    for entry in &manifest.glosses {
+        ayahs.insert((entry.surah, entry.ayah));
+    }
+    let mut token_counts: std::collections::HashMap<(u16, u32), usize> =
+        std::collections::HashMap::new();
+    for (surah, ayah) in &ayahs {
+        let count = match &staged {
+            Some(run_id) => {
+                let rows = uow
+                    .quran()
+                    .list_stg_tokens(run_id, &aligned_id, i64::from(*surah), i64::from(*ayah))
+                    .await
+                    .map_err(ActivationError::storage)?;
+                // A staged ayah with no token rows is not a real ayah.
+                if rows.is_empty() {
+                    let staged_ayahs = uow
+                        .quran()
+                        .list_stg_ayahs(run_id)
+                        .await
+                        .map_err(ActivationError::storage)?;
+                    let exists = staged_ayahs.iter().any(|row| {
+                        row.edition_id == aligned_id
+                            && row.surah == i64::from(*surah)
+                            && row.ayah == i64::from(*ayah)
+                    });
+                    if !exists {
+                        return Err(ActivationError::Storage(format!(
+                            "aligned edition {aligned_slug}@{aligned_version} has no ayah {surah}:{ayah}"
+                        )));
+                    }
+                }
+                rows.len()
+            }
+            None => {
+                uow.quran()
+                    .get_ayah(&aligned_id, i64::from(*surah), i64::from(*ayah))
+                    .await
+                    .map_err(ActivationError::storage)?
+                    .ok_or_else(|| {
+                        ActivationError::Storage(format!(
+                            "aligned edition {aligned_slug}@{aligned_version} has no ayah {surah}:{ayah}"
+                        ))
+                    })?;
+                uow.quran()
+                    .get_tokens(&aligned_id, i64::from(*surah), i64::from(*ayah))
+                    .await
+                    .map_err(ActivationError::storage)?
+                    .len()
+            }
+        };
+        token_counts.insert((*surah, *ayah), count);
+    }
+    // Every gloss must be well-formed, non-empty, unique, and land on a real
+    // token (structural alignment at token granularity).
+    let mut seen = std::collections::HashSet::new();
+    for entry in &manifest.glosses {
+        SurahNumber::new(entry.surah)
+            .map_err(|_| ActivationError::Storage(format!("bad surah {}", entry.surah)))?;
+        AyahNumber::new(entry.ayah)
+            .map_err(|_| ActivationError::Storage(format!("bad ayah {}", entry.ayah)))?;
+        entry
+            .language
+            .parse::<Language>()
+            .map_err(|_| ActivationError::Storage(format!("bad language `{}`", entry.language)))?;
+        if entry.gloss.trim().is_empty() {
+            return Err(ActivationError::Storage(format!(
+                "empty gloss for {}:{}#{}",
+                entry.surah, entry.ayah, entry.position
+            )));
+        }
+        if entry.position == 0 {
+            return Err(ActivationError::Storage(format!(
+                "bad token position {} (positions are 1-based)",
+                entry.position
+            )));
+        }
+        let count = token_counts[&(entry.surah, entry.ayah)];
+        if (entry.position as usize) > count {
+            return Err(ActivationError::Storage(format!(
+                "aligned edition {aligned_slug}@{aligned_version} ayah {}:{} has {count} tokens; no position {}",
+                entry.surah, entry.ayah, entry.position
+            )));
+        }
+        if !seen.insert((entry.surah, entry.ayah, entry.position, entry.language.clone())) {
+            return Err(ActivationError::Storage(format!(
+                "duplicate gloss for {}:{}#{} [{}]",
+                entry.surah, entry.ayah, entry.position, entry.language
+            )));
+        }
+    }
+    // Attributed provenance for the gloss dataset (principle 5). Glosses are
+    // scholarly annotations aligned to canonical tokens, not canonical text,
+    // so they use the annotation layer rather than `canonical_source`.
+    let provenance_id =
+        format!("prov-gloss-{}-{aligned_slug}-{aligned_version}", manifest.dataset.id);
+    let gloss_urn = format!("quran-gloss:{}", manifest.dataset.id);
+    uow.provenance()
+        .insert(storage::repository::ProvenanceRecord {
+            id: provenance_id.clone(),
+            layer: "scholarly_annotation".to_string(),
+            subject_urn: gloss_urn,
+            attribution_kind: "dataset".to_string(),
+            attribution_json: serde_json::json!({
+                "dataset_id": manifest.dataset.id,
+                "aligned_edition": manifest.dataset.aligned_edition,
+                "gloss_count": manifest.glosses.len(),
+            })
+            .to_string(),
+            source_version_id: None,
+            trust_level: "ImportedUnverified".to_string(),
+            verification_status: "unverified".to_string(),
+            confidence: None,
+            versions_json: serde_json::json!({"schema_version": 1}).to_string(),
+            created_by: invoked_by.to_string(),
+        })
+        .await
+        .map_err(ActivationError::storage)?;
+    for entry in &manifest.glosses {
+        uow.quran()
+            .insert_word_gloss(storage::quran::WordGlossRow {
+                gloss_dataset_id: manifest.dataset.id.clone(),
+                edition_id: aligned_id.clone(),
+                surah: i64::from(entry.surah),
+                ayah: i64::from(entry.ayah),
+                position: i64::from(entry.position),
+                language: entry.language.clone(),
+                gloss: entry.gloss.clone(),
+                provenance_id: provenance_id.clone(),
+            })
+            .await
+            .map_err(ActivationError::storage)?;
+    }
+    uow.commit().await.map_err(ActivationError::storage)?;
+    Ok(manifest.glosses.len())
 }
 
 /// Deprecate a canonical edition (human-gated maintenance; rows are kept).
