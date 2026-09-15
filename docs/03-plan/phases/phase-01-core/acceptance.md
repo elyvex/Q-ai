@@ -53,7 +53,7 @@
 | ID | Criterion | Verification | Blocks | Evidence | Status |
 |---|---|---|---|---|---|
 | **AC-P1-08** | `UPDATE`/`DELETE` on `quran_ayahs` / `quran_tokens` aborts with the documented error codes (`QAI-QUR-0001`…`0005`) | Raw-SQL trigger tests | D1.5, D1.13 | `crates/storage-sqlite/tests/quran.rs` trigger/schema tests green; ritual pending | ◐ |
-| **AC-P1-09** | No public API exists to write canonical ayah rows without a `CanonicalChangeSession` derived from an `ApprovalToken` | API-surface test + code review | D1.1, D1.3 | | ☐ |
+| **AC-P1-09** | No public API exists to write canonical ayah rows without a `CanonicalChangeSession` derived from an `ApprovalToken` | API-surface test + code review | D1.1, D1.3 | `quran_import.rs::rejected_activations_leave_canonical_state_untouched` green (missing/denied/mismatched approvals change no canonical state; granted approval moves exactly once) + trigger suite + approval-gating suite; code review + ritual pending | ◐ |
 | **AC-P1-10** | Killing the import process at each of the **13 checkpoints** leaves the active edition **unchanged in all 13 cases**, and `qai job retry` completes the import correctly | Crash matrix | D1.3 | `quran_import.rs::crash_matrix_all_thirteen_checkpoints_leave_active_untouched` green; process-kill recording + `job retry` ritual pending | ◐ |
 | **AC-P1-11** | Cancelling an import removes all `quran_stg_*` rows for that run **and** records the cancellation | Cancellation test | D1.3 | `quran_import.rs::cancel_cleans_staging_and_marks_cancelled` green; ritual pending | ◐ |
 

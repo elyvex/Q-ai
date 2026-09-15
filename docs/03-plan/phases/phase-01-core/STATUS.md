@@ -13,7 +13,7 @@
 | Dimension | State |
 |---|---|
 | Task rows (excluding 3 sequencing notes) | **50 ☑ / 2 ◐ / 13 ☐** of 65 |
-| Acceptance criteria | **10 ◐ / 11 ☐** of 21 (none marked fully verified — rituals pending) |
+| Acceptance criteria | **19 ◐ / 2 ☐** of 21 (none marked fully verified — rituals pending) |
 | ADRs | **12 Accepted**, 2 Draft (0101, 0114) |
 | Phase-1 migrations | **6 / 6** (`0007`–`0012`); workspace now at 14 (Phase-2 added `0013`–`0014`) |
 | D1.14 documents | **5 / 5** published |
@@ -92,17 +92,12 @@ Remaining task IDs: `P1-X01..X05`, `P1-T01`, `P1-T02`, `P1-T03`, `P1-T26◐`,
 
 ## 2. Acceptance criteria
 
-**Partial — automated-green, ritual/live verification pending (11):**
-AC-P1-04, 08, 12, 13, 14, 15, 16, 17, 19, 20, 21.
-Automated evidence also exists for AC-P1-02, 03, 05, 06, 07, 10, 11 (import,
-tokenizer, hashes, crash matrix, cancellation) even though `acceptance.md` still
-shows them as ☐ — **the board needs syncing** (see §4).
+**Partial — automated-green, ritual/live verification pending (19):**
+AC-P1-02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 19, 20, 21.
+AC-P1-09 joined on 2026-09-15 via the activation-rejection state test.
 
-**Not started (10):** AC-P1-01, 02, 03, 05, 06, 07, 09, 10, 11, 18.
-Of these, all but AC-P1-01 (dataset/license sign-off), AC-P1-09 (an explicit
-"no public write path" test) and AC-P1-18 (debug-reader web font) have automated
-coverage today; they remain ☐ because the step is a **recorded ritual** or the
-board was not flipped.
+**Not started (2):** AC-P1-01 (dataset/license sign-off), AC-P1-18
+(debug-reader web font).
 
 ## 3. Remaining work
 
@@ -219,3 +214,8 @@ storage `quran.rs` 9/9 · application `quran_gloss` 11/11 + `quran_reader`
 green · CLI trycmd 2/2 (incl. gloss import + `get --glosses`) · rustfmt clean ·
 clippy shows no lints in T38 files. Run in an isolated worktree at HEAD
 because the shared tree's `quran-search` had concurrent uncommitted breakage.
+
+Targeted verification (2026-09-15, AC-P1-09 hardening):
+`cargo test -p application --test quran_import` 9/9 green in an isolated
+worktree (incl. new `rejected_activations_leave_canonical_state_untouched`);
+rustfmt clean. AC-P1-09 flipped to ◐ (code review + ritual pending).
