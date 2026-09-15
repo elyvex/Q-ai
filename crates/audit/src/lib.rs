@@ -233,50 +233,15 @@ impl AuditVerifier {
 
 // ─── Redaction ────────────────────────────────────
 
+/// Redact secret material from an audit payload in place.
+///
+/// Delegates to [`domain::redaction::redact_json_value`], the workspace's
+/// single source of truth for the key matcher and marker (research D1/D3).
+/// String values are scrubbed by credential-pattern rules (Rule B/C) rather
+/// than a bare substring match, so benign prose (e.g. "approval token
+/// issued") is preserved.
 pub fn redact_audit_value(value: &mut serde_json::Value) {
-    redact_json(value);
-}
-
-fn redact_json(value: &mut serde_json::Value) {
-    match value {
-        serde_json::Value::String(s) => {
-            if is_secret(s) {
-                *value = serde_json::Value::String("***REDACTED***".to_string());
-            }
-        }
-        serde_json::Value::Object(map) => {
-            for (k, v) in map.iter_mut() {
-                if is_secret_key(k) {
-                    *v = serde_json::Value::String("***REDACTED***".to_string());
-                } else {
-                    redact_json(v);
-                }
-            }
-        }
-        serde_json::Value::Array(arr) => {
-            for item in arr {
-                redact_json(item);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn is_secret(s: &str) -> bool {
-    let lower = s.to_lowercase();
-    lower.contains("secret")
-        || lower.contains("password")
-        || lower.contains("api_key")
-        || lower.contains("token")
-        || lower.contains("credential")
-}
-fn is_secret_key(key: &str) -> bool {
-    let lower = key.to_lowercase();
-    lower.contains("secret")
-        || lower.contains("password")
-        || lower.contains("api_key")
-        || lower.contains("token")
-        || lower.contains("credential")
+    let _ = domain::redaction::redact_json_value(value);
 }
 
 // ─── AuditError ──────────────────────────────────
