@@ -100,6 +100,11 @@ pub trait ReadTx: Send {
 
     /// Execute a read-only query returning a scalar value.
     async fn query_one(&self, sql: &str) -> Result<Option<String>, error::StorageError>;
+
+    /// Execute a read-only query returning the first TEXT column of every row.
+    async fn query_list(&self, _sql: &str) -> Result<Vec<String>, error::StorageError> {
+        Err(error::StorageError::StorageUnavailable)
+    }
 }
 
 /// A unit of work representing a write transaction.
