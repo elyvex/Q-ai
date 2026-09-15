@@ -11,15 +11,13 @@
 //! `tests/normalization_seed.rs` binds the two: any drift between the
 //! migration seed and the code fails the build.
 
-use quran_normalization::{
-    ProfileRegistry,
-    rules::{all_rules, by_id, heuristic_rules},
-};
+use quran_normalization::rules::{all_rules, by_id, heuristic_rules};
 
 /// Re-exported so the CLI and server share these types without a direct
 /// dependency on the normalization crate (arch rule AC-P2-36).
 pub use quran_normalization::{
-    NormalizationPipeline, NormalizationTrace, Profile, ProfileId, RuleId, SemVer, StepOutput,
+    NormalizationPipeline, NormalizationRule, NormalizationTrace, Profile, ProfileId,
+    ProfileRegistry, RuleId, SemVer, StepOutput,
     error::{Diagnostic as NormalizationDiagnostic, NormalizationError},
 };
 
@@ -196,6 +194,12 @@ pub fn latest_row(
     rows.iter()
         .filter(|r| r.profile_id == id.as_str())
         .max_by_key(|r| r.version.parse::<SemVer>().ok())
+}
+
+/// Look up one rule implementation by id (for pipeline-adjacent tooling).
+#[must_use]
+pub fn rule_impl(id: RuleId) -> Option<Box<dyn NormalizationRule>> {
+    by_id(id)
 }
 
 /// Implementation metadata for every rule id with an implementation.
