@@ -125,6 +125,9 @@ pub struct SearchHitParts {
     pub explanation: NormalizationTrace,
     /// Concatenated-match segmentation (empty for all other tools).
     pub segmentation: Vec<Segmentation>,
+    /// Display text with the span wrapped in `<b>` markers, when the calling
+    /// tool requested highlighting (T49). Rendered, never stored.
+    pub highlighted: Option<String>,
     /// Advisories.
     pub warnings: Vec<Warning>,
 }
@@ -145,6 +148,7 @@ pub struct SearchHit {
     score_explain: Option<ScoreExplain>,
     explanation: NormalizationTrace,
     segmentation: Vec<Segmentation>,
+    highlighted: Option<String>,
     warnings: Vec<Warning>,
 }
 
@@ -214,6 +218,7 @@ impl SearchHit {
             score_explain: parts.score_explain,
             explanation: parts.explanation,
             segmentation: parts.segmentation,
+            highlighted: parts.highlighted,
             warnings: parts.warnings,
         })
     }
@@ -276,6 +281,12 @@ impl SearchHit {
     #[must_use]
     pub fn segmentation(&self) -> &[Segmentation] {
         &self.segmentation
+    }
+
+    /// Display text with markers, when the calling tool requested it.
+    #[must_use]
+    pub fn highlighted(&self) -> Option<&str> {
+        self.highlighted.as_deref()
     }
 
     /// Advisories.
@@ -347,6 +358,7 @@ pub(crate) fn sample_parts() -> SearchHitParts {
             canonical_token: 1,
             canonical_surface: "بِسْمِ".to_string(),
         }],
+        highlighted: Some("<b>بِسْمِ ٱللَّه</b>ِ".to_string()),
         warnings: vec![],
     }
 }
