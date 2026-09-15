@@ -49,9 +49,9 @@ with what evidence.
 | 1.1 — Domain & Addressing | 9 | 9 | 19.5 | — | ☑ |
 | 1.2 — Import & Validation | 17 | 16 | 42.0 | — | ◐ |
 | 1.3 — Reader, Translations, API | 11 | 7 | 21.5 | — | ◐ |
-| 1.4 — Tools, Citations, CLI, Doctor | 11 | 10 | 21.5 | — | ◐ |
+| 1.4 — Tools, Citations, CLI, Doctor | 11 | 11 | 21.5 | — | ☑ |
 | 1.5 — Debug Reader, Hardening, Exit | 7 | 2 | 15.0 | — | ☐ |
-| **Total** | **65** | **45** | **131.0** | **—** | **69%** |
+| **Total** | **65** | **46** | **131.0** | **—** | **71%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -599,6 +599,21 @@ estimate — an under-recorded sprint is how the next phase inherits a wrong cap
   deferred to the API surface (M9b); formats are frozen now
 - **Notes:** `/read/{slug}@{version}/{s}:{a}` + `qai://quran/…` URN. ADR-0111 stays
   Draft until the endpoint lands.
+
+### P1-T53 — ADR-0111 (accepted)
+- **Deliverable:** ADR
+- **Completed:** 2026-09-15 (mechanical acceptance: resolver + endpoint shipped)
+- **Owner:** agent (DOC)
+- **PR / commit:** working tree
+- **Evidence:** `docs/02-architecture/decisions/ADR-0111-…` flipped to Accepted;
+  resolver verdicts + `deep_link`/`citation_urn` frozen in `crates/citations`
+  with round-trip tests; `GET /api/v1/quran/citations/{id}` live in
+  `crates/server` with route coverage (satisfies the T47 endpoint exception)
+- **DoD:** ✅ all items
+- **Notes:** Acceptance follows the ADR's own condition (P1-T46/T47), consistent
+  with the ADR-0113 precedent (accepted with the consistency test). No human
+  sign-off is named by this ADR; owner decisions (licensed dataset, reviewer)
+  remain with ADR-0101/P1-X01..X02.
 
 ### P1-T48 — CLI `quran get/context/surah/division/resolve` + `--json`
 - **Deliverable:** D1.10

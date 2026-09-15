@@ -1,6 +1,6 @@
-# ADR-0111 — Citation Identity and Deep-Link Format (Draft)
+# ADR-0111 — Citation Identity and Deep-Link Format
 
-- Status: **Draft** (accepted when the resolver ships, P1-T46/T47)
+- Status: **Accepted** (resolver + deep links shipped, P1-T46/T47; accepted 2026-09-15)
 - Phase: 1 — Canonical Quran Core
 - Date: 2026-09-14
 - Related decisions: ADR-0102, ADR-0108
@@ -25,4 +25,6 @@ identity format must be fixed before the first citation is stored.
 ## Consequences
 
 - `citations` crate + `citations` table (`content_hash` + `ingestion_version`)
-  land in M9 (P1-T46/T47); this ADR is accepted then.
+  landed in M9 (P1-T46/T47); this ADR was accepted with them. Evidence:
+  `crates/citations` resolver verdicts + `deep_link`/`citation_urn` frozen formats
+  with round-trip tests; resolver + persistence suites green.
