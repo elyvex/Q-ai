@@ -174,26 +174,14 @@ pub fn handle_quran(action: QuranAction, db_path: &str, json: bool, yes: bool) -
     runtime.block_on(handle_quran_async(action, db_path, json, yes))
 }
 
-async fn handle_quran_async(
-    action: QuranAction,
-    db_path: &str,
-    json: bool,
-    yes: bool,
-) -> i32 {
+async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes: bool) -> i32 {
     let output = match action {
         QuranAction::Get { reference, translations, tokens } => {
             application::quran_cli::cmd_get(db_path, &reference, translations.as_deref(), tokens)
                 .await
         }
         QuranAction::Context { reference, before, after, boundary } => {
-            application::quran_cli::cmd_context(
-                db_path,
-                &reference,
-                before,
-                after,
-                &boundary,
-            )
-            .await
+            application::quran_cli::cmd_context(db_path, &reference, before, after, &boundary).await
         }
         QuranAction::Surah { number, metadata } => {
             application::quran_cli::cmd_surah(db_path, number, metadata).await
@@ -252,9 +240,7 @@ async fn handle_quran_async(
             application::quran_cli::cmd_hashes(db_path, &edition).await
         }
         QuranAction::Translation { action } => match action {
-            TranslationAction::List => {
-                application::quran_cli::cmd_translation_list(db_path).await
-            }
+            TranslationAction::List => application::quran_cli::cmd_translation_list(db_path).await,
             TranslationAction::Import { manifest } => {
                 application::quran_cli::cmd_translation_import(db_path, &manifest).await
             }
@@ -295,5 +281,5 @@ async fn confirm(
             );
         }
     }
-    run().await
+    run.await
 }
