@@ -4,6 +4,36 @@
 
 ## Phase 1 — Canonical Quran Core (in progress)
 
+### Session: 2026-09-14 — M7 importer + M8 reader
+
+**Importer (`quran-corpus::import`, `application::quran`)**
+- P1-T25 — 13-checkpoint `quran.import` job (deterministic restart-is-resume,
+  cancellation with staging cleanup, `stop_after` dry-run/chaos support).
+- P1-T27 — char-level edition differ (`similar`), persisted per import.
+- P1-T28 — approval-gated activation/rollback services (granted approval +
+  subject match + same-tx audit); importer holds no token (I5/I7).
+- P1-T29 — 13-prefix crash matrix (active untouched) + cancellation test.
+- P1-T26 — round-trip verifier (QV-014/QV-024 fail-closed); QV-015 recorded skip.
+- First real hash-chained audit writer app-wide (`application::audit_bridge`).
+- AC-P1-02/03/10/11 automated-green (rituals pending).
+
+**Reader (`application::quran_reader`)**
+- P1-T32/T33/T34 — `QuranReader` trait + service: ayah/range/surah/division/token
+  expansion, structure-bounded context with caps, typed errors.
+- P1-T35 — generation-keyed `lru` cache + no-stale-text test (AC-P1-19 partial).
+- P1-T37 — `AyahView`/`AttributedTranslation` principle-5 types (translations and
+  gloss import stay in M9).
+- P1-T41 — lookup performance smoke (2000 warm reads, < 5 ms avg budget).
+- P1-T42 — ADR-0113 Accepted; ADR-0112 stays Draft for M9.
+
+### Verified
+- `cargo test --workspace`: 387 passing, 0 failing.
+- `cargo clippy --workspace --all-targets -- -D warnings`: clean.
+- `cargo fmt --all`: clean.
+- `cargo run -p xtask -- arch-check` / `migrate-check`: OK.
+
+
+
 ### Session: 2026-09-14 — execution plan + M0/M1
 
 **Plan**
