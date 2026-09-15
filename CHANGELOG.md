@@ -72,6 +72,12 @@ All notable changes to Q-ai are documented here.
   score explanation, mandatory trace, warnings; fail-closed
   `QAI-IDX-0006`), `ScoreExplain`, `Warning` (incl. `QAI-IDX-0101`
   staleness); `CanonicalSpan::byte_range_in` for highlight slicing.
+- **application** (M3): `quran.search_exact` (L0/L1, whole-token FTS plus
+  substring/prefix scans, Persian zero-result hint, never a silent fold)
+  and `quran.search_normalized` (L0–L5 on their FTS fields, L7/L8/adhoc
+  verified scans, typed profile-or-rules selector, explain toggles
+  relevance + BM25 breakdowns) — both assembling `SearchHit` through the
+  single validating path with drift warnings.
 
 ### Added — Phase 1 Canonical Quran Core (in progress)
 - **cli**: read verbs `quran get/context/surah/division/resolve` and lifecycle verbs
