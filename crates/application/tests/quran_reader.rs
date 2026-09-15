@@ -188,13 +188,7 @@ async fn context_invariants_hold_for_random_specs() {
         let Ok(reference) = quran_core::parse(&format!("{surah}:{ayah}")) else {
             continue;
         };
-        let spec = ContextSpec {
-            before,
-            after,
-            boundary,
-            include_surah_header: false,
-            max_ayahs,
-        };
+        let spec = ContextSpec { before, after, boundary, include_surah_header: false, max_ayahs };
         let view = match reader.get_context(&reference, &spec).await {
             Ok(view) => view,
             Err(ReaderError::AyahNotFound(_)) => continue,

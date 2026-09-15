@@ -50,8 +50,8 @@ with what evidence.
 | 1.2 — Import & Validation | 17 | 16 | 42.0 | — | ◐ |
 | 1.3 — Reader, Translations, API | 11 | 7 | 21.5 | — | ◐ |
 | 1.4 — Tools, Citations, CLI, Doctor | 11 | 10 | 21.5 | — | ◐ |
-| 1.5 — Debug Reader, Hardening, Exit | 7 | 1 | 15.0 | — | ☐ |
-| **Total** | **65** | **44** | **131.0** | **—** | **68%** |
+| 1.5 — Debug Reader, Hardening, Exit | 7 | 2 | 15.0 | — | ☐ |
+| **Total** | **65** | **45** | **131.0** | **—** | **69%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -506,6 +506,21 @@ estimate — an under-recorded sprint is how the next phase inherits a wrong cap
   staged) and every passage must name a real ayah of it, be non-empty, and be
   unique. Attribution is required (principle 5) with a provenance record. A
   rejected import is atomic — no partial edition is left behind.
+
+### P1-T57 — Property-test suite (§5.4): randomized context matrix
+- **Deliverable:** D1.13
+- **Completed:** 2026-09-15
+- **Owner:** agent (QA)
+- **PR / commit:** `2c5f0fb` (proptest + helper)
+- **Evidence:** `context_invariants_hold_for_random_specs` (512 deterministic-seed
+  proptest cases over Surah/Juz/Ruku/Page × before/after/cap) green alongside the
+  exhaustive `context_invariants_hold_for_every_ayah_and_spec`; `proptest` added to
+  `application` dev-dependencies; other §5.4 bullets (tokenizer, reference
+  round-trip/never-panics, hash stability) covered by existing suites
+- **DoD:** ✅ all items
+- **Notes:** Runner is deterministic (`TestRunner::deterministic()`), so failures
+  reproduce. Boundary-crossing is asserted for Surah/Juz; Ruku/Page exercise the
+  cap/contiguity invariants through the division clamp.
 
 ### P1-T11 — ADR-0102 / 0103 / 0105
 - **Deliverable:** ADR

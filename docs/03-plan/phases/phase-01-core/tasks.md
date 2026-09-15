@@ -224,7 +224,7 @@ suite is green; `doctor --quran --deep` passes on the fixture edition.
 | P1-T54 | Debug reader page (RTL, web font, ayah markers) | D1.12 | T39 | 1.5 | BE | ☐ |
 | P1-T55 | Editorial review pass: reviewer verifies sampled text against printed muṣḥaf; record `verified_by` | AC | T54 | 3.0 | EDIT | ☐ |
 | P1-T56 | Golden-set expansion to all §5.2 edge cases | D1.13 | T55 | 2.0 | QA | ☐ |
-| P1-T57 | Property-test suite (§5.4) | D1.13 | T32 | 2.0 | QA | ☐ |
+| P1-T57 | Property-test suite (§5.4) | D1.13 | T32 | 2.0 | QA | ☑ |
 | P1-T58 | Full-corpus soak: import → validate → activate → 10k random lookups → `doctor --deep` | D1.13 | all | 2.0 | QA | ☐ |
 | P1-T59 | Docs: corpus architecture, import runbook, rollback runbook, citation spec, adapter authoring guide | D1.14 | all | 3.0 | DOC | ☑ |
 | P1-T60 | Phase-1 exit gate review + handoff to Phase 2 | — | all | 1.5 | all | ☐ |

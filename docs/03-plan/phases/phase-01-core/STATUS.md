@@ -12,7 +12,7 @@
 
 | Dimension | State |
 |---|---|
-| Task rows (excluding 3 sequencing notes) | **44 ☑ / 3 ◐ / 18 ☐** of 65 |
+| Task rows (excluding 3 sequencing notes) | **45 ☑ / 3 ◐ / 17 ☐** of 65 |
 | Acceptance criteria | **10 ◐ / 11 ☐** of 21 (none marked fully verified — rituals pending) |
 | ADRs | **10 Accepted**, 4 Draft (0101, 0111, 0112, 0114) |
 | Phase-1 migrations | **6 / 6** (`0007`–`0012`); workspace now at 14 (Phase-2 added `0013`–`0014`) |
@@ -21,7 +21,7 @@
 
 Remaining task IDs: `P1-X01..X05`, `P1-T01`, `P1-T02`, `P1-T03`, `P1-T26◐`,
 `P1-T38`, `P1-T39`, `P1-T40`, `P1-T42◐`, `P1-T53`, `P1-T54`, `P1-T55`,
-`P1-T56`, `P1-T57`, `P1-T58`, `P1-T60` (and `P1-T04◐`).
+`P1-T56`, `P1-T58`, `P1-T60` (and `P1-T04◐`).
 
 ## 1. Implemented (by surface)
 
@@ -118,7 +118,6 @@ board was not flipped.
 | `P1-T42`, `P1-T53` | ADR-0112 and ADR-0111 are written but still **Draft** |
 | `P1-T54` | Debug reader exists with RTL + label; **missing the web font**, and the ledger is still ☐ |
 | `P1-T56` | Golden-set expansion to §5.2 edge cases — **blocked on a real dataset** (ADR-0101); must not be filled with fabricated scripture |
-| `P1-T57` | §5.4 property suite — tokenizer/reference/context properties and hash-stability now covered; remaining nuance is a randomized context matrix (done deterministically + by property test) |
 | `P1-T58` | Full-corpus soak (import → validate → activate → 10k lookups → `doctor --deep`) — needs a standard edition to be meaningful |
 | `P1-T60` | Exit-gate review + handoff sign-off |
 
@@ -178,3 +177,9 @@ Targeted verification (2026-09-15, T36):
 Full-workspace `clippy -D warnings` was not re-run because a concurrent Phase-2
 writer had uncommitted `crates/application/src/quran_index.rs` changes in the
 tree.
+
+Targeted verification (2026-09-15, T57):
+`cargo test -p application --test quran_reader context_invariants` 2/2 green
+(exhaustive matrix + 512-case deterministic proptest) ·
+`cargo clippy -p application --test quran_reader` shows no `quran_reader` lints ·
+`rustfmt --check` clean on the T57 test file.
