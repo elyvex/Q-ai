@@ -323,6 +323,38 @@ async fn cache_serves_no_stale_text_after_activation() {
 }
 
 #[tokio::test]
+async fn get_ayah_with_glosses_serves_aligned_dataset() {
+    let (_dir, db, reader, _path) = active_reader().await;
+    // `src-1` is seeded by the harness and doubles as the gloss dataset.
+    let manifest = serde_json::json!({
+        "dataset": {"id": "src-1", "aligned_edition": "test-edition-min@0.1.0"},
+        "glosses": [
+            {"surah": 1, "ayah": 1, "position": 1, "language": "en", "gloss": "first"},
+            {"surah": 1, "ayah": 1, "position": 2, "language": "en", "gloss": "second"},
+        ],
+    })
+    .to_string();
+    application::quran::import_glosses(&*db, &manifest, &principal(), &timestamp()).await.unwrap();
+
+    let reference = quran_core::parse("1:1").unwrap();
+    let view = reader.get_ayah(&reference, &plain()).await.unwrap();
+    assert!(view.word_glosses.is_none(), "glosses stay off unless requested");
+
+    let options = AyahOptions { translations: Vec::new(), glosses: true, tokens: false };
+    let view = reader.get_ayah(&reference, &options).await.unwrap();
+    let glosses = view.word_glosses.expect("aligned glosses are served");
+    assert_eq!(glosses.len(), 2);
+    assert_eq!(glosses[0].dataset, "src-1");
+    assert_eq!(glosses[0].language.to_string(), "en");
+    assert_eq!(glosses[0].gloss, "first");
+    assert_eq!(glosses[1].gloss, "second");
+
+    let other = quran_core::parse("1:3").unwrap();
+    let view = reader.get_ayah(&other, &options).await.unwrap();
+    assert!(view.word_glosses.is_none(), "ayahs without glosses serve none");
+}
+
+#[tokio::test]
 async fn lookup_performance_smoke() {
     let (_dir, _db, reader, _path) = active_reader().await;
     let reference = quran_core::parse("2:1").unwrap();
