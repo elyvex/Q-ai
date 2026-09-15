@@ -179,16 +179,19 @@ impl Fts5Index {
         Ok(out)
     }
 
-    /// Build the FTS5 `MATCH` expression for a query, normalizing terms
-    /// through the shared family (query path).
-    async fn match_expression(&self, query: &FtsQuery) -> Result<Option<String>, IndexError> {
+    /// Compiled MATCH plan: an expression, possibly with regex provenance.
+    ///
+    /// `Unsatisfiable` matches nothing (an emptied term, an empty expansion);
+    /// `Unconstrained` is `FtsQuery::All`. Only a top-level regex carries its
+    /// expansion stats; nested regexes contribute their expression alone.
+    async fn match_expression(&self, query: &FtsQuery) -> Result<MatchPlan, IndexError> {
         match query {
             FtsQuery::Term { field, term } => {
                 let normalized = self.family.tokenize(field, term)?;
                 if normalized.trim().is_empty() {
-                    return Ok(None);
+                    return Ok(MatchPlan::Unsatisfiable);
                 }
-                Ok(Some(format!("{{ {field} }} : {}", quote(&normalized))))
+                Ok(MatchPlan::Expr(format!("{{ {field} }} : {}", quote(&normalized)))))
             }
             FtsQuery::Phrase { field, terms, slop, ordered } => {
                 let mut normalized = Vec::with_capacity(terms.len());
@@ -230,20 +233,25 @@ impl Fts5Index {
                 let mut parts = Vec::new();
                 for sub in must {
                     match Box::pin(self.match_expression(sub)).await? {
-                        Some(expr) => parts.push(format!("({expr})")),
-                        None => return Ok(None),
+                        MatchPlan::Expr(expr) | MatchPlan::Regex { expr, .. } => {
+                            parts.push(format!("({expr})"))
+                        }
+                        MatchPlan::Unsatisfiable => return Ok(MatchPlan::Unsatisfiable),
+                        MatchPlan::Unconstrained => {}
                     }
                 }
                 if !should.is_empty() {
                     let mut options = Vec::new();
                     for sub in should {
-                        if let Some(expr) = Box::pin(self.match_expression(sub)).await? {
+                        if let MatchPlan::Expr(expr) | MatchPlan::Regex { expr, .. } =
+                            Box::pin(self.match_expression(sub)).await?
+                        {
                             options.push(format!("({expr})"));
                         }
                     }
                     if options.is_empty() {
                         if parts.is_empty() {
-                            return Ok(None);
+                            return Ok(MatchPlan::Unsatisfiable);
                         }
                     } else {
                         parts.push(format!("({})", options.join(" OR ")));
@@ -251,7 +259,9 @@ impl Fts5Index {
                 }
                 let mut expression = parts.join(" AND ");
                 for sub in must_not {
-                    if let Some(expr) = Box::pin(self.match_expression(sub)).await? {
+                    if let MatchPlan::Expr(expr) | MatchPlan::Regex { expr, .. } =
+                        Box::pin(self.match_expression(sub)).await?
+                    {
                         if expression.is_empty() {
                             expression = format!("NOT ({expr})");
                         } else {
@@ -260,9 +270,9 @@ impl Fts5Index {
                     }
                 }
                 if expression.is_empty() || expression.starts_with("NOT (") {
-                    return Ok(None);
+                    return Ok(MatchPlan::Unsatisfiable);
                 }
-                Ok(Some(expression))
+                Ok(MatchPlan::Expr(expression))
             }
             FtsQuery::Range { .. } => Err(IndexError::QueryRejected {
                 detail:
@@ -270,7 +280,7 @@ impl Fts5Index {
                         .to_string(),
             }),
             FtsQuery::Regex { field, pattern } => self.regex_expression(field, pattern).await,
-            FtsQuery::All => Ok(None),
+            FtsQuery::All => Ok(MatchPlan::Unconstrained),
         }
     }
 
