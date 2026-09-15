@@ -659,7 +659,7 @@ fn scan_match(
             (0, query.chars().count() as u32)
         }
     };
-    let span = derived.spans().to_canonical(start..end);
+    let span = derived.0.spans().to_canonical(start..end);
     // Tokens overlapping the canonical span.
     let matched: Vec<usize> = tokens
         .iter()
@@ -1144,7 +1144,7 @@ pub async fn search_phrase(
         let text = uow_text(db, &serving.edition_id, candidate.surah, candidate.ayah).await?;
         // Verify against normalized ayah text (cheap string pass first).
         let derived = pipeline.apply(&text);
-        let dtokens = derived_tokens(derived.text());
+        let dtokens = derived_tokens(derived.0.text());
         if find_term_sequence(&dtokens, &terms, mode, slop).is_some() {
             verified.push(Candidate {
                 surah: candidate.surah,
@@ -1164,9 +1164,9 @@ pub async fn search_phrase(
     };
     run_search(&ctx, verified, total_matches, |ayah_text, tokens| {
         let derived = pipeline.apply(ayah_text);
-        let dtokens = derived_tokens(derived.text());
+        let dtokens = derived_tokens(derived.0.text());
         let (start, end) = find_term_sequence(&dtokens, &terms, mode, slop)?;
-        let span = derived.spans().to_canonical(start..end);
+        let span = derived.0.spans().to_canonical(start..end);
         let matched: Vec<usize> = tokens
             .iter()
             .enumerate()
@@ -1309,7 +1309,7 @@ pub async fn search_concatenated(
 
     // Normalize the query through L6 (spaces vanish here by design).
     let query_derived = pipeline.apply(&params.text);
-    let query_skeleton = query_derived.text().to_string();
+    let query_skeleton = query_derived.0.text().to_string();
     if query_skeleton.is_empty() {
         return Ok(SearchOutput {
             hits: Vec::new(),
@@ -1387,7 +1387,7 @@ fn verify_concatenated(
     let byte = text.find(query_skeleton)?;
     let start = text[..byte].chars().count() as u32;
     let end = start + query_skeleton.chars().count() as u32;
-    let span = derived.spans().to_canonical(start..end);
+    let span = derived.0.spans().to_canonical(start..end);
     // Re-normalization check (plan §3.4 property 5): the sliced canonical
     // text must reproduce the matched derived substring.
     let slice: String = ayah_text
