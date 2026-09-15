@@ -135,9 +135,7 @@ async fn import_runs_end_to_end_to_staged() {
     )
     .await
     .expect("base import completes");
-    let ImportOutcome::Completed(success) = outcome else {
-        panic!("expected completion");
-    };
+    let ImportOutcome::Completed(success) = outcome;
     assert!(success.stopped_at.is_none());
     assert_eq!(success.edition_id, "run-1");
     assert_eq!(progress.checkpoints(), ImportCheckpoint::ALL);
@@ -167,9 +165,7 @@ async fn crash_matrix_all_thirteen_checkpoints_leave_active_untouched() {
         )
         .await
         .expect("prefix run halts cleanly");
-        let ImportOutcome::Completed(success) = outcome else {
-            panic!("expected completion");
-        };
+        let ImportOutcome::Completed(success) = outcome;
         if index < ImportCheckpoint::ALL.len() - 1 {
             assert_eq!(success.stopped_at, Some(*checkpoint));
         } else {
