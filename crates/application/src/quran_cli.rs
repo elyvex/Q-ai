@@ -736,22 +736,19 @@ pub async fn cmd_diff(
     }
 }
 
-fn approval_flow(
+async fn approval_flow(
     db_path: &str,
-) -> impl std::future::Future<Output = Result<(Arc<SqliteDatabase>, String, String), CommandOutput>> + '_
-{
-    async move {
-        let db = Arc::new(
-            open_db(db_path)
-                .await
-                .map_err(|err| CommandOutput::err(exit::INTERNAL, err.to_string()))?,
-        );
-        let at = now_rfc3339();
-        super::quran::ensure_principal(&*db, LOCAL_PRINCIPAL, "local operator", &at)
+) -> Result<(Arc<SqliteDatabase>, String, String), CommandOutput> {
+    let db = Arc::new(
+        open_db(db_path)
             .await
-            .map_err(|err| CommandOutput::err(exit::INTERNAL, err.to_string()))?;
-        Ok((db, at, uuid::Uuid::new_v4().to_string()))
-    }
+            .map_err(|err| CommandOutput::err(exit::INTERNAL, err.to_string()))?,
+    );
+    let at = now_rfc3339();
+    super::quran::ensure_principal(&*db, LOCAL_PRINCIPAL, "local operator", &at)
+        .await
+        .map_err(|err| CommandOutput::err(exit::INTERNAL, err.to_string()))?;
+    Ok((db, at, uuid::Uuid::new_v4().to_string()))
 }
 
 /// `quran activate`.
