@@ -37,6 +37,16 @@ All notable changes to Q-ai are documented here.
   server `POST /api/v1/quran/normalization/preview` + `GET
   /api/v1/quran/normalization/profiles` with byte-identical CLI/API traces
   (AC-P2-39 evidence), OpenAPI entries.
+- **quran-search** (new crate, M2): backend-agnostic `FullTextIndex` port
+  (`FtsQuery` incl. phrase/boolean/range/regex/all, `SearchOpts` with
+  1000-result and 10 s ceilings, `IndexManifest` with generation + version
+  stamps, `FtsDoc`/`FtsHit`/`FtsResults` with exact totals) plus the
+  `QAI-IDX-*` error contract; FTS5 selected first (DEV-05), Tantivy named
+  only as a future adapter.
+- **storage**: derived-forms tables `quran_token_forms`, `quran_ayah_forms`,
+  `quran_skeletons` (migration `0014`, numbering per DEV-04) with
+  FK-to-canonical enforcement, Layer D stamps, and surah-scoped window
+  CHECKs; FTS5 availability probe (`fts5_available`) as the M2 entry gate.
 
 ### Added — Phase 1 Canonical Quran Core (in progress)
 - **cli**: read verbs `quran get/context/surah/division/resolve` and lifecycle verbs
