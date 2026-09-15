@@ -1,7 +1,7 @@
 # Phase 2 — Completion Ledger
 
 **Phase:** P2 — Quran Search, Arabic Normalization, Morphology & Word Families
-**Status:** 🟡 In Progress — 3 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 1 / 6 migrations
+**Status:** 🟡 In Progress — 5 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 2 / 6 migrations
 **Started:** 2026-09-14
 **Completed:** —
 
@@ -47,19 +47,19 @@ with what evidence.
 | X — External-lead-time decisions | 5 | 0 | — | — | ☐ |
 | 2.0 — Dataset & Linguistic Decisions | 12 | 0 | 30.5 | — | ☐ |
 | 2.1 — Normalization Engine | 12 | 3 | 28.5 | — | ☐ |
-| 2.2 — Derived Forms & FTS Foundation | 15 | 0 | 33.5 | — | ☐ |
+| 2.2 — Derived Forms & FTS Foundation | 15 | 2 | 33.5 | — | ☐ |
 | 2.3 — Search Tools | 17 | 0 | 42.0 | — | ☐ |
 | 2.4 — Morphology Import & Lexicons | 18 | 0 | 45.0 | — | ☐ |
 | 2.5 — Morphology & Family Tools | 19 | 0 | 47.5 | — | ☐ |
 | 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 0 | 51.0 | — | ☐ |
-| **Total** | **114 + 5** | **3** | **278.0** | **—** | **3%** |
+| **Total** | **114 + 5** | **5** | **278.0** | **—** | **4%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
 | Deliverables (D2.1–D2.13) | 0 | 13 |
 | Acceptance criteria (AC-P2-01…50) | 0 | 50 |
 | ADRs accepted (+ 2 reserved) | 0 | 14 + 2 |
-| Migrations applied (`0013`–`0018` per DEV-04) | 1 | 6 |
+| Migrations applied (`0013`–`0018` per DEV-04) | 2 | 6 |
 | Required test suites green | 0 | 17 |
 | D2.13 documents published | 0 | 6 |
 
@@ -120,6 +120,24 @@ _None completed yet._
 - **Notes:** none.
 
 ### Sprint 2.2 — Derived Forms & FTS Foundation
+
+### P2-T25 — Migration `0014_quran_forms`
+- **Deliverable:** D2.2
+- **Completed:** 2026-09-15
+- **Owner:** agent (BE)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- migrations/sqlite/0014* crates/storage*/src/quran.rs`)
+- **Evidence:** `migrations/sqlite/0014_quran_forms.up.sql`; `cargo run -p xtask -- migrate-check` (14 ordered, checksums stable); `crates/storage-sqlite/tests/quran_forms.rs` (real SQLite: empty reads, orphan writes rejected on canonical FK, edition delete total)
+- **DoD:** ✅ all items / derived-only tables with provenance+generation stamps; canonical untouched; FK (not discipline) enforces I8
+- **Notes:** span maps deliberately NOT stored (recomputed from canonical text through the shared pipeline — R6 by construction; recorded in migration header, ADR-0208 keeps FTS-side scope). Windows surah-scoped by CHECK.
+
+### P2-T29 — `FullTextIndex` trait + `IndexManifest` + `FtsQuery`/`SearchOpts` types
+- **Deliverable:** D2.3
+- **Completed:** 2026-09-15
+- **Owner:** agent (SRCH)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/quran-search/`)
+- **Evidence:** `crates/quran-search/src/{error,index,model}.rs`; `cargo test -p quran-search` (error codes, opts ceilings, query/manifest JSON round-trips); `cargo run -p xtask -- arch-check` (no llm/embeddings/retrieval/vector edges)
+- **DoD:** ✅ all items / backend-agnostic port (FTS5 now, Tantivy/OpenSearch named only); exact-count `count()` separate from ranked `search()`; `QAI-IDX-0101` reserved for drift
+- **Notes:** `QAI-IDX-*` error namespace opened (0001–0004 + 0101). FTS5 adapter (P2-T30) and tokenizers (P2-T31) are separate tasks.
 
 ### Sprint 2.3 — Search Tools
 
