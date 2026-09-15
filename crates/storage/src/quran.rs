@@ -236,6 +236,25 @@ pub struct TranslationPassageRow {
     pub provenance_id: String,
 }
 
+/// A row in `word_glosses`: one attributed word-level gloss aligned to a
+/// canonical token position (Phase 1, P1-T38; migration `0010`).
+///
+/// Glosses are a separate attributed dataset, never canonical text
+/// (principle 5): `gloss_dataset_id` names the `sources` row carrying the
+/// dataset's provenance, and `edition_id` names the aligned Arabic edition.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WordGlossRow {
+    pub gloss_dataset_id: String,
+    pub edition_id: String,
+    pub surah: i64,
+    pub ayah: i64,
+    /// 1-based token position within the ayah.
+    pub position: i64,
+    pub language: String,
+    pub gloss: String,
+    pub provenance_id: String,
+}
+
 /// One index pointer row: the serving generation for an index id.
 ///
 /// The pointer is the only mutable Phase-2 catalog row by design; flips
@@ -764,6 +783,22 @@ pub trait QuranRepository: Send + Sync {
 
     /// List translation editions ordered by slug and version.
     async fn list_translation_editions(&self) -> Result<Vec<TranslationEditionRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Insert a word gloss (P1-T38; the `word_glosses` PK rejects duplicates).
+    async fn insert_word_gloss(&mut self, _row: WordGlossRow) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// List an ayah's word glosses ordered by dataset, position, then language
+    /// (deterministic serving order for the reader).
+    async fn list_word_glosses(
+        &self,
+        _edition_id: &str,
+        _surah: i64,
+        _ayah: i64,
+    ) -> Result<Vec<WordGlossRow>, StorageError> {
         Err(StorageError::StorageUnavailable)
     }
 
