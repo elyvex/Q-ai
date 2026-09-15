@@ -83,3 +83,8 @@ workspace = { allow = ["tools", "quran-core", "domain"] }
 # It must never depend on llm/embeddings/retrieval or any vector store (AC-P2-36).
 [quran-normalization]
 workspace = { allow = ["domain"] }
+
+# quran-search: index + query over derived text (FTS5 backend first, DEV-05).
+# Same prohibition: no llm/embeddings/retrieval/vector store (AC-P2-36).
+[quran-search]
+workspace = { allow = ["quran-normalization", "quran-core", "domain", "storage"] }
