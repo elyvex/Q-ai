@@ -140,7 +140,7 @@ async fn end_to_end_parity_both_directions() {
             fields,
         }
     };
-    let index = Fts5Index::stage(dir.path(), manifest(2), family()).await.unwrap();
+    let index = Fts5Index::stage(dir.path(), 3, manifest(2), family()).await.unwrap();
     index.create(&schema()).await.unwrap();
     index.add_batch(vec![mk("diac", raw_diac), mk("bare", raw_bare)]).await.unwrap();
     index.commit().await.unwrap();
