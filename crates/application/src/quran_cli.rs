@@ -287,13 +287,20 @@ pub async fn cmd_resolve(db_path: &str, reference: &str) -> CommandOutput {
         Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
     };
     match reader(&db).resolve(reference).await {
-        Ok(resolved) => CommandOutput::ok(
-            format!("{}\n", resolved.canonical),
-            serde_json::json!({
-                "canonical": resolved.canonical,
-                "reference": quran_core::serialize(&resolved.reference),
-            }),
-        ),
+        Ok(resolved) => {
+            let edition = reader(&db)
+                .get_edition(&quran_core::EditionSelector::Active)
+                .await
+                .map(|edition| format!("{}@{}", edition.slug, edition.version))
+                .unwrap_or_default();
+            CommandOutput::ok(
+                format!("{}\nactive edition: {edition}\n", resolved.canonical),
+                serde_json::json!({
+                    "canonical": resolved.canonical,
+                    "reference": quran_core::serialize(&resolved.reference),
+                }),
+            )
+        }
         Err(err) => {
             let (exit, message) = map_reader_error(err);
             CommandOutput::err(exit, message)
@@ -531,7 +538,17 @@ pub async fn cmd_import(
         declared_manifest_hash: None,
         invoked_by: LOCAL_PRINCIPAL.to_string(),
         license_status: "Unknown".to_string(),
-        license_json: "{\"status\":\"Unknown\"}".to_string(),
+        license_json: serde_json::json!({
+            "status": "Unknown",
+            "spdx_id": null,
+            "name": null,
+            "url": null,
+            "attribution_required": false,
+            "redistribution_allowed": false,
+            "export_allowed": false,
+            "notes": "user-supplied edition; verify rights before activation (ADR-0101 fallback)",
+        })
+        .to_string(),
         created_at: at,
     };
     match super::quran::run_import_job(&db, input).await {
