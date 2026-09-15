@@ -633,7 +633,7 @@ pub async fn cmd_diff(db_path: &str, slug: &str, from: &str, to: &str, format: &
         Ok(uow) => uow,
         Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
     };
-    let load = async |version: &str| -> Result<Vec<(u16, u32, String)>, CommandOutput> {
+    let mut load = async |version: &str| -> Result<Vec<(u16, u32, String)>, CommandOutput> {
         let edition = uow
             .quran()
             .get_edition_by_slug_version(slug, version)
