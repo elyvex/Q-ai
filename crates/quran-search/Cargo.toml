@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 domain = { path = "../domain" }
+quran-normalization = { path = "../quran-normalization" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
