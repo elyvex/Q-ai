@@ -10,6 +10,10 @@ Short answer: **one embedded relational spine (SQLite) as the single source of t
 | Full-text (Arabic-aware, BM25, phrase, proximity) | **Tantivy** (embedded, pure Rust, a directory on disk) | Custom tokenizer required for your normalization forms; BM25 + positional phrase queries; no server; PRD §32.2 already suggests it |
 | Vector | **`sqlite-vec`** (default) → **LanceDB** (when corpora grow) | `sqlite-vec` keeps everything in the *same file* = truly zero-config; LanceDB gives real ANN (IVF/HNSW) still file-based |
 | Graph | **SQLite adjacency tables + recursive CTEs** | PRD §32.4 explicitly forbids requiring a graph DB for local MVP; typed edges + provenance columns are trivially relational |
+| SQLite graph extension (e.g., sqlite-graph) | Stays in SQLite process; Cypher support; zero extra files | Alpha (tested to ~1k nodes); exposes Cypher — violates allowlist rule |
+| Embedded graph engine (CozoDB) | Rust-native, Datalog recursion better than CTEs for transitive closure, MVCC, vector+graph; embeddable | Still a second engine; authority drift risk; MPL-2.0 |
+| Dedicated graph database (Neo4j, Kuzu) | Rich traversal tooling and graph query languages | Operational overhead; unnecessary for local MVP; Kuzu archived (Oct 2025) |
+| Graph only in memory | Simple small-fixture traversal | Startup, memory, persistence, and concurrency limitations |
 | Analytics (frequency, distribution, co-occurrence, collocation) | **SQLite aggregates**, optional **DuckDB** attach for heavy scans | Optional accelerator; never authoritative |
 | Cache / offset maps / skeleton blobs | **`redb`** or plain files (optional) | Pure-Rust embedded KV; only if SQLite proves slow |
 
