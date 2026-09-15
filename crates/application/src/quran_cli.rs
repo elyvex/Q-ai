@@ -1330,3 +1330,68 @@ pub async fn cmd_normalize_show_rule(db_path: &str, rule: &str) -> CommandOutput
     });
     CommandOutput::ok(human, json)
 }
+
+/// `quran forms rebuild` — rebuild derived forms for an edition, inline.
+///
+/// Runs the same [`super::quran_forms::rebuild_forms`] the job handler runs;
+/// MV-018 failures surface as validation errors, never silent drift.
+pub async fn cmd_forms_rebuild(db_path: &str, edition: &str) -> CommandOutput {
+    use super::quran_forms::{FormsError, RebuildParams};
+    use std::sync::atomic::AtomicBool;
+
+    let (slug, version) = match edition.split_once('@') {
+        Some((slug, version)) if !slug.is_empty() && !version.is_empty() => (slug, version),
+        _ => return CommandOutput::err(exit::USAGE, "use slug@version".to_string()),
+    };
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let params = RebuildParams {
+        edition_slug: slug.to_string(),
+        edition_version: version.to_string(),
+        invoked_by: LOCAL_PRINCIPAL.to_string(),
+        run_tag: format!("cli-{}", uuid::Uuid::new_v4()),
+    };
+    match super::quran_forms::rebuild_forms(&db, &params, &AtomicBool::new(false), |_| {}).await {
+        Ok(report) => {
+            let human = format!(
+                "rebuilt forms for {}: {} ayahs, {} tokens, {} skeletons (generation {})\nMV-018 canonical-unchanged: pass ({})\nprovenance: {}",
+                report.edition_urn,
+                report.ayahs,
+                report.tokens,
+                report.skeletons,
+                report.generation,
+                report.mv018.actual_hash,
+                report.provenance_id
+            );
+            let json = serde_json::json!({
+                "edition_urn": report.edition_urn,
+                "generation": report.generation,
+                "ayahs": report.ayahs,
+                "tokens": report.tokens,
+                "token_forms": report.token_forms,
+                "ayah_forms": report.ayah_forms,
+                "skeletons": report.skeletons,
+                "provenance_id": report.provenance_id,
+                "rule_set_version": report.rule_set_version,
+                "mv018": {
+                    "unchanged": report.mv018.unchanged,
+                    "expected_hash": report.mv018.expected_hash,
+                    "actual_hash": report.mv018.actual_hash,
+                },
+            });
+            CommandOutput::ok(human, json)
+        }
+        Err(error) => {
+            let exit = match &error {
+                FormsError::Cancelled => exit::CANCELLED,
+                FormsError::EditionNotFound { .. } => exit::NOT_FOUND,
+                FormsError::NotActive { .. } => exit::CONFLICT,
+                FormsError::Normalization(_) => exit::VALIDATION,
+                FormsError::Storage(_) | FormsError::Index(_) => exit::INTERNAL,
+            };
+            CommandOutput::err(exit, error.to_string())
+        }
+    }
+}
