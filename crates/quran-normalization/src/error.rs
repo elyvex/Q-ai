@@ -149,6 +149,8 @@ pub mod codes {
     pub const SPAN_OUT_OF_RANGE: DiagnosticCode = DiagnosticCode::new("QAI-NORM", 4);
     /// Inconsistent mapping supplied to a `SpanMap` constructor.
     pub const INVALID_MAPPING: DiagnosticCode = DiagnosticCode::new("QAI-NORM", 5);
+    /// A trace or profile was constructed without the mandatory profile label.
+    pub const EMPTY_PROFILE: DiagnosticCode = DiagnosticCode::new("QAI-NORM", 6);
 }
 
 /// Normalization errors. Construction sites must supply enough context for
@@ -189,6 +191,12 @@ pub enum NormalizationError {
         /// What was inconsistent.
         detail: String,
     },
+    /// A trace or profile was constructed without its mandatory profile label.
+    ///
+    /// The label is what ties a derived result to the exact rule set that
+    /// produced it; an unlabeled result is unverifiable (I9).
+    #[error("normalization result requires a profile label")]
+    EmptyProfile,
 }
 
 impl Diagnostic for NormalizationError {
@@ -199,6 +207,7 @@ impl Diagnostic for NormalizationError {
             Self::ProfileImmutable { .. } => codes::PROFILE_IMMUTABLE,
             Self::SpanOutOfRange { .. } => codes::SPAN_OUT_OF_RANGE,
             Self::InvalidMapping { .. } => codes::INVALID_MAPPING,
+            Self::EmptyProfile => codes::EMPTY_PROFILE,
         }
     }
 
@@ -213,6 +222,7 @@ impl Diagnostic for NormalizationError {
                 Some(format!("profile '{profile}'"))
             }
             Self::SpanOutOfRange { .. } | Self::InvalidMapping { .. } => None,
+            Self::EmptyProfile => Some("trace/profile label".to_string()),
         }
     }
 
@@ -233,6 +243,7 @@ impl Diagnostic for NormalizationError {
             Self::InvalidMapping { .. } => {
                 "Rebuild the map from the rule application output.".to_string()
             }
+            Self::EmptyProfile => "Always build results through a profiled pipeline.".to_string(),
         })
     }
 
@@ -245,6 +256,7 @@ impl Diagnostic for NormalizationError {
             Self::SpanOutOfRange { .. } | Self::InvalidMapping { .. } => {
                 "qai doctor --indexes".to_string()
             }
+            Self::EmptyProfile => "qai quran normalize --list-profiles".to_string(),
         })
     }
 }
@@ -261,11 +273,13 @@ mod tests {
             NormalizationError::ProfileImmutable { profile: "L3".into() },
             NormalizationError::SpanOutOfRange { start: 0, end: 9, len: 3 },
             NormalizationError::InvalidMapping { detail: "x".into() },
+            NormalizationError::EmptyProfile,
         ];
         let rendered: Vec<String> = errs.iter().map(|e| e.code().to_string()).collect();
         assert!(rendered.iter().all(|c| c.starts_with("QAI-NORM-")));
         assert_eq!(rendered[0], "QAI-NORM-0001");
         assert_eq!(codes::PROFILE_IMMUTABLE.to_string(), "QAI-NORM-0003");
+        assert_eq!(codes::EMPTY_PROFILE.to_string(), "QAI-NORM-0006");
     }
 
     #[test]
