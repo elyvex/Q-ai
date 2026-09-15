@@ -33,6 +33,7 @@ lru = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 sqlx = { workspace = true }
+proptest = { workspace = true }
 
 [lints]
 workspace = true
