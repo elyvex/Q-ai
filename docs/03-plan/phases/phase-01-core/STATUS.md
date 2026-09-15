@@ -12,7 +12,7 @@
 
 | Dimension | State |
 |---|---|
-| Task rows (excluding 3 sequencing notes) | **43 ☑ / 3 ◐ / 19 ☐** of 65 |
+| Task rows (excluding 3 sequencing notes) | **44 ☑ / 3 ◐ / 18 ☐** of 65 |
 | Acceptance criteria | **10 ◐ / 11 ☐** of 21 (none marked fully verified — rituals pending) |
 | ADRs | **10 Accepted**, 4 Draft (0101, 0111, 0112, 0114) |
 | Phase-1 migrations | **6 / 6** (`0007`–`0012`); workspace now at 14 (Phase-2 added `0013`–`0014`) |
@@ -20,7 +20,7 @@
 | Gate | `clippy -D warnings` clean · `cargo test --workspace` 135 suites ok · `arch-check` OK · `migrate-check` OK · `fmt` clean for Phase-1 files |
 
 Remaining task IDs: `P1-X01..X05`, `P1-T01`, `P1-T02`, `P1-T03`, `P1-T26◐`,
-`P1-T36`, `P1-T38`, `P1-T39`, `P1-T40`, `P1-T42◐`, `P1-T53`, `P1-T54`, `P1-T55`,
+`P1-T38`, `P1-T39`, `P1-T40`, `P1-T42◐`, `P1-T53`, `P1-T54`, `P1-T55`,
 `P1-T56`, `P1-T57`, `P1-T58`, `P1-T60` (and `P1-T04◐`).
 
 ## 1. Implemented (by surface)
@@ -60,7 +60,9 @@ Remaining task IDs: `P1-X01..X05`, `P1-T01`, `P1-T02`, `P1-T03`, `P1-T26◐`,
   property test over every fixture ayah × spec matrix.
 - Corpus doctor (`run_quran_checks`): 19 checks, read-only, `--deep` full scan;
   recomputed hashes asserted equal to import-time values.
-- Translation import with structural attribution (principle 5).
+- Translation import with structural attribution (principle 5) and structural
+  alignment (aligned edition + per-passage ayah must exist; non-empty, unique;
+  atomic on rejection).
 
 ### 1.5 Surfaces — `crates/{tools,tool-registry,citations,cli,server}` (Sprints 1.3–1.4)
 - **Tools:** `ToolResult`/`ReproducibilityData` contract + registry with
@@ -111,7 +113,6 @@ board was not flipped.
 ### 3.2 Engineering work still open
 | Task | What remains |
 |---|---|
-| `P1-T36` | Translation import + alignment validation shipped (migration `0010`, not plan `0013` — DEV-02); finish/close the ledger entry |
 | `P1-T38` | Word-gloss dataset import (table + reader field exist; no importer/CLI path) |
 | `P1-T39`, `P1-T40` | API v1 handlers + OpenAPI spec **exist**; remaining work is depth (per-endpoint schema detail) and flipping the ledger |
 | `P1-T42`, `P1-T53` | ADR-0112 and ADR-0111 are written but still **Draft** |
@@ -169,3 +170,11 @@ Phase-1 files.
 Re-run `cargo xtask ci` before relying on this snapshot: the tree was shared with
 an active Phase-2 writer, and Phase-2 migrations (`0013`–`0014`) already extend
 the schema version.
+
+Targeted verification (2026-09-15, T36):
+`cargo test -p application --test quran_translation` 9/9 green ·
+`cargo test -p cli --test quran` 2/2 (trycmd) green ·
+`rustfmt --check` clean on the T36 test file.
+Full-workspace `clippy -D warnings` was not re-run because a concurrent Phase-2
+writer had uncommitted `crates/application/src/quran_index.rs` changes in the
+tree.
