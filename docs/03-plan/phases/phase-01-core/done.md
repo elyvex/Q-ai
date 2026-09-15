@@ -48,10 +48,10 @@ with what evidence.
 | 1.0 — Data & Decisions | 5 | 1 | 11.5 | — | ◐ |
 | 1.1 — Domain & Addressing | 9 | 9 | 19.5 | — | ☑ |
 | 1.2 — Import & Validation | 17 | 16 | 42.0 | — | ◐ |
-| 1.3 — Reader, Translations, API | 11 | 10 | 21.5 | — | ◐ |
+| 1.3 — Reader, Translations, API | 11 | 11 | 21.5 | — | ☑ |
 | 1.4 — Tools, Citations, CLI, Doctor | 11 | 11 | 21.5 | — | ☑ |
 | 1.5 — Debug Reader, Hardening, Exit | 7 | 2 | 15.0 | — | ☐ |
-| **Total** | **65** | **49** | **131.0** | **—** | **75%** |
+| **Total** | **65** | **50** | **131.0** | **—** | **77%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -523,6 +523,24 @@ estimate — an under-recorded sprint is how the next phase inherits a wrong cap
 - **DoD:** ✅ all items for the handler contract
 - **Notes:** Per-endpoint OpenAPI schema detail (machine-readable `components`)
   is P1-T40, not this task.
+
+### P1-T38 — Word-gloss dataset import (optional path)
+- **Deliverable:** D1.4
+- **Completed:** 2026-09-15 (importer + reader + CLI; migration is `0010`, DEV-02)
+- **Owner:** agent (DATA/BE)
+- **PR / commit:** working tree
+- **Evidence:** `application::quran::import_glosses` + `WordGlossRow`/`insert_word_gloss`/
+  `list_word_glosses` (storage + SQLite); `quran gloss import` + `quran get --glosses`;
+  `fixtures/quran/test-gloss-min.json`; `quran_gloss.rs` 11/11 green,
+  `quran_reader.rs` gloss test green, storage `word_glosses_*` green,
+  `read_flow.trycmd` gloss blocks green
+- **DoD:** ✅ all items
+- **Notes:** Token-granularity alignment (every gloss names a real token position;
+  language validated; dataset must be a catalogued source; `scholarly_annotation`
+  provenance; atomic on rejection; re-import fails closed). Reader serves glosses
+  only for the served edition when requested, each carrying its dataset id.
+  Verified in an isolated worktree because the shared tree's `quran-search`
+  had concurrent uncommitted breakage.
 
 ### P1-T40 — API OpenAPI spec depth + contract tests
 - **Deliverable:** D1.7
