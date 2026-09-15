@@ -3,3 +3,14 @@ name = "quran-normalization"
 version = "0.0.0"
 edition = "2024"
 publish = false
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+proptest = { workspace = true }
+serde_json = { workspace = true }
