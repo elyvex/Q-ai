@@ -17,6 +17,7 @@ sources = { path = "../sources" }
 observability = { path = "../observability" }
 quran-core = { path = "../quran-core" }
 quran-corpus = { path = "../quran-corpus" }
+quran-search = { path = "../quran-search" }
 tools = { path = "../tools" }
 tool-registry = { path = "../tool-registry" }
 citations = { path = "../citations" }
