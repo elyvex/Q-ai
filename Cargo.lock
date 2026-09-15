@@ -1855,6 +1855,7 @@ dependencies = [
  "async-trait",
  "domain",
  "proptest",
+ "quran-core",
  "quran-normalization",
  "regex-automata",
  "serde",
