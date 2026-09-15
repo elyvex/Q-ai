@@ -117,6 +117,21 @@
         "responses": {"200": {"description": "envelope of resolved citation"}, "404": {"description": "diagnostic body"}}
       }
     },
+    "/api/v1/quran/normalization/preview": {
+      "post": {
+        "operationId": "previewNormalization",
+        "description": "Normalize text through a profile (default latest L3.diacritics) or an explicit rule list; returns derived text with its NormalizationTrace. Same pipeline as the CLI (AC-P2-39).",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["text"], "properties": {"text": {"type": "string"}, "profile": {"type": "string"}, "rules": {"type": "string"}}}}}},
+        "responses": {"200": {"description": "envelope of preview with trace"}, "400": {"description": "diagnostic body"}}
+      }
+    },
+    "/api/v1/quran/normalization/profiles": {
+      "get": {
+        "operationId": "listNormalizationProfiles",
+        "description": "Seeded normalization profile catalog (L0-L8).",
+        "responses": {"200": {"description": "envelope of profile catalog"}}
+      }
+    },
     "/debug/read/{edition}/{surah}": {
       "get": {
         "operationId": "debugRead",
