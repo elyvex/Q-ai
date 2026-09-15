@@ -315,7 +315,8 @@ fn migrations_dir() -> std::path::PathBuf {
     from_cwd
 }
 
-fn loads_or_default(cli: &Cli) -> Config {    let mut cfg = match cli.config.as_ref() {
+fn loads_or_default(cli: &Cli) -> Config {
+    let mut cfg = match cli.config.as_ref() {
         Some(path) => {
             let overrides = std::collections::BTreeMap::new();
             config::Config::load(Some(path), "QAI", &overrides).map(|(c, _)| c).unwrap_or_default()
