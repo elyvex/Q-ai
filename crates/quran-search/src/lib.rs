@@ -1,4 +1,21 @@
-//! Phase 2 placeholder — quran-search.
+//! Phase 2 — lexical search over derived Quran text (`quran-search`, D2.3).
 //!
-//! This crate is reserved for Phase 2 of the Q-ai roadmap and contains no
-//! implementation yet. See plan.md §3.1 for the workspace layout.
+//! Backend-independent search semantics live here: the [`FullTextIndex`]
+//! port plus its query/manifest types. Engine adapters (FTS5 now, Tantivy
+//! later) sit below the port; tools, counting, and explanation sit above it.
+//!
+//! This crate is lexical + morphological only: no LLM, embedding, retrieval,
+//! or vector-store dependency, ever (enforced by `cargo xtask arch-check`,
+//! AC-P2-36).
+
+pub mod error;
+pub mod index;
+pub mod model;
+
+pub use domain::SemVer;
+pub use error::{Diagnostic, DiagnosticCode, IndexError, codes};
+pub use index::FullTextIndex;
+pub use model::{
+    CommitStamp, FieldId, Filter, FtsBackend, FtsDoc, FtsHit, FtsIntegrityReport, FtsQuery,
+    FtsResults, FtsSchema, FtsStats, IndexManifest, ResultOrder, SearchOpts,
+};
