@@ -114,6 +114,7 @@ board was not flipped.
 | Task | What remains |
 |---|---|
 | `P1-T38` | Word-gloss dataset import (table + reader field exist; no importer/CLI path) |
+| `P1-T39`, `P1-T40` | API v1 handlers + OpenAPI spec **exist**; remaining work is depth (per-endpoint schema detail) and flipping the ledger |
 | `P1-T54` | Debug reader exists with RTL + label; **missing the web font**, and the ledger is still ☐ |
 | `P1-T56` | Golden-set expansion to §5.2 edge cases — **blocked on a real dataset** (ADR-0101); must not be filled with fabricated scripture |
 | `P1-T58` | Full-corpus soak (import → validate → activate → 10k lookups → `doctor --deep`) — needs a standard edition to be meaningful |
@@ -187,3 +188,8 @@ Targeted verification (2026-09-15, T53, docs-only):
 ADR-0111 acceptance condition (P1-T46/T47 + citation endpoint) confirmed by
 inspection — `crates/citations` resolver verdicts + `deep_link`/`citation_urn`,
 `GET /api/v1/quran/citations/{id}` in `crates/server` with route coverage.
+
+Targeted verification (2026-09-15, T42, docs-only):
+ADR-0112 acceptance condition (P1-T36/T37) confirmed — `import_translations`
+structural alignment suite 9/9 green, `AttributedTranslation` type guards in
+`quran-core`, read-time alignment re-check in the reader.
