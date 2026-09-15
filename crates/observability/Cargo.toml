@@ -14,6 +14,7 @@ opentelemetry_sdk = { workspace = true, optional = true }
 opentelemetry-otlp = { workspace = true, optional = true }
 tracing-opentelemetry = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
+domain = { path = "../domain" }
 
 [features]
 # Opt-in OTLP export (D0.8 / T42). Off by default: PRD §39 forbids external

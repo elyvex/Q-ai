@@ -24,6 +24,7 @@ pub mod ids;
 pub mod licensing;
 pub mod primitives;
 pub mod provenance;
+pub mod redaction;
 pub mod security;
 pub mod security_archive;
 pub mod security_input;

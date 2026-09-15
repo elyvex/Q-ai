@@ -153,6 +153,7 @@ dependencies = [
  "tool-registry",
  "tools",
  "tracing",
+ "unicode-segmentation",
  "uuid",
 ]
 
@@ -1467,6 +1468,7 @@ dependencies = [
 name = "observability"
 version = "0.0.0"
 dependencies = [
+ "domain",
  "metrics",
  "opentelemetry",
  "opentelemetry-otlp",
