@@ -1,7 +1,7 @@
 # Phase 2 — Completion Ledger
 
 **Phase:** P2 — Quran Search, Arabic Normalization, Morphology & Word Families
-**Status:** 🟡 In Progress — 14 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 3 / 6 migrations
+**Status:** 🟡 In Progress — 16 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 3 / 6 migrations
 **Started:** 2026-09-14
 **Completed:** —
 
@@ -48,11 +48,11 @@ with what evidence.
 | 2.0 — Dataset & Linguistic Decisions | 12 | 0 | 30.5 | — | ☐ |
 | 2.1 — Normalization Engine | 12 | 3 | 28.5 | — | ☐ |
 | 2.2 — Derived Forms & FTS Foundation | 15 | 10 | 33.5 | — | ☐ |
-| 2.3 — Search Tools | 17 | 1 | 42.0 | — | ☐ |
+| 2.3 — Search Tools | 17 | 3 | 42.0 | — | ☐ |
 | 2.4 — Morphology Import & Lexicons | 18 | 0 | 45.0 | — | ☐ |
 | 2.5 — Morphology & Family Tools | 19 | 0 | 47.5 | — | ☐ |
 | 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 0 | 51.0 | — | ☐ |
-| **Total** | **114 + 5** | **14** | **278.0** | **—** | **12%** |
+| **Total** | **114 + 5** | **16** | **278.0** | **—** | **14%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -212,6 +212,24 @@ _None completed yet._
 - **Notes:** `Fts5Index` now takes an explicit build generation (dir key) separate from `manifest.corpus_generation` (multi-build retention required it). Manifest hash binds edition identity (slug@version), not the run-surrogate edition id — verified identical across fresh databases. Token-level index (`quran.token.v1`) and retention GC are follow-ups (T35/next session).
 
 ### Sprint 2.3 — Search Tools
+
+### P2-T41 — `quran.search_exact` (+ zero-result normalization hint)
+- **Deliverable:** D2.5
+- **Completed:** 2026-09-15
+- **Owner:** agent (SRCH)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/application/src/quran_search.rs`)
+- **Evidence:** `crates/application/src/quran_search.rs` (`search_exact` over L0/L1 with whole-token FTS + substring/prefix scan paths); `crates/application/tests/search_tools.rs::exact_never_silently_folds` + `::persian_query_gets_hint_not_silence` on real SQLite (L0 surface matches, bare form misses with no hint when no Persian involved, Persian query carries the L5 hint)
+- **DoD:** ✅ all items / zero normalization beyond the selected profile; foreign code points warn instead of folding; every hit traced, spanned, and quotation-verified through the single assembly path
+- **Notes:** engine split is deliberate (FTS for whole-token, exact Rust scans for substring/prefix FTS cannot express). Registry/tool-conformance wiring (T110) lands in M6; these services ARE the tools until then.
+
+### P2-T42 — `quran.search_normalized` incl. ad-hoc rule sets + `explain`
+- **Deliverable:** D2.5
+- **Completed:** 2026-09-15
+- **Owner:** agent (SRCH)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/application/src/quran_search.rs`)
+- **Evidence:** `search_normalized` (registry profiles L0–L5 on their FTS fields; L7/L8/adhoc scan with verification; typed `NormalizedProfile` makes profile+rules unrepresentable); `search_tools.rs::normalized_bridges_diacritics_with_traces` (pinned + latest + adhoc, unknown-rule rejection) + `::filters_paging_and_explain` (surah filter, paging consistency, relevance scores + breakdowns under explain, scoreless canonical without)
+- **DoD:** ✅ all items / `explain: false` = canonical order without scores, `explain: true` = relevance with BM25 breakdowns (plan §5.2); I9 traces unconditional
+- **Notes:** full mushaf reference-set goldens (AC-P2-07/09) need a licensed corpus — the fixture holds synthetic text, so these suites prove the mechanics (fold-bridging, hints, traces) those goldens will exercise.
 
 ### P2-T40 — `SearchHit`, `ScoreExplain`, unified result assembly + canonical-span attach
 - **Deliverable:** D2.5
