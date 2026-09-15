@@ -4,6 +4,35 @@
 
 ## Phase 1 — Canonical Quran Core (in progress)
 
+### Session: 2026-09-15 — M9a/M9b tools, citations, API, CLI, doctor
+
+**Tools, citations, API (`crates/tools`, `tool-registry`, `citations`, `server`)**
+- P1-T43/T44/T45 — `ToolResult`/`ReproducibilityData` contract + `ToolRegistry`
+  (`quran.get_ayah`, `quran.get_context`) with typed no-fabrication errors; fixed a
+  flaky equality test on nondeterministic `execution_time_ms`.
+- P1-T46/T47 — citation resolver (`resolve`/`resolve_stored`/`StoredCitation`) +
+  deep links; `GET /api/v1/quran/…` + `/debug/read/{edition}/{surah}`.
+- P1-T39/T40 — axum API v1 with envelope/ETag/`Content-Language`/Diagnostic error
+  body; `docs/08-api/quran-v1-openapi.json` + route-coverage test.
+
+**CLI + doctor (`crates/cli`, `application::quran_cli`)**
+- P1-T48/T49 — read verbs (`get/context/surah/division/resolve`) and lifecycle verbs
+  (`import/validate/activate/rollback/diff/edition/translation`), every read command
+  `--json`, destructive verbs gated on `--yes`, Phase-0 exit-code table.
+- P1-T50 — `cli/tests/quran/read_flow.trycmd` (trycmd): migrate → import → activate →
+  RTL read + provenance → attributed translations → error exits.
+- P1-T51/T52 — `doctor --quran` 19 checks + `--deep`, read-only DB open, JSON shape
+  matching `docs/schemas/doctor.v1.schema.json`.
+- Fixed three end-to-end defects: `QAI_DATA_DIR` ignored by config resolution,
+  translation import violating the `provenance_records` FK, and doubled trailing
+  newline in CLI human output.
+
+**Hygiene**
+- Cleared `-D warnings` clippy regressions exposed by the toolchain: `unreachable_else`
+  (`quran_import.rs`), collapsible `if` (server `api.rs` + test), items-after-test-module
+  (`server/api.rs`, `cli/doctor.rs`); `application/src/db.rs` schema-version assertions
+  now derive the version from `migrations/sqlite/` instead of hard-coding it.
+
 ### Session: 2026-09-14 — M7 importer + M8 reader
 
 **Importer (`quran-corpus::import`, `application::quran`)**
