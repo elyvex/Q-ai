@@ -1,14 +1,17 @@
-//! Phase 1 — CLI snapshot acceptance: AC-P1-16 (P1-T50).
+//! Phase 1 CLI acceptance — end-to-end reading flow (AC-P1-16, P1-T50).
 //!
-//! `QAI_DATA_DIR` points the real `qai` binary at a temp database; cases run
-//! in filename order (`db migrate` first). Human outputs avoid volatile ids;
-//! `--json` cases run after fixed inputs so structures are deterministic.
+//! Points the real `qai` binary at a fresh temp database via `QAI_DATA_DIR`,
+//! then drives `trycmd` cases (see `tests/quran/`). Cases in a file run in
+//! order against the one database; human output elides volatile values.
 
 #[test]
 fn quran_snapshots() {
     let dir = tempfile::tempdir().unwrap();
-    std::env::set_var("QAI_DATA_DIR", dir.path());
-    // Keep the directory alive for the whole trycmd run.
-    let _guard = dir;
-    trycmd::TestCases::new().case("tests/quran/*.toml");
+    trycmd::TestCases::new()
+        .default_bin_name("qai")
+        .env("QAI_DATA_DIR", dir.path().to_str().unwrap())
+        .case("tests/quran/*.toml")
+        .case("tests/quran/*.trycmd");
+    // Keep the temp database alive until assertions complete.
+    drop(dir);
 }

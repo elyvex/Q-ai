@@ -1,0 +1,126 @@
+# Phase 1 CLI acceptance — end-to-end reading flow (AC-P1-16)
+
+`QAI_DATA_DIR` points the real `qai` binary at a fresh temp database (set by the
+harness); each `console` block below runs in order against that one database, so
+`db migrate` must come first and activation happens exactly once.
+
+Human-readable output avoids volatile values (uuids, timestamps); the `--json`
+block is deterministic for this synthetic edition.
+
+```console
+$ qai db migrate
+migrations applied; schema version 12
+
+```
+
+```console
+$ qai quran import ../../fixtures/quran/test-edition-min/manifest.json
+imported test-edition-min@0.1.0 to Staged
+
+
+```
+
+```console
+$ qai quran activate test-edition-min@0.1.0 --yes
+activated test-edition-min@0.1.0 (generation 1)
+
+
+```
+
+Reading a verse prints the Uthmani text (right-to-left script preserved) on the
+first line and a provenance citation on the second.
+
+```console
+$ qai quran get 1:1
+أوَيت تَساكُن كن لهُم ثُشأوَ
+— quran:test-edition-min@0.1.0:1:1
+
+```
+
+```console
+$ qai quran get 1:1 --json
+{
+  "canonical": {
+    "arabic_text": "أوَيت تَساكُن كن لهُم ثُشأوَ",
+    "ayah_range": [
+      1,
+      1
+    ],
+    "deep_link": "/read/test-edition-min@0.1.0/1:1",
+    "edition": {
+      "riwayah": null,
+      "script": "uthmani",
+      "slug": "test-edition-min",
+      "version": "0.1.0"
+    },
+    "juz": 1,
+    "page": 1,
+    "reference": "quran:test-edition-min@0.1.0:1:1",
+    "surah_name_arabic": "سورة تجريبية 1",
+    "surah_name_translit": "Test-1",
+    "surah_number": 1,
+    "text_hash": {
+      "algorithm": "Sha256",
+      "hex": "2c656d34d59038eed42464f08e753d2d6d16f702f09b8b05789abcaae792ba31"
+    },
+    "translation": null
+  },
+  "tokens": null,
+  "translations": [],
+  "word_glosses": null
+}
+
+```
+
+```console
+$ qai quran resolve 1:1
+1:1
+active edition: test-edition-min@0.1.0
+
+
+```
+
+```console
+$ qai quran edition active
+test-edition-min@0.1.0
+
+
+```
+
+Divisions enumerate their member verses in canonical order.
+
+```console
+$ qai quran division juz 1
+juz 1 (8 ayahs)
+quran:test-edition-min@0.1.0:1:1 أوَيت تَساكُن كن لهُم ثُشأوَ
+quran:test-edition-min@0.1.0:1:2 شُأويَت يت اكَن بَلهمُ مثشُأو أوُ
+quran:test-edition-min@0.1.0:1:3 ثش ويُت سُاكنَ
+quran:test-edition-min@0.1.0:2:1 نَبلهُم هم شأُو يُتساَ اكنَبل بلَ
+quran:test-edition-min@0.1.0:2:2 كن لهَم ثَشأوُ
+quran:test-edition-min@0.1.0:3:1 أو تسُا كُنبلَ
+quran:test-edition-min@0.1.0:3:2 شأَو يَتساُ اكنُبل بلُ
+quran:test-edition-min@0.1.0:3:3 ثُشأوَ ويتَسا ساَ نَبل همثُش
+
+
+```
+
+## Errors
+
+Activating an edition that is no longer staged is a conflict (exit 6); the
+message names the edition.
+
+```console
+$ qai quran activate test-edition-min@0.1.0 --yes
+? 6
+error: no staged edition test-edition-min@0.1.0
+
+```
+
+A reference outside the imported corpus is not found (exit 5).
+
+```console
+$ qai quran get 9:1
+? 5
+error: ayah not found: 9:1
+
+```
