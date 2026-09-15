@@ -460,6 +460,10 @@ struct Predicate {
     /// True when the query is unsatisfiable (e.g. a term normalizing to
     /// empty): search returns zero hits without touching the engine.
     unsatisfiable: bool,
+    /// Regex expansion provenance (top-level regex queries only).
+    regex_terms: Vec<String>,
+    /// Dictionary terms examined (top-level regex queries only).
+    terms_examined: u64,
 }
 
 impl Fts5Index {
@@ -475,18 +479,37 @@ impl Fts5Index {
             let (filter_sql, args) = Self::filter_clause(filters)?;
             let where_sql =
                 if filter_sql.is_empty() { String::new() } else { format!("WHERE {filter_sql}") };
-            return Ok(Predicate { where_sql, match_expr: None, args, unsatisfiable: false });
+            return Ok(Predicate {
+                where_sql,
+                match_expr: None,
+                args,
+                unsatisfiable: false,
+                regex_terms: Vec::new(),
+                terms_examined: 0,
+            });
         }
         let mut clauses = Vec::new();
         let mut match_expr = None;
         let mut unsatisfiable = false;
+        let mut regex_terms = Vec::new();
+        let mut terms_examined = 0u64;
         if let FtsQuery::Range { field, lo, hi } = query {
             clauses.push(range_clause(field, *lo, *hi)?);
-        } else if let Some(expr) = self.match_expression(query).await? {
-            clauses.push("ayah_fts MATCH ?".to_string());
-            match_expr = Some(expr);
         } else {
-            unsatisfiable = true;
+            match self.match_expression(query).await? {
+                MatchPlan::Expr(expr) => {
+                    clauses.push("ayah_fts MATCH ?".to_string());
+                    match_expr = Some(expr);
+                }
+                MatchPlan::Regex { expr, terms, examined } => {
+                    clauses.push("ayah_fts MATCH ?".to_string());
+                    match_expr = Some(expr);
+                    regex_terms = terms;
+                    terms_examined = examined;
+                }
+                MatchPlan::Unsatisfiable => unsatisfiable = true,
+                MatchPlan::Unconstrained => {}
+            }
         }
         let (filter_sql, args) = Self::filter_clause(filters)?;
         if !filter_sql.is_empty() {
