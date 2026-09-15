@@ -337,6 +337,26 @@ mod tests {
     }
 
     #[test]
+    fn byte_range_in_maps_multibyte_text() {
+        // "بِسْمِ" is 6 chars (letters and harakat are 2 bytes each in UTF-8).
+        let text = "بِسْمِ";
+        assert_eq!(text.chars().count(), 6);
+        let span = CanonicalSpan { char_range: 0..6, exact: true };
+        assert_eq!(span.byte_range_in(text), Some(0..text.len() as u32));
+        let span = CanonicalSpan { char_range: 2..3, exact: true };
+        let bytes = span.byte_range_in(text).unwrap();
+        assert_eq!(&text.as_bytes()[bytes.start as usize..bytes.end as usize], "س".as_bytes());
+        // Empty range at a boundary maps to the empty byte range there.
+        let span = CanonicalSpan { char_range: 6..6, exact: true };
+        assert_eq!(span.byte_range_in(text), Some(text.len() as u32..text.len() as u32));
+        // Out-of-range maps to nothing.
+        let span = CanonicalSpan { char_range: 0..7, exact: false };
+        assert_eq!(span.byte_range_in(text), None);
+        let span = CanonicalSpan { char_range: 0..0, exact: false };
+        assert_eq!(span.byte_range_in(""), Some(0..0));
+    }
+
+    #[test]
     fn segments_group_runs_and_mark_provenance() {
         let m = delete_middle();
         let segs = m.segments();
