@@ -123,6 +123,11 @@ pub enum QuranAction {
         #[command(subcommand)]
         action: TranslationAction,
     },
+    /// Derived-form management (search indexes build on these).
+    Forms {
+        #[command(subcommand)]
+        action: FormsAction,
+    },
     /// Normalize text through a profile or adhoc rule list (no canonical reads).
     Normalize {
         /// Text to normalize.
@@ -179,6 +184,17 @@ pub enum TranslationAction {
     Show {
         /// Slug.
         slug: String,
+    },
+}
+
+/// Derived-form subcommands.
+#[derive(Subcommand)]
+pub enum FormsAction {
+    /// Rebuild derived token/ayah forms and skeletons for an edition
+    /// (MV-018 verified before and after; canonical text untouched).
+    Rebuild {
+        /// `slug@version` (must be the active edition).
+        edition: String,
     },
 }
 
@@ -266,6 +282,11 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
             }
             TranslationAction::Show { slug } => {
                 application::quran_cli::cmd_translation_show(db_path, &slug).await
+            }
+        },
+        QuranAction::Forms { action } => match action {
+            FormsAction::Rebuild { edition } => {
+                application::quran_cli::cmd_forms_rebuild(db_path, &edition).await
             }
         },
         QuranAction::Normalize { text, profile, rules, explain, list_profiles, show_rule } => {
