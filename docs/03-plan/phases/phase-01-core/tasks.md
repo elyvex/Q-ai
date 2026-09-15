@@ -197,7 +197,7 @@ ETagged, and translations are structurally incapable of masquerading as canonica
 | P1-T49 | CLI `quran edition/import/validate/diff/activate/rollback` | D1.10 | T28 | 2.5 | BE | ☑ |
 | P1-T50 | CLI snapshot tests incl. RTL/Arabic terminal output sanity | D1.13 | T48, T49 | 1.5 | QA | ☑ |
 | P1-T51 | `doctor --quran` checks (19 checks) + `--deep` mode | D1.11 | T23, T13 | 3.0 | BE | ☑ |
-| P1-T52 | `doctor --quran --json` schema + CI consumption | D1.11 | T51 | 1.0 | BE | ◐ |
+| P1-T52 | `doctor --quran --json` schema + CI consumption | D1.11 | T51 | 1.0 | BE | ☑ |
 | P1-T53 | ADR-0111 | ADR | T47 | 0.5 | DOC | ☐ |
 
 > **T43/T44 define the tool contract once** so every later tool conforms (§12). The first two
@@ -226,7 +226,7 @@ suite is green; `doctor --quran --deep` passes on the fixture edition.
 | P1-T56 | Golden-set expansion to all §5.2 edge cases | D1.13 | T55 | 2.0 | QA | ☐ |
 | P1-T57 | Property-test suite (§5.4) | D1.13 | T32 | 2.0 | QA | ☐ |
 | P1-T58 | Full-corpus soak: import → validate → activate → 10k random lookups → `doctor --deep` | D1.13 | all | 2.0 | QA | ☐ |
-| P1-T59 | Docs: corpus architecture, import runbook, rollback runbook, citation spec, adapter authoring guide | D1.14 | all | 3.0 | DOC | ☐ |
+| P1-T59 | Docs: corpus architecture, import runbook, rollback runbook, citation spec, adapter authoring guide | D1.14 | all | 3.0 | DOC | ☑ |
 | P1-T60 | Phase-1 exit gate review + handoff to Phase 2 | — | all | 1.5 | all | ☐ |
 
 > **T54 is explicitly not the Phase-4 UI.** One server-rendered page at
