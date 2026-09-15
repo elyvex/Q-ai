@@ -198,8 +198,7 @@ impl QuranRepository for SqliteQuranRepository {
                  JOIN quran_import_runs AS r ON s.import_run_id = r.run_id
                  WHERE r.state IN ('Cancelled', 'Failed')"
             );
-            let row =
-                sqlx::query(&sql).fetch_one(&mut **tx).await.map_err(map_sqlx_error)?;
+            let row = sqlx::query(&sql).fetch_one(&mut **tx).await.map_err(map_sqlx_error)?;
             total += row.get::<i64, _>("n");
         }
         Ok(total)
@@ -220,10 +219,8 @@ impl QuranRepository for SqliteQuranRepository {
         .fetch_optional(&mut **tx)
         .await
         .map_err(map_sqlx_error)?;
-        Ok(row.map(|r| StagedEditionRef {
-            run_id: r.get("run_id"),
-            edition_id: r.get("edition_id"),
-        }))
+        Ok(row
+            .map(|r| StagedEditionRef { run_id: r.get("run_id"), edition_id: r.get("edition_id") }))
     }
 
     async fn get_stg_edition(
