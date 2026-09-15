@@ -24,6 +24,11 @@ pub mod n14;
 pub mod n15;
 pub mod n16;
 pub mod n17;
+pub mod n18;
+pub mod n19;
+pub mod n20;
+pub mod n21;
+pub mod n22;
 
 pub use n01::WhitespaceCollapse;
 pub use n02::StripTatweel;
@@ -42,6 +47,11 @@ pub use n14::StripPauseMarks;
 pub use n15::ExpandPresentationForms;
 pub use n16::NfcCompose;
 pub use n17::RemoveSpaces;
+pub use n18::StripDefiniteArticle;
+pub use n19::StripConjunctionPrefix;
+pub use n20::StripPrepositionPrefix;
+pub use n21::StripPronounSuffix;
+pub use n22::DedupeRepeatedLetters;
 
 use crate::rule::{NormalizationRule, NormalizedText, RuleId};
 use crate::span::SpanMap;
@@ -70,13 +80,25 @@ pub fn all_rules() -> Vec<Box<dyn NormalizationRule>> {
     ]
 }
 
-/// Look up a deterministic rule implementation by id.
+/// Look up a rule implementation by id (deterministic N01–N17 and heuristic
+/// N18–N22).
 ///
-/// Returns `None` for heuristic (N18–N22) and reserved (N23–N24) ids, which
-/// have no implementation in this module.
+/// Returns `None` for reserved ids (N23–N24), which have no implementation.
 #[must_use]
 pub fn by_id(id: RuleId) -> Option<Box<dyn NormalizationRule>> {
-    all_rules().into_iter().find(|r| r.id() == id)
+    all_rules().into_iter().chain(heuristic_rules()).find(|r| r.id() == id)
+}
+
+/// Every heuristic rule in catalog order (N18–N22).
+#[must_use]
+pub fn heuristic_rules() -> Vec<Box<dyn NormalizationRule>> {
+    vec![
+        Box::new(StripDefiniteArticle),
+        Box::new(StripConjunctionPrefix),
+        Box::new(StripPrepositionPrefix),
+        Box::new(StripPronounSuffix),
+        Box::new(DedupeRepeatedLetters),
+    ]
 }
 
 /// Per-character rewrite outcome for [`transform`].
@@ -128,6 +150,32 @@ pub(crate) fn transform(
     let canonical_len = input.text().chars().count() as u32;
     let rule_map = SpanMap::build(canonical_len, forward, rule)
         .expect("transform builds a total map by construction");
+    let spans = input.spans().clone().compose(&rule_map);
+    NormalizedText::from_parts(text, spans)
+}
+
+/// Apply a precomputed keep-mask: `keep[i]` decides the fate of input char `i`.
+///
+/// Total by construction: a missing entry keeps the char (`!= Some(&false)`),
+/// so length mismatches degrade to identity rather than panics. Heuristic
+/// affix rules (N18–N21) compute edge-strip masks, then funnel through here so
+/// span composition stays in one place.
+pub(crate) fn transform_mask(
+    input: &NormalizedText,
+    rule: RuleId,
+    keep: &[bool],
+) -> NormalizedText {
+    let mut text = String::new();
+    let mut forward: Vec<u32> = Vec::new();
+    for (i, ch) in input.text().chars().enumerate() {
+        if keep.get(i) != Some(&false) {
+            text.push(ch);
+            forward.push(i as u32);
+        }
+    }
+    let canonical_len = input.text().chars().count() as u32;
+    let rule_map = SpanMap::build(canonical_len, forward, rule)
+        .expect("transform_mask builds a total map by construction");
     let spans = input.spans().clone().compose(&rule_map);
     NormalizedText::from_parts(text, spans)
 }
