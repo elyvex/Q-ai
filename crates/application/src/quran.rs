@@ -217,6 +217,7 @@ impl storage::error::Diagnostic for ActivationError {
                     "Approve the exact edition URN being activated."
                 }
                 Self::NotStaged { .. } => "Import the edition to Staged first.",
+                Self::AlreadyActive { .. } => "That edition version is already active.",
                 Self::Storage(_) => "Check the database and retry.",
                 Self::Audit(_) => "Check the audit chain and retry.",
             }
