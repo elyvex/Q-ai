@@ -94,6 +94,9 @@ pub mod codes {
     pub const BUILD_FAILED: DiagnosticCode = DiagnosticCode::new("QAI-IDX", 3);
     /// Index manifest disagrees with the requested build inputs.
     pub const MANIFEST_MISMATCH: DiagnosticCode = DiagnosticCode::new("QAI-IDX", 4);
+    /// Canonical text changed under a build (MV-018). Always fatal: no
+    /// derived artifact may ship, and the build must stop, not warn.
+    pub const CANONICAL_CHANGED: DiagnosticCode = DiagnosticCode::new("QAI-IDX", 5);
     /// Index is stale relative to corpus/profile/dataset inputs (warning,
     /// never an error: drift is reported, never auto-repaired).
     pub const STALE_INDEX: DiagnosticCode = DiagnosticCode::new("QAI-IDX", 101);
@@ -130,6 +133,19 @@ pub enum IndexError {
         /// Expected vs actual.
         detail: String,
     },
+    /// Canonical text changed under a build (MV-018).
+    ///
+    /// Recomputed canonical hashes disagree with the stored edition hashes.
+    /// The build stops immediately; nothing derived ships.
+    #[error("canonical text changed under build for {edition_urn}")]
+    CanonicalChanged {
+        /// Edition under build.
+        edition_urn: String,
+        /// Stored hash the build expected.
+        expected_hash: String,
+        /// Recomputed hash actually found.
+        actual_hash: String,
+    },
 }
 
 impl Diagnostic for IndexError {
@@ -139,6 +155,7 @@ impl Diagnostic for IndexError {
             Self::QueryRejected { .. } => codes::QUERY_REJECTED,
             Self::BuildFailed { .. } => codes::BUILD_FAILED,
             Self::ManifestMismatch { .. } => codes::MANIFEST_MISMATCH,
+            Self::CanonicalChanged { .. } => codes::CANONICAL_CHANGED,
         }
     }
 
@@ -150,6 +167,9 @@ impl Diagnostic for IndexError {
         match self {
             Self::BackendUnavailable { backend, .. } => Some(format!("backend '{backend}'")),
             Self::BuildFailed { stage, .. } => Some(format!("build stage '{stage}'")),
+            Self::CanonicalChanged { edition_urn, .. } => {
+                Some(format!("canonical text of {edition_urn}"))
+            }
             Self::QueryRejected { .. } | Self::ManifestMismatch { .. } => None,
         }
     }
@@ -168,16 +188,19 @@ impl Diagnostic for IndexError {
             Self::ManifestMismatch { .. } => {
                 "Rebuild the index from current inputs, then retry.".to_string()
             }
+            Self::CanonicalChanged { .. } => {
+                "Treat as an integrity incident: do not rebuild over it, investigate the canonical store first.".to_string()
+            }
         })
     }
 
     fn next_command(&self) -> Option<String> {
         Some(match self {
-            Self::BackendUnavailable { .. } | Self::ManifestMismatch { .. } => {
-                "qai doctor --indexes".to_string()
-            }
             Self::QueryRejected { .. } => "qai quran normalize --list-profiles".to_string(),
             Self::BuildFailed { .. } => "qai quran index rebuild --all".to_string(),
+            Self::BackendUnavailable { .. }
+            | Self::CanonicalChanged { .. }
+            | Self::ManifestMismatch { .. } => "qai doctor --indexes".to_string(),
         })
     }
 }
@@ -193,11 +216,17 @@ mod tests {
             IndexError::QueryRejected { detail: "x".into() },
             IndexError::BuildFailed { stage: "x".into(), detail: "y".into() },
             IndexError::ManifestMismatch { detail: "x".into() },
+            IndexError::CanonicalChanged {
+                edition_urn: "e".into(),
+                expected_hash: "a".into(),
+                actual_hash: "b".into(),
+            },
         ];
         let rendered: Vec<String> = errs.iter().map(|e| e.code().to_string()).collect();
         assert!(rendered.iter().all(|c| c.starts_with("QAI-IDX-")));
         assert_eq!(rendered[0], "QAI-IDX-0001");
         assert_eq!(codes::STALE_INDEX.to_string(), "QAI-IDX-0101");
+        assert_eq!(codes::CANONICAL_CHANGED.to_string(), "QAI-IDX-0005");
     }
 
     #[test]
