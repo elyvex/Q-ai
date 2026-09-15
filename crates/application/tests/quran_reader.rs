@@ -164,7 +164,11 @@ async fn context_invariants_hold_for_every_ayah_and_spec() {
 
                     let (lo, hi) = view.global_range;
                     assert!(lo <= hi, "empty/inverted window");
-                    assert_eq!(usize::try_from(hi - lo + 1).unwrap(), total, "non-contiguous window");
+                    assert_eq!(
+                        usize::try_from(hi - lo + 1).unwrap(),
+                        total,
+                        "non-contiguous window"
+                    );
 
                     let focal = &view.focal.canonical;
                     for member in view.before.iter().chain(view.after.iter()) {
@@ -178,7 +182,10 @@ async fn context_invariants_hold_for_every_ayah_and_spec() {
                             }
                             ContextBoundary::Juz => {
                                 if let (Some(a), Some(b)) = (member.canonical.juz(), focal.juz()) {
-                                    assert_eq!(a, b, "{surah}:{ayah}: context crossed a juz boundary");
+                                    assert_eq!(
+                                        a, b,
+                                        "{surah}:{ayah}: context crossed a juz boundary"
+                                    );
                                 }
                             }
                             _ => {}
@@ -191,7 +198,8 @@ async fn context_invariants_hold_for_every_ayah_and_spec() {
 }
 
 #[tokio::test]
-async fn resolve_parses_and_bounds_checks() {    let (_dir, _db, reader, _path) = active_reader().await;
+async fn resolve_parses_and_bounds_checks() {
+    let (_dir, _db, reader, _path) = active_reader().await;
     let resolved = reader.resolve("2:255").await.unwrap_err();
     assert!(matches!(resolved, ReaderError::AyahNotFound(_)));
     let resolved = reader.resolve("quran:juz:1").await.unwrap();
