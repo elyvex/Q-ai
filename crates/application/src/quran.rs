@@ -623,13 +623,15 @@ pub async fn import_translations(
         })?;
     let mut uow = db.write().await.map_err(ActivationError::storage)?;
     // Alignment target must exist (canonical or staged).
-    let aligned = uow
+    let canonical = uow
         .quran()
         .get_edition_by_slug_version(aligned_slug, aligned_version)
         .await
         .map_err(ActivationError::storage)?;
-    let aligned_id = match aligned {
-        Some(row) => row.id,
+    // For a staged target the aligned ayah locations are cached once; for a
+    // canonical target each passage is checked against the canonical ayah.
+    let (aligned_id, staged_ayahs) = match canonical {
+        Some(row) => (row.id, None),
         None => {
             let staged = uow
                 .quran()
@@ -640,10 +642,21 @@ pub async fn import_translations(
                     slug: aligned_slug.to_string(),
                     version: aligned_version.to_string(),
                 })?;
-            staged.edition_id
+            let ayahs = uow
+                .quran()
+                .list_stg_ayahs(&staged.run_id)
+                .await
+                .map_err(ActivationError::storage)?
+                .into_iter()
+                .filter(|row| row.edition_id == staged.edition_id)
+                .map(|row| (row.surah, row.ayah))
+                .collect::<std::collections::HashSet<_>>();
+            (staged.edition_id, Some(ayahs))
         }
     };
-    // Every passage must name a real ayah (checked against canonical when active).
+    // Every passage must be well-formed, non-empty, unique, and name a real ayah
+    // of the aligned edition (structural alignment).
+    let mut seen = std::collections::HashSet::new();
     for passage in &manifest.passages {
         SurahNumber::new(passage.surah)
             .map_err(|_| ActivationError::Storage(format!("bad surah {}", passage.surah)))?;
@@ -652,6 +665,27 @@ pub async fn import_translations(
         if passage.text.trim().is_empty() {
             return Err(ActivationError::Storage(format!(
                 "empty translation for {}:{}",
+                passage.surah, passage.ayah
+            )));
+        }
+        if !seen.insert((passage.surah, passage.ayah)) {
+            return Err(ActivationError::Storage(format!(
+                "duplicate translation passage for {}:{}",
+                passage.surah, passage.ayah
+            )));
+        }
+        let exists = match &staged_ayahs {
+            Some(ayahs) => ayahs.contains(&(i64::from(passage.surah), i64::from(passage.ayah))),
+            None => uow
+                .quran()
+                .get_ayah(&aligned_id, i64::from(passage.surah), i64::from(passage.ayah))
+                .await
+                .map_err(ActivationError::storage)?
+                .is_some(),
+        };
+        if !exists {
+            return Err(ActivationError::Storage(format!(
+                "aligned edition {aligned_slug}@{aligned_version} has no ayah {}:{}",
                 passage.surah, passage.ayah
             )));
         }
