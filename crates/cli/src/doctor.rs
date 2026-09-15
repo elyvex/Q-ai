@@ -803,3 +803,24 @@ mod tests {
         assert_eq!(before, after, "doctor must not write to the database");
     }
 }
+
+
+/// Run the Quran corpus checks (D1.11). The database is opened read-only;
+/// `deep` upgrades the token round-trip to a full-corpus scan.
+pub fn run_quran_checks(cfg: &Config, json: bool, deep: bool) -> i32 {
+    let path = cfg.storage.sqlite.path.clone();
+    let runtime = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
+        Ok(runtime) => runtime,
+        Err(err) => {
+            eprintln!("failed to start async runtime: {err}");
+            return exit_code::INTERNAL;
+        }
+    };
+    let output = runtime.block_on(application::quran_cli::cmd_doctor_quran(&path, deep));
+    if json {
+        println!("{}", serde_json::to_string_pretty(&output.json).unwrap_or_default());
+    } else {
+        println!("{}", output.human);
+    }
+    output.exit
+}
