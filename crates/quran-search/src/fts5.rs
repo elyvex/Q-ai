@@ -156,7 +156,7 @@ impl Fts5Index {
             stage: "create".to_string(),
             detail: err.to_string(),
         })?;
-        sqlx::query("CREATE VIRTUAL TABLE IF NOT EXISTS vocab USING fts5vocab(ayah_fts, 'row')")
+        sqlx::query("CREATE VIRTUAL TABLE IF NOT EXISTS vocab USING fts5vocab(ayah_fts, 'col')")
             .execute(&self.pool)
             .await
             .map_err(|err| IndexError::BuildFailed {
@@ -207,6 +207,15 @@ impl Fts5Index {
                 }
             }
             FtsQuery::Boolean { must, should, must_not } => {
+                // FTS5 exclusion is `<expr> NOT <expr>` (there is no `AND NOT`
+                // and no leading `NOT`). A `must_not`-only query is therefore
+                // inexpressible — and always a caller bug, since search tools
+                // build positive clauses — so it is rejected, never widened.
+                if must.is_empty() && should.is_empty() && !must_not.is_empty() {
+                    return Err(IndexError::QueryRejected {
+                        detail: "must_not requires a positive clause".to_string(),
+                    });
+                }
                 // `None` from a subquery means unsatisfiable: an unsatisfiable
                 // `must` poisons the conjunction, unsatisfiable `should`s are
                 // dropped (an OR of nothing with no `must` stays unsatisfiable),
@@ -233,15 +242,20 @@ impl Fts5Index {
                         parts.push(format!("({})", options.join(" OR ")));
                     }
                 }
+                let mut expression = parts.join(" AND ");
                 for sub in must_not {
                     if let Some(expr) = Box::pin(self.match_expression(sub)).await? {
-                        parts.push(format!("NOT ({expr})"));
+                        if expression.is_empty() {
+                            expression = format!("NOT ({expr})");
+                        } else {
+                            expression.push_str(&format!(" NOT ({expr})"));
+                        }
                     }
                 }
-                if parts.is_empty() {
+                if expression.is_empty() || expression.starts_with("NOT (") {
                     return Ok(None);
                 }
-                Ok(Some(parts.join(" AND ")))
+                Ok(Some(expression))
             }
             FtsQuery::Range { .. } => Err(IndexError::QueryRejected {
                 detail: "range queries are metadata-only; use SearchOpts filters or a top-level scan".to_string(),
