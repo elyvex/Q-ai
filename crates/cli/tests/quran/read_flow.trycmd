@@ -17,13 +17,11 @@ migrations applied; schema version 12
 $ qai quran import ../../fixtures/quran/test-edition-min/manifest.json
 imported test-edition-min@0.1.0 to Staged
 
-
 ```
 
 ```console
 $ qai quran activate test-edition-min@0.1.0 --yes
 activated test-edition-min@0.1.0 (generation 1)
-
 
 ```
 
@@ -77,13 +75,11 @@ $ qai quran resolve 1:1
 1:1
 active edition: test-edition-min@0.1.0
 
-
 ```
 
 ```console
 $ qai quran edition active
 test-edition-min@0.1.0
-
 
 ```
 
@@ -100,7 +96,6 @@ quran:test-edition-min@0.1.0:2:2 كن لهَم ثَشأوُ
 quran:test-edition-min@0.1.0:3:1 أو تسُا كُنبلَ
 quran:test-edition-min@0.1.0:3:2 شأَو يَتساُ اكنُبل بلُ
 quran:test-edition-min@0.1.0:3:3 ثُشأوَ ويتَسا ساَ نَبل همثُش
-
 
 ```
 
