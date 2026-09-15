@@ -148,3 +148,33 @@ $ qai quran normalize --show-rule N23
 N23 transliterate is reserved for Phase 4 (transliteration/phonetics)
 
 ```
+
+Derived forms rebuild against a real edition (MV-018 verified before and
+after; canonical text untouched).
+
+```console
+$ qai quran import ../../fixtures/quran/test-edition-min/manifest.json
+imported test-edition-min@0.1.0 to Staged
+
+```
+
+```console
+$ qai quran activate test-edition-min@0.1.0 --yes
+activated test-edition-min@0.1.0 (generation 1)
+
+```
+
+```console
+$ qai quran forms rebuild test-edition-min@0.1.0
+rebuilt forms for quran-edition:test-edition-min@0.1.0: 14 ayahs, 64 tokens, 18 skeletons (generation 1)
+MV-018 canonical-unchanged: pass (sha256:235795cb218c2df44496265b4ba5c3377d48944cb28cc4ff64c6104770932704)
+provenance: prov-forms-test-edition-min-0.1.0-g1-75e0e98f12bf
+
+```
+
+```console
+$ qai quran forms rebuild bad-ref
+? 2
+error: use slug@version
+
+```
