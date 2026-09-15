@@ -1029,10 +1029,7 @@ mod tests {
     #[test]
     fn debug_escape_html_neutralizes_markup() {
         assert_eq!(escape_html("بِسْمِ"), "بِسْمِ");
-        assert_eq!(
-            escape_html("<b>&\"x\"</b>"),
-            "&lt;b&gt;&amp;&quot;x&quot;&lt;/b&gt;"
-        );
+        assert_eq!(escape_html("<b>&\"x\"</b>"), "&lt;b&gt;&amp;&quot;x&quot;&lt;/b&gt;");
     }
 
     #[test]

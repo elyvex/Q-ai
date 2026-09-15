@@ -117,7 +117,7 @@ board was not flipped.
 ### 3.2 Engineering work still open
 | Task | What remains |
 |---|---|
-| `P1-T54` | Debug reader exists with RTL + label; **missing the web font**, and the ledger is still ☐ |
+| `P1-T54` | Debug reader has RTL + label + CSS Arabic font stack + per-ayah markers + HTML escaping (tested); still ☐ pending a bundled-`@font-face` font/licensing choice, which needs an owner decision |
 | `P1-T56` | Golden-set expansion to §5.2 edge cases — **blocked on a real dataset** (ADR-0101); must not be filled with fabricated scripture |
 | `P1-T58` | Full-corpus soak (import → validate → activate → 10k lookups → `doctor --deep`) — needs a standard edition to be meaningful |
 | `P1-T60` | Exit-gate review + handoff sign-off |
@@ -206,6 +206,12 @@ green base (incl. the new `$ref`-resolvability + JSON-schema-coverage test);
 spec JSON validated (26 refs resolve, 24 JSON responses carry schemas).
 The shared tree could not run it directly because a concurrent Phase-2 writer
 had broken `application` (E0004 in `quran_index.rs`) at HEAD.
+
+Targeted verification (2026-09-15, T54 progress, not completion):
+`cargo test -p server` green (incl. extended debug-reader structure asserts +
+`escape_html` unit test); rustfmt clean. The reader now declares an Arabic
+font stack, marks each ayah, and escapes text. T54 stays open: a bundled
+`@font-face` needs a named font + licensing sign-off (owner decision).
 
 Targeted verification (2026-09-15, T38):
 storage `quran.rs` 9/9 · application `quran_gloss` 11/11 + `quran_reader`
