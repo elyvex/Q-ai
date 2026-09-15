@@ -107,6 +107,11 @@ csv = "1.3"
 unicode-normalization = "0.1"
 # Char-level edition diffing (ADR-0109, P1-T27).
 similar = "2.7"
+
+# --- Phase 2 (Quran Search, Normalization & Linguistics) ---
+# DFA-only regex engine for pattern search (I16: no backtracking, no DoS).
+# Cached 0.4.18; the adapter pins dense-DFA builds with NFA/DFA size limits.
+regex-automata = "0.4"
 # Canonical lookup cache (ADR-0113, P1-T35).
 lru = "0.12"
 # Quran read API v1 (D1.7, P1-T39).
