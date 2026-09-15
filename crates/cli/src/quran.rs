@@ -123,6 +123,26 @@ pub enum QuranAction {
         #[command(subcommand)]
         action: TranslationAction,
     },
+    /// Normalize text through a profile or adhoc rule list (no canonical reads).
+    Normalize {
+        /// Text to normalize.
+        text: Option<String>,
+        /// Profile (`L3.diacritics`, optionally `@version`-pinned).
+        #[arg(long)]
+        profile: Option<String>,
+        /// Explicit rule list (`N01,N03,N06`); never with `--profile`.
+        #[arg(long)]
+        rules: Option<String>,
+        /// Show the rule-by-rule transformation with offset notes.
+        #[arg(long, default_value_t = false)]
+        explain: bool,
+        /// List seeded profiles and exit.
+        #[arg(long, default_value_t = false)]
+        list_profiles: bool,
+        /// Show one rule (`N06`) and exit.
+        #[arg(long)]
+        show_rule: Option<String>,
+    },
 }
 
 /// Edition subcommands.
@@ -248,6 +268,22 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
                 application::quran_cli::cmd_translation_show(db_path, &slug).await
             }
         },
+        QuranAction::Normalize { text, profile, rules, explain, list_profiles, show_rule } => {
+            if list_profiles {
+                application::quran_cli::cmd_normalize_list_profiles(db_path).await
+            } else if let Some(rule) = show_rule {
+                application::quran_cli::cmd_normalize_show_rule(db_path, &rule).await
+            } else {
+                application::quran_cli::cmd_normalize(
+                    db_path,
+                    text.as_deref(),
+                    profile.as_deref(),
+                    rules.as_deref(),
+                    explain,
+                )
+                .await
+            }
+        }
     };
     if json {
         println!("{}", serde_json::to_string_pretty(&output.json).unwrap_or_default());
