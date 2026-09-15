@@ -20,10 +20,8 @@ pub mod telemetry;
 #[cfg(feature = "otlp")]
 pub mod otlp;
 
+use std::io;
 use tracing_subscriber::EnvFilter;
-use tracing_subscriber::fmt::format::Writer;
-use tracing_subscriber::field::RecordFields;
-use tracing_subscriber::fmt::FormatFields;
 
 /// Output format for the tracing subscriber.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,59 +45,26 @@ impl Default for InitOptions {
     }
 }
 
-/// A `FormatFields` wrapper that scrubs secret-named field values when
-/// `redact` is true, applying Rule A (key-level redaction) from the
-/// shared `domain::redaction` helper. Non-secret fields pass through
-/// unchanged.
-struct RedactingFormatFields {
-    inner: tracing_subscriber::fmt::format::DefaultFields,
-    redact: bool,
-}
-
-impl<'writer> FormatFields<'writer> for RedactingFormatFields {
-    fn format_fields<R: RecordFields>(
-        &self,
-        mut writer: Writer<'writer>,
-        fields: R,
-    ) -> std::fmt::Result {
-        if !self.redact {
-            return self.inner.format_fields(writer, fields);
-        }
-        let mut scratch = String::new();
-        {
-            let mut scratch_writer = Writer::new(&mut scratch as &mut dyn std::fmt::Write);
-            self.inner.format_fields(&mut scratch_writer, fields)?;
-        }
-        write!(writer, "{}", redact_log_fields(&scratch))
-    }
-}
-
-/// Scrub secret key=value pairs in a formatted log line (Rule A).
+/// Wraps any `io::Write` to scrub secret field patterns before forwarding.
 ///
-/// Matches `key=<value>` patterns where `key` is a recognized secret key
-/// and replaces the value portion with the redaction marker.
-fn redact_log_fields(formatted: &str) -> String {
-    let mut result = formatted.to_string();
-    let keys = ["api_key", "apikey", "api-key", "password", "secret", "token", "credential"];
-    for key in &keys {
-        let pattern = format!("{key}=");
-        while let Some(pos) = result.to_lowercase().find(&pattern.to_lowercase()) {
-            let val_start = pos + key.len() + 1; // skip key=
-            let mut val_end = val_start;
-            while val_end < result.len() {
-                match result.as_bytes()[val_end] {
-                    b' ' | b',' | b';' | b'\n' | b'\r' | b'}' | b']' | b'"' | b'\'' => break,
-                    _ => val_end += 1,
-                }
-            }
-            if val_end > val_start {
-                result.replace_range(val_start..val_end, "***REDACTED***");
-            } else {
-                break; // prevent infinite loop
-            }
-        }
+/// Rule A (`key=value` pairs where `key` is a recognized secret key) are
+/// applied to every `write` call, ensuring no secret material reaches the
+/// underlying destination (stderr / log file / OTLP exporter).
+struct RedactingWriter<W: io::Write> {
+    inner: W,
+}
+
+impl<W: io::Write> io::Write for RedactingWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let text = String::from_utf8_lossy(buf);
+        let scrubbed = redact_log_fields(&text);
+        self.inner.write_all(scrubbed.as_bytes())?;
+        Ok(buf.len())
     }
-    result
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
 }
 
 /// Span field name: the component emitting the span.
@@ -128,41 +93,60 @@ pub const SPAN_OUTCOME: &str = "qai.outcome";
 /// Configures an `EnvFilter` (respecting `RUST_LOG`) and installs
 /// either a text or JSON formatter. Returns a `Shutdown` guard that
 /// flushes the subscriber on drop. When `redact_secrets` is true
-/// (default), field names matching the secret key pattern are redacted
-/// in the output.
+/// (default), every write to stderr is scrubbed for secret field patterns
+/// before reaching the destination.
 pub fn init_with_options(opts: InitOptions) -> Shutdown {
     let filter = EnvFilter::from_default_env();
 
-    match opts.format {
-        Format::Text => {
-            let subscriber = tracing_subscriber::fmt()
-                .with_env_filter(filter)
-                .with_writer(std::io::stderr)
-                .with_target(true)
-                .with_file(true)
-                .with_line_number(true)
-                .fmt_fields(RedactingFormatFields {
-                    inner: tracing_subscriber::fmt::format::DefaultFields,
-                    redact: opts.redact_secrets,
-                })
-                .compact()
-                .finish();
-            let _ = tracing::subscriber::set_global_default(subscriber);
+    if opts.redact_secrets {
+        match opts.format {
+            Format::Text => {
+                let subscriber = tracing_subscriber::fmt()
+                    .with_env_filter(filter)
+                    .with_writer(|| RedactingWriter { inner: std::io::stderr() })
+                    .with_target(true)
+                    .with_file(true)
+                    .with_line_number(true)
+                    .compact()
+                    .finish();
+                let _ = tracing::subscriber::set_global_default(subscriber);
+            }
+            Format::Json => {
+                let subscriber = tracing_subscriber::fmt()
+                    .with_env_filter(filter)
+                    .with_writer(|| RedactingWriter { inner: std::io::stderr() })
+                    .with_target(true)
+                    .with_file(true)
+                    .with_line_number(true)
+                    .json()
+                    .finish();
+                let _ = tracing::subscriber::set_global_default(subscriber);
+            }
         }
-        Format::Json => {
-            let subscriber = tracing_subscriber::fmt()
-                .with_env_filter(filter)
-                .with_writer(std::io::stderr)
-                .with_target(true)
-                .with_file(true)
-                .with_line_number(true)
-                .fmt_fields(RedactingFormatFields {
-                    inner: tracing_subscriber::fmt::format::DefaultFields,
-                    redact: opts.redact_secrets,
-                })
-                .json()
-                .finish();
-            let _ = tracing::subscriber::set_global_default(subscriber);
+    } else {
+        match opts.format {
+            Format::Text => {
+                let subscriber = tracing_subscriber::fmt()
+                    .with_env_filter(filter)
+                    .with_writer(std::io::stderr)
+                    .with_target(true)
+                    .with_file(true)
+                    .with_line_number(true)
+                    .compact()
+                    .finish();
+                let _ = tracing::subscriber::set_global_default(subscriber);
+            }
+            Format::Json => {
+                let subscriber = tracing_subscriber::fmt()
+                    .with_env_filter(filter)
+                    .with_writer(std::io::stderr)
+                    .with_target(true)
+                    .with_file(true)
+                    .with_line_number(true)
+                    .json()
+                    .finish();
+                let _ = tracing::subscriber::set_global_default(subscriber);
+            }
         }
     }
 
@@ -175,6 +159,34 @@ pub fn init_with_options(opts: InitOptions) -> Shutdown {
 /// This preserves the deny-by-default behavior for all existing callers.
 pub fn init(format: Format) -> Shutdown {
     init_with_options(InitOptions { format, redact_secrets: true })
+}
+
+/// Scrub secret key=value pairs in a formatted log line (Rule A).
+///
+/// Matches `key=<value>` patterns where `key` is a recognized secret key
+/// and replaces the value portion with `***REDACTED***`.
+fn redact_log_fields(formatted: &str) -> String {
+    let mut result = formatted.to_string();
+    let keys = ["api_key", "apikey", "api-key", "password", "secret", "token", "credential"];
+    for key in &keys {
+        let pattern = format!("{key}=");
+        while let Some(pos) = result.to_lowercase().find(&pattern.to_lowercase()) {
+            let val_start = pos + key.len() + 1;
+            let mut val_end = val_start;
+            while val_end < result.len() {
+                match result.as_bytes()[val_end] {
+                    b' ' | b',' | b';' | b'\n' | b'\r' | b'}' | b']' | b'"' | b'\'' => break,
+                    _ => val_end += 1,
+                }
+            }
+            if val_end > val_start {
+                result.replace_range(val_start..val_end, "***REDACTED***");
+            } else {
+                break;
+            }
+        }
+    }
+    result
 }
 
 /// Guard that flushes the tracing subscriber on drop.
@@ -222,5 +234,15 @@ mod tests {
     fn init_does_not_panic() {
         let _guard = init(Format::Text);
         tracing::info!(message = "init test");
+    }
+
+    #[test]
+    fn redact_log_fields_scrubs_key_value_pairs() {
+        let input = "api_key=sk-12345 status=ok token=tok-abc";
+        let result = redact_log_fields(input);
+        assert!(!result.contains("sk-12345"));
+        assert!(!result.contains("tok-abc"));
+        assert!(result.contains("***REDACTED***"));
+        assert!(result.contains("status=ok"));
     }
 }
