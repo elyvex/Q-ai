@@ -11,6 +11,13 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
+regex-automata = { workspace = true }
+sqlx = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true }
+proptest = { workspace = true }
