@@ -1499,7 +1499,7 @@ mod tests {
         assert_eq!(db.backend(), DbBackend::SQLite);
         let health = db.health().await.unwrap();
         assert!(health.healthy);
-        assert_eq!(health.schema_version, 12);
+        assert_eq!(health.schema_version, 13);
     }
 
     #[tokio::test]
