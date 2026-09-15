@@ -1,0 +1,468 @@
+# Phase 2 — Execution Plan (M1..M7)
+
+**Date:** 2026-09-14
+**Author:** agent (owner to ratify)
+**Plan source of truth:** `plan.md` v1.0.0 (never edited by this file)
+**Status:** M1a in progress; M1b..M7 pending
+
+> `plan.md` remains authoritative. Where this file differs (migration numbers,
+> FTS backend), the difference is a recorded deviation/fallback, not a plan edit.
+
+---
+
+## 1. Repository-state reconciliation (2026-09-14)
+
+Inspected: `git status`, `git log`, workspace `Cargo.toml`, all three Phase-2
+crates + manifests, `migrations/sqlite/`, `xtask/allowlist.toml`,
+`docs/02-architecture/decisions/`, `docs/schemas/`, `~/.cargo/registry`,
+Phase-0/Phase-1 public APIs (via graft skeletons + targeted reads).
+
+### 1.1 Which P2-Tnn tasks are already complete?
+
+**None. 0 / 114.** `tasks.md` shows every task ☐; `done.md` §2 is empty;
+`acceptance.md` is 0 / 50. No completion entries exist anywhere.
+
+### 1.2 Which are partially implemented?
+
+**None.** All three Phase-2 crates are doc-only placeholders:
+
+| Crate | `src/lib.rs` | `Cargo.toml` deps |
+|---|---|---|
+| `quran-normalization` | 5-line placeholder doc | none (name/version/edition only) |
+| `quran-search` | 5-line placeholder doc | none |
+| `quran-morphology` | 5-line placeholder doc | none |
+
+No branch, stash, or untracked file contains Phase-2 work. Untracked files
+present (`crates/application/src/quran_reader.rs`,
+`crates/quran-core/src/view.rs`) are **Phase-1 continuation work** (reader M8,
+`AyahView`/`ContextView`, `ContextBoundary` enum) with uncommitted diffs in
+`Cargo.toml`, `quran-core`, `quran-corpus`, `application`, Phase-1 `done.md`.
+They are preserved untouched and are **not** counted as Phase-2 progress.
+
+### 1.3 Which acceptance tests already exist?
+
+No Phase-2 acceptance test exists. `acceptance.md` §3.2 suites
+(`tests/normalization/*`, `tests/search/*`, `tests/morphology/*`,
+`tests/lexicon/*`, `tests/family/*`, `tests/counting/*`, `tests/tools/*`,
+`tests/doctor/*`, `tests/api/*`) have no corresponding files. Existing test
+dirs belong to Phase 0/1 (`crates/*/tests/`, `fixtures/quran/{golden,
+adversarial, test-edition-min}`).
+
+### 1.4 Which migrations already exist?
+
+`migrations/sqlite/`: `0001`–`0006` (Phase 0, with `.down.sql`) and
+`0007_quran_editions` … `0012_quran_validation` (Phase 1, forward-only).
+`checksums.json` covers exactly these 12. **None of `0020`–`0025` exists.**
+Next valid migration number is **`0013`** (`migrate-check` requires contiguity
+from 1; verified green 2026-09-14). Mapping (see §11 DEV-04):
+
+| Plan | Actual | Contents |
+|---|---|---|
+| `0020_quran_normalization` | `0013_quran_normalization` | rules + profiles + append-only trigger |
+| `0021_quran_forms` | `0014_quran_forms` | token/ayah forms + skeletons |
+| `0022_quran_lexicon` | `0015_quran_lexicon` | datasets, roots, lemmas, analyses, morphemes, derivations, family |
+| `0023_quran_indexes` | `0016_quran_indexes` | index pointers + build runs |
+| `0024_quran_morphology_staging` | `0017_quran_morphology_staging` | `morph_stg_*` mirrors |
+| `0025_quran_search_cache` | `0018_quran_search_cache` | generation-keyed result cache |
+
+### 1.5 Which Phase-2 crates contain real code?
+
+None (see §1.2).
+
+### 1.6 Which APIs/contracts already exist (reuse, do not reimplement)?
+
+- `QuranQuotation::new(QuotationParts)` — private fields, validating
+  constructor; the pattern `SearchHit`/`NormalizationTrace` must mirror
+  (`crates/quran-core/src/quotation.rs:89-136`).
+- `Diagnostic` contract (`code/summary/remedy/next_command`, `render_human/_json`)
+  exists in both `storage::error` and `quran-core::error` (the latter is the
+  template for `QAI-NORM-*` / `QAI-IDX-*`; quran crates must NOT depend on
+  `storage` for errors).
+- `provenance::Attribution::{Dataset, Scholar, Computational, User}` with
+  `Computational { algorithm, version, model, parameters_hash }` — reuse for I12.
+- `QuranRepository` trait (`storage/src/quran.rs:249-575`) — extend with new
+  repo traits rather than forking; `UnitOfWork::quran()` is the tx boundary.
+- `quran-corpus::tokenize()` surface tokenizer (`ComputedToken`,
+  `TokenizedAyah`, lossless separators) — normalization consumes its output,
+  never re-tokenizes.
+- `xtask arch-check` / `migrate-check` / `gen-schema` — both green 2026-09-14.
+- `fixtures/quran/test-edition-min` + golden/adversarial dirs — extend, don't fork.
+
+### 1.7 Which ADRs already exist and what status?
+
+- `ADR-0201-full-text-engine.md`: **Proposed** (Tantivy behind `FullTextIndex`).
+  Not Accepted → M2 backend choice still needs ratification (see §8).
+- `ADR-0202-graph-store.md`: exists (reserved for Phase 3; not written here).
+- `ADR-0301`, `ADR-0701`, `ADR-0702`: exist (later phases; constraints only).
+- `ADR-0101` (dataset) and `ADR-0114` (reference corpus): **DRAFT**
+  (Phase-1 swimlane X unresolved — precedent for keeping ADR-0203 DRAFT).
+- **No** `ADR-0203`…`ADR-0216` files exist yet.
+
+### 1.8 Which dependencies are already present?
+
+Workspace deps relevant to Phase 2: `serde`, `serde_json`, `thiserror`,
+`async-trait`, `unicode-segmentation` (1.12), `unicode-normalization` (0.1),
+`csv`, `similar`, `lru`, `proptest`, `tempfile`, `insta`, `tokio`, `sqlx`
+(sqlite). `regex-automata` and `tantivy` are **absent** from
+`[workspace.dependencies]` and `Cargo.lock`.
+
+### 1.9 Whether Tantivy is available in the local Cargo cache
+
+**No.** `~/.cargo/registry/{cache,src}/*/`: zero `tantivy*` entries
+(2,609 cached crates searched). Adding Tantivy would require network access
+and would break the offline build. → **FTS5 fallback trigger is met** (see §8).
+
+### 1.10 Whether an FTS5 implementation already exists
+
+**No.** Zero `fts5`/`FTS5` hits in `crates/`. SQLite arrives via
+`libsqlite3-sys 0.30.1` (bundled, through `sqlx 0.8.6`); FTS5 compile-option
+presence will be verified at M2 start with a runtime probe
+(`SELECT sqlite_compileoption_used('ENABLE_FTS5')`) before any schema lands.
+
+### 1.11 Whether any Phase-2 work has deviated from plan.md
+
+No implementation exists, so nothing has deviated yet. Two *anticipated,
+pre-recorded* deviations are carried by this plan (not silent):
+
+- **DEV-04** (numbering): migrations `0013`–`0018`, not `0020`–`0025` (§1.4).
+- **DEV-05** (backend): FTS5-first implementation of `FullTextIndex`,
+  Tantivy deferred (§8).
+
+---
+
+## 2. Remaining work
+
+All of it: P2-T01…T114 (114 tasks) + swimlane P2-X01…X05 + 50 ACs + 14 ADRs
+(+2 reserved) + 6 migrations (renumbered) + 17 test suites + 6 D2.13 docs +
+handoff. Grouped into increments M1a…M7 below (§3). Sprint 2.0 linguistic
+decisions (P2-T01…T12: dataset survey, rule catalog, tagset, golden sets) are
+**linguist/owner-led and cannot be authentically completed by this agent**;
+engineering proceeds on explicit fallbacks (public-domain test lexicon,
+rule catalog implemented as code with ADR-0204 DRAFT pending linguist review).
+
+---
+
+## 3. M1..M7 execution sequence
+
+Every increment lists Goal / Preconditions / Files / Tasks / Tests /
+Verification gates / Documentation updates / Exit criteria, and is
+independently verifiable (workspace green at every boundary).
+
+### M1a — Normalization foundation: crate, errors, RuleId/trait, SpanMap [IN PROGRESS]
+
+- **Goal:** `quran-normalization` compiles with the I8–I10 type skeleton:
+  error contract, rule identity/trait, `SpanMap` with composition.
+- **Preconditions:** reconciliation done (§1); baseline gates green (verified).
+- **Files:**
+  - `crates/quran-normalization/Cargo.toml` (deps: `domain`, `serde`,
+    `thiserror`, `unicode-segmentation`; dev: `proptest`, `serde_json`)
+  - `crates/quran-normalization/src/lib.rs`, `error.rs`, `rule.rs`, `span.rs`
+  - `xtask/allowlist.toml` (`[quran-normalization] workspace = { allow = ["domain"] }`)
+- **Tasks:** P2-T13 (partial: skeleton + `RuleId` + `NormalizationRule` trait).
+  P2-T14 (`SpanMap`).
+- **Tests:** unit tests for L0-identity, compose-associativity,
+  grapheme-boundary clamping, round-trip containment; proptest scaffolding.
+- **Verification:** `cargo fmt`, `clippy -D warnings`, `cargo test -p
+  quran-normalization`, `arch-check`, `migrate-check`.
+- **Docs:** this file; CHANGELOG entry.
+- **Exit criteria:** new crate green in isolation + workspace green; no other
+  crate touched except allowlist.
+
+### M1b — Deterministic rules N01–N17 + heuristic N18–N22 + pipeline + profiles
+
+- **Goal:** full rule catalog as code, `NormalizationPipeline`, append-only
+  L0–L8 registry, `NormalizationTrace` with trace-less-construction guard.
+- **Preconditions:** M1a exit.
+- **Files:** `rule/` modules per rule group, `pipeline.rs`, `profile.rs`,
+  `trace.rs`; `crates/quran-normalization/tests/{golden,properties,fuzz}.rs`;
+  `fixtures/quran/normalization/pairs.jsonl` (seed, linguist-unsigned).
+- **Tasks:** P2-T13 (done), T16, T17, T18, T20, T15, T22.
+- **Tests:** 5 SpanMap properties × fixture ayahs × all profiles; idempotency;
+  fuzz no-panic; golden harness (seed pairs; full 2,000 awaits linguist T11).
+- **Verification:** M1a gates + `cargo test --workspace`.
+- **Docs:** `done.md` entries for T13–T18/T20/T22 as DoD allows; ADR-0204/0205
+  DRAFT files.
+- **Exit criteria:** pipeline + profiles usable by M2; heuristic tagging
+  snapshot-tested.
+
+### M1c — Normalization persistence + CLI/API preview
+
+- **Goal:** migration `0013`, profile/rule seeding, `normalize --explain`,
+  preview endpoints.
+- **Preconditions:** M1b exit.
+- **Files:** `migrations/sqlite/0013_quran_normalization.up.sql`,
+  `checksums.json`; `storage` + `storage-sqlite` repo additions; CLI + server
+  surface.
+- **Tasks:** P2-T19, T23, T24, T21 (harness vs seed set).
+- **Tests:** migration round-trip on real SQLite; CLI snapshot tests;
+  CLI/API trace parity.
+- **Verification:** M1b gates + `gen-schema` if DTOs added + `graft build`.
+- **Docs:** `done.md`, D2.13 normalization-spec draft start.
+- **Exit criteria:** AC-P2-38/39 substantially evidenced (pending full golden).
+
+### M2 — Derived forms + FTS foundation (P2-T25…T39)
+
+Follows M1c. `0014_quran_forms`, `forms.rebuild`, skeleton builder, MV-018
+wiring, `FullTextIndex` trait + **FTS5** backend (DEV-05), `ar_*` tokenizers on
+the shared pipeline, 5,000-substring parity, `0016_quran_indexes`, staged
+build → verify → atomic flip, GC/rollback, trigram postings, crash matrix,
+cold-rebuild benchmark, ADR-0201 update + ADR-0208/0213 drafts. FTS5
+compile-option probe is the entry gate; if FTS5 is unavailable, stop and
+return to owner (no third backend invented silently).
+
+### M3 — Search (P2-T40…T56)
+
+`SearchHit` (trace-required constructor) + `ScoreExplain`, exact/normalized/
+phrase/concatenated/regex tools with all I16 guards, `total_matches`,
+filters, highlighting, cache (`0018`), API v1 + SSE, CLI, 400-query golden,
+DoS suite, latency benches, ADR-0207/0212/0214.
+
+### M4 — Morphology import + lexicons (P2-T57…T74)
+
+`0015` + `0017`, intermediate format + JSON Schema, public-domain test-lexicon
+adapter + second adapter, DirectKey + AlignmentTable, tagset mapper,
+MV-001…018, lexicon builder, 12-checkpoint importer, approval-gated
+activation, coverage gates, differ, provenance, FTS lexicon fields, 18-fault
+adversarial suite, ADR-0209. ADR-0203 stays DRAFT (owner/legal).
+
+### M5 — Morphology + family tools (P2-T75…T93)
+
+`AnalysisPolicy`, six tools, `FamilyRelation` closed taxonomy, five-path
+resolution, explanations, opt-in computational path, review-queue promotion,
+API/CLI, 500-case + 120-family suites, non-merge tests.
+
+### M6 — Counting / discovery / doctor / evaluation (P2-T94…T113 excl. soak)
+
+`CountingRules`, 13 tools with SQL-count discipline, disclaimers verbatim,
+API/CLI, 19 doctor checks, drift (`QAI-IDX-0101`), reconciliation, eval
+harness, determinism, 22-tool contract suite.
+
+### M7 — Hardening / soak / handoff (P2-T111, T113, T114)
+
+50k-query soak, six D2.13 docs, `handoff-p2-to-p3.md`, exit-gate review.
+**No "Phase 2 complete" claim until all 50 ACs + ritual pass.**
+
+---
+
+## 4. Mapping: increments → P2-Tnn
+
+| Increment | Tasks |
+|---|---|
+| M1a | T13 (part), T14 (part) |
+| M1b | T13 (done), T14 (done), T15, T16, T17, T18, T20, T22 |
+| M1c | T19, T21, T23, T24 |
+| M2 | T25, T26, T27, T28, T29, T30, T31, T32, T33, T34, T35, T36, T37, T38, T39 |
+| M3 | T40, T41, T42, T43, T44, T45, T46, T47, T48, T49, T50, T51, T52, T53, T54, T55, T56 |
+| M4 | T57, T58, T59, T60, T61, T62, T63, T64, T65, T66, T67, T68, T69, T70, T71, T72, T73, T74 |
+| M5 | T75, T76, T77, T78, T79, T80, T81, T82, T83, T84, T85, T86, T87, T88, T89, T90, T91, T92, T93 |
+| M6 | T94, T95, T96, T97, T98, T99, T100, T101, T102, T103, T104, T105, T106, T107, T108, T109, T110, T112, T113 |
+| M7 | T111, T113 (done), T114 |
+| Sprint 2.0 (T01–T12) | owner/linguist-led; engineering fallbacks per §11; T10 ADR-writing partially covered as drafts through M1b–M6 |
+
+---
+
+## 5. Mapping: increments → D2.x
+
+M1a/b/c → D2.1 (+D2.13 test slices, D2.10 migration slice, D2.11/D2.12
+preview slices). M2 → D2.2, D2.3, D2.4 (slice), D2.10. M3 → D2.5 (+D2.4 done,
+D2.10 cache, D2.11/D2.12 search slices). M4 → D2.6. M5 → D2.7, D2.8.
+M6 → D2.9, D2.10 (drift/reconcile), D2.13 (doctor/eval). M7 → D2.13 (docs,
+soak) + handoff.
+
+---
+
+## 6. Exact files/modules created or modified
+
+**M1a (this session):** create `crates/quran-normalization/src/{error,rule,
+span}.rs`, rewrite `lib.rs`; edit `crates/quran-normalization/Cargo.toml`,
+`xtask/allowlist.toml`, `CHANGELOG.md`; create this file.
+**M1b:** add `pipeline.rs`, `profile.rs`, `trace.rs`, `rules/*.rs`,
+`crates/quran-normalization/tests/*.rs`, `fixtures/quran/normalization/*`,
+`adr/ADR-0204-*.md` + `ADR-0205-*.md` (DRAFT).
+**M1c:** `migrations/sqlite/0013_*`, `checksums.json`, `crates/storage/src/
+normalization.rs` (new repo trait), `crates/storage-sqlite/src/
+normalization.rs`, CLI `quran normalize` group, server preview routes,
+`docs/schemas/*` (if DTOs), `tests/cli/normalize_snapshots.rs`.
+Later increments follow plan §13/§15 module shapes; each increment's section
+above names its files before work starts (checkpoint rule §16).
+
+---
+
+## 7. Dependencies and exact versions
+
+| Crate | Version source | Status |
+|---|---|---|
+| `unicode-segmentation` 1.12 | workspace (cached 1.12.0) | in use (M1a) |
+| `regex-automata` **0.4.x** | ADD to workspace (cached: 0.4.9/13/14/16/18) | M1c at latest (M3 regex needs it); exact pin chosen at add-time by offline `cargo add --offline` probe |
+| `unicode-normalization` 0.1 | workspace (cached 0.1.24/25) | M1b (N15/N16) |
+| `lru` 0.12 | workspace | M3 (result cache) |
+| `tantivy` | NOT cached | **rejected for offline build** (DEV-05) |
+| FTS5 | via `libsqlite3-sys` 0.30.1 bundled | probe at M2 entry |
+
+Policy: every addition lands in root `[workspace.dependencies]` first,
+consumed as `{ workspace = true }`; offline resolution proven with
+`cargo build --offline` before the increment exits.
+
+---
+
+## 8. Tantivy-vs-FTS5 decision and trigger
+
+**Trigger (met):** Tantivy absent from `~/.cargo` cache and `Cargo.lock`;
+network is unavailable; the workspace must build offline.
+**Decision:** implement `FullTextIndex` with an **FTS5 backend first**
+(DEV-05), keeping the trait boundary backend-agnostic exactly as ADR-0201
+§1 prescribes (adapter quarantines backend types; typed queries, stable IDs,
+manifests stay portable). ADR-0201 remains **Proposed** with a fallback annex
+added at M2; a future Tantivy adapter remains possible without API breakage.
+Entry gate for M2: FTS5 compile-option probe green on this machine.
+
+---
+
+## 9. arch-check allowlist changes
+
+Planned, each applied **before** the edge is introduced:
+
+```toml
+[quran-normalization]
+workspace = { allow = ["domain"] }                       # M1a
+[quran-search]
+workspace = { allow = ["quran-normalization", "quran-core", "domain", "storage"] }  # M2
+[quran-morphology]
+workspace = { allow = ["quran-normalization", "quran-core", "domain", "sources", "storage"] }  # M4
+[storage-sqlite]
+workspace = { allow = ["storage", "domain", "quran-core"] }  # unchanged (already covers forms/lexicon repos)
+[application]
+workspace = { allow = [ ...existing..., "quran-normalization", "quran-search", "quran-morphology"] }  # M1c/M3/M5
+```
+
+Forbidden everywhere in the three crates: `llm`, `embeddings`, `retrieval`,
+`vector-store` crates (AC-P2-36 gate).
+
+---
+
+## 10. Acceptance-test mapping (increment → ACs evidenced)
+
+M1a: none fully (scaffolding for AC-P2-04/06). M1b: AC-P2-03 (seed subset;
+full 2,000 needs T11 linguist set), AC-P2-04, AC-P2-10 (unit side),
+AC-P2-06 (type test). M1c: AC-P2-38/39. M2: AC-P2-05 (MV-018 wiring),
+AC-P2-31/32/40. M3: AC-P2-06…14, 35 (cache). M4: AC-P2-01/15/16/20/21/24/45.
+M5: AC-P2-17/18/19/22/23/25/26/27. M6: AC-P2-28/29/30/33/34/37/41/42/43/44.
+M7: AC-P2-05/31/33/49/50 ritual + AC-P2-02/46/47/48 (docs/ADRs/sign-off).
+
+---
+
+## 11. Owner decisions / blockers
+
+| ID | Item | Fallback in use | Permanent? | Unblocks |
+|---|---|---|---|---|
+| OWN-01 (P2-X01) | Morphology dataset + license (ADR-0203) | public-domain test lexicon; typed unavailable errors | No — owner/legal must decide | M4+ morphology value |
+| OWN-02 (P2-X02) | Arabic linguist 0.4 FTE | rule catalog as code, DRAFT ADRs, unsigned seed fixtures; AC-P2-02/03/23/24/25/46 pending review | No — sign-off required | T04/T05/T11/T12/T92 |
+| OWN-03 | 112 ed vs 278 ed estimate gap | incremental M-slices, 2.3a/b + 2.4a/b splits, no compression | Owner scope/schedule call | scheduling |
+| OWN-04 | FTS backend ratification | FTS5-first (DEV-05), trait preserved | Reversible by design | M2 (T30) |
+| OWN-05 | Migration numbering | `0013`–`0018` mapping (§1.4, DEV-04) | Permanent numbering; plan text unchanged | M1c (T19) |
+
+---
+
+## 12. Interim fallbacks
+
+F1 test lexicon (M4) · F2 unsigned seed golden sets, linguist review pending
+(M1b) · F3 FTS5 backend (M2) · F4 `regex-automata` pinned from cache at M1c
+· F5 renormalized-numbering migrations (M1c). All are logged in `done.md` §5
+at introduction and are reversible except F5 (append-only history).
+
+---
+
+## 13. Risks and concrete mitigations
+
+R1 no dataset → F1 + typed errors (M4). R2 wrong rules → mapping tables +
+loss statements in code + DRAFT ADR-0204 + seed goldens; linguist review
+paves final. R3 tokenization disagreement → AlignmentTable design (M4),
+canonical re-tokenization impossible by construction. R4 SpanMap bugs → 5
+properties × fixture ayahs × profiles from M1b; citation re-verify at M3.
+R5 concatenated complexity → fixed 3-ayah windows, verify-then-emit (M2/M3).
+R6 tokenizer drift → single shared pipeline + 5,000-parity gate (M2).
+R7 numerology pressure → `CountingRules` mandatory + verbatim disclaimers,
+snapshot-tested (M6). R8 "correct analysis" pressure → schema test banning
+the columns (M4/M5). R9 root-merge → suggestions-only (M5). R10 crunch →
+§11 OWN-03 splits; integrity slices (M1, M2-parity, M4-validation, eval) are
+never the cut surface.
+
+---
+
+## 14. Estimate discrepancy
+
+`plan.md` §15 header: ≈112 ed. Task rows: **278.0 ed** (≈2.5×, ~18.5 weeks at
+15 ed/week for 3 engineers). Preserved as owner decision OWN-03; this plan
+does not compress. M-slicing (M1a/b/c, 2.3a/b, 2.4a/b, 2.5a/b, 2.6a/b) makes
+progress shippable per session regardless of the scheduling outcome.
+
+---
+
+## 15. Sprint-overload warning
+
+Sprints 2.3–2.6 carry 42–51 ed each (~3× a 15 ed/week team). Mandatory splits:
+2.3a search core (T40–43, T47–50) / 2.3b concatenated+regex+hardening
+(T44–46, T53–55); 2.4a import+alignment+validation (T57–63, T71–72) / 2.4b
+lexicons+activation+FTS fields (T64–70, T73–74); 2.5a morphology tools
+(T75–82) / 2.5b family engine (T83–90); 2.6a counting/discovery (T94–104) /
+2.6b doctor/eval/soak/docs (T105–114). QA suites follow their build halves.
+T66 (import) and T67 (activation) are never merged.
+
+---
+
+## 16. Expected verification commands (every increment)
+
+```bash
+cargo fmt --all
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+cargo run -p xtask -- arch-check
+cargo run -p xtask -- migrate-check
+# when DTOs/schemas change:
+cargo run -p xtask -- gen-schema
+# after structural changes:
+graft build
+# if available, else record unavailable:
+cargo deny check
+```
+
+Persistence/index increments additionally use real tempdirs + real SQLite +
+real FTS5 (no mocks for acceptance). `cargo-deny` availability is probed in
+M1a (§17).
+
+## 17. Checkpoint / recovery strategy
+
+Each increment ends at a green workspace with `done.md`/`tasks.md` updated;
+an interrupted session stops at the last green boundary and records: current
+increment, completed vs incomplete tasks, failing tests, next file/module,
+next verification command. **This session's checkpoint:** M1a (files §6) →
+gates §16 → then M1b. If the session ends mid-M1a, the resume point is the
+first unimplemented item in M1a's file list with `cargo test -p
+quran-normalization` as the next command.
+
+---
+
+## 18. Session checkpoint — 2026-09-14 (M1a complete, M1b next)
+
+- **Completed:** M1a — `quran-normalization` foundation (`error.rs`, `rule.rs`,
+  `span.rs`, `lib.rs`, manifest deps, allowlist entry, CHANGELOG entry, this plan).
+  P2-T13/T14 are **partial** (skeleton + trait + SpanMap); tasks stay ☐.
+- **Verification (all green):** `cargo fmt --check` clean; `cargo clippy
+  --workspace --all-targets -- -D warnings` exit 0; `cargo test --workspace`
+  **387 passed / 0 failed** (incl. 15 new `quran-normalization` tests);
+  `arch-check` OK; `migrate-check` OK (12 migrations); `cargo deny`
+  **unavailable** (not installed); `gen-schema` N/A (no DTO changes);
+  `graft build` refreshed (9 files parsed).
+- **Concurrent activity:** 5 Phase-1 commits landed mid-session
+  (`2f1355e`..`fb2d666`, quran reader + view types + lru); a transient
+  workspace-clippy red during that window resolved at HEAD. No conflicts with
+  Phase-2 files. Uncommitted Phase-1 diffs (`application/tests/quran_import.rs`,
+  Phase-1 `done.md`, `AGENT-PROMPT.md`) left untouched.
+- **Housekeeping:** stale `proptest-regressions/span.txt` from a fixed
+  test-scaffolding bug removed (invalid degenerate maps; generator now emits
+  valid chains only).
+- **No task/AC flips, no ADRs, no migrations, no deviations added this session**
+  (DEV-04/DEV-05 remain planned, recorded above).
+- **Next concrete action (M1b):** implement deterministic rules N01–N17
+  (`crates/quran-normalization/src/rules/*.rs`), then N18–N22 + pipeline +
+  profiles + trace; next command `cargo test -p quran-normalization`.
