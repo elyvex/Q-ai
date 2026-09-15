@@ -179,6 +179,38 @@ impl Fts5Index {
         Ok(out)
     }
 
+/// Compiled MATCH plan: an expression, possibly with regex provenance.
+///
+/// `Unsatisfiable` matches nothing (an emptied term, an empty expansion);
+/// `Unconstrained` is `FtsQuery::All`. Only a top-level regex carries its
+/// expansion stats; nested regexes contribute their expression alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum MatchPlan {
+    Unsatisfiable,
+    Unconstrained,
+    Expr(String),
+    Regex { expr: String, terms: Vec<String>, examined: u64 },
+}
+
+impl MatchPlan {
+    /// The MATCH expression, if the plan constrains anything.
+    fn expression(self) -> Option<String> {
+        match self {
+            Self::Expr(expr) | Self::Regex { expr, .. } => Some(expr),
+            Self::Unsatisfiable | Self::Unconstrained => None,
+        }
+    }
+
+    /// Regex expansion provenance, if this plan is a top-level regex.
+    fn regex_stats(&self) -> Option<(&[String], u64)> {
+        match self {
+            Self::Regex { terms, examined, .. } => Some((terms, *examined)),
+            _ => None,
+        }
+    }
+}
+
+impl Fts5Index {
     /// Compiled MATCH plan: an expression, possibly with regex provenance.
     ///
     /// `Unsatisfiable` matches nothing (an emptied term, an empty expansion);
@@ -191,7 +223,7 @@ impl Fts5Index {
                 if normalized.trim().is_empty() {
                     return Ok(MatchPlan::Unsatisfiable);
                 }
-                Ok(MatchPlan::Expr(format!("{{ {field} }} : {}", quote(&normalized)))))
+                Ok(MatchPlan::Expr(format!("{{ {field} }} : {}", quote(&normalized))))
             }
             FtsQuery::Phrase { field, terms, slop, ordered } => {
                 let mut normalized = Vec::with_capacity(terms.len());
@@ -202,7 +234,7 @@ impl Fts5Index {
                     }
                 }
                 if normalized.is_empty() {
-                    return Ok(None);
+                    return Ok(MatchPlan::Unsatisfiable);
                 }
                 if *ordered && *slop == 0 {
                     let phrase = normalized
@@ -210,10 +242,10 @@ impl Fts5Index {
                         .map(|t| quote_phrase_term(t))
                         .collect::<Vec<_>>()
                         .join(" ");
-                    Ok(Some(format!("{{ {field} }} : \"{phrase}\"")))
+                    Ok(MatchPlan::Expr(format!("{{ {field} }} : \"{phrase}\"")))
                 } else {
                     let inner = normalized.join(" ");
-                    Ok(Some(format!("{{ {field} }} : NEAR({inner}, {slop})")))
+                    Ok(MatchPlan::Expr(format!("{{ {field} }} : NEAR({inner}, {slop})")))
                 }
             }
             FtsQuery::Boolean { must, should, must_not } => {
