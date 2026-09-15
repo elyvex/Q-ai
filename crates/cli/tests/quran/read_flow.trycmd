@@ -1,11 +1,12 @@
-# Phase 1 CLI acceptance — end-to-end reading flow (AC-P1-16)
+# Phase 1 CLI acceptance — end-to-end reading, edition lifecycle, RTL (AC-P1-16)
 
 `QAI_DATA_DIR` points the real `qai` binary at a fresh temp database (set by the
 harness); each `console` block below runs in order against that one database, so
-`db migrate` must come first and activation happens exactly once.
+`db migrate` must come first and `test-edition-min@0.1.0` is activated before any
+read.
 
-Human-readable output avoids volatile values (uuids, timestamps); the `--json`
-block is deterministic for this synthetic edition.
+Human-readable output avoids volatile values (uuids, timestamps, migration
+numbers); the `--json` block is deterministic for this synthetic edition.
 
 ```console
 $ qai db migrate
@@ -83,6 +84,42 @@ test-edition-min@0.1.0
 
 ```
 
+```console
+$ qai quran edition show test-edition-min@0.1.0 --statistics --hashes
+test-edition-min@0.1.0 — Synthetic test edition (non-canonical, ADR-0101 fallback)
+status: active
+surahs=5 ayahs=14 tokens=64
+text=235795cb218c2df44496265b4ba5c3377d48944cb28cc4ff64c6104770932704
+structure=4aa52bfaa4839bc5eb38157e44bfeaace76c0b1bc55e754b2ed6aa0da9e7a8fb
+order=033673b04dbaebd0f754711d912f742b237e34298bca70024b0982ddec1b2d1a
+
+```
+
+Context stays inside the focal surah (no ayah precedes `2:1` in surah 2).
+
+```console
+$ qai quran surah 1
+أوَيت تَساكُن كن لهُم ثُشأوَ
+شُأويَت يت اكَن بَلهمُ مثشُأو أوُ
+ثش ويُت سُاكنَ
+
+```
+
+```console
+$ qai quran surah 1 --metadata
+سورة تجريبية 1
+quran:test-edition-min@0.1.0:1:1
+
+```
+
+```console
+$ qai quran context 2:1 --before 1 --after 1
+نَبلهُم هم شأُو يُتساَ اكنَبل بلَ
+كن لهَم ثَشأوُ
+— quran:test-edition-min@0.1.0:2:1
+
+```
+
 Divisions enumerate their member verses in canonical order.
 
 ```console
@@ -124,9 +161,62 @@ $ qai quran get 1:1 --translations en-test
 
 ```
 
+## Edition lifecycle
+
+A second version is staged, validated, activated (generation 2), diffed against
+the first, then rolled back (generation 3). Canonical rows are never rewritten;
+activation just moves the pointer.
+
+```console
+$ qai quran import ../../fixtures/quran/test-edition-min-v2.json
+imported test-edition-min@0.2.0 to Staged
+
+```
+
+```console
+$ qai quran validate test-edition-min@0.2.0
+test-edition-min@0.2.0: 0 fatal, 0 errors, 0 warnings (pass)
+
+```
+
+```console
+$ qai quran activate test-edition-min@0.2.0 --yes
+activated test-edition-min@0.2.0 (generation 2)
+
+```
+
+```console
+$ qai quran diff test-edition-min --from 0.1.0 --to 0.2.0
+test-edition-min: 0.1.0 → 0.2.0: 0 added, 0 removed, 1 changed, 13 unchanged
+~ 1:1
+
+```
+
+```console
+$ qai quran edition list
+test-edition-min@0.1.0 [deprecated]
+test-edition-min@0.2.0 [active]
+
+```
+
+```console
+$ qai quran rollback test-edition-min --to 0.1.0 --yes
+rolled back test-edition-min to 0.1.0 (generation 3)
+
+```
+
+```console
+$ qai quran hashes test-edition-min@0.1.0
+test-edition-min@0.1.0:
+  text_hash: 235795cb218c2df44496265b4ba5c3377d48944cb28cc4ff64c6104770932704
+  structure_hash: 4aa52bfaa4839bc5eb38157e44bfeaace76c0b1bc55e754b2ed6aa0da9e7a8fb
+  token_order_hash: 033673b04dbaebd0f754711d912f742b237e34298bca70024b0982ddec1b2d1a
+
+```
+
 ## Errors
 
-Activating an edition that is no longer staged is a conflict (exit 6); the
+Re-activating an edition that is no longer staged is a conflict (exit 6); the
 message names the edition.
 
 ```console
