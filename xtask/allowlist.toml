@@ -36,7 +36,7 @@ workspace = { allow = ["domain", "storage", "provenance"] }
 workspace = { allow = ["application", "config", "observability", "server"] }
 
 [server]
-workspace = { allow = ["application", "config", "observability"] }
+workspace = { allow = ["application", "config", "observability", "tool-registry", "citations", "quran-core"] }
 
 [observability]
 workspace = { allow = [] }
@@ -71,4 +71,10 @@ workspace = { allow = ["quran-core", "domain"] }
 
 # tool-registry: minimal local registry wiring the first two read-only tools.
 [tool-registry]
-workspace = { allow = ["tools"] }
+workspace = { allow = ["tools", "quran-core", "domain"] }
+
+# --- Phase 2 (Quran Search, Normalization & Linguistics) ---
+# quran-normalization is pure logic: rules, SpanMap, pipeline, profiles, traces.
+# It must never depend on llm/embeddings/retrieval or any vector store (AC-P2-36).
+[quran-normalization]
+workspace = { allow = ["domain"] }
