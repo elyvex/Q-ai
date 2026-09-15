@@ -241,9 +241,7 @@ impl CitationResolver {
         stored: &StoredCitation,
     ) -> Result<ResolvedCitation, CitationError> {
         let parsed = quran_core::parse(&stored.canonical_reference).map_err(|_| {
-            CitationError::InvalidReference {
-                reference: stored.canonical_reference.clone(),
-            }
+            CitationError::InvalidReference { reference: stored.canonical_reference.clone() }
         })?;
         if !matches!(parsed, QuranRef::Ayah { .. }) {
             return Ok(ResolvedCitation {
