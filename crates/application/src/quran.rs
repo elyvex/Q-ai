@@ -685,6 +685,38 @@ pub async fn import_translations(
         })
         .await
         .map_err(ActivationError::storage)?;
+    // Attributed provenance for the translation dataset (principle 5: every
+    // passage must point at a provenance row, not at a principal id).
+    let provenance_id = format!("prov-{id}");
+    let translation_urn =
+        format!("quran-translation:{}@{}", manifest.translation.slug, manifest.translation.version);
+    uow.provenance()
+        .insert(storage::repository::ProvenanceRecord {
+            id: provenance_id.clone(),
+            layer: "canonical_source".to_string(),
+            subject_urn: translation_urn,
+            attribution_kind: "dataset".to_string(),
+            attribution_json: serde_json::json!({
+                "dataset_name": manifest.translation.slug,
+                "dataset_version": manifest.translation.version,
+                "translator": manifest.translation.translator,
+                "aligned_edition": manifest.translation.aligned_edition,
+                "source_version_id": source_version_id,
+            })
+            .to_string(),
+            source_version_id: Some(source_version_id.to_string()),
+            trust_level: "ImportedUnverified".to_string(),
+            verification_status: "unverified".to_string(),
+            confidence: None,
+            versions_json: serde_json::json!({
+                "source_version_id": source_version_id,
+                "schema_version": 1,
+            })
+            .to_string(),
+            created_by: invoked_by.to_string(),
+        })
+        .await
+        .map_err(ActivationError::storage)?;
     for passage in &manifest.passages {
         uow.quran()
             .insert_translation_passage(storage::quran::TranslationPassageRow {
@@ -693,7 +725,7 @@ pub async fn import_translations(
                 ayah: i64::from(passage.ayah),
                 text: passage.text.clone(),
                 footnotes_json: "[]".to_string(),
-                provenance_id: invoked_by.to_string(),
+                provenance_id: provenance_id.clone(),
             })
             .await
             .map_err(ActivationError::storage)?;
