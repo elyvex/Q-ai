@@ -689,13 +689,16 @@ pub async fn cmd_diff(db_path: &str, slug: &str, from: &str, to: &str, format: &
 
 fn approval_flow(
     db_path: &str,
-) -> impl std::future::Future<Output = Result<(Arc<SqliteDatabase>, String, String), CommandOutput>> + '_ {
+) -> impl std::future::Future<Output = Result<(Arc<SqliteDatabase>, String, String), CommandOutput>> + '_
+{
     async move {
-        let db = Arc::new(open_db(db_path).await.map_err(|err| {
-            CommandOutput::err(exit::INTERNAL, err.to_string())
-        })?);
+        let db = Arc::new(
+            open_db(db_path)
+                .await
+                .map_err(|err| CommandOutput::err(exit::INTERNAL, err.to_string()))?,
+        );
         let at = now_rfc3339();
-        super::quran::ensure_principal(&db, LOCAL_PRINCIPAL, "local operator", &at)
+        super::quran::ensure_principal(&*db, LOCAL_PRINCIPAL, "local operator", &at)
             .await
             .map_err(|err| CommandOutput::err(exit::INTERNAL, err.to_string()))?;
         Ok((db, at, uuid::Uuid::new_v4().to_string()))
@@ -714,7 +717,7 @@ pub async fn cmd_activate(db_path: &str, edition: &str) -> CommandOutput {
     };
     let subject = format!("quran-edition:{slug}@{version}");
     if let Err(err) = super::quran::record_approval(
-        &db,
+        &*db,
         &approval_id,
         &subject,
         LOCAL_PRINCIPAL,
@@ -734,7 +737,8 @@ pub async fn cmd_activate(db_path: &str, edition: &str) -> CommandOutput {
         Ok(at) => at,
         Err(_) => return CommandOutput::err(exit::INTERNAL, "bad timestamp".to_string()),
     };
-    match super::quran::activate_edition(&db, slug, version, &principal, &approval_id, &at_ts).await
+    match super::quran::activate_edition(&*db, slug, version, &principal, &approval_id, &at_ts)
+        .await
     {
         Ok(generation) => CommandOutput::ok(
             format!("activated {slug}@{version} (generation {generation})\n"),
@@ -755,7 +759,7 @@ pub async fn cmd_rollback(db_path: &str, slug: &str, to: &str) -> CommandOutput 
     };
     let subject = format!("quran-edition:{slug}@{to}");
     if let Err(err) = super::quran::record_approval(
-        &db,
+        &*db,
         &approval_id,
         &subject,
         LOCAL_PRINCIPAL,
@@ -775,7 +779,7 @@ pub async fn cmd_rollback(db_path: &str, slug: &str, to: &str) -> CommandOutput 
         Ok(at) => at,
         Err(_) => return CommandOutput::err(exit::INTERNAL, "bad timestamp".to_string()),
     };
-    match super::quran::rollback_edition(&db, slug, to, &principal, &approval_id, &at_ts).await {
+    match super::quran::rollback_edition(&*db, slug, to, &principal, &approval_id, &at_ts).await {
         Ok(generation) => CommandOutput::ok(
             format!("rolled back {slug} to {to} (generation {generation})\n"),
             serde_json::json!({"slug": slug, "version": to, "corpus_generation": generation}),
@@ -799,7 +803,7 @@ pub async fn cmd_deprecate(db_path: &str, edition: &str) -> CommandOutput {
     };
     let subject = format!("quran-edition:{slug}@{version}");
     if let Err(err) = super::quran::record_approval(
-        &db,
+        &*db,
         &approval_id,
         &subject,
         LOCAL_PRINCIPAL,
@@ -819,7 +823,8 @@ pub async fn cmd_deprecate(db_path: &str, edition: &str) -> CommandOutput {
         Ok(at) => at,
         Err(_) => return CommandOutput::err(exit::INTERNAL, "bad timestamp".to_string()),
     };
-    match super::quran::deprecate_edition(&db, slug, version, &principal, &approval_id, &at_ts).await
+    match super::quran::deprecate_edition(&*db, slug, version, &principal, &approval_id, &at_ts)
+        .await
     {
         Ok(()) => CommandOutput::ok(
             format!("deprecated {slug}@{version}\n"),
@@ -938,13 +943,12 @@ pub async fn cmd_translation_import(db_path: &str, manifest: &str) -> CommandOut
         Ok(id) => id,
         Err(output) => return output,
     };
-    match super::quran::import_translations(&db, &text, &source_version_id, &principal, &at_ts)
+    match super::quran::import_translations(&*db, &text, &source_version_id, &principal, &at_ts)
         .await
     {
-        Ok(id) => CommandOutput::ok(
-            format!("imported translation {id}\n"),
-            serde_json::json!({"id": id}),
-        ),
+        Ok(id) => {
+            CommandOutput::ok(format!("imported translation {id}\n"), serde_json::json!({"id": id}))
+        }
         Err(err) => {
             let (exit, message) = map_activation_error(err);
             CommandOutput::err(exit, message)
@@ -953,7 +957,7 @@ pub async fn cmd_translation_import(db_path: &str, manifest: &str) -> CommandOut
 }
 
 async fn ensure_principal_or_err(db: &Arc<SqliteDatabase>, at: &str) -> Result<(), CommandOutput> {
-    super::quran::ensure_principal(db, LOCAL_PRINCIPAL, "local operator", at)
+    super::quran::ensure_principal(&**db, LOCAL_PRINCIPAL, "local operator", at)
         .await
         .map_err(|err| CommandOutput::err(exit::INTERNAL, err.to_string()))
 }
