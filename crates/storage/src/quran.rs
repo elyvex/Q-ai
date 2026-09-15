@@ -266,6 +266,35 @@ pub trait QuranRepository: Send + Sync {
         Err(StorageError::StorageUnavailable)
     }
 
+    /// Fetch one staged edition row (for staged re-validation).
+    async fn get_stg_edition(
+        &self,
+        _run_id: &str,
+        _edition_id: &str,
+    ) -> Result<Option<QuranEditionRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// List staged surahs for a run ordered by number.
+    async fn list_stg_surahs(&self, _run_id: &str) -> Result<Vec<SurahRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// List staged divisions for a run.
+    async fn list_stg_divisions(&self, _run_id: &str) -> Result<Vec<DivisionRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Set a canonical edition's lifecycle status (human-gated maintenance;
+    /// identity and hashes stay trigger-guarded).
+    async fn set_edition_status(
+        &mut self,
+        _id: &str,
+        _status: &str,
+    ) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
     /// Update an import run's state.
     async fn set_import_run_state(
         &mut self,
@@ -277,6 +306,11 @@ pub trait QuranRepository: Send + Sync {
 
     /// Delete an import run; staging rows cascade.
     async fn delete_import_run(&mut self, _run_id: &str) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Count staging rows whose run ended `Cancelled` or `Failed`.
+    async fn count_staging_orphans(&self) -> Result<i64, StorageError> {
         Err(StorageError::StorageUnavailable)
     }
 
