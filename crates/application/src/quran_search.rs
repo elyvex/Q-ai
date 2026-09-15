@@ -21,7 +21,7 @@ use std::collections::HashMap;
 
 use quran_normalization::{NormalizationTrace, RuleId, SemVer};
 use quran_search::{
-    Diagnostic as SearchDiagnostic, FieldId, Filter, FtsQuery, FullTextIndex, Fts5Index,
+    Diagnostic as SearchDiagnostic, FieldId, Filter, Fts5Index, FtsQuery, FullTextIndex,
     IndexError, IndexManifest, ResultOrder, ScoreExplain, SearchHit, SearchHitParts,
     TokenizerFamily, Warning,
 };
@@ -81,6 +81,8 @@ pub struct SearchParams {
     /// `false` = canonical order without scores; `true` = relevance order
     /// with per-hit BM25 breakdowns (indexed modes only).
     pub explain: bool,
+    /// Wrap hit spans in `<b>` display markers (T49).
+    pub highlight: bool,
 }
 
 /// Tool output: hits plus exact totals and provenance.
@@ -201,11 +203,8 @@ async fn open_serving(
     // Pointer → manifest → adapter.
     let (pointer, manifest) = {
         let mut uow = db.write().await.map_err(SearchError::storage)?;
-        let pointer = uow
-            .quran()
-            .get_index_pointer(SEARCH_INDEX_ID)
-            .await
-            .map_err(SearchError::storage)?;
+        let pointer =
+            uow.quran().get_index_pointer(SEARCH_INDEX_ID).await.map_err(SearchError::storage)?;
         uow.rollback().await.map_err(SearchError::storage)?;
         let Some(pointer) = pointer else {
             return Err(SearchError::NoServingIndex { index_id: SEARCH_INDEX_ID.to_string() });
@@ -221,8 +220,7 @@ async fn open_serving(
     };
     let profile_rows = {
         let mut uow = db.write().await.map_err(SearchError::storage)?;
-        let rows =
-            uow.quran().list_normalization_profiles().await.map_err(SearchError::storage)?;
+        let rows = uow.quran().list_normalization_profiles().await.map_err(SearchError::storage)?;
         uow.rollback().await.map_err(SearchError::storage)?;
         rows
     };
@@ -238,14 +236,14 @@ async fn open_serving(
             detail: err.to_string(),
         })
     })?;
-    let index =
-        Fts5Index::open(data_dir, pointer.generation as u64, manifest.clone(), family)
-            .await
-            .map_err(SearchError::Index)?;
+    let index = Fts5Index::open(data_dir, pointer.generation as u64, manifest.clone(), family)
+        .await
+        .map_err(SearchError::Index)?;
 
     // Edition context (indexed edition by default; requests must match it).
     let mut uow = db.write().await.map_err(SearchError::storage)?;
-    let edition = uow.quran().get_edition(&manifest.edition_id).await.map_err(SearchError::storage)?;
+    let edition =
+        uow.quran().get_edition(&manifest.edition_id).await.map_err(SearchError::storage)?;
     let Some(edition) = edition else {
         return Err(SearchError::Index(IndexError::BuildFailed {
             stage: "open".to_string(),
@@ -342,6 +340,7 @@ async fn assemble_hit(
     matched: &[usize],
     tokens: &[storage::quran::TokenRow],
     segmentation: Vec<quran_search::Segmentation>,
+    highlight: bool,
     score: Option<f32>,
     score_explain: Option<ScoreExplain>,
     trace: NormalizationTrace,
@@ -365,7 +364,8 @@ async fn assemble_hit(
             detail: format!("hit surah {surah} is gone"),
         })
     })?;
-    let matched_tokens: Vec<u16> = matched.iter().map(|index| tokens[*index].position as u16).collect();
+    let matched_tokens: Vec<u16> =
+        matched.iter().map(|index| tokens[*index].position as u16).collect();
     let edition_version: SemVer = serving.edition_version.parse().map_err(|_| {
         SearchError::Index(IndexError::BuildFailed {
             stage: "search".to_string(),
@@ -376,6 +376,16 @@ async fn assemble_hit(
     if let Some(stale) = serving.stale.clone() {
         warnings.push(stale);
     }
+    let highlighted = if highlight {
+        quran_search::apply_markers(
+            &ayah_row.text,
+            &[(span.char_range.start, span.char_range.end)],
+            "<b>",
+            "</b>",
+        )
+    } else {
+        None
+    };
     SearchHit::new(SearchHitParts {
         edition: quran_core::EditionRef {
             slug: serving.edition_slug.clone(),
@@ -397,6 +407,7 @@ async fn assemble_hit(
         score_explain,
         explanation: trace,
         segmentation,
+        highlighted,
         warnings,
     })
     .map_err(SearchError::Index)
@@ -440,10 +451,10 @@ struct Candidate {
 
 /// One verified ayah match: canonical span, token indexes, and optional
 /// concatenated-match segmentation.
-struct AyahMatch {
-    span: quran_normalization::CanonicalSpan,
-    matched: Vec<usize>,
-    segmentation: Vec<quran_search::Segmentation>,
+pub struct AyahMatch {
+    pub span: quran_normalization::CanonicalSpan,
+    pub matched: Vec<usize>,
+    pub segmentation: Vec<quran_search::Segmentation>,
 }
 
 /// Shared driver: match per candidate ayah, assemble hits in canonical
@@ -475,8 +486,7 @@ async fn run_search(
         if position < start || position >= end {
             continue;
         }
-        let tokens =
-            ayah_tokens(db, &serving.edition_id, candidate.surah, candidate.ayah).await?;
+        let tokens = ayah_tokens(db, &serving.edition_id, candidate.surah, candidate.ayah).await?;
         let mut uow = db.write().await.map_err(SearchError::storage)?;
         let ayah_row = uow
             .quran()
@@ -511,6 +521,7 @@ async fn run_search(
                 &matched.matched,
                 &tokens,
                 matched.segmentation,
+                params.highlight,
                 score,
                 score_explain,
                 ctx.trace.clone(),
@@ -519,8 +530,7 @@ async fn run_search(
         );
     }
     let limit = u64::from(params.limit.max(1));
-    let truncated =
-        u64::try_from(hits.len()).unwrap_or(u64::MAX) >= limit && total_matches > limit;
+    let truncated = u64::try_from(hits.len()).unwrap_or(u64::MAX) >= limit && total_matches > limit;
     Ok(SearchOutput {
         hits,
         total_matches,
@@ -532,10 +542,7 @@ async fn run_search(
 }
 
 /// Normalize one token surface for whole-token comparison.
-fn normalize_token(
-    pipeline: &quran_normalization::NormalizationPipeline,
-    surface: &str,
-) -> String {
+fn normalize_token(pipeline: &quran_normalization::NormalizationPipeline, surface: &str) -> String {
     pipeline.apply(surface).0.text().to_string()
 }
 
@@ -584,12 +591,51 @@ async fn whole_token_candidates(
 }
 
 /// Scan every ayah through a pipeline (substring/prefix/non-indexed modes).
+/// Metadata filter check over one canonical ayah row (scan paths).
+///
+/// NULL division fields never match a range (SQL-like semantics); an empty
+/// filter list matches everything.
+fn passes_filters(
+    ayah: &storage::quran::AyahRow,
+    revelation: Option<&str>,
+    filters: &[Filter],
+) -> bool {
+    filters.iter().all(|filter| match filter {
+        Filter::Surah(ids) => ids.contains(&(ayah.surah as u16)),
+        Filter::JuzRange(lo, hi) => {
+            ayah.juz.is_some_and(|juz| juz >= i64::from(*lo) && juz <= i64::from(*hi))
+        }
+        Filter::Page(pages) => ayah.page.is_some_and(|page| pages.contains(&(page as u32))),
+        Filter::RevelationPlace(place) => revelation == Some(place.as_str()),
+        Filter::GlobalRange(lo, hi) => {
+            let global = ayah.global_ayah_index as u64;
+            global >= *lo && global <= *hi
+        }
+    })
+}
+
+/// Revelation place per surah for filter checks.
+async fn surah_revelation(
+    db: &SqliteDatabase,
+    edition_id: &str,
+) -> Result<HashMap<i64, String>, SearchError> {
+    let mut uow = db.write().await.map_err(SearchError::storage)?;
+    let surahs = uow.quran().list_surahs(edition_id).await.map_err(SearchError::storage)?;
+    uow.rollback().await.map_err(SearchError::storage)?;
+    Ok(surahs
+        .into_iter()
+        .filter_map(|row| row.revelation_place.map(|place| (row.number, place)))
+        .collect())
+}
+
 async fn scan_candidates(
     db: &SqliteDatabase,
     serving: &Serving,
     pipeline: &quran_normalization::NormalizationPipeline,
     query: &str,
     mode: MatchMode,
+    filters: &[Filter],
+    revelation: &HashMap<i64, String>,
 ) -> Result<Vec<Candidate>, SearchError> {
     let mut uow = db.write().await.map_err(SearchError::storage)?;
     let ayahs = uow
@@ -602,6 +648,9 @@ async fn scan_candidates(
     ordered.sort_by_key(|ayah| (ayah.surah, ayah.ayah));
     let mut candidates = Vec::new();
     for ayah in &ordered {
+        if !passes_filters(ayah, revelation.get(&ayah.surah).map(String::as_str), filters) {
+            continue;
+        }
         let derived = pipeline.apply(&ayah.text).0;
         let matched = match mode {
             MatchMode::WholeToken => {
@@ -620,6 +669,48 @@ async fn scan_candidates(
         }
     }
     Ok(candidates)
+}
+
+/// Convert a token row's grapheme-cluster range to char offsets.
+///
+/// Phase-1 token offsets are grapheme-cluster indices (ADR-0104) while the
+/// normalization layer (and every [`CanonicalSpan`]) counts Unicode scalars.
+/// This function is the single unit boundary between the two: spans stay in
+/// char space, tokens convert here. Returns `None` for inconsistent rows
+/// (fail-closed per token, never a guessed range).
+fn token_char_range(text: &str, token: &storage::quran::TokenRow) -> Option<std::ops::Range<u32>> {
+    use unicode_segmentation::UnicodeSegmentation;
+    // Byte offset of each cluster start, plus the string end sentinel.
+    let mut starts = vec![0u32];
+    let mut chars = 0u32;
+    for grapheme in text.graphemes(true) {
+        chars += grapheme.chars().count() as u32;
+        starts.push(chars);
+    }
+    let clusters = starts.len() as u32 - 1;
+    let (from, to) = (token.char_start as u32, token.char_end as u32);
+    if from > to || to > clusters {
+        return None;
+    }
+    Some(starts[from as usize]..starts[to as usize])
+}
+
+/// Tokens overlapping a canonical span, with converted char ranges.
+fn overlapping_tokens(
+    text: &str,
+    tokens: &[storage::quran::TokenRow],
+    span: &quran_normalization::CanonicalSpan,
+) -> Vec<usize> {
+    tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, token)| {
+            token_char_range(text, token).is_some_and(|range| {
+                range.start < span.char_range.end && span.char_range.start < range.end
+            })
+        })
+        .map(|(index, _)| index)
+        .collect()
 }
 
 /// Span + tokens for one ayah under a pipeline (scan modes).
@@ -660,16 +751,8 @@ fn scan_match(
         }
     };
     let span = derived.spans().to_canonical(start..end);
-    // Tokens overlapping the canonical span.
-    let matched: Vec<usize> = tokens
-        .iter()
-        .enumerate()
-        .filter(|(_, token)| {
-            let (token_start, token_end) = (token.char_start as u32, token.char_end as u32);
-            token_start < span.char_range.end && span.char_range.start < token_end
-        })
-        .map(|(index, _)| index)
-        .collect();
+    // Tokens overlapping the canonical span (cluster→char converted).
+    let matched = overlapping_tokens(ayah_text, tokens, &span);
     if matched.is_empty() {
         return None;
     }
@@ -704,10 +787,27 @@ pub async fn search_exact(
 
     let (candidates, total_matches) = match params.mode {
         MatchMode::WholeToken => {
-            whole_token_candidates(&serving, &field_id, &params.text, &params.filters, params.explain).await?
+            whole_token_candidates(
+                &serving,
+                &field_id,
+                &params.text,
+                &params.filters,
+                params.explain,
+            )
+            .await?
         }
         MatchMode::Substring | MatchMode::AyahPrefix => {
-            let found = scan_candidates(db, &serving, &pipeline, &normalized_query, params.mode).await?;
+            let revelation = surah_revelation(db, &serving.edition_id).await?;
+            let found = scan_candidates(
+                db,
+                &serving,
+                &pipeline,
+                &normalized_query,
+                params.mode,
+                &params.filters,
+                &revelation,
+            )
+            .await?;
             let total = found.len() as u64;
             (found, total)
         }
@@ -721,21 +821,16 @@ pub async fn search_exact(
         field: &field_id,
         stats_docs: stats_docs(&serving).await?,
     };
-    let mut output = run_search(
-        &ctx,
-        candidates,
-        total_matches,
-        |ayah_text, tokens| {
-            // Re-derive per ayah so spans come from the shared pipeline.
-            match params.mode {
-                MatchMode::WholeToken => verify_whole_token(&pipeline, tokens, &params.text),
-                _ => {
-                    let normalized = normalize_token(&pipeline, &params.text);
-                    scan_match(&pipeline, ayah_text, tokens, &normalized, params.mode)
-                }
+    let mut output = run_search(&ctx, candidates, total_matches, |ayah_text, tokens| {
+        // Re-derive per ayah so spans come from the shared pipeline.
+        match params.mode {
+            MatchMode::WholeToken => verify_whole_token(&pipeline, ayah_text, tokens, &params.text),
+            _ => {
+                let normalized = normalize_token(&pipeline, &params.text);
+                scan_match(&pipeline, ayah_text, tokens, &normalized, params.mode)
             }
-        },
-    )
+        }
+    })
     .await?;
 
     // Zero-result hint (T41): never a silent fold under exact search.
@@ -773,15 +868,23 @@ pub async fn search_normalized(
     let registry = db_registry(db).await?;
 
     enum Source {
-        Indexed { field: FieldId, pipeline: quran_normalization::NormalizationPipeline, trace: NormalizationTrace },
-        Scanned { pipeline: quran_normalization::NormalizationPipeline, trace: NormalizationTrace },
+        Indexed {
+            field: FieldId,
+            pipeline: quran_normalization::NormalizationPipeline,
+            trace: NormalizationTrace,
+        },
+        Scanned {
+            pipeline: quran_normalization::NormalizationPipeline,
+            trace: NormalizationTrace,
+        },
     }
     let source = match profile {
         NormalizedProfile::Registry(id, version) => {
             let stored = registry.latest(id).map_err(SearchError::Normalization)?;
             let version = version.unwrap_or(stored.version);
-            let pipeline = quran_normalization::NormalizationPipeline::for_profile(&registry, id, version)
-                .map_err(SearchError::Normalization)?;
+            let pipeline =
+                quran_normalization::NormalizationPipeline::for_profile(&registry, id, version)
+                    .map_err(SearchError::Normalization)?;
             let trace = empty_trace_for(&pipeline);
             match indexed_field_for(id) {
                 Some(field) => Source::Indexed { field, pipeline, trace },
@@ -800,11 +903,28 @@ pub async fn search_normalized(
         Source::Indexed { field, pipeline, trace } => {
             let (candidates, total_matches) = match params.mode {
                 MatchMode::WholeToken => {
-                    whole_token_candidates(&serving, &field, &params.text, &params.filters, params.explain).await?
+                    whole_token_candidates(
+                        &serving,
+                        &field,
+                        &params.text,
+                        &params.filters,
+                        params.explain,
+                    )
+                    .await?
                 }
                 MatchMode::Substring | MatchMode::AyahPrefix => {
                     let normalized = normalize_token(&pipeline, &params.text);
-                    let found = scan_candidates(db, &serving, &pipeline, &normalized, params.mode).await?;
+                    let revelation = surah_revelation(db, &serving.edition_id).await?;
+                    let found = scan_candidates(
+                        db,
+                        &serving,
+                        &pipeline,
+                        &normalized,
+                        params.mode,
+                        &params.filters,
+                        &revelation,
+                    )
+                    .await?;
                     let total = found.len() as u64;
                     (found, total)
                 }
@@ -817,23 +937,30 @@ pub async fn search_normalized(
                 field: &field,
                 stats_docs: stats_docs(&serving).await?,
             };
-            run_search(
-                &ctx,
-                candidates,
-                total_matches,
-                |ayah_text, tokens| match params.mode {
-                    MatchMode::WholeToken => verify_whole_token(&pipeline, tokens, &params.text),
-                    _ => {
-                        let normalized = normalize_token(&pipeline, &params.text);
-                        scan_match(&pipeline, ayah_text, tokens, &normalized, params.mode)
-                    }
-                },
-            )
+            run_search(&ctx, candidates, total_matches, |ayah_text, tokens| match params.mode {
+                MatchMode::WholeToken => {
+                    verify_whole_token(&pipeline, ayah_text, tokens, &params.text)
+                }
+                _ => {
+                    let normalized = normalize_token(&pipeline, &params.text);
+                    scan_match(&pipeline, ayah_text, tokens, &normalized, params.mode)
+                }
+            })
             .await
         }
         Source::Scanned { pipeline, trace } => {
             let normalized = normalize_token(&pipeline, &params.text);
-            let found = scan_candidates(db, &serving, &pipeline, &normalized, params.mode).await?;
+            let revelation = surah_revelation(db, &serving.edition_id).await?;
+            let found = scan_candidates(
+                db,
+                &serving,
+                &pipeline,
+                &normalized,
+                params.mode,
+                &params.filters,
+                &revelation,
+            )
+            .await?;
             let total = found.len() as u64;
             // Scanned modes always serve canonical order: no backend rank.
             let field = "text_bare".to_string();
@@ -865,26 +992,23 @@ fn indexed_field_for(id: quran_normalization::ProfileId) -> Option<FieldId> {
 /// Verify a whole-token candidate against token rows (index/verify split).
 fn verify_whole_token(
     pipeline: &quran_normalization::NormalizationPipeline,
+    ayah_text: &str,
     tokens: &[storage::quran::TokenRow],
     text: &str,
 ) -> Option<AyahMatch> {
     let matched = whole_token_matches(pipeline, tokens, text);
     let first = *matched.first()?;
     let token = tokens.get(first)?;
+    let range = token_char_range(ayah_text, token)?;
     Some(AyahMatch {
-        span: quran_normalization::CanonicalSpan {
-            char_range: token.char_start as u32..token.char_end as u32,
-            exact: true,
-        },
+        span: quran_normalization::CanonicalSpan { char_range: range, exact: true },
         matched,
         segmentation: Vec::new(),
     })
 }
 
 /// Empty-input trace for a pipeline (traces never depend on input text).
-fn empty_trace_for(
-    pipeline: &quran_normalization::NormalizationPipeline,
-) -> NormalizationTrace {
+fn empty_trace_for(pipeline: &quran_normalization::NormalizationPipeline) -> NormalizationTrace {
     pipeline.apply("").1
 }
 
@@ -906,8 +1030,7 @@ async fn db_registry(
     db: &SqliteDatabase,
 ) -> Result<quran_normalization::ProfileRegistry, SearchError> {
     let mut uow = db.write().await.map_err(SearchError::storage)?;
-    let rows =
-        uow.quran().list_normalization_profiles().await.map_err(SearchError::storage)?;
+    let rows = uow.quran().list_normalization_profiles().await.map_err(SearchError::storage)?;
     uow.rollback().await.map_err(SearchError::storage)?;
     crate::quran_normalize::registry_from_rows(&rows).map_err(|err| {
         SearchError::Index(IndexError::BuildFailed {
@@ -1024,7 +1147,11 @@ fn find_unordered(
         let mut last = 0usize;
         let mut ok = true;
         for term in terms {
-            match window.iter().enumerate().find(|(index, (_, text))| !used[*index] && *text == term) {
+            match window
+                .iter()
+                .enumerate()
+                .find(|(index, (_, text))| !used[*index] && *text == term)
+            {
                 Some((index, _)) => {
                     used[index] = true;
                     first = first.min(index);
@@ -1062,8 +1189,9 @@ pub async fn search_phrase(
         NormalizedProfile::Registry(id, version) => {
             let stored = registry.latest(id).map_err(SearchError::Normalization)?;
             let version = version.unwrap_or(stored.version);
-            let pipeline = quran_normalization::NormalizationPipeline::for_profile(&registry, id, version)
-                .map_err(SearchError::Normalization)?;
+            let pipeline =
+                quran_normalization::NormalizationPipeline::for_profile(&registry, id, version)
+                    .map_err(SearchError::Normalization)?;
             let trace = empty_trace_for(&pipeline);
             let field = indexed_field_for(id).ok_or_else(|| {
                 SearchError::Index(IndexError::QueryRejected {
@@ -1086,8 +1214,7 @@ pub async fn search_phrase(
     // Query terms: normalize the whole query, then split. An empty term list
     // matches nothing (never everything).
     let normalized_query = normalize_token(&pipeline, &params.text);
-    let terms: Vec<String> =
-        normalized_query.split_whitespace().map(str::to_string).collect();
+    let terms: Vec<String> = normalized_query.split_whitespace().map(str::to_string).collect();
     if terms.is_empty() {
         return Ok(SearchOutput {
             hits: Vec::new(),
@@ -1099,12 +1226,19 @@ pub async fn search_phrase(
         });
     }
 
-    // Recall prefilter from the positional index.
+    // Recall prefilter from the positional index. Bounds stay loose on
+    // purpose: verification enforces exact semantics, so the prefilter must
+    // over-approximate (NEAR distance covers gaps plus term count).
+    let (recall_slop, ordered) = match mode {
+        PhraseMode::OrderedExact => (0, true),
+        PhraseMode::OrderedNear => (slop + 1, false),
+        PhraseMode::UnorderedNear => (slop + terms.len() as u32, false),
+    };
     let prefilter = quran_search::FtsQuery::Phrase {
         field: field.clone(),
         terms: terms.clone(),
-        slop,
-        ordered: matches!(mode, PhraseMode::OrderedExact) && slop == 0,
+        slop: recall_slop,
+        ordered,
     };
     let order = if params.explain { ResultOrder::Relevance } else { ResultOrder::CanonicalOrder };
     let opts = quran_search::SearchOpts {
@@ -1123,7 +1257,8 @@ pub async fn search_phrase(
     loop {
         let mut page_opts = opts.clone();
         page_opts.offset = offset;
-        let page = serving.index.search(&prefilter, &page_opts).await.map_err(SearchError::Index)?;
+        let page =
+            serving.index.search(&prefilter, &page_opts).await.map_err(SearchError::Index)?;
         if page.hits.is_empty() {
             break;
         }
@@ -1168,15 +1303,7 @@ pub async fn search_phrase(
         let dtokens = derived_tokens(derived.0.text());
         let (start, end) = find_term_sequence(&dtokens, &terms, mode, slop)?;
         let span = derived.0.spans().to_canonical(start..end);
-        let matched: Vec<usize> = tokens
-            .iter()
-            .enumerate()
-            .filter(|(_, token)| {
-                let (token_start, token_end) = (token.char_start as u32, token.char_end as u32);
-                token_start < span.char_range.end && span.char_range.start < token_end
-            })
-            .map(|(index, _)| index)
-            .collect();
+        let matched = overlapping_tokens(ayah_text, tokens, &span);
         if matched.is_empty() {
             return None;
         }
@@ -1224,16 +1351,17 @@ fn query_trigrams(skeleton: &str) -> Vec<String> {
 /// returns (no second implementation to drift).
 pub fn segment_concatenated(
     query_skeleton: &str,
+    ayah_text: &str,
+    derived_match_start: u32,
     span: &quran_normalization::CanonicalSpan,
     map: &quran_normalization::SpanMap,
     ayah_derived_len: u32,
     tokens: &[storage::quran::TokenRow],
 ) -> Vec<quran_search::Segmentation> {
-    // Char→byte table for slicing the query skeleton.
-    let mut byte_of = vec![0u32];
-    for (byte, _) in query_skeleton.char_indices() {
-        byte_of.push(byte as u32);
-    }
+    // Char→byte table for slicing the query skeleton: `byte_of[i]` is the
+    // byte offset of char `i`, with the string length as the sentinel.
+    let mut byte_of: Vec<u32> =
+        query_skeleton.char_indices().map(|(byte, _)| byte as u32).collect();
     byte_of.push(query_skeleton.len() as u32);
     let slice = |from: u32, to: u32| {
         query_skeleton
@@ -1242,20 +1370,23 @@ pub fn segment_concatenated(
             .to_string()
     };
     // Invert the derived→canonical map one char at a time (exact for single
-    // chars: every derived char has exactly one canonical image).
+    // chars: every derived char has exactly one canonical image). Only chars
+    // inside the match window participate, so each part tiles the query.
     let derived_len = ayah_derived_len;
+    let match_end = derived_match_start + query_skeleton.chars().count() as u32;
     let mut parts = Vec::new();
     // Walk the canonical span token by token (token rows are ordered).
     for token in tokens {
-        let (token_start, token_end) = (token.char_start as u32, token.char_end as u32);
+        let Some(token_range) = token_char_range(ayah_text, token) else { continue };
+        let (token_start, token_end) = (token_range.start, token_range.end);
         if token_end <= span.char_range.start || token_start >= span.char_range.end {
             continue;
         }
-        // Derived chars whose image falls inside this token.
+        // Derived chars of the match window whose image falls inside this token.
         let mut first: Option<u32> = None;
         let mut last: u32 = 0;
-        let mut derived = 0u32;
-        while derived < derived_len {
+        let mut derived = derived_match_start;
+        while derived < derived_len.min(match_end) {
             let image = map.to_canonical(derived..derived + 1).char_range.start;
             if image >= token_start.max(span.char_range.start)
                 && image < token_end.min(span.char_range.end)
@@ -1268,8 +1399,10 @@ pub fn segment_concatenated(
             derived += 1;
         }
         if let Some(from) = first {
+            // Report query-relative offsets: the match starts at
+            // `derived_match_start` in ayah-derived space.
             parts.push(quran_search::Segmentation {
-                query_part: slice(from, last),
+                query_part: slice(from - derived_match_start, last - derived_match_start),
                 canonical_token: token.position as u16,
                 canonical_surface: token.surface.clone(),
             });
@@ -1331,12 +1464,16 @@ pub async fn search_concatenated(
     let mut ayah_numbers: Vec<(u16, u32)> = Vec::new();
     // All ayahs with skeletons: probe in Rust (one ordered read; the T36
     // trigram posting index will replace this scan).
-    let surahs = uow.quran().list_surahs(&serving.edition_id).await.map_err(SearchError::storage)?;
+    let surahs =
+        uow.quran().list_surahs(&serving.edition_id).await.map_err(SearchError::storage)?;
     uow.rollback().await.map_err(SearchError::storage)?;
     for surah in &surahs {
         let mut uow = db.write().await.map_err(SearchError::storage)?;
-        let skeletons =
-            uow.quran().list_skeletons(&serving.edition_id, surah.number).await.map_err(SearchError::storage)?;
+        let skeletons = uow
+            .quran()
+            .list_skeletons(&serving.edition_id, surah.number)
+            .await
+            .map_err(SearchError::storage)?;
         uow.rollback().await.map_err(SearchError::storage)?;
         let trigrams = query_trigrams(&query_skeleton);
         for row in &skeletons {
@@ -1355,21 +1492,32 @@ pub async fn search_concatenated(
     }
     // Verify the recall set (recall is not precision): ayahs whose
     // skeleton contains the trigrams but not the query drop out here.
+    // Metadata filters apply before verification (same semantics as FTS).
     ayah_numbers.sort();
     ayah_numbers.dedup();
+    let revelation = surah_revelation(db, &serving.edition_id).await?;
     let mut verified: Vec<Candidate> = Vec::new();
     for (surah, ayah) in &ayah_numbers {
-        let text = uow_text(db, &serving.edition_id, *surah, *ayah).await?;
+        let mut uow = db.write().await.map_err(SearchError::storage)?;
+        let ayah_row = uow
+            .quran()
+            .get_ayah(&serving.edition_id, i64::from(*surah), i64::from(*ayah))
+            .await
+            .map_err(SearchError::storage)?;
+        uow.rollback().await.map_err(SearchError::storage)?;
+        let Some(ayah_row) = ayah_row else { continue };
+        if !passes_filters(&ayah_row, revelation.get(&(ayah_row.surah)).map(String::as_str), &params.filters) {
+            continue;
+        }
         let tokens = ayah_tokens(db, &serving.edition_id, *surah, *ayah).await?;
-        if verify_concatenated(&pipeline, &text, &tokens, &query_skeleton).is_some() {
+        if verify_concatenated(&pipeline, &ayah_row.text, &tokens, &query_skeleton).is_some() {
             verified.push(Candidate { surah: *surah, ayah: *ayah, score: None });
         }
     }
     let total_matches = verified.len() as u64;
     let field = "skeleton".to_string();
     let stats = stats_docs(&serving).await?;
-    let ctx =
-        RunContext { db, serving: &serving, trace, params, field: &field, stats_docs: stats };
+    let ctx = RunContext { db, serving: &serving, trace, params, field: &field, stats_docs: stats };
     let query_owned = query_skeleton.clone();
     run_search(&ctx, verified, total_matches, |ayah_text, tokens| {
         verify_concatenated(&pipeline, ayah_text, tokens, &query_owned)
@@ -1408,21 +1556,20 @@ pub fn verify_concatenated(
     if reapplied.text() != query_skeleton {
         return None;
     }
-    let matched: Vec<usize> = tokens
-        .iter()
-        .enumerate()
-        .filter(|(_, token)| {
-            let (token_start, token_end) = (token.char_start as u32, token.char_end as u32);
-            token_start < span.char_range.end && span.char_range.start < token_end
-        })
-        .map(|(index, _)| index)
-        .collect();
+    let matched = overlapping_tokens(ayah_text, tokens, &span);
     if matched.is_empty() {
         return None;
     }
     let derived_len = derived.text().chars().count() as u32;
-    let segmentation =
-        segment_concatenated(query_skeleton, &span, derived.spans(), derived_len, tokens);
+    let segmentation = segment_concatenated(
+        query_skeleton,
+        ayah_text,
+        start,
+        &span,
+        derived.spans(),
+        derived_len,
+        tokens,
+    );
     Some(AyahMatch { span, matched, segmentation })
 }
 
@@ -1438,28 +1585,41 @@ mod tests {
     fn ordered_modes_respect_gaps() {
         let tokens = tokens_of("a b c d");
         let terms = ["b".to_string(), "d".to_string()];
-        assert!(find_term_sequence(
-            &tokens.iter().map(|(range, token)| (range.clone(), token.as_str())).collect::<Vec<_>>(),
-            &terms,
-            PhraseMode::OrderedExact,
-            0
-        )
-        .is_none());
+        assert!(
+            find_term_sequence(
+                &tokens
+                    .iter()
+                    .map(|(range, token)| (range.clone(), token.as_str()))
+                    .collect::<Vec<_>>(),
+                &terms,
+                PhraseMode::OrderedExact,
+                0
+            )
+            .is_none()
+        );
         let (start, end) = find_term_sequence(
-            &tokens.iter().map(|(range, token)| (range.clone(), token.as_str())).collect::<Vec<_>>(),
+            &tokens
+                .iter()
+                .map(|(range, token)| (range.clone(), token.as_str()))
+                .collect::<Vec<_>>(),
             &terms,
             PhraseMode::OrderedNear,
             1,
         )
         .expect("one gap allowed");
         assert_eq!((start, end), (2, 7));
-        assert!(find_term_sequence(
-            &tokens.iter().map(|(range, token)| (range.clone(), token.as_str())).collect::<Vec<_>>(),
-            &terms,
-            PhraseMode::OrderedNear,
-            0,
-        )
-        .is_none());
+        assert!(
+            find_term_sequence(
+                &tokens
+                    .iter()
+                    .map(|(range, token)| (range.clone(), token.as_str()))
+                    .collect::<Vec<_>>(),
+                &terms,
+                PhraseMode::OrderedNear,
+                0,
+            )
+            .is_none()
+        );
     }
 
     #[test]
@@ -1468,21 +1628,29 @@ mod tests {
         let terms = ["a".to_string(), "b".to_string(), "c".to_string()];
         // Window of 3 + slop 1 covers positions 1..=4.
         let (start, end) = find_term_sequence(
-            &tokens.iter().map(|(range, token)| (range.clone(), token.as_str())).collect::<Vec<_>>(),
+            &tokens
+                .iter()
+                .map(|(range, token)| (range.clone(), token.as_str()))
+                .collect::<Vec<_>>(),
             &terms,
             PhraseMode::UnorderedNear,
             1,
         )
         .expect("all terms within window");
-        assert_eq!((start, end), (2, 9));
+        assert_eq!((start, end), (2, 7));
         // Without slop the window of exactly 3 still covers them.
-        assert!(find_term_sequence(
-            &tokens.iter().map(|(range, token)| (range.clone(), token.as_str())).collect::<Vec<_>>(),
-            &terms,
-            PhraseMode::UnorderedNear,
-            0,
-        )
-        .is_some());
+        assert!(
+            find_term_sequence(
+                &tokens
+                    .iter()
+                    .map(|(range, token)| (range.clone(), token.as_str()))
+                    .collect::<Vec<_>>(),
+                &terms,
+                PhraseMode::UnorderedNear,
+                0,
+            )
+            .is_some()
+        );
     }
 
     #[test]

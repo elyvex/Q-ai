@@ -44,7 +44,7 @@ workspace = { allow = ["application", "config", "observability", "server"] }
 workspace = { allow = ["application", "config", "observability", "tool-registry", "tools", "storage", "citations", "quran-core"] }
 
 [observability]
-workspace = { allow = [] }
+workspace = { allow = ["domain"] }
 
 # testkit is a dev-only fixture crate. It legitimately reuses domain/config/storage
 # types to build fixtures, and never ships in a binary (dev-dependency only).
