@@ -47,7 +47,7 @@ public-domain test fixture; user supplies the real edition via `qai quran import
 | P1-T01 | Survey candidate Quran datasets: provenance, script, license, numbering | ADR-0101 | — | 3.0 | DATA | ☐ |
 | P1-T02 | Legal review of redistribution rights; decide bundle vs user-supplied | ADR-0101 | T01 | 2.0 | EDIT | ☐ |
 | P1-T03 | Select reference corpus + define comparison procedure and sign-off | ADR-0114 | T01 | 1.5 | EDIT | ☐ |
-| P1-T04 | Write ADR-0101 / 0104 / 0110 | ADR | T01–T03 | 2.0 | DOC | ☐ |
+| P1-T04 | Write ADR-0101 / 0104 / 0110 | ADR | T01–T03 | 2.0 | DOC | ◐ |
 | P1-T05 | Build `test-edition-min` + `adversarial/*` fixtures | D1.13 | T04 | 3.0 | QA | ☑ |
 
 > **T05 is not optional even if a real dataset is licensed.** The `test-edition-min` fixture
@@ -69,7 +69,7 @@ fallback decision), and the fixture set exists.
 | P1-T08 | Reference grammar implementation: parser (zero-alloc) + serializer | D1.1 | T06 | 3.0 | BE | ☑ |
 | P1-T09 | Reference golden-set tests (300 cases incl. malformed) | D1.13 | T08 | 2.0 | QA | ☑ |
 | P1-T10 | `QuranQuotation` + constructor visibility guard + tests | D1.9 | T07 | 1.5 | BE | ☑ |
-| P1-T11 | ADR-0102 / 0103 / 0105 | ADR | T08 | 1.5 | DOC | ☐ |
+| P1-T11 | ADR-0102 / 0103 / 0105 | ADR | T08 | 1.5 | DOC | ☑ |
 | P1-T12 | Migrations `0010`–`0012` + triggers + constraint tests | D1.5 | T07 | 3.0 | BE | ☑ |
 | P1-T13 | Repository layer: editions, surahs, ayahs, tokens, divisions (read paths) | D1.5 | T12 | 3.0 | BE | ☑ |
 | P1-T14 | Immutability test suite (trigger + API-level guards) | D1.13 | T12 | 2.0 | QA | ☑ |
@@ -152,17 +152,17 @@ adversarial corpora are rejected with the right codes, and activation requires h
 
 | ID | Task | Deliv. | Depends | Est | Role | Status |
 |---|---|---|---|---|---|---|
-| P1-T32 | `QuranReader` implementation: get_ayah/get_ayahs/get_tokens | D1.6 | T13 | 2.5 | BE | ☐ |
-| P1-T33 | `get_context` with boundary logic + caps | D1.6 | T32 | 2.0 | BE | ☐ |
-| P1-T34 | Division lookups (juz/hizb/rub/manzil/page/ruku/sajdah) | D1.6 | T13 | 1.5 | BE | ☐ |
-| P1-T35 | Caching layer keyed by corpus generation + consistency tests | D1.6 | T32 | 2.0 | BE | ☐ |
+| P1-T32 | `QuranReader` implementation: get_ayah/get_ayahs/get_tokens | D1.6 | T13 | 2.5 | BE | ☑ |
+| P1-T33 | `get_context` with boundary logic + caps | D1.6 | T32 | 2.0 | BE | ☑ |
+| P1-T34 | Division lookups (juz/hizb/rub/manzil/page/ruku/sajdah) | D1.6 | T13 | 1.5 | BE | ☑ |
+| P1-T35 | Caching layer keyed by corpus generation + consistency tests | D1.6 | T32 | 2.0 | BE | ☑ |
 | P1-T36 | Migration `0013` + translation import job + alignment validation | D1.4 | T12 | 2.5 | BE | ☐ |
-| P1-T37 | `AyahView` / `AttributedTranslation` types + principle-5 guard tests | D1.6 | T36 | 1.5 | BE | ☐ |
+| P1-T37 | `AyahView` / `AttributedTranslation` types + principle-5 guard tests | D1.6 | T36 | 1.5 | BE | ☑ |
 | P1-T38 | Word-gloss dataset import (optional path) | D1.4 | T36 | 1.5 | DATA | ☐ |
 | P1-T39 | API v1 handlers + response envelope + ETag/caching | D1.7 | T32–T37 | 3.0 | BE | ☐ |
 | P1-T40 | API OpenAPI spec + contract tests + error-body conformance | D1.7 | T39 | 2.0 | BE | ☐ |
-| P1-T41 | Performance benchmarks + threshold gates (table in D1.6) | D1.6 | T35 | 2.0 | QA | ☐ |
-| P1-T42 | ADR-0112 / 0113 | ADR | T35, T37 | 1.0 | DOC | ☐ |
+| P1-T41 | Performance benchmarks + threshold gates (table in D1.6) | D1.6 | T35 | 2.0 | QA | ☑ |
+| P1-T42 | ADR-0112 / 0113 | ADR | T35, T37 | 1.0 | DOC | ◐ |
 
 > **T33 must respect the declared boundary and `max_ayahs`.** Context is retrieved by
 > **canonical structure** (surah/juz/ruku/page), never arbitrary chunking (§11.4). Random
@@ -188,11 +188,11 @@ ETagged, and translations are structurally incapable of masquerading as canonica
 
 | ID | Task | Deliv. | Depends | Est | Role | Status |
 |---|---|---|---|---|---|---|
-| P1-T43 | `ToolResult` contract + `ReproducibilityData` + checksum computation | D1.8 | T32 | 2.5 | BE | ☐ |
-| P1-T44 | Minimal tool registry + `quran.get_ayah` + `quran.get_context` | D1.8 | T43 | 2.0 | BE | ☐ |
-| P1-T45 | Tool contract conformance tests + no-fabrication tests | D1.13 | T44 | 1.5 | QA | ☐ |
-| P1-T46 | `citations` crate: `Citation`, resolver, `verify_quotation`, persistence | D1.9 | T32, T15 | 3.0 | BE | ☐ |
-| P1-T47 | Deep-link format + resolver endpoint + round-trip tests | D1.9 | T46 | 1.5 | BE | ☐ |
+| P1-T43 | `ToolResult` contract + `ReproducibilityData` + checksum computation | D1.8 | T32 | 2.5 | BE | ☑ |
+| P1-T44 | Minimal tool registry + `quran.get_ayah` + `quran.get_context` | D1.8 | T43 | 2.0 | BE | ☑ |
+| P1-T45 | Tool contract conformance tests + no-fabrication tests | D1.13 | T44 | 1.5 | QA | ☑ |
+| P1-T46 | `citations` crate: `Citation`, resolver, `verify_quotation`, persistence | D1.9 | T32, T15 | 3.0 | BE | ☑ |
+| P1-T47 | Deep-link format + resolver endpoint + round-trip tests | D1.9 | T46 | 1.5 | BE | ☑ |
 | P1-T48 | CLI `quran get/context/surah/division/resolve` + `--json` | D1.10 | T32 | 2.5 | BE | ☐ |
 | P1-T49 | CLI `quran edition/import/validate/diff/activate/rollback` | D1.10 | T28 | 2.5 | BE | ☐ |
 | P1-T50 | CLI snapshot tests incl. RTL/Arabic terminal output sanity | D1.13 | T48, T49 | 1.5 | QA | ☐ |
