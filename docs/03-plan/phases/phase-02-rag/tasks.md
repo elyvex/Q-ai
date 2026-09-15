@@ -107,9 +107,9 @@ properties, and the fuzz battery; `normalize --explain` teaches the transformati
 | ID | Task | Deliv. | Depends | Est | Role | Status |
 |---|---|---|---|---|---|---|
 | P2-T25 | Migration `0021_quran_forms` | D2.2 | T19 | 1.5 | BE | ☑ |
-| P2-T26 | `quran.forms.rebuild` job: token + ayah forms, all indexed profiles | D2.2 | T25,T18 | 3.0 | BE | ☐ |
-| P2-T27 | Skeleton builder (ayah + 3-ayah windows) + span maps | D2.4 | T26 | 2.5 | BE | ☐ |
-| P2-T28 | MV-018 canonical-unchanged verifier wired into every build job | D2.10 | T26 | 1.5 | BE | ☐ |
+| P2-T26 | `quran.forms.rebuild` job: token + ayah forms, all indexed profiles | D2.2 | T25,T18 | 3.0 | BE | ☑ |
+| P2-T27 | Skeleton builder (ayah + 3-ayah windows) + span maps | D2.4 | T26 | 2.5 | BE | ☑ |
+| P2-T28 | MV-018 canonical-unchanged verifier wired into every build job | D2.10 | T26 | 1.5 | BE | ☑ |
 | P2-T29 | `FullTextIndex` trait + `IndexManifest` + `FtsQuery`/`SearchOpts` types | D2.3 | T13 | 2.5 | SRCH | ☑ |
 | P2-T30 | Tantivy backend: schema, writer, reader, commit stamps | D2.3 | T29 | 3.5 | SRCH | ☐ |
 | P2-T31 | Custom `ar_*` tokenizers wired to `NormalizationPipeline` (shared query/index path) | D2.3 | T30,T18 | 3.0 | SRCH | ☐ |
