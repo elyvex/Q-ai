@@ -204,6 +204,24 @@ mod tests {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../migrations/sqlite")
     }
 
+    /// Highest numbered `NNNN_*.up.sql` present, i.e. the schema version a
+    /// full migration run lands on. Derived from disk so adding a migration
+    /// never breaks these tests.
+    fn latest_migration_version() -> u32 {
+        let mut latest = 0u32;
+        for entry in std::fs::read_dir(migrations_dir()).unwrap().flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !name.ends_with(".up.sql") {
+                continue;
+            }
+            let digits: String = name.chars().take_while(|c| c.is_ascii_digit()).collect();
+            if let Ok(number) = digits.parse::<u32>() {
+                latest = latest.max(number);
+            }
+        }
+        latest
+    }
+
     #[tokio::test]
     async fn migrate_then_probe() {
         let dir = tempdir().unwrap();
@@ -212,13 +230,13 @@ mod tests {
         cfg.storage.sqlite.path = dir.path().join("qai.db").display().to_string();
 
         let version = migrate_database(&cfg, &migrations_dir()).await.unwrap();
-        assert_eq!(version, 12);
+        assert_eq!(version, latest_migration_version());
 
         let probe = probe_database(&cfg).await;
         assert!(probe.reachable);
         assert!(probe.integrity_ok);
         assert!(probe.foreign_keys_on);
-        assert_eq!(probe.schema_version, 12);
+        assert_eq!(probe.schema_version, latest_migration_version());
     }
 
     #[tokio::test]
@@ -240,7 +258,7 @@ mod tests {
 
         let status = migration_status(&cfg, &migrations_dir()).await.unwrap();
         assert!(status.current);
-        assert_eq!(status.latest_on_disk, 12);
+        assert_eq!(status.latest_on_disk, latest_migration_version());
 
         let dest = dir.path().join("bk.db");
         backup_database(&cfg, dest.to_str().unwrap()).await.unwrap();
