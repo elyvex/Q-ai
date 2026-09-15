@@ -716,3 +716,26 @@ quran-normalization` as the next command.
   benchmark (T38), ADRs 0201-annex/0208/0213 (T39).
 - **Next concrete action (M3 start):** `SearchHit` + `ScoreExplain` + unified
   result assembly (P2-T40); next command `cargo test -p quran-search`.
+
+---
+
+## 26. Session checkpoint — 2026-09-15 (M3 start: T40 done)
+
+- **Completed:** `SearchHit` + `ScoreExplain` + `Warning` + `SearchHitParts`
+  assembly (`quran-search/src/hit.rs`), `QAI-IDX-0006 InvalidHit`,
+  `CanonicalSpan::byte_range_in` (quran-normalization), quran-core
+  dependency for the search crate (allowlisted).
+- **Tasks flipped ☑:** P2-T40 (evidence in `done.md` §2).
+- **Verification (all green in scope):** `quran-search` 14 lib + 5 backend
+  + 3 parity; `quran-normalization` full suite; `clippy -D warnings` clean
+  both crates; `arch-check` OK; per-file rustfmt clean.
+- **Assembly notes:** references derive via `canonical_form` (never
+  hand-formatted); quotation reuses the Phase-1 validating constructor;
+  token bounds beyond non-emptiness verify downstream (AC-P2-12); byte
+  ranges derive on demand.
+- **Repaired mid-session:** two identical-edit newline strips (verified by
+  re-read); a rambling test comment (trimmed); an over-asserted byte
+  expectation (replaced with programmatic slicing after confirming the
+  span was right and the expectation wrong).
+- **Next concrete action (M3):** exact + normalized search tools (P2-T41/T42)
+  on the assembly path; next command `cargo test -p quran-search`.
