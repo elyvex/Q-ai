@@ -1,0 +1,171 @@
+# Phase 1 — Implementation Status (as of 2026-09-15)
+
+> **Purpose:** one page that answers *what is implemented, what remains, and what
+> follows*. The authoritative, append-only ledgers are `done.md` (completion
+> entries), `tasks.md` (task board) and `acceptance.md` (criteria); this file is
+> a reconciled snapshot and is expected to be refreshed, not appended.
+>
+> **Caveat:** a concurrent Phase-2 writer was active in the same tree while this
+> was written. Where the boards lag the code, this file says so explicitly.
+
+## 0. Snapshot
+
+| Dimension | State |
+|---|---|
+| Task rows (excluding 3 sequencing notes) | **43 ☑ / 3 ◐ / 19 ☐** of 65 |
+| Acceptance criteria | **10 ◐ / 11 ☐** of 21 (none marked fully verified — rituals pending) |
+| ADRs | **10 Accepted**, 4 Draft (0101, 0111, 0112, 0114) |
+| Phase-1 migrations | **6 / 6** (`0007`–`0012`); workspace now at 14 (Phase-2 added `0013`–`0014`) |
+| D1.14 documents | **5 / 5** published |
+| Gate | `clippy -D warnings` clean · `cargo test --workspace` 135 suites ok · `arch-check` OK · `migrate-check` OK · `fmt` clean for Phase-1 files |
+
+Remaining task IDs: `P1-X01..X05`, `P1-T01`, `P1-T02`, `P1-T03`, `P1-T26◐`,
+`P1-T36`, `P1-T38`, `P1-T39`, `P1-T40`, `P1-T42◐`, `P1-T53`, `P1-T54`, `P1-T55`,
+`P1-T56`, `P1-T57`, `P1-T58`, `P1-T60` (and `P1-T04◐`).
+
+## 1. Implemented (by surface)
+
+### 1.1 Canonical domain — `crates/quran-core` (Sprint 1.1, 9/9 ☑)
+- Numbering newtypes, edition/enum vocabulary, `QuranEdition`/statistics,
+  surah/ayah/segment/token structs.
+- Reference grammar (parse/serialize) with a 331-case golden set and property
+  tests (`roundtrip_parse_serialize`, `parser_never_panics_and_errors_are_coded`).
+- `QuranQuotation` with a visibility-restricted constructor (invariant I6).
+- Read views: `AyahView`, `AttributedTranslation`, `ContextView`, `ContextBoundary`.
+- **Evidence:** `crates/quran-core/tests/reference_grammar.rs`,
+  `fixtures/quran/golden/references.jsonl`.
+
+### 1.2 Import & validation — `crates/quran-corpus` (Sprint 1.2, 16/17 ☑)
+- Intermediate format + adapter trait with JSON and CSV adapters proving
+  extensibility; JSON Schema at `docs/schemas/quran-edition-source.v1.schema.json`.
+- Char-level tokenizer with separators and grapheme-mapped byte offsets
+  (proptest: `reconstruct(tokens, separators) == text`, offsets in range).
+- Frozen hashing recipes: `text_hash`, `structure_hash`, `token_order_hash`.
+- Unicode auditor and validators **QV-001…028**; 16 adversarial fixtures reject
+  with the specific rule id.
+- 13-checkpoint importer (restart-is-resume, cancellation cleanup), edition differ.
+
+### 1.3 Storage — `crates/storage`, `crates/storage-sqlite` (Sprint 1.2 ☑)
+- Migrations `0007`–`0012`: editions, structure, divisions, translations,
+  staging, validation. Canonical tables are insert-only (triggers).
+- `QuranRepository` traits + SQLite impl: staging, atomic activation, reads,
+  reports, citations, translations; approval rows; audit sequence queries.
+- **Evidence:** `crates/storage-sqlite/tests/quran.rs`, `integrity_provenance.rs`.
+
+### 1.4 Application services — `crates/application` (Sprints 1.2–1.3)
+- `quran.import` job handler, approval-gated activation/rollback, hash-chained
+  audit bridge.
+- Deterministic `QuranReader` with a generation-keyed cache (no stale text after
+  activation) and typed errors; context boundary/cap invariants now covered by a
+  property test over every fixture ayah × spec matrix.
+- Corpus doctor (`run_quran_checks`): 19 checks, read-only, `--deep` full scan;
+  recomputed hashes asserted equal to import-time values.
+- Translation import with structural attribution (principle 5).
+
+### 1.5 Surfaces — `crates/{tools,tool-registry,citations,cli,server}` (Sprints 1.3–1.4)
+- **Tools:** `ToolResult`/`ReproducibilityData` contract + registry with
+  `quran.get_ayah` and `quran.get_context`; typed no-fabrication errors.
+- **Citations:** resolver with `QuotationVerdict` (ExactMatch / …Normalization /
+  Mismatch / LocationNotFound / EditionNotFound / AccessDenied), persistence, and
+  frozen deep-link/URN formats.
+- **API v1** (`crates/server/src/api.rs`): envelope + `meta` + ETag +
+  `Content-Language` + Diagnostic error body; `/api/v1/quran/…` routes; OpenAPI
+  spec + route-coverage test; HTML debug reader at
+  `/debug/read/{edition}/{surah}` (RTL, labelled, no persistence).
+- **CLI** (`crates/cli`): every read verb (`get/context/surah/division/resolve`),
+  lifecycle verbs (`import/validate/activate/rollback/diff/deprecate/edition/
+  translation/hashes`), `--json` on reads, `--yes` on destructive verbs, Phase-0
+  exit-code table; trycmd snapshot suite with RTL assertions and error exits.
+- **Doctor:** `qai doctor --quran` (19 checks, read-only, `--deep`) and a single
+  merged `--json` document that validates against `doctor.v1.schema.json`.
+
+### 1.6 Docs (D1.14) — 5/5 published
+`docs/07-technical/quran-corpus-architecture.md`, `quran-adapter-authoring.md`,
+`quran-citation-spec.md`; `docs/10-operations/quran-import-runbook.md`,
+`quran-rollback-runbook.md`. Handoff: `docs/plans/handoff-p1-to-p2.md`.
+
+## 2. Acceptance criteria
+
+**Partial — automated-green, ritual/live verification pending (11):**
+AC-P1-04, 08, 12, 13, 14, 15, 16, 17, 19, 20, 21.
+Automated evidence also exists for AC-P1-02, 03, 05, 06, 07, 10, 11 (import,
+tokenizer, hashes, crash matrix, cancellation) even though `acceptance.md` still
+shows them as ☐ — **the board needs syncing** (see §4).
+
+**Not started (10):** AC-P1-01, 02, 03, 05, 06, 07, 09, 10, 11, 18.
+Of these, all but AC-P1-01 (dataset/license sign-off), AC-P1-09 (an explicit
+"no public write path" test) and AC-P1-18 (debug-reader web font) have automated
+coverage today; they remain ☐ because the step is a **recorded ritual** or the
+board was not flipped.
+
+## 3. Remaining work
+
+### 3.1 Blocked on owner/editorial decisions (cannot be done by an agent)
+| Task | Blocked on |
+|---|---|
+| `P1-X01`, `P1-T01`, `P1-T02`, `P1-T04` (ADR-0101) | Licensed dataset + named editorial reviewer |
+| `P1-X02`, `P1-T55` | Named reviewer signs sampled text (`verified_by`) |
+| `P1-X03`, `P1-T03`, `P1-T26` (ADR-0114) | Reference corpus + comparison procedure + sign-off (QV-015 currently a recorded skip) |
+| `P1-X04` (morphology data), `P1-X05` (normalization linguist) | Phase-2 upstream decisions |
+
+### 3.2 Engineering work still open
+| Task | What remains |
+|---|---|
+| `P1-T36` | Translation import + alignment validation shipped (migration `0010`, not plan `0013` — DEV-02); finish/close the ledger entry |
+| `P1-T38` | Word-gloss dataset import (table + reader field exist; no importer/CLI path) |
+| `P1-T39`, `P1-T40` | API v1 handlers + OpenAPI spec **exist**; remaining work is depth (per-endpoint schema detail) and flipping the ledger |
+| `P1-T42`, `P1-T53` | ADR-0112 and ADR-0111 are written but still **Draft** |
+| `P1-T54` | Debug reader exists with RTL + label; **missing the web font**, and the ledger is still ☐ |
+| `P1-T56` | Golden-set expansion to §5.2 edge cases — **blocked on a real dataset** (ADR-0101); must not be filled with fabricated scripture |
+| `P1-T57` | §5.4 property suite — tokenizer/reference/context properties and hash-stability now covered; remaining nuance is a randomized context matrix (done deterministically + by property test) |
+| `P1-T58` | Full-corpus soak (import → validate → activate → 10k lookups → `doctor --deep`) — needs a standard edition to be meaningful |
+| `P1-T60` | Exit-gate review + handoff sign-off |
+
+### 3.3 Board/ritual debt
+- `acceptance.md`: flip AC-P1-02/03/05/06/07/10/11 to ◐ (automated evidence
+  exists) and record the ritual steps.
+- `acceptance.md` / `done.md` §4: ADR statuses are stale (10 are Accepted); sync.
+- `tasks.md`: T39/T40/T54 are ☐ despite shipped code; reconcile after the API
+  depth pass.
+
+## 4. Follow-ups & deviations
+
+### Recorded deviations (must be honoured by Phase 2)
+- **DEV-01** — no XML adapter; JSON + CSV prove adapter extensibility.
+- **DEV-02** — Phase-1 migrations are `0007`–`0012` (not plan `0010`–`0015`);
+  `migrate-check` requires contiguity. Phase 2 continues from `0013`.
+- **DEV-03** — division numbers are globally unique per kind (`ruku`/`rub`
+  cumulative); per-surah ruku is available via the ayah `ruku` column.
+
+### Open owner decisions
+| ID | Item |
+|---|---|
+| **OWN-01** | ADR-0101 dataset/license/reviewer unresolved; engineering runs on the synthetic `test-edition-min` fixture |
+| **OWN-02** | ADR-0114 reference corpus/procedure/sign-off unresolved; QV-015 skip-when-unconfigured |
+| **OWN-03** | Estimate gap 82 ed vs 131.0 ed summed; no silent compression |
+| **OWN-04** | axum + tower-http adopted provisionally for API v1; ADR to ratify |
+| **OWN-05** | Phase-0 exit discrepancy between `status.md` and the build prompt |
+| **OWN-06** | `server` reaches `storage` + `tools` directly; allowlisted to keep `arch-check` green, should be routed through `application` and tightened (Phase 3) |
+
+### Known limitations / risks
+- **Flaky test:** `jobs::worker::tests::retries_then_succeeds` passes in isolation
+  but intermittently returns `Idle` under the fully-parallel workspace run
+  (queue-timing race). De-flake before the exit ritual.
+- **Standard-edition timings unverified:** `doctor --quran --deep` < 30 s and the
+  full-corpus soak both need a real dataset (ADR-0101).
+- **ADR-0111/0112 Draft:** deep-link and translation-alignment contracts are
+  frozen in code but not yet ratified.
+- **Board drift:** several tasks/criteria are more complete than `tasks.md` /
+  `acceptance.md` indicate; sync before the exit gate walks the ledgers.
+
+## 5. Verification
+
+Last full green run (2026-09-15):
+`cargo clippy --workspace --all-targets -- -D warnings` clean ·
+`cargo test --workspace` 135 suites ok ·
+`cargo xtask arch-check` OK · `cargo xtask migrate-check` OK · `fmt` clean for
+Phase-1 files.
+
+Re-run `cargo xtask ci` before relying on this snapshot: the tree was shared with
+an active Phase-2 writer, and Phase-2 migrations (`0013`–`0014`) already extend
+the schema version.
