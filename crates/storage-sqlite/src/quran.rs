@@ -220,8 +220,94 @@ impl QuranRepository for SqliteQuranRepository {
         .fetch_optional(&mut **tx)
         .await
         .map_err(map_sqlx_error)?;
-        Ok(row
-            .map(|r| StagedEditionRef { run_id: r.get("run_id"), edition_id: r.get("edition_id") }))
+        Ok(row.map(|r| StagedEditionRef {
+            run_id: r.get("run_id"),
+            edition_id: r.get("edition_id"),
+        }))
+    }
+
+    async fn get_stg_edition(
+        &self,
+        run_id: &str,
+        edition_id: &str,
+    ) -> Result<Option<QuranEditionRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query(
+            "SELECT id, slug, version, name, script, riwayah, qiraah, publisher,
+                    source_url, language, verse_numbering_scheme, basmala_policy,
+                    unicode_normalization, license_json, text_hash, structure_hash,
+                    token_order_hash, manifest_hash, source_version_id, statistics_json,
+                    status, imported_at,
+                    NULL AS verified_at, NULL AS verified_by, NULL AS verification_method,
+                    NULL AS activated_at, NULL AS deprecated_at
+             FROM quran_stg_editions WHERE import_run_id = ? AND id = ?",
+        )
+        .bind(run_id)
+        .bind(edition_id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(row.map(|r| decode_edition(&r)))
+    }
+
+    async fn list_stg_surahs(&self, run_id: &str) -> Result<Vec<SurahRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT edition_id, number, name_arabic, name_transliteration,
+                    name_translations_json, ayah_count, revelation_place, revelation_order,
+                    basmala, ruku_count, metadata_provenance_id AS metadata_provenance_id
+             FROM quran_stg_surahs WHERE import_run_id = ? ORDER BY number",
+        )
+        .bind(run_id)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows.iter().map(decode_surah).collect())
+    }
+
+    async fn list_stg_divisions(&self, run_id: &str) -> Result<Vec<DivisionRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT edition_id, kind, number, start_surah, start_ayah, end_surah, end_ayah,
+                    start_global, end_global, label, provenance_id
+             FROM quran_stg_divisions WHERE import_run_id = ? ORDER BY kind, number",
+        )
+        .bind(run_id)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows
+            .iter()
+            .map(|r| DivisionRow {
+                edition_id: r.get("edition_id"),
+                kind: r.get("kind"),
+                number: r.get("number"),
+                start_surah: r.get("start_surah"),
+                start_ayah: r.get("start_ayah"),
+                end_surah: r.get("end_surah"),
+                end_ayah: r.get("end_ayah"),
+                start_global: r.get("start_global"),
+                end_global: r.get("end_global"),
+                label: r.get("label"),
+                provenance_id: r.get("provenance_id"),
+            })
+            .collect())
+    }
+
+    async fn set_edition_status(&mut self, id: &str, status: &str) -> Result<(), StorageError> {
+        if !["Staged", "Approved", "Active", "Deprecated", "Quarantined"].contains(&status) {
+            return Err(StorageError::ConstraintViolation {
+                message: format!("unknown edition status `{status}`"),
+            });
+        }
+        let mut tx = self.tx.lock().await;
+        sqlx::query("UPDATE quran_editions SET status = ? WHERE id = ?")
+            .bind(status)
+            .bind(id)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        Ok(())
     }
 
     async fn insert_stg_edition(
