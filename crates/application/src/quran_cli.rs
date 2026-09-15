@@ -85,10 +85,10 @@ fn map_reader_error(error: crate::quran_reader::ReaderError) -> (i32, String) {
 fn map_activation_error(error: super::quran::ActivationError) -> (i32, String) {
     use super::quran::ActivationError as E;
     match &error {
-        E::ApprovalMissing { .. } | E::ApprovalNotGranted { .. } | E::ApprovalSubjectMismatch { .. } => {
-            (exit::POLICY, error.to_string())
-        }
-        E::NotStaged { .. } => (exit::CONFLICT, error.to_string()),
+        E::ApprovalMissing { .. }
+        | E::ApprovalNotGranted { .. }
+        | E::ApprovalSubjectMismatch { .. } => (exit::POLICY, error.to_string()),
+        E::NotStaged { .. } | E::AlreadyActive { .. } => (exit::CONFLICT, error.to_string()),
         E::Storage(_) | E::Audit(_) => (exit::INTERNAL, error.to_string()),
     }
 }
