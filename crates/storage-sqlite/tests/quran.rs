@@ -17,6 +17,7 @@ use storage::Database;
 use storage::quran::{
     AyahRow, CitationRow, DifferenceReportRow, ImportRunRow, QuranEditionRow, SeparatorRow,
     SurahRow, TokenRow, TranslationEditionRow, TranslationPassageRow, ValidationReportRow,
+    WordGlossRow,
 };
 use storage_sqlite::SqliteDatabase;
 use tempfile::tempdir;
@@ -550,5 +551,94 @@ async fn reports_citations_and_translations_roundtrip() {
         .await
         .unwrap_err();
     assert!(matches!(err, storage::StorageError::ConstraintViolation { .. }));
+    uow.rollback().await.unwrap();
+}
+
+#[tokio::test]
+async fn word_glosses_roundtrip_in_deterministic_order() {
+    let (_dir, db, _path) = migrated_db().await;
+    let mut uow = db.write().await.unwrap();
+    for dataset in ["gloss-a", "gloss-b"] {
+        uow.sources()
+            .insert_source(storage::repository::SourceRow {
+                id: dataset.to_string(),
+                title: dataset.to_string(),
+                content_type: "quran_gloss".to_string(),
+                language: Some("en".to_string()),
+                created_at: now(),
+            })
+            .await
+            .unwrap();
+    }
+    // Out-of-order inserts come back ordered by (dataset, position, language).
+    for (dataset, position, language, gloss) in [
+        ("gloss-b", 2, "en", "second"),
+        ("gloss-a", 2, "en", "second-a"),
+        ("gloss-a", 1, "en", "first"),
+        ("gloss-a", 1, "ar", "first-ar"),
+    ] {
+        uow.quran()
+            .insert_word_gloss(WordGlossRow {
+                gloss_dataset_id: dataset.to_string(),
+                edition_id: "ed-1".to_string(),
+                surah: 1,
+                ayah: 1,
+                position,
+                language: language.to_string(),
+                gloss: gloss.to_string(),
+                provenance_id: "prov-1".to_string(),
+            })
+            .await
+            .unwrap();
+    }
+    let rows = uow.quran().list_word_glosses("ed-1", 1, 1).await.unwrap();
+    assert_eq!(rows.len(), 4);
+    let keys: Vec<_> =
+        rows.iter().map(|r| (r.gloss_dataset_id.clone(), r.position, r.language.clone())).collect();
+    assert_eq!(
+        keys,
+        vec![
+            ("gloss-a".to_string(), 1, "ar".to_string()),
+            ("gloss-a".to_string(), 1, "en".to_string()),
+            ("gloss-a".to_string(), 2, "en".to_string()),
+            ("gloss-b".to_string(), 2, "en".to_string()),
+        ]
+    );
+    // Glosses are namespaced by edition: another edition sees none.
+    assert!(uow.quran().list_word_glosses("ed-2", 1, 1).await.unwrap().is_empty());
+    // Duplicate (dataset, edition, surah, ayah, position, language) is rejected.
+    let err = uow
+        .quran()
+        .insert_word_gloss(WordGlossRow {
+            gloss_dataset_id: "gloss-a".to_string(),
+            edition_id: "ed-1".to_string(),
+            surah: 1,
+            ayah: 1,
+            position: 1,
+            language: "en".to_string(),
+            gloss: "dup".to_string(),
+            provenance_id: "prov-1".to_string(),
+        })
+        .await
+        .unwrap_err();
+    assert!(matches!(err, storage::StorageError::Conflict));
+    // Unknown dataset and unknown provenance are rejected (attribution FKs).
+    for (dataset, provenance) in [("missing-src", "prov-1"), ("gloss-a", "missing-prov")] {
+        let err = uow
+            .quran()
+            .insert_word_gloss(WordGlossRow {
+                gloss_dataset_id: dataset.to_string(),
+                edition_id: "ed-1".to_string(),
+                surah: 1,
+                ayah: 2,
+                position: 1,
+                language: "en".to_string(),
+                gloss: "x".to_string(),
+                provenance_id: provenance.to_string(),
+            })
+            .await
+            .unwrap_err();
+        assert!(matches!(err, storage::StorageError::ConstraintViolation { .. }));
+    }
     uow.rollback().await.unwrap();
 }
