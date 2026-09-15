@@ -15,6 +15,13 @@ All notable changes to Q-ai are documented here.
   M1a..M7 plan (migration mapping `0013`–`0018`, FTS5-first fallback DEV-05).
 - **xtask**: `arch-check` allowlist gains `[quran-normalization]`
   (`domain` only; no llm/embeddings/retrieval/vector-store edges).
+- **quran-normalization** (M1b): all 17 deterministic rules N01–N17 as pure
+  total functions with per-rule `SpanMap`s (mapping tables documented per
+  rule; N06 standalone-hamza→∅, N15 lam-alef expansion 1→2, N16 full NFC with
+  starter-tracked offsets cross-checked against reference NFC), `all_rules()`
+  / `by_id()` registry, 41 unit + 7 integration tests (mapping tables,
+  idempotency, hull round-trips, fuzz no-panic, basmala→bare/skeleton and
+  spaceless-query seed goldens pending linguist review).
 
 ### Added — Phase 1 Canonical Quran Core (in progress)
 - **quran-corpus**: 13-checkpoint importer driver, char-level differ, frozen
