@@ -207,6 +207,12 @@ pub struct FtsResults {
     pub total_matches: u64,
     /// True when `limit` truncated the hit list.
     pub truncated: bool,
+    /// Regex expansion terms (empty unless the query was a regex).
+    #[serde(default)]
+    pub regex_terms: Vec<String>,
+    /// Dictionary terms examined for a regex (0 unless regex).
+    #[serde(default)]
+    pub terms_examined: u64,
 }
 
 /// Index build inputs: generation + every version that must match (I14).
