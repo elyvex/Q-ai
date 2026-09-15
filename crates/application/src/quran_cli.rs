@@ -76,7 +76,9 @@ fn map_reader_error(error: crate::quran_reader::ReaderError) -> (i32, String) {
     use crate::quran_reader::ReaderError as E;
     match &error {
         E::InvalidReference(_) => (exit::USAGE, error.to_string()),
-        E::EditionNotFound(_) | E::AyahNotFound(_) | E::TranslationNotFound(_)
+        E::EditionNotFound(_)
+        | E::AyahNotFound(_)
+        | E::TranslationNotFound(_)
         | E::DivisionNotFound(_) => (exit::NOT_FOUND, error.to_string()),
         E::Storage(_) => (exit::INTERNAL, error.to_string()),
     }
@@ -195,8 +197,7 @@ pub async fn cmd_context(
         Ok(parsed) => parsed,
         Err(err) => return CommandOutput::err(exit::USAGE, err.to_string()),
     };
-    let spec =
-        ContextSpec { before, after, boundary, include_surah_header: true, max_ayahs: 100 };
+    let spec = ContextSpec { before, after, boundary, include_surah_header: true, max_ayahs: 100 };
     let view = match reader(&db).get_context(&parsed, &spec).await {
         Ok(view) => view,
         Err(err) => {
@@ -236,7 +237,8 @@ pub async fn cmd_surah(db_path: &str, number: u16, metadata: bool) -> CommandOut
             Some(view) => view,
             None => return CommandOutput::err(exit::NOT_FOUND, "empty surah".to_string()),
         };
-        let human = format!("{}\n{}", first.canonical.surah_name_arabic(), first.canonical.reference());
+        let human =
+            format!("{}\n{}", first.canonical.surah_name_arabic(), first.canonical.reference());
         return CommandOutput::ok(human, serde_json::json!({"ayahs": views.len()}));
     }
     let mut human = String::new();
@@ -263,8 +265,7 @@ pub async fn cmd_division(db_path: &str, kind: &str, number: u32) -> CommandOutp
         Ok(db) => Arc::new(db),
         Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
     };
-    let reference =
-        QuranRef::Division { edition: EditionSelector::Active, kind: division, number };
+    let reference = QuranRef::Division { edition: EditionSelector::Active, kind: division, number };
     let views = match reader(&db).get_ayahs(&reference, &AyahOptions::default()).await {
         Ok(views) => views,
         Err(err) => {
@@ -274,7 +275,11 @@ pub async fn cmd_division(db_path: &str, kind: &str, number: u32) -> CommandOutp
     };
     let mut human = format!("{kind} {number} ({} ayahs)\n", views.len());
     for view in &views {
-        human.push_str(&format!("{} {}\n", view.canonical.reference(), view.canonical.arabic_text()));
+        human.push_str(&format!(
+            "{} {}\n",
+            view.canonical.reference(),
+            view.canonical.arabic_text()
+        ));
     }
     CommandOutput::ok(human, serde_json::to_value(&views).unwrap_or_default())
 }
@@ -315,19 +320,22 @@ pub async fn cmd_edition_list(db_path: &str) -> CommandOutput {
         Ok(db) => Arc::new(db),
         Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
     };
-    let editions = match reader(&db)
-        .list_editions(crate::quran_reader::EditionFilter::default())
-        .await
-    {
-        Ok(editions) => editions,
-        Err(err) => {
-            let (exit, message) = map_reader_error(err);
-            return CommandOutput::err(exit, message);
-        }
-    };
+    let editions =
+        match reader(&db).list_editions(crate::quran_reader::EditionFilter::default()).await {
+            Ok(editions) => editions,
+            Err(err) => {
+                let (exit, message) = map_reader_error(err);
+                return CommandOutput::err(exit, message);
+            }
+        };
     let mut human = String::new();
     for edition in &editions {
-        human.push_str(&format!("{}@{} [{}]\n", edition.slug, edition.version, edition_status(edition)));
+        human.push_str(&format!(
+            "{}@{} [{}]\n",
+            edition.slug,
+            edition.version,
+            edition_status(edition)
+        ));
     }
     CommandOutput::ok(human, serde_json::to_value(&editions).unwrap_or_default())
 }
@@ -365,8 +373,13 @@ pub async fn cmd_edition_show(
             return CommandOutput::err(exit, message);
         }
     };
-    let mut human =
-        format!("{}@{} — {}\nstatus: {}\n", edition.slug, edition.version, edition.name, edition_status(&edition));
+    let mut human = format!(
+        "{}@{} — {}\nstatus: {}\n",
+        edition.slug,
+        edition.version,
+        edition.name,
+        edition_status(&edition)
+    );
     if statistics {
         human.push_str(&format!(
             "surahs={} ayahs={} tokens={}\n",
@@ -552,23 +565,16 @@ pub async fn cmd_import(
         created_at: at,
     };
     match super::quran::run_import_job(&db, input).await {
-        Ok(outcome) => {
-            let job = outcome.result.clone().unwrap_or_default();
-            CommandOutput::ok(
-                format!("imported to Staged ({job})\n"),
-                serde_json::json!({"job": job}),
-            )
-        }
+        Ok(_) => CommandOutput::ok(
+            format!("imported {}@{} to Staged\n", doc.edition.slug, doc.edition.version),
+            serde_json::json!({"slug": doc.edition.slug, "version": doc.edition.version.to_string()}),
+        ),
         Err(err) => CommandOutput::err(exit::INTERNAL, err.to_string()),
     }
 }
 
 /// `quran validate`.
-pub async fn cmd_validate(
-    db_path: &str,
-    target: &str,
-    report_path: Option<&str>,
-) -> CommandOutput {
+pub async fn cmd_validate(db_path: &str, target: &str, report_path: Option<&str>) -> CommandOutput {
     let report = if std::path::Path::new(target).exists() {
         let text = match read_manifest(target) {
             Ok(text) => text,
@@ -584,7 +590,12 @@ pub async fn cmd_validate(
     } else {
         let (slug, version) = match target.split_once('@') {
             Some((slug, version)) if !slug.is_empty() && !version.is_empty() => (slug, version),
-            _ => return CommandOutput::err(exit::USAGE, format!("target must be a manifest path or `slug@version`, got `{target}`")),
+            _ => {
+                return CommandOutput::err(
+                    exit::USAGE,
+                    format!("target must be a manifest path or `slug@version`, got `{target}`"),
+                );
+            }
         };
         let db = match open_db(db_path).await {
             Ok(db) => Arc::new(db),
@@ -617,11 +628,21 @@ pub async fn cmd_validate(
         }
     );
     let exit = if report.has_fatal() { exit::VALIDATION } else { exit::OK };
-    CommandOutput { exit, human: human.clone(), json: serde_json::to_value(&report).unwrap_or_default() }
+    CommandOutput {
+        exit,
+        human: human.clone(),
+        json: serde_json::to_value(&report).unwrap_or_default(),
+    }
 }
 
 /// `quran diff`.
-pub async fn cmd_diff(db_path: &str, slug: &str, from: &str, to: &str, format: &str) -> CommandOutput {
+pub async fn cmd_diff(
+    db_path: &str,
+    slug: &str,
+    from: &str,
+    to: &str,
+    format: &str,
+) -> CommandOutput {
     if !matches!(format, "text" | "json" | "unified") {
         return CommandOutput::err(exit::USAGE, format!("unknown format `{format}`"));
     }
@@ -647,10 +668,7 @@ pub async fn cmd_diff(db_path: &str, slug: &str, from: &str, to: &str, format: &
             .list_ayahs_range(&edition.id, 1, i64::MAX)
             .await
             .map_err(|err: StorageError| CommandOutput::err(exit::INTERNAL, err.to_string()))?;
-        Ok(rows
-            .into_iter()
-            .map(|row| (row.surah as u16, row.ayah as u32, row.text))
-            .collect())
+        Ok(rows.into_iter().map(|row| (row.surah as u16, row.ayah as u32, row.text)).collect())
     };
     let old = match load(from).await {
         Ok(old) => old,
@@ -740,7 +758,12 @@ fn approval_flow(
 pub async fn cmd_activate(db_path: &str, edition: &str) -> CommandOutput {
     let (slug, version) = match edition.split_once('@') {
         Some((slug, version)) if !slug.is_empty() && !version.is_empty() => (slug, version),
-        _ => return CommandOutput::err(exit::USAGE, format!("edition must be `slug@version`, got `{edition}`")),
+        _ => {
+            return CommandOutput::err(
+                exit::USAGE,
+                format!("edition must be `slug@version`, got `{edition}`"),
+            );
+        }
     };
     let (db, at, approval_id) = match approval_flow(db_path).await {
         Ok(flow) => flow,
@@ -826,7 +849,12 @@ pub async fn cmd_rollback(db_path: &str, slug: &str, to: &str) -> CommandOutput 
 pub async fn cmd_deprecate(db_path: &str, edition: &str) -> CommandOutput {
     let (slug, version) = match edition.split_once('@') {
         Some((slug, version)) if !slug.is_empty() && !version.is_empty() => (slug, version),
-        _ => return CommandOutput::err(exit::USAGE, format!("edition must be `slug@version`, got `{edition}`")),
+        _ => {
+            return CommandOutput::err(
+                exit::USAGE,
+                format!("edition must be `slug@version`, got `{edition}`"),
+            );
+        }
     };
     let (db, at, approval_id) = match approval_flow(db_path).await {
         Ok(flow) => flow,
@@ -873,7 +901,12 @@ pub async fn cmd_hashes(db_path: &str, edition: &str) -> CommandOutput {
     use crate::quran_reader::QuranReader;
     let (slug, version) = match edition.split_once('@') {
         Some((slug, version)) if !slug.is_empty() && !version.is_empty() => (slug, version),
-        _ => return CommandOutput::err(exit::USAGE, format!("edition must be `slug@version`, got `{edition}`")),
+        _ => {
+            return CommandOutput::err(
+                exit::USAGE,
+                format!("edition must be `slug@version`, got `{edition}`"),
+            );
+        }
     };
     let db = match open_db(db_path).await {
         Ok(db) => Arc::new(db),
@@ -933,17 +966,21 @@ pub async fn cmd_translation_list(db_path: &str) -> CommandOutput {
     }
     let mut human = String::new();
     for row in &rows {
-        human.push_str(&format!("{}@{} — {} [{}]\n", row.slug, row.version, row.translator, row.language));
+        human.push_str(&format!(
+            "{}@{} — {} [{}]\n",
+            row.slug, row.version, row.translator, row.language
+        ));
     }
     CommandOutput::ok(
         human,
-        serde_json::json!(rows
-            .iter()
-            .map(|row| serde_json::json!({
-                "slug": row.slug, "version": row.version,
-                "translator": row.translator, "language": row.language,
-            }))
-            .collect::<Vec<_>>()),
+        serde_json::json!(
+            rows.iter()
+                .map(|row| serde_json::json!({
+                    "slug": row.slug, "version": row.version,
+                    "translator": row.translator, "language": row.language,
+                }))
+                .collect::<Vec<_>>()
+        ),
     )
 }
 
@@ -951,7 +988,9 @@ pub async fn cmd_translation_list(db_path: &str) -> CommandOutput {
 pub async fn cmd_translation_import(db_path: &str, manifest: &str) -> CommandOutput {
     let text = match std::fs::read_to_string(manifest) {
         Ok(text) => text,
-        Err(err) => return CommandOutput::err(exit::USAGE, format!("cannot read `{manifest}`: {err}")),
+        Err(err) => {
+            return CommandOutput::err(exit::USAGE, format!("cannot read `{manifest}`: {err}"));
+        }
     };
     let db = match open_db(db_path).await {
         Ok(db) => Arc::new(db),
@@ -1073,10 +1112,7 @@ pub async fn cmd_doctor_quran(db_path: &str, deep: bool) -> CommandOutput {
             }))
             .collect::<Vec<_>>(),
     });
-    let exit = if checks
-        .iter()
-        .any(|check| check.status == super::quran_doctor::CheckLevel::Fail)
-    {
+    let exit = if checks.iter().any(|check| check.status == super::quran_doctor::CheckLevel::Fail) {
         exit::VALIDATION
     } else {
         exit::OK
