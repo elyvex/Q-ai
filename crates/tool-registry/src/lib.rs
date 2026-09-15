@@ -333,7 +333,7 @@ mod tests {
     #[tokio::test]
     async fn get_ayah_conforms_to_the_contract() {
         let registry = ToolRegistry::new(Arc::new(FakeBackend));
-        let (result, meta) = registry
+        let (mut result, meta) = registry
             .get_ayah(GetAyahParams {
                 reference: "1:1".into(),
                 translations: Vec::new(),
@@ -349,6 +349,8 @@ mod tests {
         assert!(result.reproducibility.deterministic);
         assert_eq!(meta.edition_slug, "test");
         assert_eq!(meta.text_hash, "sha256:ab");
+        // Timing is not deterministic; exclude it from the round-trip equality.
+        result.execution_time_ms = 0.0;
         // The envelope round-trips (contract stability for later consumers).
         let json = serde_json::to_string(&result).unwrap();
         let back: ToolResult<Vec<AyahView>> = serde_json::from_str(&json).unwrap();
