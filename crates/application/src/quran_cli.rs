@@ -1116,3 +1116,217 @@ pub async fn cmd_doctor_quran(db_path: &str, deep: bool) -> CommandOutput {
     };
     CommandOutput { exit, human, json }
 }
+
+/// `quran normalize` — normalize text through a profile or adhoc rule list.
+///
+/// The pipeline runs from the seeded profile definitions (proving the
+/// migration seed on every call); implementations come from code. `--explain`
+/// prints the rule-by-rule transformation with offset-map fidelity notes.
+pub async fn cmd_normalize(
+    db_path: &str,
+    text: Option<&str>,
+    profile: Option<&str>,
+    rules: Option<&str>,
+    explain: bool,
+) -> CommandOutput {
+    use quran_normalization::error::Diagnostic as _;
+
+    let Some(text) = text else {
+        return CommandOutput::err(exit::USAGE, "provide text to normalize".to_string());
+    };
+    if profile.is_some() && rules.is_some() {
+        return CommandOutput::err(
+            exit::USAGE,
+            "use either --profile or --rules, never both".to_string(),
+        );
+    }
+    if profile.is_none() && rules.is_none() {
+        return CommandOutput::err(exit::USAGE, "use --profile or --rules".to_string());
+    }
+
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let rows = match db.write().await {
+        Ok(mut uow) => match uow.quran().list_normalization_profiles().await {
+            Ok(rows) => rows,
+            Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        },
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let registry = match crate::quran_normalize::registry_from_rows(&rows) {
+        Ok(registry) => registry,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.summary()),
+    };
+
+    let preview = if let Some(profile) = profile {
+        let (id, version) = match crate::quran_normalize::parse_profile_spec(profile) {
+            Ok(spec) => spec,
+            Err(error) => return CommandOutput::err(exit::USAGE, error.summary()),
+        };
+        match crate::quran_normalize::preview(&registry, text, id, version) {
+            Ok(preview) => preview,
+            Err(error) => {
+                return CommandOutput::err(map_norm_error(&error), error.summary());
+            }
+        }
+    } else {
+        let rule_ids = match crate::quran_normalize::parse_rule_list(rules.unwrap_or("")) {
+            Ok(ids) => ids,
+            Err(error) => return CommandOutput::err(exit::USAGE, error.summary()),
+        };
+        match crate::quran_normalize::preview_adhoc(text, &rule_ids) {
+            Ok(preview) => preview,
+            Err(error) => {
+                return CommandOutput::err(map_norm_error(&error), error.summary());
+            }
+        }
+    };
+
+    let human = if explain {
+        explain_human(&preview)
+    } else {
+        format!(
+            "input: {}\noutput: {}\nprofile: {}",
+            preview.input, preview.output, preview.profile
+        )
+    };
+    let json = serde_json::json!({
+        "input": preview.input,
+        "profile": preview.profile,
+        "output": preview.output,
+        "trace": preview.trace,
+        "steps": preview.steps,
+    });
+    CommandOutput::ok(human, json)
+}
+
+fn map_norm_error(error: &quran_normalization::error::NormalizationError) -> i32 {
+    use quran_normalization::error::NormalizationError as E;
+    match error {
+        E::UnknownRule { .. } | E::UnknownProfile { .. } => exit::USAGE,
+        E::ProfileImmutable { .. }
+        | E::SpanOutOfRange { .. }
+        | E::InvalidMapping { .. }
+        | E::EmptyProfile => exit::INTERNAL,
+    }
+}
+
+fn explain_human(preview: &crate::quran_normalize::Preview) -> String {
+    let mut out = format!(
+        "input: {}\nprofile: {}\noutput: {}\nrules applied ({}):",
+        preview.input,
+        preview.profile,
+        preview.output,
+        preview.steps.len()
+    );
+    for (step, applied) in preview.steps.iter().zip(preview.trace.rules_applied.iter()) {
+        let kind = if applied.kind == quran_normalization::RuleKind::Heuristic {
+            "heuristic"
+        } else {
+            "deterministic"
+        };
+        out.push_str(&format!(
+            "\n  {} {} [{kind}] v{}\n    → {}",
+            applied.rule,
+            applied.rule.name(),
+            applied.version,
+            step.text
+        ));
+    }
+    if preview.trace.contains_heuristic_rules {
+        out.push_str("\nnote: matched using heuristic affix stripping — not verified scholarship");
+    }
+    out
+}
+
+/// `quran normalize --list-profiles` — profiles from the seeded catalog.
+pub async fn cmd_normalize_list_profiles(db_path: &str) -> CommandOutput {
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let rows = match db.write().await {
+        Ok(mut uow) => match uow.quran().list_normalization_profiles().await {
+            Ok(rows) => rows,
+            Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        },
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let mut human = String::new();
+    for row in &rows {
+        let mut flags = if row.indexed { "indexed" } else { "query-time" }.to_string();
+        if row.heuristic {
+            flags.push_str(", heuristic");
+        }
+        if row.experimental {
+            flags.push_str(", experimental");
+        }
+        human.push_str(&format!("{}@{} — {} [{flags}]\n", row.profile_id, row.version, row.label));
+    }
+    let json = serde_json::json!({
+        "profiles": rows.iter().map(|row| serde_json::json!({
+            "profile_id": row.profile_id,
+            "version": row.version,
+            "label": row.label,
+            "rules": serde_json::from_str::<serde_json::Value>(&row.rules_json)
+                .unwrap_or(serde_json::Value::Null),
+            "indexed": row.indexed,
+            "heuristic": row.heuristic,
+            "experimental": row.experimental,
+        })).collect::<Vec<_>>(),
+    });
+    CommandOutput::ok(human.trim_end().to_string(), json)
+}
+
+/// `quran normalize --show-rule` — one rule from the seeded catalog.
+pub async fn cmd_normalize_show_rule(db_path: &str, rule: &str) -> CommandOutput {
+    use quran_normalization::error::Diagnostic as _;
+
+    let id = match quran_normalization::RuleId::parse(rule) {
+        Ok(id) => id,
+        Err(error) => return CommandOutput::err(exit::USAGE, error.summary()),
+    };
+    if id.is_reserved() {
+        let message =
+            format!("{id} {} is reserved for Phase 4 (transliteration/phonetics)", id.name());
+        return CommandOutput::ok(
+            message.clone(),
+            serde_json::json!({"rule_id": id.as_str(), "reserved": true, "note": message}),
+        );
+    }
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let rows = match db.write().await {
+        Ok(mut uow) => match uow.quran().list_normalization_rules().await {
+            Ok(rows) => rows,
+            Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        },
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let Some(row) = rows.iter().find(|r| r.rule_id == id.as_str()) else {
+        return CommandOutput::err(
+            exit::NOT_FOUND,
+            format!("rule {id} has no seeded implementation"),
+        );
+    };
+    let kind = if row.kind == "heuristic" { "heuristic" } else { "deterministic" };
+    let mut human =
+        format!("{} {} [{kind}] v{}\n{}", row.rule_id, id.name(), row.version, row.description);
+    if row.kind == "heuristic" {
+        human.push_str("\nheuristic: results using this rule must be labeled");
+    }
+    let json = serde_json::json!({
+        "rule_id": row.rule_id,
+        "name": id.name(),
+        "version": row.version,
+        "kind": row.kind,
+        "description": row.description,
+        "heuristic": row.kind == "heuristic",
+        "reserved": false,
+    });
+    CommandOutput::ok(human, json)
+}
