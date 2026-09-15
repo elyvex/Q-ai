@@ -585,3 +585,39 @@ quran-normalization` as the next command.
 - **Next concrete action (M2 start):** FTS5 compile-option probe, then
   `0014_quran_forms` + `forms.rebuild` + `FullTextIndex` trait; next command
   `cargo test -p quran-normalization`.
+
+---
+
+## 22. Session checkpoint — 2026-09-15 (M2 start: probe + 0014 + trait; T25/T29 done)
+
+- **Completed:** FTS5 entry-gate probe (`storage-sqlite/tests/fts5_available.rs`:
+  compile-option + Arabic MATCH + `highlight()` smoke — note `offsets()` is
+  context-restricted in current SQLite, `highlight()` is the supported path
+  for M3), migration `0014_quran_forms` (token/ayah forms + surah-scoped
+  skeleton windows, FK-to-canonical, Layer D stamps, window CHECK),
+  `QuranRepository` forms methods + SQLite impl (+ `QAI-NORM-` mapping to
+  `ConstraintViolation`), `quran-search` crate (`FullTextIndex` port,
+  `FtsQuery`/`SearchOpts`/`IndexManifest`/`FtsDoc|Hit|Results`,
+  `QAI-IDX-*` contract), allowlist `[quran-search]` entry.
+- **Decisions:** span maps NOT stored (recomputed via shared pipeline — R6 by
+  construction; migration header records it); profiles L0–L8 rule lists
+  duplicated in seed SQL with `seed_matches_code` as the guard; transliteration
+  / phonetic columns reserved NULL.
+- **Tasks flipped ☑:** P2-T25, P2-T29 (evidence in `done.md` §2). No ADRs.
+- **Verification (all green in scope):** `cargo test -p quran-search` 4/4;
+  `--test fts5_available` 2/2; `--test quran_forms` 2/2;
+  `-p cli --test quran` 2/2 (both trycmd files at schema 14);
+  `migrate-check` OK (14); `arch-check` OK;
+  `clippy -p {quran-search,storage,storage-sqlite,quran-normalization}` clean.
+- **Fallout on concurrent files (minimal):** `sqlite_database_health` 13→14.
+  Owner already wildcarded trycmd schema versions (`[..]`), retiring that
+  churn class. Two edit-tool misfires repaired immediately (orphaned struct
+  body in `storage/src/quran.rs`, clobbered allowlist section) — both
+  verified by `cargo check` + file inspection.
+- **Workspace gates:** `arch-check` green again (concurrent server edges
+  resolved upstream). Full `cargo test --workspace` not re-run this session
+  (concurrent tree in flux; last known blocker: `jobs` Worker timing flake).
+  `cargo deny` unavailable.
+- **Next concrete action (M2 continued):** `forms.rebuild` job (P2-T26:
+  token/ayah forms for all indexed profiles, skeleton builder incl. 3-ayah
+  windows, MV-018 wiring); next command `cargo test -p quran-normalization`.
