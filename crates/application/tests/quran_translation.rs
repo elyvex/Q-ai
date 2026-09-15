@@ -10,6 +10,7 @@ mod common;
 
 use application::quran::import_translations;
 use common::{active_reader, principal, timestamp};
+use storage::Database as _;
 
 fn manifest(aligned: &str, translator: &str, passages: &[(u16, u32, &str)]) -> String {
     let passages = passages
@@ -174,11 +175,8 @@ async fn import_translations_rejects_ayah_absent_from_aligned_edition() {
 #[tokio::test]
 async fn import_translations_rejects_duplicate_passage() {
     let (_dir, db, _reader, _path) = active_reader().await;
-    let text = manifest(
-        "test-edition-min@0.1.0",
-        "Test Translator",
-        &[(1, 1, "first"), (1, 1, "second")],
-    );
+    let text =
+        manifest("test-edition-min@0.1.0", "Test Translator", &[(1, 1, "first"), (1, 1, "second")]);
     let err = import_translations(
         &*db,
         &text,
@@ -195,11 +193,8 @@ async fn import_translations_rejects_duplicate_passage() {
 async fn import_translations_is_atomic_on_rejection() {
     let (_dir, db, _reader, _path) = active_reader().await;
     // A valid first passage followed by an unknown ayah: nothing may persist.
-    let text = manifest(
-        "test-edition-min@0.1.0",
-        "Test Translator",
-        &[(1, 1, "ok"), (2, 9, "bad")],
-    );
+    let text =
+        manifest("test-edition-min@0.1.0", "Test Translator", &[(1, 1, "ok"), (2, 9, "bad")]);
     let err = import_translations(
         &*db,
         &text,
