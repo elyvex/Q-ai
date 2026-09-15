@@ -9,7 +9,7 @@ block is deterministic for this synthetic edition.
 
 ```console
 $ qai db migrate
-migrations applied; schema version 12
+migrations applied; schema version [..]
 
 ```
 
