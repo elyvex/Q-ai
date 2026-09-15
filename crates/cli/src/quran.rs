@@ -22,6 +22,9 @@ pub enum QuranAction {
         /// Attach surface tokens.
         #[arg(long, default_value_t = false)]
         tokens: bool,
+        /// Attach word glosses (optional attributed dataset).
+        #[arg(long, default_value_t = false)]
+        glosses: bool,
     },
     /// Print context around a focal ayah.
     Context {
@@ -123,6 +126,11 @@ pub enum QuranAction {
         #[command(subcommand)]
         action: TranslationAction,
     },
+    /// Word-gloss dataset management (optional attributed path).
+    Gloss {
+        #[command(subcommand)]
+        action: GlossAction,
+    },
     /// Derived-form management (search indexes build on these).
     Forms {
         #[command(subcommand)]
@@ -192,6 +200,16 @@ pub enum TranslationAction {
     },
 }
 
+/// Word-gloss subcommands.
+#[derive(Subcommand)]
+pub enum GlossAction {
+    /// Import a word-gloss manifest.
+    Import {
+        /// Manifest path.
+        manifest: String,
+    },
+}
+
 /// Derived-form subcommands.
 #[derive(Subcommand)]
 pub enum FormsAction {
@@ -237,9 +255,15 @@ pub fn handle_quran(action: QuranAction, db_path: &str, json: bool, yes: bool) -
 
 async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes: bool) -> i32 {
     let output = match action {
-        QuranAction::Get { reference, translations, tokens } => {
-            application::quran_cli::cmd_get(db_path, &reference, translations.as_deref(), tokens)
-                .await
+        QuranAction::Get { reference, translations, tokens, glosses } => {
+            application::quran_cli::cmd_get(
+                db_path,
+                &reference,
+                translations.as_deref(),
+                tokens,
+                glosses,
+            )
+            .await
         }
         QuranAction::Context { reference, before, after, boundary } => {
             application::quran_cli::cmd_context(db_path, &reference, before, after, &boundary).await
@@ -307,6 +331,11 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
             }
             TranslationAction::Show { slug } => {
                 application::quran_cli::cmd_translation_show(db_path, &slug).await
+            }
+        },
+        QuranAction::Gloss { action } => match action {
+            GlossAction::Import { manifest } => {
+                application::quran_cli::cmd_gloss_import(db_path, &manifest).await
             }
         },
         QuranAction::Forms { action } => match action {
