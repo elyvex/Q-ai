@@ -221,7 +221,7 @@ pub fn dispatch(cli: Cli) -> i32 {
             let probe = block_on(application::db::probe_database(&cfg));
             let mut code = doctor::run_checks(&cfg, &probe, json || cli.json, repair_preview);
             if quran {
-                code = code.max(block_on(doctor::run_quran_checks(&cfg, json || cli.json, deep)));
+                code = code.max(doctor::run_quran_checks(&cfg, json || cli.json, deep));
             }
             code
         }
