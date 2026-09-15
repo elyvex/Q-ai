@@ -225,11 +225,17 @@ pub fn dispatch(cli: Cli) -> i32 {
         }
         Commands::Doctor { json, repair_preview, quran, deep, .. } => {
             let probe = block_on(application::db::probe_database(&cfg));
-            let mut code = doctor::run_checks(&cfg, &probe, json || cli.json, repair_preview);
-            if quran {
-                code = code.max(doctor::run_quran_checks(&cfg, json || cli.json, deep));
+            if repair_preview {
+                doctor::run_checks(&cfg, &probe, false, true)
+            } else {
+                let (doc, human, code) = doctor::doctor_report(&cfg, &probe, quran, deep);
+                if json || cli.json {
+                    println!("{}", serde_json::to_string_pretty(&doc).unwrap());
+                } else {
+                    print!("{human}");
+                }
+                code
             }
-            code
         }
         Commands::Config { action } => match action {
             ConfigAction::Show { explain, defaults, json } => {
