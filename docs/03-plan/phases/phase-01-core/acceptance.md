@@ -33,12 +33,12 @@
 
 | ID | Criterion | Verification | Blocks | Evidence | Status |
 |---|---|---|---|---|---|
-| **AC-P1-02** | `qai quran import <manifest>` imports the edition to `Staged` and produces a `ValidationReport` with **zero `Fatal` findings** | Scripted run against `test-edition-min` + the licensed edition | D1.3, D1.4 | | ☐ |
-| **AC-P1-03** | Import is **not** activatable by the importer; activation requires `qai quran activate` with a human approval, producing an `approvals` row **and** an audit event | Negative + positive test | D1.3, D1.9 | | ☐ |
+| **AC-P1-02** | `qai quran import <manifest>` imports the edition to `Staged` and produces a `ValidationReport` with **zero `Fatal` findings** | Scripted run against `test-edition-min` + the licensed edition | D1.3, D1.4 | `quran_import.rs::import_runs_end_to_end_to_staged` green (zero Fatal); licensed-edition run + ritual pending | ◐ |
+| **AC-P1-03** | Import is **not** activatable by the importer; activation requires `qai quran activate` with a human approval, producing an `approvals` row **and** an audit event | Negative + positive test | D1.3, D1.9 | `quran_import.rs::activation_service_requires_a_granted_approval` green; ritual pending | ◐ |
 | **AC-P1-04** | Validation rules QV-001…QV-028 are all implemented, and **each of the 16 adversarial fixtures is rejected with the specific expected rule ID** | Adversarial suite (`fixtures/quran/adversarial/`) | D1.4, D1.13 | `crates/quran-corpus/tests/adversarial.rs` 6/6 green; ritual pending | ◐ |
-| **AC-P1-05** | For **every ayah** in the corpus, `reconstruct(tokens, separators)` equals the stored text **byte-for-byte** | Full-corpus test (property + explicit) | D1.3, D1.13 | | ☐ |
-| **AC-P1-06** | For **every token**, `ayah.text[byte_start..byte_end] == surface` | Full-corpus test | D1.3, D1.13 | | ☐ |
-| **AC-P1-07** | Recomputed `text_hash`, `structure_hash`, `token_order_hash` from DB rows match the values stored at import | `qai doctor --quran --deep` | D1.4, D1.11 | | ☐ |
+| **AC-P1-05** | For **every ayah** in the corpus, `reconstruct(tokens, separators)` equals the stored text **byte-for-byte** | Full-corpus test (property + explicit) | D1.3, D1.13 | `tokenize.rs` proptest (`roundtrip_is_lossless_and_offsets_valid`) + importer round-trip verifier green; full licensed corpus pending (ADR-0101) | ◐ |
+| **AC-P1-06** | For **every token**, `ayah.text[byte_start..byte_end] == surface` | Full-corpus test | D1.3, D1.13 | `tokenize.rs` proptest (byte offsets in range and surface equal) green; full licensed corpus pending | ◐ |
+| **AC-P1-07** | Recomputed `text_hash`, `structure_hash`, `token_order_hash` from DB rows match the values stored at import | `qai doctor --quran --deep` | D1.4, D1.11 | `application/tests/quran_doctor.rs::recomputed_hashes_match_import_time` green; `doctor --quran --deep` fixture scan has no failures | ◐ |
 
 > AC-P1-04 is deliberately specific. "The import failed" does not satisfy it: each adversarial
 > fixture must fail with the **documented rule id** (e.g. `nfd_text` → QV-007, `bidi_override` →
@@ -54,8 +54,8 @@
 |---|---|---|---|---|---|
 | **AC-P1-08** | `UPDATE`/`DELETE` on `quran_ayahs` / `quran_tokens` aborts with the documented error codes (`QAI-QUR-0001`…`0005`) | Raw-SQL trigger tests | D1.5, D1.13 | `crates/storage-sqlite/tests/quran.rs` trigger/schema tests green; ritual pending | ◐ |
 | **AC-P1-09** | No public API exists to write canonical ayah rows without a `CanonicalChangeSession` derived from an `ApprovalToken` | API-surface test + code review | D1.1, D1.3 | | ☐ |
-| **AC-P1-10** | Killing the import process at each of the **13 checkpoints** leaves the active edition **unchanged in all 13 cases**, and `qai job retry` completes the import correctly | Crash matrix | D1.3 | | ☐ |
-| **AC-P1-11** | Cancelling an import removes all `quran_stg_*` rows for that run **and** records the cancellation | Cancellation test | D1.3 | | ☐ |
+| **AC-P1-10** | Killing the import process at each of the **13 checkpoints** leaves the active edition **unchanged in all 13 cases**, and `qai job retry` completes the import correctly | Crash matrix | D1.3 | `quran_import.rs::crash_matrix_all_thirteen_checkpoints_leave_active_untouched` green; process-kill recording + `job retry` ritual pending | ◐ |
+| **AC-P1-11** | Cancelling an import removes all `quran_stg_*` rows for that run **and** records the cancellation | Cancellation test | D1.3 | `quran_import.rs::cancel_cleans_staging_and_marks_cancelled` green; ritual pending | ◐ |
 
 > AC-P1-08/09 together implement I1. The DB trigger is the last line of defence, but it is not
 > sufficient: AC-P1-09 closes the API path so a future developer cannot write canonical rows
