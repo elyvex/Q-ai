@@ -65,10 +65,9 @@ impl<'writer> FormatFields<'writer> for RedactingFormatFields {
         if !self.redact {
             return self.inner.format_fields(writer, fields);
         }
-        // Format into a scratch buffer, then scrub and write through.
         let mut scratch = String::new();
         {
-            let mut scratch_writer = Writer::new(&mut scratch);
+            let mut scratch_writer = Writer::new(&mut scratch as &mut dyn std::fmt::Write);
             self.inner.format_fields(&mut scratch_writer, fields)?;
         }
         write!(writer, "{}", redact_log_fields(&scratch))
@@ -80,11 +79,9 @@ impl<'writer> FormatFields<'writer> for RedactingFormatFields {
 /// Matches `key=<value>` patterns where `key` is a recognized secret key
 /// and replaces the value portion with the redaction marker.
 fn redact_log_fields(formatted: &str) -> String {
-    // For field=value patterns in the log output, apply Rule A.
     let mut result = formatted.to_string();
     let keys = ["api_key", "apikey", "api-key", "password", "secret", "token", "credential"];
     for key in &keys {
-        // Match `key=...` where value goes up to next whitespace, comma, or end
         let pattern = format!("{key}=");
         while let Some(pos) = result.to_lowercase().find(&pattern.to_lowercase()) {
             let val_start = pos + key.len() + 1; // skip key=
