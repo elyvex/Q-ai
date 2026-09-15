@@ -621,3 +621,35 @@ quran-normalization` as the next command.
 - **Next concrete action (M2 continued):** `forms.rebuild` job (P2-T26:
   token/ayah forms for all indexed profiles, skeleton builder incl. 3-ayah
   windows, MV-018 wiring); next command `cargo test -p quran-normalization`.
+
+---
+
+## 23. Session checkpoint — 2026-09-15 (M2: T26/T27/T28 done; review rule set)
+
+- **Completed:** `quran.forms.rebuild` core + `FormsRebuildHandler`
+  (`quran.forms.rebuild`, idempotent, checkpoints, cancel-safe) + `qai quran
+  forms rebuild` (+ 4 trycmd cases) + `skeletons_for_surah` + MV-018
+  (`verify_canonical_unchanged` + in-tx variant, `QAI-IDX-0005
+  CanonicalChanged`) wired pre-write AND pre-commit.
+- **Tasks flipped ☑:** P2-T26, P2-T27, P2-T28 (evidence in `done.md` §2).
+- **Key designs:** content-addressed provenance ids (retries converge);
+  active-edition-only rebuilds; windows normalize joined raw texts;
+  deterministic normalization rows carry confidence 1.0 + `unverified`
+  (deterministic derivation, not an analyzer suggestion); trust
+  `ComputedUnverified`; server untouched (no search endpoints yet).
+- **Verification (all green in scope):** `forms_rebuild.rs` 6/6 (coverage,
+  idempotency + hash stability, MV-018 pass, cancel-commits-nothing,
+  unknown/inactive refusals with gen-2 supersede, handler contract);
+  `quran-search` 10/10 (incl. 3 skeleton); CLI snapshots 2/2 (14 normalize
+  cases); `clippy -p {application,quran-search} -D warnings` clean;
+  per-file rustfmt clean.
+- **Real-CLI proof:** 14 ayahs, 64 tokens, 18 skeletons (14+4 windows),
+  byte-identical rerun incl. provenance id.
+- **Review rule for all future build jobs:** wire MV-018 pre-write AND
+  pre-commit; reuse `verify_canonical_unchanged[_in]` + `CanonicalChanged` —
+  never a second verifier (M4 included).
+- **Workspace gates:** concurrent tree still in flux (owner committing
+  throughout); full-workspace test not re-run. `cargo deny` unavailable.
+- **Next concrete action (M2 continued):** FTS5 adapter (P2-T30): schema,
+  writer/reader, `ar_*` tokenizers on the shared pipeline (P2-T31), parity
+  test (P2-T32); next command `cargo test -p quran-search`.
