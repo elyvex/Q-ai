@@ -67,6 +67,11 @@ All notable changes to Q-ai are documented here.
   budgets, lifecycle + verify) and the `ar_*` `TokenizerFamily` on the
   shared pipeline (both paths normalize; 5,000-substring parity suite);
   `regex-automata 0.4` workspace dependency (offline-cached).
+- **quran-search** (M3): `SearchHit` unified assembly (pinned reference via
+  the Phase-1 grammar, validated `QuranQuotation`, exact span + tokens,
+  score explanation, mandatory trace, warnings; fail-closed
+  `QAI-IDX-0006`), `ScoreExplain`, `Warning` (incl. `QAI-IDX-0101`
+  staleness); `CanonicalSpan::byte_range_in` for highlight slicing.
 
 ### Added — Phase 1 Canonical Quran Core (in progress)
 - **cli**: read verbs `quran get/context/surah/division/resolve` and lifecycle verbs
