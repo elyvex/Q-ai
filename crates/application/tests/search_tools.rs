@@ -94,7 +94,7 @@ async fn searchable_db() -> (tempfile::TempDir, SqliteDatabase, std::path::PathB
             source_version_id: "sv-1".into(),
             adapter: "json".into(),
             manifest_text: BASE_MANIFEST.into(),
-            declared_manifest_hash: Some(sha256_hex(BASE_manifest.as_bytes())),
+            declared_manifest_hash: Some(sha256_hex(BASE_MANIFEST.as_bytes())),
             invoked_by: PRINCIPAL.into(),
             license_status: "PublicDomain".into(),
             license_json: "{}".into(),
