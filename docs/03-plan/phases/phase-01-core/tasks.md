@@ -193,11 +193,11 @@ ETagged, and translations are structurally incapable of masquerading as canonica
 | P1-T45 | Tool contract conformance tests + no-fabrication tests | D1.13 | T44 | 1.5 | QA | ☑ |
 | P1-T46 | `citations` crate: `Citation`, resolver, `verify_quotation`, persistence | D1.9 | T32, T15 | 3.0 | BE | ☑ |
 | P1-T47 | Deep-link format + resolver endpoint + round-trip tests | D1.9 | T46 | 1.5 | BE | ☑ |
-| P1-T48 | CLI `quran get/context/surah/division/resolve` + `--json` | D1.10 | T32 | 2.5 | BE | ☐ |
-| P1-T49 | CLI `quran edition/import/validate/diff/activate/rollback` | D1.10 | T28 | 2.5 | BE | ☐ |
-| P1-T50 | CLI snapshot tests incl. RTL/Arabic terminal output sanity | D1.13 | T48, T49 | 1.5 | QA | ☐ |
-| P1-T51 | `doctor --quran` checks (19 checks) + `--deep` mode | D1.11 | T23, T13 | 3.0 | BE | ☐ |
-| P1-T52 | `doctor --quran --json` schema + CI consumption | D1.11 | T51 | 1.0 | BE | ☐ |
+| P1-T48 | CLI `quran get/context/surah/division/resolve` + `--json` | D1.10 | T32 | 2.5 | BE | ☑ |
+| P1-T49 | CLI `quran edition/import/validate/diff/activate/rollback` | D1.10 | T28 | 2.5 | BE | ☑ |
+| P1-T50 | CLI snapshot tests incl. RTL/Arabic terminal output sanity | D1.13 | T48, T49 | 1.5 | QA | ☑ |
+| P1-T51 | `doctor --quran` checks (19 checks) + `--deep` mode | D1.11 | T23, T13 | 3.0 | BE | ☑ |
+| P1-T52 | `doctor --quran --json` schema + CI consumption | D1.11 | T51 | 1.0 | BE | ◐ |
 | P1-T53 | ADR-0111 | ADR | T47 | 0.5 | DOC | ☐ |
 
 > **T43/T44 define the tool contract once** so every later tool conforms (§12). The first two
