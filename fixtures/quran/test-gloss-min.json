@@ -1,0 +1,11 @@
+{
+  "dataset": {
+    "id": "gloss-en-test",
+    "aligned_edition": "test-edition-min@0.1.0"
+  },
+  "glosses": [
+    {"surah": 1, "ayah": 1, "position": 1, "language": "en", "gloss": "test gloss one one"},
+    {"surah": 1, "ayah": 1, "position": 2, "language": "en", "gloss": "test gloss one two"},
+    {"surah": 2, "ayah": 1, "position": 1, "language": "en", "gloss": "test gloss two one"}
+  ]
+}
