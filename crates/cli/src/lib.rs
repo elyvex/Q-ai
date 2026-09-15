@@ -248,13 +248,28 @@ pub fn dispatch(cli: Cli) -> i32 {
             });
             match r {
                 Ok(rt) => {
-                    let result = rt.block_on(server::start(&bind));
+                    let db_path = db_path_for(&cfg, cli.data_dir.as_deref());
+                    let result = rt.block_on(async {
+                        let reader = std::sync::Arc::new(
+                            application::quran_cli::open_reader(&db_path).await.map_err(|e| {
+                                eprintln!("cannot open database: {e}");
+                                exit_code::INTERNAL
+                            })?,
+                        );
+                        let tools = std::sync::Arc::new(
+                            application::quran_tools::ReaderToolBackend::registry(reader.clone()),
+                        );
+                        let api = std::sync::Arc::new(server::api::ReaderBackend::new(reader));
+                        server::api::serve(&bind, server::api::AppState { tools, api })
+                            .await
+                            .map_err(|e| {
+                                eprintln!("serve failed: {e}");
+                                exit_code::INTERNAL
+                            })
+                    });
                     match result {
                         Ok(()) => exit_code::OK,
-                        Err(e) => {
-                            eprintln!("serve failed: {e}");
-                            exit_code::INTERNAL
-                        }
+                        Err(code) => code,
                     }
                 }
                 Err(code) => code,
