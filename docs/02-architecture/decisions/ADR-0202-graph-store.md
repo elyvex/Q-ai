@@ -27,9 +27,10 @@ is original scholarly or user work. These categories must not be confused.
 | Option | Advantages | Disadvantages |
 |---|---|---|
 | Relational adjacency + bounded recursive CTEs | No additional service; natural provenance joins; SQLite/PostgreSQL path | Recursive queries require careful limits and indexing |
-| Embedded graph engine | Graph-oriented execution without a remote service | Additional dependency, packaging, and migration complexity |
-| PostgreSQL graph extension | Server-side graph capabilities near relational data | Not suitable as the local default; extension dependence |
-| Dedicated graph database | Rich traversal tooling and graph query languages | Operational overhead; unnecessary for local MVP |
+| Embedded graph engine (CozoDB) | Rust-native, Datalog recursion better than CTEs for transitive closure, MVCC, time-travel, vector+graph hybrid, embeddable | Still a second engine; authority drift risk; single-maintainer; MPL-2.0 |
+| SQLite graph extension (e.g., sqlite-graph) | Stays in SQLite process; Cypher support; zero extra files | Alpha (tested to ~1k nodes); exposes Cypher violating allowlist rule; C extension packaging |
+| PostgreSQL graph extension (Apache AGE) | Server-side graph near relational data | Not suitable as local default; extension dependence |
+| Dedicated graph database (Neo4j, Kuzu) | Rich traversal tooling and graph query languages | Operational overhead; unnecessary for local MVP; Kuzu archived Oct 2025 |
 | Graph only in memory | Simple small-fixture traversal | Startup, memory, persistence, and concurrency limitations |
 
 ## Decision
@@ -37,11 +38,18 @@ is original scholarly or user work. These categories must not be confused.
 Define a backend-neutral `GraphStore` port and implement it initially with
 relational adjacency tables and bounded recursive CTEs.
 
+Two additional embedded backends are explicitly planned behind the same port
+as optional derived projections — **CozoDB** (Rust, Datalog, MVCC, vector+graph)
+and **SQLite graph extensions** (for example `sqlite-graph`, Cypher on SQLite) —
+evaluated as accelerators for recursive/transitive workloads, not as new
+authorities. SQLite remains the single source of truth in every configuration;
+all graph backends are rebuildable projections.
+
 Use application-controlled, batched frontier traversal where it provides more
 reliable expansion limits than a single recursive query.
 
-Do not expose unrestricted SQL, Cypher, or another backend query language
-through the public graph API.
+Do not expose unrestricted SQL, Cypher, Datalog, or another backend query
+language through the public graph API.
 
 ### 1. Authority Versus Projection
 
@@ -220,6 +228,56 @@ Results include:
 An interrupted or bounded-out search returns an explicit incomplete result
 or typed error. It must not report "no path exists" when it only means
 "no path found within this budget."
+
+### 8. Multiple Quran Graph Projections
+
+Q-ai must host multiple distinct graph projections over the same canonical
+corpus — one `GraphStore` port with many typed edge/node families, built as
+separate derived projections that can evolve independently. A non-exhaustive
+catalog:
+
+| Graph | Nodes | Edges | Purpose |
+|---|---|---|---|
+| Structural | Surah, ayah, juz, hizb, ruku, token | `CONTAINS`, `NEXT` | Lossless navigation of the canonical hierarchy |
+| Word-root | Root, lemma, word-form, token, ayah | `HAS_ROOT`, `HAS_LEMMA`, `INFLECTS_TO`, `ROOT_OF` | Arabic morphology — connect ayahs sharing a root |
+| Lemma | Lemma, token, ayah | `HAS_LEMMA`, `LEMMA_OF` | Connect by lemma where root is not the right unit |
+| Co-occurrence | Token, ayah | `COOCCURS_WITH` (windowed) | Collocation / statistics (derived) |
+| Concept/topic | Concept, ayah | `MENTIONS_CONCEPT` (annotated) | Thematic research |
+| Isnad / narrator | Narrator, hadith, chain link | `TRANSMITTED_TO`, `NARRATED` | Later phases |
+
+Each graph records its own projection ID, source versions, builder version,
+and snapshot so `qai doctor` can detect per-graph drift.
+
+#### 8.1 Word-root graph (required)
+
+Arabic morphology is central to Quran research. Surface forms diverge while the
+root stays stable:
+
+- Root **ق و ل** (q-w-l): `قال` (qāla), `قل` (qul), `قالوا` (qālū), `قلتم` (qultum),
+  `يقول` (yaqūlu), `قول` (qawl) — all map to one root node.
+- Similar families: `ك ت ب` (kataba / kutiba / kitāb), `ع ل م` (ʿalima / ʿilm / ʿālim).
+
+The word-root graph connects **ayahs through a shared root node**, not by
+materializing all pairwise ayah–ayah edges:
+
+    Token —HAS_ROOT→ Root ←HAS_ROOT— Token
+                 Token —IN_AYAH→ Ayah
+
+An ayah is therefore reachable from a root in one hop via its tokens. Do not
+precompute the ayah×ayah closure — quadratic edges hide provenance and break
+budgets. Application traversal expands through the root hub and returns ranked
+ayahs with provenance.
+
+Rules:
+
+- Root and lemma identities originate only in attributed morphology datasets
+  (Phase 2, ADR-0203). The graph does not invent or guess roots.
+- Multiple competing analyses for the same token remain separate edges with
+  distinct `assertion_id` / `dataset_version`; never silently merge.
+- Normalization (tashkīl stripping, etc.) does not create new roots — it only
+  maps surface forms to the same root node via the analyzer.
+- Diacritics and orthography of display text remain in the canonical store;
+  graph payloads carry hashes/IDs, never a second copy of the ayah text.
 
 ## Accuracy and Religious-Source Implications
 
