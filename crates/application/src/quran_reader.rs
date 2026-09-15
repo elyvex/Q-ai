@@ -19,15 +19,15 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use domain::{Language, SemVer};
 use lru::LruCache;
-use quran_core::{    AttributedTranslation, AyahLocation, AyahNumber, AyahOptions, AyahView, BasmalaPolicy,
-    ContextBoundary, ContextSpec, ContextView, DivisionKind, EditionRef, EditionSelector,
-    EditionStatus, NumberingScheme, QuranEdition, QuranQuotation, QuranRef, QuotationParts,
-    ResolvedRef, RevelationPlace, SajdahKind, Script, Surah, SurahNumber, Token, TokenPosition,
-    UnicodeForm,
+use quran_core::{
+    AttributedTranslation, AyahLocation, AyahNumber, AyahOptions, AyahView, BasmalaPolicy,
+    ContextBoundary, ContextSpec, ContextView, EditionRef, EditionSelector, EditionStatus,
+    NumberingScheme, QuotationParts, QuranEdition, QuranQuotation, QuranRef, ResolvedRef,
+    RevelationPlace, Script, Surah, SurahNumber, Token, TokenPosition, UnicodeForm,
 };
+use storage::Database as _;
 use storage::error::StorageError;
 use storage::quran::{QuranEditionRow, SurahRow, TokenRow};
-use storage::Database as _;
 use storage_sqlite::SqliteDatabase;
 
 /// Reader errors (`QAI-QUR-0306…0310`; reference errors keep their `01xx` codes).
@@ -58,18 +58,13 @@ impl storage::error::Diagnostic for ReaderError {
         match self {
             Self::InvalidReference(inner) => {
                 let rendered = quran_corpus::error::QuranDiagnostic::code(inner).to_string();
-                let number = rendered
-                    .rsplit('-')
-                    .next()
-                    .and_then(|digits| digits.parse().ok())
-                    .unwrap_or(0);
+                let number =
+                    rendered.rsplit('-').next().and_then(|digits| digits.parse().ok()).unwrap_or(0);
                 storage::error::DiagnosticCode::new("QAI-QUR", number)
             }
             Self::EditionNotFound(_) => storage::error::DiagnosticCode::new("QAI-QUR", 306),
             Self::AyahNotFound(_) => storage::error::DiagnosticCode::new("QAI-QUR", 307),
-            Self::TranslationNotFound(_) => {
-                storage::error::DiagnosticCode::new("QAI-QUR", 308)
-            }
+            Self::TranslationNotFound(_) => storage::error::DiagnosticCode::new("QAI-QUR", 308),
             Self::DivisionNotFound(_) => storage::error::DiagnosticCode::new("QAI-QUR", 309),
             Self::Storage(_) => storage::error::DiagnosticCode::new("QAI-QUR", 310),
         }
@@ -182,14 +177,6 @@ fn parse_place(raw: &str) -> Result<RevelationPlace, ReaderError> {
     }
 }
 
-fn parse_sajdah(raw: &str) -> Result<SajdahKind, ReaderError> {
-    match raw {
-        "recommended" => Ok(SajdahKind::Recommended),
-        "obligatory" => Ok(SajdahKind::Obligatory),
-        _ => Err(storage_broken(format!("unknown sajdah kind `{raw}`"))),
-    }
-}
-
 fn map_edition(row: &QuranEditionRow) -> Result<QuranEdition, ReaderError> {
     Ok(QuranEdition {
         id: parse_edition_id(&row.id)?,
@@ -252,11 +239,7 @@ fn map_surah(row: &SurahRow) -> Result<Surah, ReaderError> {
         name_transliteration: row.name_transliteration.clone(),
         name_translations: names,
         ayah_count: row.ayah_count as u16,
-        revelation_place: row
-            .revelation_place
-            .as_deref()
-            .map(parse_place)
-            .transpose()?,
+        revelation_place: row.revelation_place.as_deref().map(parse_place).transpose()?,
         revelation_order: row.revelation_order.map(|value| value as u16),
         basmala: parse_basmala(&row.basmala)?,
         ruku_count: row.ruku_count.map(|value| value as u16),
@@ -361,11 +344,12 @@ impl QuranReaderService {
         }
     }
 
-    fn cache_key(
-        edition: &ResolvedEdition,
-        reference: &QuranRef,
-        options: &AyahOptions,
-    ) -> String {
+    /// The underlying database handle.
+    pub fn database(&self) -> &SqliteDatabase {
+        &self.db
+    }
+
+    fn cache_key(edition: &ResolvedEdition, reference: &QuranRef, options: &AyahOptions) -> String {
         let options_hash = serde_json::to_string(options).unwrap_or_default();
         format!(
             "{}|{}|{}|{}|{options_hash}",
@@ -495,8 +479,7 @@ impl QuranReaderService {
             ),
             page: ayah_row.page.map(|value| value as u32),
             juz: ayah_row.juz.map(|value| value as u16),
-        })
-        ?;
+        })?;
 
         let mut translations = Vec::new();
         for slug in &options.translations {
@@ -505,7 +488,11 @@ impl QuranReaderService {
         let tokens = if options.tokens {
             let rows = uow
                 .quran()
-                .get_tokens(&edition.id, i64::from(location.surah.get()), i64::from(location.ayah.get()))
+                .get_tokens(
+                    &edition.id,
+                    i64::from(location.surah.get()),
+                    i64::from(location.ayah.get()),
+                )
                 .await
                 .map_err(ReaderError::from)?;
             let mut mapped = Vec::with_capacity(rows.len());
@@ -517,12 +504,7 @@ impl QuranReaderService {
             None
         };
         uow.rollback().await.map_err(ReaderError::from)?;
-        Ok(AyahView {
-            canonical,
-            translations,
-            word_glosses: None,
-            tokens,
-        })
+        Ok(AyahView { canonical, translations, word_glosses: None, tokens })
     }
 
     async fn translation_for(
@@ -532,10 +514,8 @@ impl QuranReaderService {
         slug: &str,
         location: &AyahLocation,
     ) -> Result<AttributedTranslation, ReaderError> {
-        let editions =
-            uow.quran().list_translation_editions().await.map_err(ReaderError::from)?;
-        let mut candidates: Vec<_> =
-            editions.iter().filter(|row| row.slug == slug).collect();
+        let editions = uow.quran().list_translation_editions().await.map_err(ReaderError::from)?;
+        let mut candidates: Vec<_> = editions.iter().filter(|row| row.slug == slug).collect();
         candidates.sort_by(|a, b| a.version.cmp(&b.version));
         let translation = candidates.into_iter().next_back().ok_or_else(|| {
             ReaderError::TranslationNotFound(format!("translation edition `{slug}`"))
@@ -583,9 +563,9 @@ impl QuranReaderService {
         reference: &QuranRef,
     ) -> Result<Vec<AyahLocation>, ReaderError> {
         match reference {
-            QuranRef::Edition { .. } => Err(ReaderError::AyahNotFound(
-                "edition references need a locator".to_string(),
-            )),
+            QuranRef::Edition { .. } => {
+                Err(ReaderError::AyahNotFound("edition references need a locator".to_string()))
+            }
             QuranRef::Surah { surah, .. } => {
                 let mut uow = self.db.write().await.map_err(ReaderError::from)?;
                 let row = uow
@@ -597,9 +577,8 @@ impl QuranReaderService {
                 uow.rollback().await.map_err(ReaderError::from)?;
                 let mut locations = Vec::new();
                 for ayah in 1..=row.ayah_count as u32 {
-                    let number = AyahNumber::new(ayah).map_err(|_| {
-                        ReaderError::AyahNotFound(format!("{surah}:{ayah}"))
-                    })?;
+                    let number = AyahNumber::new(ayah)
+                        .map_err(|_| ReaderError::AyahNotFound(format!("{surah}:{ayah}")))?;
                     locations.push(self.ayah_location(&edition.id, *surah, number).await?);
                 }
                 Ok(locations)
@@ -628,9 +607,8 @@ impl QuranReaderService {
                         surah: SurahNumber::new(row.surah as u16).map_err(|_| {
                             ReaderError::AyahNotFound(format!("surah {}", row.surah))
                         })?,
-                        ayah: AyahNumber::new(row.ayah as u32).map_err(|_| {
-                            ReaderError::AyahNotFound(format!("ayah {}", row.ayah))
-                        })?,
+                        ayah: AyahNumber::new(row.ayah as u32)
+                            .map_err(|_| ReaderError::AyahNotFound(format!("ayah {}", row.ayah)))?,
                         global: row.global_ayah_index as u32,
                     });
                 }
@@ -651,9 +629,7 @@ impl QuranReaderService {
                 let division = divisions
                     .iter()
                     .find(|row| row.number == i64::from(*number))
-                    .ok_or_else(|| {
-                        ReaderError::DivisionNotFound(format!("{keyword}:{number}"))
-                    })?;
+                    .ok_or_else(|| ReaderError::DivisionNotFound(format!("{keyword}:{number}")))?;
                 let mut uow = self.db.write().await.map_err(ReaderError::from)?;
                 let rows = uow
                     .quran()
@@ -667,9 +643,8 @@ impl QuranReaderService {
                         surah: SurahNumber::new(row.surah as u16).map_err(|_| {
                             ReaderError::AyahNotFound(format!("surah {}", row.surah))
                         })?,
-                        ayah: AyahNumber::new(row.ayah as u32).map_err(|_| {
-                            ReaderError::AyahNotFound(format!("ayah {}", row.ayah))
-                        })?,
+                        ayah: AyahNumber::new(row.ayah as u32)
+                            .map_err(|_| ReaderError::AyahNotFound(format!("ayah {}", row.ayah)))?,
                         global: row.global_ayah_index as u32,
                     });
                 }
@@ -719,8 +694,7 @@ impl QuranReader for QuranReaderService {
     async fn list_surahs(&self, selector: &EditionSelector) -> Result<Vec<Surah>, ReaderError> {
         let resolved = self.resolve_edition(selector).await?;
         let mut uow = self.db.write().await.map_err(ReaderError::from)?;
-        let rows =
-            uow.quran().list_surahs(&resolved.id).await.map_err(ReaderError::from)?;
+        let rows = uow.quran().list_surahs(&resolved.id).await.map_err(ReaderError::from)?;
         uow.rollback().await.map_err(ReaderError::from)?;
         rows.iter().map(map_surah).collect()
     }
@@ -732,13 +706,16 @@ impl QuranReader for QuranReaderService {
     ) -> Result<AyahView, ReaderError> {
         let edition = self.resolve_edition(reference.edition()).await?;
         let key = Self::cache_key(&edition, reference, options);
-        if let Some(cached) = self.cache.lock().map(|mut cache| cache.get(&key).cloned()).unwrap_or(None) {
+        if let Some(cached) =
+            self.cache.lock().map(|mut cache| cache.get(&key).cloned()).unwrap_or(None)
+        {
             return Ok(cached);
         }
         let locations = self.expand(&edition, reference).await?;
-        let first = locations.into_iter().next().ok_or_else(|| {
-            ReaderError::AyahNotFound(quran_core::serialize(reference))
-        })?;
+        let first = locations
+            .into_iter()
+            .next()
+            .ok_or_else(|| ReaderError::AyahNotFound(quran_core::serialize(reference)))?;
         let view = self.build_view(&edition, first, options).await?;
         if let Ok(mut cache) = self.cache.lock() {
             cache.put(key, view.clone());
@@ -805,8 +782,11 @@ impl QuranReader for QuranReaderService {
                     ContextBoundary::Ruku => "ruku",
                     _ => "page",
                 };
-                let divisions =
-                    uow.quran().list_divisions(&edition.id, kind).await.map_err(ReaderError::from)?;
+                let divisions = uow
+                    .quran()
+                    .list_divisions(&edition.id, kind)
+                    .await
+                    .map_err(ReaderError::from)?;
                 let division = divisions
                     .iter()
                     .find(|row| {
@@ -899,11 +879,10 @@ impl QuranReader for QuranReaderService {
             before.remove(0);
             total -= 1;
         }
-        let low_global = before.first().map(|_| focal.global - before.len() as u32).unwrap_or(focal.global);
+        let low_global =
+            before.first().map(|_| focal.global - before.len() as u32).unwrap_or(focal.global);
         let high_global = focal.global + after.len() as u32;
-        let focal_view = self
-            .build_view(&edition, focal, &AyahOptions::default())
-            .await?;
+        let focal_view = self.build_view(&edition, focal, &AyahOptions::default()).await?;
         let surah = if spec.include_surah_header {
             let mut uow = self.db.write().await.map_err(ReaderError::from)?;
             let row = uow
