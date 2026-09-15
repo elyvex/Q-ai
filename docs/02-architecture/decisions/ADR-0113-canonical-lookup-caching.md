@@ -1,6 +1,6 @@
 # ADR-0113 — Canonical Lookup Caching & Invalidation (Draft)
 
-- Status: **Draft** (accepted with the reader, P1-T35)
+- Status: Accepted
 - Phase: 1 — Canonical Quran Core
 - Date: 2026-09-14
 - Related decisions: ADR-0107
@@ -23,4 +23,4 @@ serves pre-activation text is a correctness catastrophe, not a performance bug.
 
 ## Consequences
 
-- Implemented in M8 (`application` reader); accepted with the consistency test.
+- Implemented in M8 (`application::quran_reader`); accepted with the consistency test (`cache_serves_no_stale_text_after_activation`).
