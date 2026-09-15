@@ -181,6 +181,37 @@ impl RuleId {
     pub const fn is_reserved(self) -> bool {
         matches!(self, Self::N23 | Self::N24)
     }
+
+    /// Snake-case rule name (`"whitespace_collapse"` … `"phonetic_key"`).
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::N01 => "whitespace_collapse",
+            Self::N02 => "strip_tatweel",
+            Self::N03 => "strip_harakat",
+            Self::N04 => "strip_quranic_marks",
+            Self::N05 => "strip_superscript_alef",
+            Self::N06 => "normalize_hamza_forms",
+            Self::N07 => "normalize_wasla",
+            Self::N08 => "normalize_alif_maqsura",
+            Self::N09 => "normalize_ta_marbuta",
+            Self::N10 => "normalize_persian_codepoints",
+            Self::N11 => "strip_zero_width_and_bidi",
+            Self::N12 => "strip_punctuation",
+            Self::N13 => "fold_digits",
+            Self::N14 => "strip_pause_marks",
+            Self::N15 => "expand_presentation_forms",
+            Self::N16 => "nfc",
+            Self::N17 => "remove_spaces",
+            Self::N18 => "strip_definite_article",
+            Self::N19 => "strip_conjunction_prefix",
+            Self::N20 => "strip_preposition_prefix",
+            Self::N21 => "strip_pronoun_suffix",
+            Self::N22 => "dedupe_repeated_letters",
+            Self::N23 => "transliterate",
+            Self::N24 => "phonetic_key",
+        }
+    }
 }
 
 impl std::fmt::Display for RuleId {
@@ -297,7 +328,11 @@ mod tests {
         for (i, id) in all.iter().enumerate() {
             assert_eq!(id.as_str(), format!("N{:02}", i + 1));
             assert_eq!(RuleId::parse(id.as_str()).unwrap(), *id);
+            assert!(!id.name().is_empty());
         }
+        assert_eq!(RuleId::N01.name(), "whitespace_collapse");
+        assert_eq!(RuleId::N16.name(), "nfc");
+        assert_eq!(RuleId::N23.name(), "transliterate");
     }
 
     #[test]
