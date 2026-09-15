@@ -48,10 +48,10 @@ with what evidence.
 | 1.0 — Data & Decisions | 5 | 1 | 11.5 | — | ◐ |
 | 1.1 — Domain & Addressing | 9 | 9 | 19.5 | — | ☑ |
 | 1.2 — Import & Validation | 17 | 16 | 42.0 | — | ◐ |
-| 1.3 — Reader, Translations, API | 11 | 7 | 21.5 | — | ◐ |
+| 1.3 — Reader, Translations, API | 11 | 8 | 21.5 | — | ◐ |
 | 1.4 — Tools, Citations, CLI, Doctor | 11 | 11 | 21.5 | — | ☑ |
 | 1.5 — Debug Reader, Hardening, Exit | 7 | 2 | 15.0 | — | ☐ |
-| **Total** | **65** | **46** | **131.0** | **—** | **71%** |
+| **Total** | **65** | **47** | **131.0** | **—** | **72%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -483,14 +483,17 @@ estimate — an under-recorded sprint is how the next phase inherits a wrong cap
 - **Notes:** Coarse smoke, not a benchmark harness; generous budget avoids flakes.
   Cold-path and longest-surah timings belong to the M10 soak.
 
-### P1-T42 — ADR-0112 / ADR-0113 (partial)
+### P1-T42 — ADR-0112 / ADR-0113 (accepted)
 - **Deliverable:** ADR
-- **Completed:** 2026-09-14
+- **Completed:** 2026-09-15 (ADR-0112; ADR-0113 was accepted 2026-09-14)
 - **Owner:** agent (DOC)
 - **PR / commit:** working tree
-- **Evidence:** ADR-0113 flipped to Accepted (cache implemented + tested)
-- **DoD:** ⚠️ exceptions: ADR-0112 stays Draft until translation import (P1-T36, M9)
-- **Notes:** —
+- **Evidence:** ADR-0113 Accepted (cache implemented + tested); ADR-0112 flipped
+  to Accepted with translation import (P1-T36) + type guards (P1-T37) —
+  `import_translations` structural alignment suite 9/9 green
+- **DoD:** ✅ all items
+- **Notes:** Mechanical acceptance per each ADR's own condition, consistent with
+  the ADR-0113 precedent. No human sign-off is named by these ADRs.
 
 ### P1-T36 — Translation import + alignment validation
 - **Deliverable:** D1.4
