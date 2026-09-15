@@ -151,7 +151,7 @@ impl Fts5Index {
                 .map(|c| format!("{c} UNINDEXED")),
         );
         columns.push("revelation UNINDEXED".to_string());
-        let ddl = format!("CREATE TABLE IF NOT EXISTS ayah_fts USING fts5({})", columns.join(", "));
+        let ddl = format!("CREATE VIRTUAL TABLE IF NOT EXISTS ayah_fts USING fts5({})", columns.join(", "));
         sqlx::query(&ddl).execute(&self.pool).await.map_err(|err| IndexError::BuildFailed {
             stage: "create".to_string(),
             detail: err.to_string(),
