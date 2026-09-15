@@ -33,10 +33,10 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use axum::Router;
-use axum::extract::{Path, Query, State};
+use axum::extract::{Json, Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use quran_core::{AyahOptions, AyahView, Surah};
 use serde::{Deserialize, Serialize};
 use tool_registry::{BackendMeta, ToolRegistry};
@@ -595,6 +595,102 @@ async fn citation_handler(State(state): State<AppState>, Path(id): Path<String>)
     )
 }
 
+/// Preview normalization without touching the database (M1c, P2-T24).
+///
+/// Runs the same [`application::quran_normalize`] pipeline the CLI uses, so
+/// the trace here is byte-identical to `qai quran normalize --json` (AC-P2-39).
+#[derive(Debug, Deserialize)]
+struct PreviewRequest {
+    /// Text to normalize.
+    text: String,
+    /// Profile (`L3.diacritics`, optionally `@version`-pinned).
+    /// Defaults to the latest `L3.diacritics`.
+    profile: Option<String>,
+    /// Explicit rule list (`N01,N03`); never with `profile`.
+    rules: Option<String>,
+}
+
+fn norm_error_response(error: &application::quran_normalize::NormalizationError) -> Response {
+    use application::quran_normalize::{NormalizationDiagnostic as _, NormalizationError as E};
+    let status = match error {
+        E::UnknownRule { .. } | E::UnknownProfile { .. } | E::InvalidMapping { .. } => {
+            StatusCode::BAD_REQUEST
+        }
+        E::ProfileImmutable { .. } | E::SpanOutOfRange { .. } | E::EmptyProfile => {
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
+    };
+    json_response(
+        status,
+        &ErrorBody {
+            error: ErrorDetail {
+                code: error.code().to_string(),
+                summary: error.summary(),
+                location: error.location(),
+                why: error.cause_chain(),
+                remedy: error.remedy(),
+                next_command: error.next_command(),
+            },
+        },
+        None,
+        false,
+    )
+}
+
+async fn normalization_preview_handler(Json(body): Json<PreviewRequest>) -> Response {
+    use application::quran_normalize;
+
+    let started = Instant::now();
+    if body.profile.is_some() && body.rules.is_some() {
+        return norm_error_response(&quran_normalize::NormalizationError::InvalidMapping {
+            detail: "use either profile or rules, never both".to_string(),
+        });
+    }
+    let registry = quran_normalize::builtin_registry();
+    let preview = if let Some(rules) = body.rules.as_deref() {
+        let rule_ids = match quran_normalize::parse_rule_list(rules) {
+            Ok(ids) => ids,
+            Err(error) => return norm_error_response(&error),
+        };
+        match quran_normalize::preview_adhoc(&body.text, &rule_ids) {
+            Ok(preview) => preview,
+            Err(error) => return norm_error_response(&error),
+        }
+    } else {
+        let profile = body.profile.as_deref().unwrap_or("L3.diacritics");
+        let (id, version) = match quran_normalize::parse_profile_spec(profile) {
+            Ok(spec) => spec,
+            Err(error) => return norm_error_response(&error),
+        };
+        match quran_normalize::preview(&registry, &body.text, id, version) {
+            Ok(preview) => preview,
+            Err(error) => return norm_error_response(&error),
+        }
+    };
+    let data = serde_json::json!({
+        "input": preview.input,
+        "profile": preview.profile,
+        "output": preview.output,
+        "trace": preview.trace,
+        "steps": preview.steps,
+    });
+    let mut meta = empty_meta();
+    meta.execution_time_ms = started.elapsed().as_secs_f64() * 1000.0;
+    json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, false)
+}
+
+/// Seeded profile catalog over the built-in ladder (M1c, P2-T24).
+async fn normalization_profiles_handler() -> Response {
+    use application::quran_normalize;
+    let started = Instant::now();
+    let data = serde_json::json!({
+        "profiles": quran_normalize::builtin_registry_profiles(),
+    });
+    let mut meta = empty_meta();
+    meta.execution_time_ms = started.elapsed().as_secs_f64() * 1000.0;
+    json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, false)
+}
+
 async fn debug_reader_handler(
     State(state): State<AppState>,
     Path((edition, surah)): Path<(String, u16)>,
@@ -642,6 +738,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/quran/tokens/{reference}", get(tokens_handler))
         .route("/api/v1/quran/resolve", get(resolve_handler))
         .route("/api/v1/quran/citations/{id}", get(citation_handler))
+        .route("/api/v1/quran/normalization/preview", post(normalization_preview_handler))
+        .route("/api/v1/quran/normalization/profiles", get(normalization_profiles_handler))
         .route("/debug/read/{edition}/{surah}", get(debug_reader_handler))
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .layer(tower_http::limit::RequestBodyLimitLayer::new(1024 * 1024))
