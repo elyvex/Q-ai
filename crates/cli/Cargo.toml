@@ -17,6 +17,7 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+trycmd = { workspace = true }
 
 [lints]
 workspace = true
