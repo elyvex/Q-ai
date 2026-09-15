@@ -380,3 +380,393 @@ mod tests {
         assert!(err.remedy().is_some());
     }
 }
+
+/// Open a database from configuration (CLI entry point helper).
+pub async fn open_database(
+    path: &str,
+    max_connections: u32,
+) -> Result<storage_sqlite::SqliteDatabase, StorageError> {
+    storage_sqlite::SqliteDatabase::new(path, max_connections, true).await
+}
+
+/// Ensure a local principal row exists (single-user interim; Phase 11 owns identity).
+pub async fn ensure_principal(
+    db: &dyn storage::Database,
+    id: &str,
+    display_name: &str,
+    at: &str,
+) -> Result<(), StorageError> {
+    let mut uow = db.write().await?;
+    uow.sources()
+        .upsert_principal(storage::repository::PrincipalRow {
+            id: id.to_string(),
+            kind: "local_user".to_string(),
+            display_name: display_name.to_string(),
+            created_at: at.to_string(),
+        })
+        .await?;
+    uow.commit().await
+}
+
+/// Record a human approval decision and return its id.
+pub async fn record_approval(
+    db: &dyn storage::Database,
+    id: &str,
+    subject_urn: &str,
+    requested_by: &str,
+    decided_by: &str,
+    request_payload: &str,
+    at: &str,
+) -> Result<(), StorageError> {
+    let mut uow = db.write().await?;
+    uow.sources()
+        .insert_approval(storage::repository::ApprovalRow {
+            id: id.to_string(),
+            subject_urn: subject_urn.to_string(),
+            kind: "CanonicalChange".to_string(),
+            requested_by: Some(requested_by.to_string()),
+            decided_by: Some(decided_by.to_string()),
+            decision: Some("approved".to_string()),
+            request_payload: request_payload.to_string(),
+            decision_note: None,
+            requested_at: at.to_string(),
+            decided_at: Some(at.to_string()),
+        })
+        .await?;
+    uow.commit().await
+}
+
+/// Validate a manifest document without touching the database (dry run).
+pub fn dry_run_validate(
+    manifest_text: &str,
+) -> Result<quran_corpus::ValidationReport, quran_corpus::CorpusError> {
+    use quran_corpus::{EditionAdapter, JsonAdapter};
+    let source = JsonAdapter.parse(manifest_text)?;
+    Ok(quran_corpus::validate_edition(&source))
+}
+
+/// Re-validate staged rows against stored statistics and hashes.
+pub async fn validate_staged(
+    db: &dyn storage::Database,
+    slug: &str,
+    version: &str,
+) -> Result<quran_corpus::ValidationReport, ActivationError> {
+    use quran_corpus::{reconstruct, tokenize};
+    let mut uow = db.write().await.map_err(ActivationError::storage)?;
+    let staged = uow
+        .quran()
+        .find_staged_edition(slug, version)
+        .await
+        .map_err(ActivationError::storage)?
+        .ok_or_else(|| ActivationError::NotStaged {
+            slug: slug.to_string(),
+            version: version.to_string(),
+        })?;
+    let edition = uow
+        .quran()
+        .get_stg_edition(&staged.run_id, &staged.edition_id)
+        .await
+        .map_err(ActivationError::storage)?
+        .ok_or_else(|| ActivationError::NotStaged {
+            slug: slug.to_string(),
+            version: version.to_string(),
+        })?;
+    let ayahs =
+        uow.quran().list_stg_ayahs(&staged.run_id).await.map_err(ActivationError::storage)?;
+    let mut findings = Vec::new();
+    let stats: quran_core::EditionStatistics = serde_json::from_str(&edition.statistics_json)
+        .map_err(|err| {
+            ActivationError::Storage(format!("stored statistics are corrupt: {err}"))
+        })?;
+    if ayahs.len() as u32 != stats.ayah_count {
+        findings.push(quran_corpus::Finding::new(
+            "QV-004",
+            quran_corpus::Severity::Fatal,
+            "edition",
+            format!("staged {} ayahs, statistics say {}", ayahs.len(), stats.ayah_count),
+        ));
+    }
+    for row in &ayahs {
+        let computed = tokenize(&row.text);
+        let separators: Vec<String> = uow
+            .quran()
+            .list_stg_separators(&staged.run_id, &staged.edition_id, row.surah, row.ayah)
+            .await
+            .map_err(ActivationError::storage)?
+            .into_iter()
+            .map(|separator| separator.separator)
+            .collect();
+        if reconstruct(&computed.tokens, &separators) != row.text {
+            findings.push(quran_corpus::Finding::new(
+                "QV-011",
+                quran_corpus::Severity::Fatal,
+                format!("surah {} ayah {}", row.surah, row.ayah),
+                "staged tokens do not reconstruct the ayah text".to_string(),
+            ));
+        }
+    }
+    // Recompute the text hash from staged rows and compare with the stored one.
+    let texts: Vec<&str> = ayahs.iter().map(|row| row.text.as_str()).collect();
+    let recomputed = quran_corpus::text_hash(&edition.slug, &edition.version, &texts);
+    if quran_corpus::tagged(&recomputed) != edition.text_hash {
+        findings.push(quran_corpus::Finding::new(
+            "QV-014",
+            quran_corpus::Severity::Fatal,
+            "edition",
+            "text_hash recomputed from staged rows differs".to_string(),
+        ));
+    }
+    uow.rollback().await.map_err(ActivationError::storage)?;
+    let fatal = findings.iter().filter(|finding| finding.severity == quran_corpus::Severity::Fatal).count() as u32;
+    let error = findings.iter().filter(|finding| finding.severity == quran_corpus::Severity::Error).count() as u32;
+    let warning =
+        findings.iter().filter(|finding| finding.severity == quran_corpus::Severity::Warning).count() as u32;
+    Ok(quran_corpus::ValidationReport {
+        subject_urn: format!("quran-staged:{slug}@{version}"),
+        validator: quran_corpus::VALIDATOR_NAME.to_string(),
+        validator_version: quran_corpus::VALIDATOR_VERSION,
+        outcome: if fatal > 0 || error > 0 {
+            quran_corpus::Outcome::Fail
+        } else if warning > 0 {
+            quran_corpus::Outcome::PassWithWarnings
+        } else {
+            quran_corpus::Outcome::Pass
+        },
+        fatal_count: fatal,
+        error_count: error,
+        warning_count: warning,
+        findings,
+    })
+}
+
+/// Translation import manifest (v1 JSON shape).
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct TranslationManifest {
+    /// Translation edition metadata.
+    pub translation: TranslationMeta,
+    /// Verse passages.
+    pub passages: Vec<TranslationPassage>,
+}
+
+/// Translation edition metadata in the manifest.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct TranslationMeta {
+    /// Slug (unique with version).
+    pub slug: String,
+    /// Version.
+    pub version: String,
+    /// Display name.
+    pub name: String,
+    /// Named human translator (required, principle 5).
+    pub translator: String,
+    /// BCP-47 language.
+    pub language: String,
+    /// Aligned Arabic edition `slug@version`.
+    pub aligned_edition: String,
+    /// Numbering scheme.
+    pub numbering_scheme: String,
+    /// SPDX license id, when known.
+    pub spdx_id: Option<String>,
+}
+
+/// One translated passage.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct TranslationPassage {
+    /// Surah number.
+    pub surah: u16,
+    /// Ayah number.
+    pub ayah: u32,
+    /// Translated text.
+    pub text: String,
+}
+
+/// Import a translation edition: validate attribution + alignment, then store.
+pub async fn import_translations(
+    db: &dyn storage::Database,
+    manifest_text: &str,
+    source_version_id: &str,
+    invoked_by: &PrincipalId,
+    at: &Timestamp,
+) -> Result<String, ActivationError> {
+    use quran_core::{AyahNumber, SurahNumber};
+    let manifest: TranslationManifest = serde_json::from_str(manifest_text).map_err(|err| {
+        ActivationError::Storage(format!("translation manifest is not valid: {err}"))
+    })?;
+    if manifest.translation.translator.trim().is_empty() {
+        return Err(ActivationError::Storage(
+            "translation requires a non-empty translator (principle 5)".to_string(),
+        ));
+    }
+    let (aligned_slug, aligned_version) =
+        manifest.translation.aligned_edition.split_once('@').ok_or_else(|| {
+            ActivationError::Storage("aligned_edition must be `slug@version`".to_string())
+        })?;
+    let mut uow = db.write().await.map_err(ActivationError::storage)?;
+    // Alignment target must exist (canonical or staged).
+    let aligned = uow
+        .quran()
+        .get_edition_by_slug_version(aligned_slug, aligned_version)
+        .await
+        .map_err(ActivationError::storage)?;
+    let aligned_id = match aligned {
+        Some(row) => row.id,
+        None => {
+            let staged = uow
+                .quran()
+                .find_staged_edition(aligned_slug, aligned_version)
+                .await
+                .map_err(ActivationError::storage)?
+                .ok_or_else(|| {
+                    ActivationError::NotStaged {
+                        slug: aligned_slug.to_string(),
+                        version: aligned_version.to_string(),
+                    }
+                })?;
+            staged.edition_id
+        }
+    };
+    // Every passage must name a real ayah (checked against canonical when active).
+    for passage in &manifest.passages {
+        SurahNumber::new(passage.surah).map_err(|_| {
+            ActivationError::Storage(format!("bad surah {}", passage.surah))
+        })?;
+        AyahNumber::new(passage.ayah).map_err(|_| {
+            ActivationError::Storage(format!("bad ayah {}", passage.ayah))
+        })?;
+        if passage.text.trim().is_empty() {
+            return Err(ActivationError::Storage(format!(
+                "empty translation for {}:{}",
+                passage.surah, passage.ayah
+            )));
+        }
+    }
+    let id = format!("tr-{}-{}", manifest.translation.slug, manifest.translation.version);
+    let license_json = serde_json::json!({
+        "status": "Unknown",
+        "spdx_id": manifest.translation.spdx_id,
+        "attribution_required": true,
+        "redistribution_allowed": false,
+        "export_allowed": false,
+        "notes": "declared at import; verify before activation use",
+    })
+    .to_string();
+    uow.quran()
+        .insert_translation_edition(storage::quran::TranslationEditionRow {
+            id: id.clone(),
+            slug: manifest.translation.slug.clone(),
+            version: manifest.translation.version.clone(),
+            name: manifest.translation.name.clone(),
+            translator: manifest.translation.translator.clone(),
+            language: manifest.translation.language.clone(),
+            aligned_edition_id: aligned_id,
+            numbering_scheme: manifest.translation.numbering_scheme.clone(),
+            license_json,
+            trust_level: "ImportedUnverified".to_string(),
+            source_version_id: source_version_id.to_string(),
+            text_hash: String::new(),
+            status: "Staged".to_string(),
+            imported_at: at.to_string(),
+        })
+        .await
+        .map_err(ActivationError::storage)?;
+    for passage in &manifest.passages {
+        uow.quran()
+            .insert_translation_passage(storage::quran::TranslationPassageRow {
+                translation_edition_id: id.clone(),
+                surah: i64::from(passage.surah),
+                ayah: i64::from(passage.ayah),
+                text: passage.text.clone(),
+                footnotes_json: "[]".to_string(),
+                provenance_id: invoked_by.to_string(),
+            })
+            .await
+            .map_err(ActivationError::storage)?;
+    }
+    uow.commit().await.map_err(ActivationError::storage)?;
+    Ok(id)
+}
+
+/// Deprecate a canonical edition (human-gated maintenance; rows are kept).
+pub async fn deprecate_edition(
+    db: &dyn storage::Database,
+    slug: &str,
+    version: &str,
+    invoked_by: &PrincipalId,
+    approval_id: &str,
+    at: &Timestamp,
+) -> Result<(), ActivationError> {
+    let expected_subject = edition_urn(slug, version);
+    let mut uow = db.write().await.map_err(ActivationError::storage)?;
+    check_approval(&mut *uow, approval_id, &expected_subject).await?;
+    let edition = uow
+        .quran()
+        .get_edition_by_slug_version(slug, version)
+        .await
+        .map_err(ActivationError::storage)?
+        .ok_or_else(|| ActivationError::NotStaged {
+            slug: slug.to_string(),
+            version: version.to_string(),
+        })?;
+    uow.quran().set_edition_status(&edition.id, "Deprecated").await.map_err(ActivationError::storage)?;
+    audit_activation(
+        &mut *uow,
+        AuditAction::SourceRolledBack,
+        &expected_subject,
+        invoked_by,
+        &edition.id,
+        0,
+    )
+    .await?;
+    let _ = at;
+    uow.commit().await.map_err(ActivationError::storage)?;
+    Ok(())
+}
+
+/// Enqueue a `quran.import` job and run the worker inline to completion.
+pub async fn run_import_job(
+    db: &std::sync::Arc<storage_sqlite::SqliteDatabase>,
+    input: quran_corpus::import::ImportInput,
+) -> Result<jobs::JobOutcome, jobs::JobError> {
+    use jobs::queue::JobQueue;
+    use jobs::registry::HandlerRegistry;
+    use jobs::worker::Worker;
+    let queue = std::sync::Arc::new(crate::job_queue::SqliteJobQueue::new(db.clone()));
+    let registry = std::sync::Arc::new(
+        HandlerRegistry::new().register(std::sync::Arc::new(QuranImportHandler::new(db.clone()))),
+    );
+    let job_id = input.job_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let mut payload = input.clone();
+    payload.job_id = Some(job_id.clone());
+    let payload_json = serde_json::to_value(&payload)
+        .map_err(|err| jobs::JobError::Storage(format!("bad import payload: {err}")))?;
+    queue
+        .enqueue(storage::repository::JobRecord {
+            id: job_id.clone(),
+            kind: QURAN_IMPORT_KIND.into(),
+            payload_json: payload_json.to_string(),
+            idempotency_key: Some(import_idempotency_key(&input.source_version_id)),
+            state: "Queued".into(),
+            priority: 0,
+            attempts: 0,
+            max_attempts: 1,
+            available_at: input.created_at.clone(),
+            lease_owner: None,
+            lease_expires_at: None,
+            checkpoint_json: None,
+            cancel_requested: false,
+            created_by: input.invoked_by.clone(),
+        })
+        .await?;
+    let worker = Worker::new(queue.clone(), registry, "qai-cli");
+    worker.run_until_idle().await?;
+    // Read the terminal state through the queue.
+    let job = queue
+        .get(&job_id)
+        .await?
+        .ok_or_else(|| jobs::JobError::NotFound { id: job_id.clone() })?;
+    match job.state.as_str() {
+        "Succeeded" => Ok(jobs::JobOutcome { success: true, result: Some(job_id) }),
+        "Cancelled" => Err(jobs::JobError::Cancelled { id: job_id }),
+        _ => Err(jobs::JobError::Storage(format!("import job ended as {}", job.state))),
+    }
+}
