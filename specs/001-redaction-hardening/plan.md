@@ -1,113 +1,120 @@
-# Implementation Plan: [FEATURE]
+# Implementation Plan: Global Redaction Tracing Layer + Sentinel Suite
 
-**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
+**Branch**: `001-redaction-hardening` | **Date**: 2026-09-15 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
-
-**Note**: This template is filled in by the `/speckit-plan` command; its definition describes the execution workflow.
+**Input**: Feature specification from `/specs/001-redaction-hardening/spec.md`
 
 ## Summary
 
-[Extract from feature spec: primary requirement + technical approach from research]
+P0-T16 extends secret-leak protection from type-level (`Secret<T>`) and
+audit-level redaction to four new emission surfaces — traced log fields,
+diagnostic renderers, `config show`, and doctor JSON — behind one shared
+`domain::redaction` helper plus a redacting `FormatFields` wrapper on the
+`tracing_subscriber::fmt` layer, switched by the existing (currently dead)
+`logging.redact_secrets` flag. Approach per [research.md](research.md):
+leaf-crate helper, one justified allowlist line (`observability → domain`),
+behavior-preserving `audit` delegation, additive `init_with_options` API.
 
 ## Technical Context
 
-<!--
-  ACTION REQUIRED: Replace the content in this section with the technical details
-  for the project. The structure here is presented in advisory capacity to guide
-  the iteration process.
--->
+**Language/Version**: Rust, workspace `resolver = "2"`, edition 2024
+(`rust-toolchain.toml`).
 
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]
+**Primary Dependencies**: `tracing` + `tracing-subscriber` (fmt layer),
+`serde_json` (already a `domain` dep), `config` (`Secret<T>`,
+`SecretStore`, `logging.redact_secrets`), `audit`
+(`redact_audit_value`), `cli` render paths.
 
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
+**Storage**: N/A — pure in-memory transformation, no migrations, no new
+persisted state.
 
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
+**Testing**: `cargo test --workspace`; sentinel suite extended in
+`crates/testkit/tests/secret_leak.rs`; unit tests in `domain`,
+`observability`, `audit`; trycmd/schema gates unchanged.
 
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]
+**Target Platform**: local-first `qai` CLI + library crates (same binary).
 
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
+**Project Type**: Rust workspace feature across `domain`, `observability`,
+`audit`, `application`, `cli` (+ `testkit` suite).
 
-**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]
+**Performance Goals**: secret-free hot paths unchanged — `redact_text`
+returns borrowed input when clean (zero-alloc); field-name check is a
+small substring scan per recorded field; no per-event allocation blowup.
 
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]
+**Constraints**: `unsafe_code = "forbid"`; `clippy -D warnings`; fmt
+clean; `arch-check` green WITH the one-line allowlist amendment;
+`migrate-check` untouched; doctor JSON schema (`additionalProperties:
+false`) — structure-preserving redaction only; no new external
+dependencies (manual pattern scan, no regex crate).
 
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]
-
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Scale/Scope**: 4 emission surfaces (US1–US3), 6 new sentinel tests,
+1 allowlist line, 1 additive constructor; OTLP span scrubbing explicitly
+deferred to follow-up (spec Assumptions).
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+- I (Canonical integrity): PASS — no canonical paths touched.
+- II (Layered trust/provenance): PASS — strengthens Layer E separation;
+  no provenance schema changes.
+- III (Traceability/reproducibility): PASS — no tool contracts changed;
+  doctor schema shape preserved by construction.
+- IV (Scholarly honesty): N/A — no scholarly content.
+- V (Test-first/gates): PASS — suite-first per FR-006/007; full gate
+  sweep in quickstart §6.
+- VI (Local-first/deny-by-default): PASS — default-on redaction, flag is
+  an opt-out escape hatch; no network/egress changes; no secret values
+  leave the process in tests (sentinel is fake).
+- VII (Simplicity/architecture): CONDITIONAL PASS — the single
+  `observability → domain` allowlist addition is a leaf-ward edge with
+  zero cycle risk, recorded with justification here (research D2), not
+  silent. `cli` consumes via `application` re-export (composition root).
+  No new crates, no new external deps.
+
+Post-design re-check: no new violations introduced beyond the one
+declared amendment. GATE OPEN.
 
 ## Project Structure
 
 ### Documentation (this feature)
 
 ```text
-specs/[###-feature]/
+specs/001-redaction-hardening/
 ├── plan.md              # This file (/speckit-plan command output)
 ├── research.md          # Phase 0 output (/speckit-plan command)
 ├── data-model.md        # Phase 1 output (/speckit-plan command)
 ├── quickstart.md        # Phase 1 output (/speckit-plan command)
 ├── contracts/           # Phase 1 output (/speckit-plan command)
+│   └── redaction-api.md
 └── tasks.md             # Phase 2 output (/speckit-tasks command - NOT created by /speckit-plan)
 ```
 
 ### Source Code (repository root)
-<!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
--->
 
 ```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
-src/
-├── models/
-├── services/
-├── cli/
-└── lib/
+crates/
+├── domain/src/redaction.rs          # NEW: shared helper (Rule A/B/C, marker)
+├── domain/src/diagnostic.rs         # MOD: render-time redaction
+├── domain/src/lib.rs                # MOD: pub mod redaction
+├── audit/src/lib.rs                 # MOD: delegate to domain::redaction
+├── observability/src/lib.rs         # MOD: InitOptions + redacting FormatFields
+├── observability/Cargo.toml         # MOD: + domain path dep
+├── application/src/lib.rs           # MOD: re-export + thread flag in run()
+├── cli/src/lib.rs                   # MOD: config-show redact-then-print
+├── cli/src/doctor.rs                # MOD: doctor JSON redact-then-print
+├── testkit/tests/secret_leak.rs     # MOD: six new sentinel tests
+└── xtask/allowlist.toml             # MOD: one justified line (observability → domain)
 
-tests/
-├── contract/
-├── integration/
-└── unit/
-
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
-
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+tests/ — workspace suites above; no new harness.
 ```
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+**Structure Decision**: Rust workspace, existing crates only — no new
+crate (VII simplicity; helper belongs in the `domain` leaf). Single
+project layout; paths above are exact per contracts.
 
 ## Complexity Tracking
 
-> **Fill ONLY if Constitution Check has violations that must be justified**
-
 | Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|-------------------------------------|
-| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
-| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+|---|---|---|
+| `observability → domain` allowlist addition | Tracing layer must share the exact key matcher + marker with audit/diagnostics | Duplication re-creates the matcher drift this feature closes; placing the helper in `observability` strands `domain::Diagnostic` and `audit` (wrong-direction edges) |

@@ -1,7 +1,7 @@
 # Phase 2 — Completion Ledger
 
 **Phase:** P2 — Quran Search, Arabic Normalization, Morphology & Word Families
-**Status:** 🟡 In Progress — 16 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 3 / 6 migrations
+**Status:** 🟡 In Progress — 18 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 3 / 6 migrations
 **Started:** 2026-09-14
 **Completed:** —
 
@@ -48,11 +48,11 @@ with what evidence.
 | 2.0 — Dataset & Linguistic Decisions | 12 | 0 | 30.5 | — | ☐ |
 | 2.1 — Normalization Engine | 12 | 3 | 28.5 | — | ☐ |
 | 2.2 — Derived Forms & FTS Foundation | 15 | 10 | 33.5 | — | ☐ |
-| 2.3 — Search Tools | 17 | 3 | 42.0 | — | ☐ |
+| 2.3 — Search Tools | 17 | 5 | 42.0 | — | ☐ |
 | 2.4 — Morphology Import & Lexicons | 18 | 0 | 45.0 | — | ☐ |
 | 2.5 — Morphology & Family Tools | 19 | 0 | 47.5 | — | ☐ |
 | 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 0 | 51.0 | — | ☐ |
-| **Total** | **114 + 5** | **16** | **278.0** | **—** | **14%** |
+| **Total** | **114 + 5** | **18** | **278.0** | **—** | **16%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -239,6 +239,24 @@ _None completed yet._
 - **Evidence:** `crates/quran-search/src/hit.rs` (`SearchHit::new` validating assembly, `ScoreExplain`, `Warning`, `SearchHitParts`); 4 unit tests (reference/quotation/link derivation, traceless/spurious rejection incl. `QAI-IDX-0006`, stale-warning code, JSON round-trip); `CanonicalSpan::byte_range_in` + multibyte tests in `quran-normalization`
 - **DoD:** ✅ all items / private fields + single validating constructor (no trace-less, span-less, or quotation-less hit exists); fail-closed `InvalidHit`; references derived via the Phase-1 grammar (`canonical_form`), never hand-formatted
 - **Notes:** `QAI-IDX-0006 InvalidHit` opened. Token bounds beyond non-emptiness verify downstream (citation resolver, AC-P2-12, M3). Byte ranges derive on demand from canonical text; nothing stores redundant offsets.
+
+### P2-T43 — `quran.search_phrase` (ordered/near/unordered, slop)
+- **Deliverable:** D2.5
+- **Completed:** 2026-09-15
+- **Owner:** agent (SRCH)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/application/src/quran_search.rs`)
+- **Evidence:** `search_phrase` (FTS phrase/NEAR recall prefilter with loose bounds + exact Rust verification of order/gap/window semantics; totals count verified matches only); unit tests (gap discrimination, unordered windows, derived-token offsets) + fixture tests (exact/gap/reversed discrimination, empty-query zero, explain scores)
+- **DoD:** ✅ all items / reported spans always satisfy the mode (prefilter never leaks unverified hits into totals); traces + quotations via the single assembly path
+- **Notes:** recall bounds deliberately loose (unordered prefilter widens by term count); exactness lives in verification. Unordered matching uses window scans, not combinatorial assignment.
+
+### P2-T44 — `quran.search_concatenated`: candidate gen → verify → segmentation explanation
+- **Deliverable:** D2.4
+- **Completed:** 2026-09-15
+- **Owner:** agent (SRCH)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/application/src/quran_search.rs`)
+- **Evidence:** `search_concatenated` (trigram recall probes over stored skeletons → exact substring verify → re-normalization check → per-token segmentation); `verify_concatenated` + `segment_concatenated` public for tool reuse; basmala segmentation unit proof (parts tile the query exactly) + fixture end-to-end (tiling assertion); cross-ayah rejection test
+- **DoD:** ✅ all items / every hit carries `segmentation` with query parts tiling the skeleton; `spans_token_boundary` semantics hold by construction (L6 removes spaces); `allow_cross_ayah=true` fails typed until P2-T45, never silently ayah-local
+- **Notes:** trigram probes are Rust-side `contains` until the T36 posting index replaces the scan. `Segmentation` lives on `SearchHit` (empty for other tools); `AyahMatch` made public for reuse.
 
 ### Sprint 2.4 — Morphology Import & Lexicons
 

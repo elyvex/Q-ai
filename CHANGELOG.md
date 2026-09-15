@@ -78,6 +78,13 @@ All notable changes to Q-ai are documented here.
   verified scans, typed profile-or-rules selector, explain toggles
   relevance + BM25 breakdowns) — both assembling `SearchHit` through the
   single validating path with drift warnings.
+- **application** (M3): `quran.search_phrase` (ordered-exact/near +
+  unordered-near with FTS recall prefilter and exact Rust verification of
+  gap/window semantics) and `quran.search_concatenated` (trigram recall
+  over skeletons, exact verify, re-normalization check, per-token
+  segmentation tiling the query; cross-ayah rejected until P2-T45);
+  `Segmentation` on `SearchHit`; cluster→char unit boundary helper
+  (Phase-1 token offsets are grapheme clusters, spans are scalars).
 
 ### Added — Phase 1 Canonical Quran Core (in progress)
 - **cli**: read verbs `quran get/context/surah/division/resolve` and lifecycle verbs

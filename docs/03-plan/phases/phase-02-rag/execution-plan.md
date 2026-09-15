@@ -767,3 +767,27 @@ quran-normalization` as the next command.
 - **Next concrete action (M3):** phrase + concatenated search (P2-T43/T44:
   slop/unordered-near, skeleton trigram candidates → verify → segment);
   next command `cargo test -p quran-search`.
+
+---
+
+## 28. Session checkpoint — 2026-09-15 (M3: T43/T44 done)
+
+- **Completed:** `search_phrase` (3 modes + slop, FTS recall + exact Rust
+  verification), `search_concatenated` (trigram recall, exact verify,
+  re-normalization check, tiling segmentation), `Segmentation` on
+  `SearchHit`, public `AyahMatch`/`verify_concatenated`/`segment_concatenated`,
+  cluster→char unit-boundary helper.
+- **Tasks flipped ☑:** P2-T43, P2-T44 (evidence in `done.md` §2).
+- **Verification (all green in scope):** `search_tools.rs` 7/7 (phrase
+  discrimination, basmala + fixture segmentation incl. tiling, cross-ayah
+  rejection, empty queries); application lib unit tests (gap/window/token
+  offsets); `clippy -D warnings` clean; per-file rustfmt clean.
+- **Load-bearing find:** Phase-1 token offsets are grapheme-cluster units
+  (tokenizer source confirms) while spans are scalar units — the service
+  converts at exactly one helper now; this boundary is documented in code.
+  Two segmentation bugs caught by tests (query-relative offsets, byte-table
+  duplicate zero); one wrong hand-built fixture row (miscounted clusters).
+- **Deferred:** cross-ayah windows + dedup (P2-T45), trigram posting index
+  (T36), highlight markers (T49), mushaf goldens (need licensed corpus).
+- **Next concrete action (M3):** regex + total/filters/highlight/cache
+  (P2-T46/T47/T48/T49/T50); next command `cargo test -p quran-search`.

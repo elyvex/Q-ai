@@ -33,7 +33,8 @@ sentinel appears in zero bytes while non-secret fields remain intact.
 1. **Given** a secret value is held in memory and code logs the surrounding
    context at any level, **When** the full captured log output is searched,
    **Then** the secret string appears zero times and a redaction marker
-   appears in its place.
+   appears in its place. (Scope: configured log appenders and files;
+   OTLP span export is an explicit follow-up — see Assumptions.)
 2. **Given** structured log fields containing a mix of secret and non-secret
    values, **When** the output is inspected, **Then** non-secret fields
    (ids, durations, counts) are preserved byte-for-byte.
@@ -165,3 +166,6 @@ for the redacted settings is still present.
   introduced later are a follow-up, not this feature.
 - CLI commands under test already support machine-readable output and a
   non-interactive mode suitable for output capture.
+- OTLP span export is out of scope: telemetry is off by default and the
+  existing content-field denylist already gates export payloads; span-field
+  scrubbing for the OTLP path is recorded as a follow-up.
