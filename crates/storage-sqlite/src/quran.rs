@@ -1632,13 +1632,12 @@ impl QuranRepository for SqliteQuranRepository {
 
     async fn max_build_generation(&self, index_id: &str) -> Result<i64, StorageError> {
         let mut tx = self.tx.lock().await;
-        let max: Option<i64> = sqlx::query_scalar(
-            "SELECT MAX(generation) FROM index_build_runs WHERE index_id = ?",
-        )
-        .bind(index_id)
-        .fetch_one(&mut **tx)
-        .await
-        .map_err(map_sqlx_error)?;
+        let max: Option<i64> =
+            sqlx::query_scalar("SELECT MAX(generation) FROM index_build_runs WHERE index_id = ?")
+                .bind(index_id)
+                .fetch_one(&mut **tx)
+                .await
+                .map_err(map_sqlx_error)?;
         Ok(max.unwrap_or(0))
     }
 }
