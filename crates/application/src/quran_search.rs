@@ -19,7 +19,7 @@
 
 use std::collections::HashMap;
 
-use quran_normalization::{NormalizationTrace, ProfileRegistry, RuleId, SemVer};
+use quran_normalization::{NormalizationTrace, RuleId, SemVer};
 use quran_search::{
     Diagnostic as SearchDiagnostic, FieldId, Filter, FtsQuery, FullTextIndex, Fts5Index,
     IndexError, IndexManifest, ResultOrder, ScoreExplain, SearchHit, SearchHitParts,
@@ -183,7 +183,6 @@ impl storage::error::Diagnostic for SearchError {
 struct Serving {
     index: Fts5Index,
     manifest: IndexManifest,
-    edition_id: String,
     edition_id: String,
     edition_slug: String,
     edition_version: String,
@@ -556,7 +555,7 @@ async fn whole_token_candidates(
         if page.hits.is_empty() {
             break;
         }
-        for hit in page.hits {
+        for hit in &page.hits {
             let (surah, ayah) =
                 parse_doc_id(&hit.doc_id, &serving.manifest.index_id, &serving.edition_id)?;
             candidates.push(Candidate { surah, ayah, score: hit.score });
@@ -616,7 +615,7 @@ fn scan_match(
     query: &str,
     mode: MatchMode,
 ) -> Option<(quran_normalization::CanonicalSpan, Vec<usize>)> {
-    let derived = pipeline.apply(ayah_text);
+    let derived = pipeline.apply(ayah_text).0;
     let text = derived.text();
     let (start, end) = match mode {
         MatchMode::WholeToken => {
