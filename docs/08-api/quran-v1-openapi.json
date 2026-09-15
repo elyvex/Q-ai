@@ -1,0 +1,132 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Q-ai Quran Read API",
+    "version": "v1",
+    "description": "Deterministic, LLM-free canonical Quran lookup (Phase 1). Every response uses the stable envelope {api_version, data, meta}; errors use the Diagnostic body."
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "health",
+        "responses": {"200": {"description": "ok (text/plain)"}}
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "ready",
+        "responses": {"200": {"description": "ready (text/plain)"}}
+      }
+    },
+    "/api/v1/quran/editions": {
+      "get": {
+        "operationId": "listEditions",
+        "parameters": [
+          {"name": "status", "in": "query", "schema": {"type": "string"}},
+          {"name": "language", "in": "query", "schema": {"type": "string"}}
+        ],
+        "responses": {"200": {"description": "envelope of edition descriptors"}}
+      }
+    },
+    "/api/v1/quran/editions/{slug}": {
+      "get": {
+        "operationId": "getEdition",
+        "parameters": [{"name": "slug", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"description": "envelope of one edition"}, "404": {"description": "diagnostic body"}}
+      }
+    },
+    "/api/v1/quran/surahs": {
+      "get": {
+        "operationId": "listSurahs",
+        "parameters": [{"name": "edition", "in": "query", "schema": {"type": "string"}}],
+        "responses": {"200": {"description": "envelope of surah descriptors"}}
+      }
+    },
+    "/api/v1/quran/surahs/{number}": {
+      "get": {
+        "operationId": "getSurah",
+        "parameters": [
+          {"name": "number", "in": "path", "required": true, "schema": {"type": "integer"}},
+          {"name": "edition", "in": "query", "schema": {"type": "string"}}
+        ],
+        "responses": {"200": {"description": "envelope of surah + ayah texts"}, "404": {"description": "diagnostic body"}}
+      }
+    },
+    "/api/v1/quran/ayahs/{reference}": {
+      "get": {
+        "operationId": "getAyah",
+        "parameters": [
+          {"name": "reference", "in": "path", "required": true, "schema": {"type": "string"}},
+          {"name": "edition", "in": "query", "schema": {"type": "string"}},
+          {"name": "translations", "in": "query", "schema": {"type": "string"}},
+          {"name": "glosses", "in": "query", "schema": {"type": "boolean"}},
+          {"name": "tokens", "in": "query", "schema": {"type": "boolean"}}
+        ],
+        "responses": {
+          "200": {"description": "envelope of ayah views; ETag from (text_hash, corpus_generation)"},
+          "400": {"description": "diagnostic body"},
+          "404": {"description": "diagnostic body"}
+        }
+      }
+    },
+    "/api/v1/quran/context/{reference}": {
+      "get": {
+        "operationId": "getContext",
+        "parameters": [
+          {"name": "reference", "in": "path", "required": true, "schema": {"type": "string"}},
+          {"name": "before", "in": "query", "schema": {"type": "integer"}},
+          {"name": "after", "in": "query", "schema": {"type": "integer"}},
+          {"name": "boundary", "in": "query", "schema": {"type": "string", "enum": ["surah", "juz", "ruku", "page", "none"]}},
+          {"name": "max_ayahs", "in": "query", "schema": {"type": "integer"}}
+        ],
+        "responses": {"200": {"description": "envelope of context view"}, "400": {"description": "diagnostic body"}, "404": {"description": "diagnostic body"}}
+      }
+    },
+    "/api/v1/quran/divisions/{kind}/{number}": {
+      "get": {
+        "operationId": "getDivision",
+        "parameters": [
+          {"name": "kind", "in": "path", "required": true, "schema": {"type": "string"}},
+          {"name": "number", "in": "path", "required": true, "schema": {"type": "integer"}},
+          {"name": "edition", "in": "query", "schema": {"type": "string"}}
+        ],
+        "responses": {"200": {"description": "envelope of ayah references+texts"}, "404": {"description": "diagnostic body"}}
+      }
+    },
+    "/api/v1/quran/tokens/{reference}": {
+      "get": {
+        "operationId": "getTokens",
+        "parameters": [
+          {"name": "reference", "in": "path", "required": true, "schema": {"type": "string"}},
+          {"name": "edition", "in": "query", "schema": {"type": "string"}}
+        ],
+        "responses": {"200": {"description": "envelope of token rows"}, "404": {"description": "diagnostic body"}}
+      }
+    },
+    "/api/v1/quran/resolve": {
+      "get": {
+        "operationId": "resolveReference",
+        "parameters": [{"name": "ref", "in": "query", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"description": "envelope of canonical reference"}, "400": {"description": "diagnostic body"}, "404": {"description": "diagnostic body"}}
+      }
+    },
+    "/api/v1/quran/citations/{id}": {
+      "get": {
+        "operationId": "resolveCitation",
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"description": "envelope of resolved citation"}, "404": {"description": "diagnostic body"}}
+      }
+    },
+    "/debug/read/{edition}/{surah}": {
+      "get": {
+        "operationId": "debugRead",
+        "description": "Labelled debug view (not the product UI): RTL HTML, no persistence.",
+        "parameters": [
+          {"name": "edition", "in": "path", "required": true, "schema": {"type": "string"}},
+          {"name": "surah", "in": "path", "required": true, "schema": {"type": "integer"}}
+        ],
+        "responses": {"200": {"description": "HTML"}}
+      }
+    }
+  }
+}
