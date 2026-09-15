@@ -236,6 +236,50 @@ pub struct TranslationPassageRow {
     pub provenance_id: String,
 }
 
+/// One index pointer row: the serving generation for an index id.
+///
+/// The pointer is the only mutable Phase-2 catalog row by design; flips
+/// happen in one transaction with the build-run state change.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IndexPointerRow {
+    /// Index identity (`quran.ayah.v1`).
+    pub index_id: String,
+    /// Serving build generation.
+    pub generation: i64,
+    /// Serving manifest as JSON.
+    pub manifest_json: String,
+    /// Flip timestamp (RFC 3339).
+    pub updated_at: String,
+    /// Operator principal id.
+    pub updated_by: String,
+}
+
+/// One index build-run row: staged → verifying → active|failed, with the
+/// previous active generation moving to superseded on flip.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IndexBuildRunRow {
+    /// Run id (unique per attempt).
+    pub id: String,
+    /// Index identity.
+    pub index_id: String,
+    /// Build generation.
+    pub generation: i64,
+    /// Corpus generation indexed.
+    pub corpus_generation: i64,
+    /// `staged` | `verifying` | `active` | `failed` | `superseded`.
+    pub state: String,
+    /// Documents committed.
+    pub doc_count: i64,
+    /// Manifest content hash.
+    pub manifest_hash: String,
+    /// Failure detail (failed runs only).
+    pub error: Option<String>,
+    /// Start timestamp (RFC 3339).
+    pub started_at: String,
+    /// Finish timestamp (RFC 3339, if finished).
+    pub finished_at: Option<String>,
+}
+
 /// One derived token-form row (migration `0014`, Layer D).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokenFormRow {
@@ -809,6 +853,53 @@ pub trait QuranRepository: Send + Sync {
     /// Delete all derived forms for one edition (rebuilds only; canonical
     /// tables are never touched by this method).
     async fn delete_forms_for_edition(&mut self, _edition_id: &str) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    // ─── Phase 2 — index lifecycle (migration 0015) ───────────────────
+
+    /// Fetch the serving pointer for an index id.
+    async fn get_index_pointer(
+        &self,
+        _index_id: &str,
+    ) -> Result<Option<IndexPointerRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Insert or replace the serving pointer (flip path only; called inside
+    /// the same transaction as the build-run state change).
+    async fn upsert_index_pointer(&mut self, _row: IndexPointerRow) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Record a new index build run.
+    async fn insert_build_run(&mut self, _row: IndexBuildRunRow) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Update a build run's terminal state (active/failed/superseded).
+    async fn set_build_run_state(
+        &mut self,
+        _id: &str,
+        _state: &str,
+        _doc_count: i64,
+        _manifest_hash: &str,
+        _error: Option<&str>,
+        _finished_at: &str,
+    ) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// List build runs for an index ordered by generation.
+    async fn list_build_runs(
+        &self,
+        _index_id: &str,
+    ) -> Result<Vec<IndexBuildRunRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Highest build generation for an index id (0 when never built).
+    async fn max_build_generation(&self, _index_id: &str) -> Result<i64, StorageError> {
         Err(StorageError::StorageUnavailable)
     }
 }
