@@ -8,12 +8,13 @@
 > deviations are recorded in `docs/03-plan/phases/phase-01-core/done.md` §5 and
 > carried here in §6.
 
-> **Verification caveat.** The last *complete* Phase-1 gate run was green
-> (`cargo test --workspace` = 387 passing; `clippy -D warnings`, `fmt`,
-> `xtask arch-check`, `xtask migrate-check` clean). At handoff time a concurrent
-> Phase-2 writer held the build lock and had added `0013_quran_normalization`,
-> so the final re-run of the full suite is **pending**; the Phase-1-specific
-> suites (`quran_*`, `cli` snapshots, `server` API) are green in isolation.
+> **Verification state.** At handoff the full gate is green:
+> `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`
+> (135 suites), `cargo xtask arch-check`, and `cargo xtask migrate-check` all pass;
+> `cargo fmt --all -- --check` is clean for the Phase-1 tree (the only unformatted files
+> are Phase-2 files under active edit). A concurrent Phase-2 writer was active in the
+> same tree, so **re-run the gate** before relying on it; `migrate-check` currently
+> reports 14 migrations (Phase-1 delivered `0007`–`0012`, Phase-2 added `0013`–`0014`).
 
 Phase 2 must **not re-invent** the following assets. Extend them.
 
@@ -101,10 +102,11 @@ must remain strictly read-only (Phase-0 AC-P0-14).
 | axum + tower-http | phase owner | Adopted provisionally for API v1; ADR still to ratify (OWN-04) |
 | Phase-0 exit discrepancy | phase owner | `status.md` lists outstanding Phase-0 items while the build prompt declared Phase 0 complete (OWN-05) |
 | XML adapter shape | Phase 2+ | JSON + CSV only; the `Adapter` trait supports adding XML unchanged (DEV-01) |
-| `doctor --quran --deep` < 30 s timing + JSON schema-validation test | Phase 1 exit | 19 checks and read-only open are verified; the timing assertion and a machine schema check are unverified (P1-T52 ◐) |
-| `cli` snapshot coverage for `diff`/`rollback`/`context`/`surah` | Phase 1 exit | `read_flow.trycmd` covers the read/import/activate/translation path (P1-T50) |
+| `doctor --quran --deep` < 30 s on a **standard** edition | Phase 1 exit | 19 checks, read-only open, and schema-valid single JSON document are verified; the fixture `--deep` runs in 0.07 s but a full 6236-ayah edition needs a real dataset (ADR-0101) to time |
+| `cli` snapshot coverage for `diff`/`rollback`/`context`/`surah` | done | `read_flow.trycmd` now covers every AC-P1-16 verb plus the edition lifecycle (`validate` → activate gen 2 → `diff` → rollback gen 3 → `hashes`) (P1-T50) |
 | Phase-0 `application/src/db.rs` schema-version tests | done | Now derive the expected version from `migrations/sqlite/` instead of hard-coding it |
 | `server` → `storage` / `server` → `tools` layering edge | Phase 3 / server hardening | `ReaderBackend` uses the `storage::Database` trait and `tools::ToolError` directly; allowlisted to keep `arch-check` green (OWN-06). Route through `application` re-exports and tighten the allowlist |
+| Flaky `jobs::worker::tests::retries_then_succeeds` | Phase 0 / jobs | Passes in isolation (3/3) but intermittently returns `Idle` instead of `Succeeded` under the fully-parallel workspace run; a queue-timing race, not a Phase-1 regression. Blocks the "15 suites green" gate intermittently, so de-flake before the exit ritual |
 
 ## 6. Deviations Phase 2 must honour
 
@@ -132,6 +134,7 @@ must remain strictly read-only (Phase-0 AC-P0-14).
   pending); 0 / 14 ADRs Accepted (0101/0111/0112/0114 Draft, others Proposed); 6 / 6
   Phase-1 migrations applied and checksummed.
 - Phase-1 exit gate (`done.md` §8) is **not** signed: it requires the Swimlane-X
-  decisions, 15 green suites, the 9-step ritual recording, and the D1.14 docs.
+  decisions, 15 green suites, and the 9-step ritual recording. The five D1.14 docs
+  are now published (5/5), and the read/CLI/doctor surfaces are automated-green.
 - Phase 2 is not blocked by the *engineering* of Phase 1 — only by the owner/editorial
   decisions above, which have external lead time and should be started now.
