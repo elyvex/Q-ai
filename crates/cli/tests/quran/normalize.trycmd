@@ -1,0 +1,150 @@
+# Phase 2 CLI acceptance — normalization introspection (M1c, P2-T23/T24).
+
+`QAI_DATA_DIR` points the real `qai` binary at a fresh temp database (set by the
+harness). The normalize commands prove the migration seed on every call: profile
+definitions come from seeded rows, implementations from code.
+
+```console
+$ qai db migrate
+migrations applied; schema version [..]
+
+```
+
+```console
+$ qai quran normalize --list-profiles
+L0.exact@1.0.0 — Exact canonical [indexed]
+L1.ws@1.0.0 — Exact after whitespace normalization [indexed]
+L2.marks@1.0.0 — Ignore Quranic marks [indexed]
+L3.diacritics@1.0.0 — Ignore diacritics [indexed]
+L4.hamza@1.0.0 — Normalize hamza/alif [indexed]
+L5.codepoints@1.0.0 — Normalize Arabic/Persian code points [indexed]
+L6.skeleton@1.0.0 — Space-insensitive skeleton [indexed]
+L7.affix@1.0.0 — Morphological (heuristic affix) search [indexed, heuristic]
+L8.fuzzy@1.0.0 — Fuzzy spelling search [query-time, experimental]
+
+```
+
+```console
+$ qai quran normalize --show-rule N06
+N06 normalize_hamza_forms [deterministic] v1.0.0
+Fold hamza carriers to bare alef/waw/yeh; standalone hamza deleted
+
+```
+
+```console
+$ qai quran normalize "بِسْمِ" --profile L3.diacritics
+input: بِسْمِ
+output: بسم
+profile: L3.diacritics@1.0.0
+
+```
+
+`--explain` prints the rule-by-rule transformation with the trace label.
+
+```console
+$ qai quran normalize "بِسْمِ" --profile L3.diacritics --explain
+input: بِسْمِ
+profile: L3.diacritics@1.0.0
+output: بسم
+rules applied (8):
+  N01 whitespace_collapse [deterministic] v1.0.0
+    → بِسْمِ
+  N11 strip_zero_width_and_bidi [deterministic] v1.0.0
+    → بِسْمِ
+  N16 nfc [deterministic] v1.0.0
+    → بِسْمِ
+  N04 strip_quranic_marks [deterministic] v1.0.0
+    → بِسْمِ
+  N14 strip_pause_marks [deterministic] v1.0.0
+    → بِسْمِ
+  N03 strip_harakat [deterministic] v1.0.0
+    → بسم
+  N05 strip_superscript_alef [deterministic] v1.0.0
+    → بسم
+  N02 strip_tatweel [deterministic] v1.0.0
+    → بسم
+
+```
+
+Heuristic profiles carry the mandatory label.
+
+```console
+$ qai quran normalize "والكتب" --profile L7.affix --explain
+input: والكتب
+profile: L7.affix@1.0.0
+output: الكتب
+rules applied (19):
+  N01 whitespace_collapse [deterministic] v1.0.0
+    → والكتب
+  N11 strip_zero_width_and_bidi [deterministic] v1.0.0
+    → والكتب
+  N16 nfc [deterministic] v1.0.0
+    → والكتب
+  N04 strip_quranic_marks [deterministic] v1.0.0
+    → والكتب
+  N14 strip_pause_marks [deterministic] v1.0.0
+    → والكتب
+  N03 strip_harakat [deterministic] v1.0.0
+    → والكتب
+  N05 strip_superscript_alef [deterministic] v1.0.0
+    → والكتب
+  N02 strip_tatweel [deterministic] v1.0.0
+    → والكتب
+  N07 normalize_wasla [deterministic] v1.0.0
+    → والكتب
+  N06 normalize_hamza_forms [deterministic] v1.0.0
+    → والكتب
+  N08 normalize_alif_maqsura [deterministic] v1.0.0
+    → والكتب
+  N10 normalize_persian_codepoints [deterministic] v1.0.0
+    → والكتب
+  N13 fold_digits [deterministic] v1.0.0
+    → والكتب
+  N09 normalize_ta_marbuta [deterministic] v1.0.0
+    → والكتب
+  N15 expand_presentation_forms [deterministic] v1.0.0
+    → والكتب
+  N18 strip_definite_article [heuristic] v1.0.0
+    → والكتب
+  N19 strip_conjunction_prefix [heuristic] v1.0.0
+    → الكتب
+  N20 strip_preposition_prefix [heuristic] v1.0.0
+    → الكتب
+  N21 strip_pronoun_suffix [heuristic] v1.0.0
+    → الكتب
+note: matched using heuristic affix stripping — not verified scholarship
+
+```
+
+Adhoc rule lists work without a profile, and `--profile` with `--rules` is a
+usage error.
+
+```console
+$ qai quran normalize "بِسْمِ" --rules N01,N03
+input: بِسْمِ
+output: بسم
+profile: adhoc:bdfecf81301d
+
+```
+
+```console
+$ qai quran normalize "x" --profile L3.diacritics --rules N01
+? 2
+error: use either --profile or --rules, never both
+
+```
+
+Unknown profiles and rules fail with actionable errors.
+
+```console
+$ qai quran normalize "x" --profile L9.nope
+? 2
+error: unknown normalization profile 'L9.nope'
+
+```
+
+```console
+$ qai quran normalize --show-rule N23
+N23 transliterate is reserved for Phase 4 (transliteration/phonetics)
+
+```
