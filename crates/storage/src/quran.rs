@@ -236,6 +236,93 @@ pub struct TranslationPassageRow {
     pub provenance_id: String,
 }
 
+/// One derived token-form row (migration `0014`, Layer D).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TokenFormRow {
+    /// Canonical edition id.
+    pub edition_id: String,
+    /// Surah number.
+    pub surah: i64,
+    /// Ayah number.
+    pub ayah: i64,
+    /// 1-based token position.
+    pub position: i64,
+    /// `L2.marks` form.
+    pub simple: String,
+    /// `L3.diacritics` form.
+    pub bare: String,
+    /// `L4.hamza` form.
+    pub hamza_folded: String,
+    /// `L5.codepoints` form.
+    pub folded: String,
+    /// `L7.affix` form (token-level only).
+    pub affix_stripped: String,
+    /// Reserved (N23, Phase 4); always `None` in Phase 2.
+    pub transliteration: Option<String>,
+    /// Reserved (N24, experimental); always `None` in Phase 2.
+    pub phonetic: Option<String>,
+    /// Producing rule set (e.g. `quran-normalization`).
+    pub rule_set_id: String,
+    /// Profile ladder version (e.g. `1.0.0`).
+    pub rule_set_version: String,
+    /// Corpus generation at build time.
+    pub corpus_generation: i64,
+    /// Layer D provenance record.
+    pub provenance_id: String,
+}
+
+/// One derived ayah-form row (migration `0014`, Layer D).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AyahFormRow {
+    /// Canonical edition id.
+    pub edition_id: String,
+    /// Surah number.
+    pub surah: i64,
+    /// Ayah number.
+    pub ayah: i64,
+    /// `L2.marks` form.
+    pub simple: String,
+    /// `L3.diacritics` form.
+    pub bare: String,
+    /// `L4.hamza` form.
+    pub hamza_folded: String,
+    /// `L5.codepoints` form.
+    pub folded: String,
+    /// Reserved (N23, Phase 4); always `None` in Phase 2.
+    pub transliteration: Option<String>,
+    /// Producing rule set (e.g. `quran-normalization`).
+    pub rule_set_id: String,
+    /// Profile ladder version (e.g. `1.0.0`).
+    pub rule_set_version: String,
+    /// Corpus generation at build time.
+    pub corpus_generation: i64,
+    /// Layer D provenance record.
+    pub provenance_id: String,
+}
+
+/// One skeleton row: an ayah skeleton or a 3-ayah window (migration `0014`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkeletonRow {
+    /// Canonical edition id.
+    pub edition_id: String,
+    /// Surah number (windows never cross a surah boundary).
+    pub surah: i64,
+    /// Window start ayah (equals `ayah_end` for single-ayah rows).
+    pub ayah_start: i64,
+    /// Window end ayah (`ayah_start..=ayah_start+2`).
+    pub ayah_end: i64,
+    /// `L6.skeleton` form.
+    pub skeleton: String,
+    /// Producing rule set (e.g. `quran-normalization`).
+    pub rule_set_id: String,
+    /// Profile ladder version (e.g. `1.0.0`).
+    pub rule_set_version: String,
+    /// Corpus generation at build time.
+    pub corpus_generation: i64,
+    /// Layer D provenance record.
+    pub provenance_id: String,
+}
+
 /// One seeded normalization rule (migration `0013`, append-only).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NormalizationRuleRow {
@@ -665,6 +752,63 @@ pub trait QuranRepository: Send + Sync {
         &mut self,
         _row: NormalizationProfileRow,
     ) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    // ─── Phase 2 — derived forms (migration 0014, Layer D) ────────────
+
+    /// Bulk-insert derived token forms (called by `forms.rebuild`).
+    async fn insert_token_forms(&mut self, _rows: Vec<TokenFormRow>) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Bulk-insert derived ayah forms (called by `forms.rebuild`).
+    async fn insert_ayah_forms(&mut self, _rows: Vec<AyahFormRow>) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Bulk-insert skeleton rows: ayah skeletons plus 3-ayah windows.
+    async fn insert_skeletons(&mut self, _rows: Vec<SkeletonRow>) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// List derived token forms for one ayah in position order.
+    async fn list_token_forms(
+        &self,
+        _edition_id: &str,
+        _surah: i64,
+        _ayah: i64,
+    ) -> Result<Vec<TokenFormRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Fetch one derived ayah-form row.
+    async fn get_ayah_form(
+        &self,
+        _edition_id: &str,
+        _surah: i64,
+        _ayah: i64,
+    ) -> Result<Option<AyahFormRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// List skeleton rows for one surah ordered by window start.
+    async fn list_skeletons(
+        &self,
+        _edition_id: &str,
+        _surah: i64,
+    ) -> Result<Vec<SkeletonRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Count derived token-form rows for one edition (build verification).
+    async fn count_token_forms(&self, _edition_id: &str) -> Result<i64, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Delete all derived forms for one edition (rebuilds only; canonical
+    /// tables are never touched by this method).
+    async fn delete_forms_for_edition(&mut self, _edition_id: &str) -> Result<(), StorageError> {
         Err(StorageError::StorageUnavailable)
     }
 }
