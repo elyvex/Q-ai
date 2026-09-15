@@ -95,20 +95,30 @@ impl IndexBuildError {
 
 impl storage::error::Diagnostic for IndexBuildError {
     fn code(&self) -> storage::error::DiagnosticCode {
+        use quran_search::IndexError as IE;
         match self {
             Self::Storage(_) => storage::error::DiagnosticCode::new("QAI-IDX", 3),
-            Self::Forms(inner) => {
-                let rendered = inner.code().to_string();
-                let (ns, number) = rendered
-                    .split_once('-')
-                    .and_then(|(ns, n)| n.parse::<u32>().ok().map(|n| (ns, n)))
-                    .unwrap_or(("QAI-IDX", 3));
-                storage::error::DiagnosticCode::new(ns, number)
+            Self::Forms(crate::quran_forms::FormsError::Normalization(inner)) => {
+                use quran_normalization::error::NormalizationError as NE;
+                let number = match inner {
+                    NE::UnknownRule { .. } => 1,
+                    NE::UnknownProfile { .. } => 2,
+                    NE::ProfileImmutable { .. } => 3,
+                    NE::SpanOutOfRange { .. } => 4,
+                    NE::InvalidMapping { .. } => 5,
+                    NE::EmptyProfile => 6,
+                };
+                storage::error::DiagnosticCode::new("QAI-NORM", number)
             }
+            Self::Forms(_) => storage::error::DiagnosticCode::new("QAI-IDX", 3),
             Self::Index(inner) => {
-                let rendered = inner.code().to_string();
-                let number =
-                    rendered.split('-').next_back().and_then(|n| n.parse().ok()).unwrap_or(3);
+                let number = match inner {
+                    IE::BackendUnavailable { .. } => 1,
+                    IE::QueryRejected { .. } => 2,
+                    IE::BuildFailed { .. } => 3,
+                    IE::ManifestMismatch { .. } => 4,
+                    IE::CanonicalChanged { .. } => 5,
+                };
                 storage::error::DiagnosticCode::new("QAI-IDX", number)
             }
             Self::Cancelled => storage::error::DiagnosticCode::new("QAI-IDX", 3),
@@ -155,7 +165,7 @@ pub async fn rebuild_index(
 
     let started_at = domain::Timestamp::now().to_string();
     // 1. Resolve the active edition.
-    let (edition_id, corpus_generation, edition_slug, edition_version) = {
+    let (edition_id, corpus_generation, _edition_slug, edition_version) = {
         let mut uow = db.write().await.map_err(IndexBuildError::storage)?;
         let edition = uow
             .quran()
@@ -317,7 +327,6 @@ pub async fn rebuild_index(
         ordered
     };
     let mut batch: Vec<FtsDoc> = Vec::with_capacity(BATCH_SIZE);
-    let mut doc_total = 0u64;
     for ayah in &ayahs {
         if cancel.load(Ordering::SeqCst) {
             fail_run(db, &run_id, "cancelled by operator").await;
@@ -365,7 +374,6 @@ pub async fn rebuild_index(
             ]),
             fields,
         });
-        doc_total += 1;
         if batch.len() >= BATCH_SIZE {
             let chunk = std::mem::take(&mut batch);
             staged.add_batch(chunk).await.map_err(IndexBuildError::Index)?;
