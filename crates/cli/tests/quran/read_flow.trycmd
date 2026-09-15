@@ -161,6 +161,26 @@ $ qai quran get 1:1 --translations en-test
 
 ```
 
+## Word glosses
+
+Word glosses are an optional attributed dataset aligned to token positions.
+They render only with `--glosses` and never touch the canonical text.
+
+```console
+$ qai quran gloss import ../../fixtures/quran/test-gloss-min.json
+imported 3 glosses
+
+```
+
+```console
+$ qai quran get 1:1 --glosses
+أوَيت تَساكُن كن لهُم ثُشأوَ
+— quran:test-edition-min@0.1.0:1:1
+[gloss-en-test] test gloss one one
+[gloss-en-test] test gloss one two
+
+```
+
 ## Edition lifecycle
 
 A second version is staged, validated, activated (generation 2), diffed against
