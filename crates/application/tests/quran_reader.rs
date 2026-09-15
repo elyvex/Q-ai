@@ -156,43 +156,82 @@ async fn context_invariants_hold_for_every_ayah_and_spec() {
                         Err(ReaderError::AyahNotFound(_)) => continue,
                         Err(error) => panic!("{surah}:{ayah} {boundary:?}: {error}"),
                     };
-                    let total = 1 + view.before.len() + view.after.len();
-                    let cap = usize::from(max_ayahs.max(1));
-                    assert!(total <= cap, "{surah}:{ayah} {boundary:?} {spec:?}: {total} > {cap}");
-                    assert!(view.before.len() <= usize::from(before));
-                    assert!(view.after.len() <= usize::from(after));
-
-                    let (lo, hi) = view.global_range;
-                    assert!(lo <= hi, "empty/inverted window");
-                    assert_eq!(
-                        usize::try_from(hi - lo + 1).unwrap(),
-                        total,
-                        "non-contiguous window"
-                    );
-
-                    let focal = &view.focal.canonical;
-                    for member in view.before.iter().chain(view.after.iter()) {
-                        match boundary {
-                            ContextBoundary::Surah => {
-                                assert_eq!(
-                                    member.canonical.surah_number(),
-                                    focal.surah_number(),
-                                    "{surah}:{ayah}: context crossed a surah boundary"
-                                );
-                            }
-                            ContextBoundary::Juz => {
-                                if let (Some(a), Some(b)) = (member.canonical.juz(), focal.juz()) {
-                                    assert_eq!(
-                                        a, b,
-                                        "{surah}:{ayah}: context crossed a juz boundary"
-                                    );
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
+                    assert_context_invariants(&format!("{surah}:{ayah}"), &spec, &view);
                 }
             }
+        }
+    }
+}
+
+/// §5.4 bullet 4 as a proptest over random `(before, after, boundary, cap)`
+/// combinations: the same invariants must hold for arbitrary declared specs,
+/// not only the hand-picked matrix above. The runner is deterministic, so a
+/// failing case is reproducible from this seed.
+#[tokio::test]
+async fn context_invariants_hold_for_random_specs() {
+    use proptest::strategy::{Strategy, ValueTree};
+    use proptest::test_runner::TestRunner;
+
+    let (_dir, _db, reader, _path) = active_reader().await;
+    let boundary_strategy = proptest::sample::select(vec![
+        ContextBoundary::Surah,
+        ContextBoundary::Juz,
+        ContextBoundary::Page,
+        ContextBoundary::Ruku,
+    ]);
+    let spec_strategy = (1u16..=5, 1u32..=6, 0u16..=10, 0u16..=10, 1u16..=14, boundary_strategy);
+
+    let mut runner = TestRunner::deterministic();
+    for _ in 0..512 {
+        let (surah, ayah, before, after, max_ayahs, boundary) =
+            spec_strategy.new_tree(&mut runner).unwrap().current();
+        let Ok(reference) = quran_core::parse(&format!("{surah}:{ayah}")) else {
+            continue;
+        };
+        let spec = ContextSpec {
+            before,
+            after,
+            boundary,
+            include_surah_header: false,
+            max_ayahs,
+        };
+        let view = match reader.get_context(&reference, &spec).await {
+            Ok(view) => view,
+            Err(ReaderError::AyahNotFound(_)) => continue,
+            Err(error) => panic!("{surah}:{ayah} {boundary:?}: {error}"),
+        };
+        assert_context_invariants(&format!("{surah}:{ayah}"), &spec, &view);
+    }
+}
+
+/// The shared invariant check for a served context window (AC-P1-14/§5.4).
+fn assert_context_invariants(label: &str, spec: &ContextSpec, view: &quran_core::ContextView) {
+    let total = 1 + view.before.len() + view.after.len();
+    let cap = usize::from(spec.max_ayahs.max(1));
+    assert!(total <= cap, "{label} {spec:?}: {total} > {cap}");
+    assert!(view.before.len() <= usize::from(spec.before), "{label}: before overflow");
+    assert!(view.after.len() <= usize::from(spec.after), "{label}: after overflow");
+
+    let (lo, hi) = view.global_range;
+    assert!(lo <= hi, "{label}: empty/inverted window");
+    assert_eq!(usize::try_from(hi - lo + 1).unwrap(), total, "{label}: non-contiguous window");
+
+    let focal = &view.focal.canonical;
+    for member in view.before.iter().chain(view.after.iter()) {
+        match spec.boundary {
+            ContextBoundary::Surah => {
+                assert_eq!(
+                    member.canonical.surah_number(),
+                    focal.surah_number(),
+                    "{label}: context crossed a surah boundary"
+                );
+            }
+            ContextBoundary::Juz => {
+                if let (Some(a), Some(b)) = (member.canonical.juz(), focal.juz()) {
+                    assert_eq!(a, b, "{label}: context crossed a juz boundary");
+                }
+            }
+            _ => {}
         }
     }
 }
