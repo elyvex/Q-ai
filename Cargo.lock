@@ -138,6 +138,7 @@ dependencies = [
  "provenance",
  "quran-core",
  "quran-corpus",
+ "quran-normalization",
  "serde",
  "serde_json",
  "sources",
