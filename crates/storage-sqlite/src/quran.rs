@@ -181,6 +181,30 @@ impl QuranRepository for SqliteQuranRepository {
         Ok(())
     }
 
+    async fn count_staging_orphans(&self) -> Result<i64, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let mut total = 0_i64;
+        for table in [
+            "quran_stg_editions",
+            "quran_stg_surahs",
+            "quran_stg_ayahs",
+            "quran_stg_tokens",
+            "quran_stg_token_separators",
+            "quran_stg_segments",
+            "quran_stg_divisions",
+        ] {
+            let sql = format!(
+                "SELECT COUNT(*) AS n FROM {table} AS s
+                 JOIN quran_import_runs AS r ON s.import_run_id = r.run_id
+                 WHERE r.state IN ('Cancelled', 'Failed')"
+            );
+            let row =
+                sqlx::query(&sql).fetch_one(&mut **tx).await.map_err(map_sqlx_error)?;
+            total += row.get::<i64, _>("n");
+        }
+        Ok(total)
+    }
+
     async fn find_staged_edition(
         &self,
         slug: &str,
