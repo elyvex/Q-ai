@@ -1836,9 +1836,11 @@ version = "0.0.0"
 name = "quran-normalization"
 version = "0.0.0"
 dependencies = [
+ "domain",
  "proptest",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 2.0.20",
  "unicode-normalization",
 ]
