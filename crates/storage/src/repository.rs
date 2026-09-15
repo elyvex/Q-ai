@@ -127,7 +127,8 @@ pub struct PrincipalRow {
 
 /// A row in the `approvals` table.
 #[derive(Debug, Clone)]
-pub struct ApprovalRow {    pub id: String,
+pub struct ApprovalRow {
+    pub id: String,
     pub subject_urn: String,
     pub kind: String,
     pub requested_by: Option<String>,
