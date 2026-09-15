@@ -6,6 +6,7 @@
 
 pub mod doctor;
 pub mod exit_code;
+pub mod quran;
 
 use clap::{Parser, Subcommand};
 use config::Config;
@@ -107,6 +108,11 @@ pub enum Commands {
         /// Bind address (must be loopback in Phase 0).
         #[arg(long, default_value = "127.0.0.1:8737")]
         bind: String,
+    },
+    /// Quran corpus: lookup, import, validation, activation.
+    Quran {
+        #[command(subcommand)]
+        action: quran::QuranAction,
     },
     /// Shell completions (Phase 1).
     Completions {
@@ -276,6 +282,20 @@ pub fn dispatch(cli: Cli) -> i32 {
             }
         }
         Commands::Completions { .. } => phase_stub("completions", 13),
+        Commands::Quran { action } => {
+            let db_path = db_path_for(&cfg, cli.data_dir.as_deref());
+            quran::handle_quran(action, &db_path, cli.json, cli.yes)
+        }
+    }
+}
+
+fn db_path_for(cfg: &Config, data_dir: Option<&str>) -> String {
+    match data_dir {
+        Some(dir) => format!("{dir}/qai.db"),
+        None => match std::env::var("QAI_DATA_DIR") {
+            Ok(dir) if !dir.is_empty() => format!("{dir}/qai.db"),
+            _ => cfg.storage.sqlite.path.clone(),
+        },
     }
 }
 
