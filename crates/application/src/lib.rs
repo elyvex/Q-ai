@@ -12,6 +12,7 @@ pub mod quran;
 pub mod quran_cli;
 pub mod quran_doctor;
 pub mod quran_forms;
+pub mod quran_index;
 pub mod quran_normalize;
 pub mod quran_reader;
 pub mod quran_tools;
