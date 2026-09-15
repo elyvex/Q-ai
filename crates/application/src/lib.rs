@@ -19,8 +19,9 @@ pub mod quran_reader;
 pub mod quran_tools;
 
 pub use config::Config;
+pub use domain::redaction;
 
-use observability::{Format, init};
+use observability::{Format, InitOptions, init_with_options};
 use storage::Database as _;
 use storage::error::StorageError;
 use tracing::{error, info};
@@ -33,7 +34,7 @@ pub struct RunResult {
 
 /// Entry point: validates config, initializes observability, health-checks storage.
 pub async fn run(cfg: Config) -> Result<RunResult, StorageError> {
-    init(Format::Text);
+    init_with_options(InitOptions { format: Format::Text, redact_secrets: cfg.logging.redact_secrets });
     info!("qai application starting (Phase 0)");
 
     let db = storage_sqlite::SqliteDatabase::new(
