@@ -20,14 +20,13 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use sqlx::Row;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 
 use crate::error::IndexError;
 use crate::index::FullTextIndex;
 use crate::model::{
-    CommitStamp, FieldId, Filter, FtsBackend, FtsDoc, FtsHit, FtsIntegrityReport, FtsQuery,
-    FtsResults, FtsSchema, FtsStats, IndexManifest, ResultOrder, SearchOpts,
+    CommitStamp, FieldId, FtsBackend, FtsDoc, FtsHit, FtsIntegrityReport, FtsQuery, FtsResults,
+    FtsSchema, FtsStats, IndexManifest, ResultOrder, SearchOpts,
 };
 use crate::tokenizer::{INDEXED_FIELDS, TokenizerFamily};
 
@@ -44,7 +43,7 @@ const NFA_SIZE_LIMIT: usize = 1024 * 1024;
 const DFA_SIZE_LIMIT: usize = 4 * 1024 * 1024;
 
 /// FTS5-backed [`FullTextIndex`], bound to one generation directory.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Fts5Index {
     root: PathBuf,
     manifest: IndexManifest,
@@ -208,25 +207,34 @@ impl Fts5Index {
                 }
             }
             FtsQuery::Boolean { must, should, must_not } => {
+                // `None` from a subquery means unsatisfiable: an unsatisfiable
+                // `must` poisons the conjunction, unsatisfiable `should`s are
+                // dropped (an OR of nothing with no `must` stays unsatisfiable),
+                // and unsatisfiable `must_not`s constrain nothing.
                 let mut parts = Vec::new();
                 for sub in must {
-                    if let Some(expr) = self.match_expression(sub).await? {
-                        parts.push(format!("({expr})"));
+                    match Box::pin(self.match_expression(sub)).await? {
+                        Some(expr) => parts.push(format!("({expr})")),
+                        None => return Ok(None),
                     }
                 }
                 if !should.is_empty() {
                     let mut options = Vec::new();
                     for sub in should {
-                        if let Some(expr) = self.match_expression(sub).await? {
+                        if let Some(expr) = Box::pin(self.match_expression(sub)).await? {
                             options.push(format!("({expr})"));
                         }
                     }
-                    if !options.is_empty() {
+                    if options.is_empty() {
+                        if parts.is_empty() {
+                            return Ok(None);
+                        }
+                    } else {
                         parts.push(format!("({})", options.join(" OR ")));
                     }
                 }
                 for sub in must_not {
-                    if let Some(expr) = self.match_expression(sub).await? {
+                    if let Some(expr) = Box::pin(self.match_expression(sub)).await? {
                         parts.push(format!("NOT ({expr})"));
                     }
                 }
@@ -238,7 +246,7 @@ impl Fts5Index {
             FtsQuery::Range { .. } => Err(IndexError::QueryRejected {
                 detail: "range queries are metadata-only; use SearchOpts filters or a top-level scan".to_string(),
             }),
-            FtsQuery::Regex { field, pattern } => self.regex_expression(field, pattern).await.map(Some),
+            FtsQuery::Regex { field, pattern } => self.regex_expression(field, pattern).await,
             FtsQuery::All => Ok(None),
         }
     }
@@ -247,7 +255,12 @@ impl Fts5Index {
     ///
     /// Guard chain (I16): length cap → anchor rule → DFA-only compile with
     /// construction budgets → bounded dictionary scan → expansion cap.
-    async fn regex_expression(&self, field: &str, pattern: &str) -> Result<String, IndexError> {
+    /// A pattern matching no terms yields `None` (unsatisfiable).
+    async fn regex_expression(
+        &self,
+        field: &str,
+        pattern: &str,
+    ) -> Result<Option<String>, IndexError> {
         if TEXT_COLUMNS.iter().all(|col| *col != field) {
             return Err(IndexError::QueryRejected {
                 detail: format!("regex is only allowed against indexed text fields, not '{field}'"),
@@ -282,10 +295,9 @@ impl Fts5Index {
             }
         }
         if matched.is_empty() {
-            // Matches nothing: an unsatisfiable conjunction.
-            return Ok("{ text_exact } : \"__qai_impossible_token__\"".to_string());
+            return Ok(None);
         }
-        Ok(matched.join(" OR "))
+        Ok(Some(matched.join(" OR ")))
     }
 
     /// WHERE clause for metadata filters (UNINDEXED columns allow plain SQL).
@@ -341,7 +353,7 @@ fn quote_phrase_term(term: &str) -> String {
 
 /// Compile a pattern with the I16 DFA-only engine and budgets.
 fn compile_dfa(pattern: &str) -> Result<regex_automata::dfa::regex::Regex, IndexError> {
-    use regex_automata::dfa::dense;
+    use regex_automata::dfa::{dense, regex};
     use regex_automata::nfa::thompson;
     if pattern.len() > MAX_PATTERN_LEN {
         return Err(IndexError::QueryRejected {
@@ -354,11 +366,13 @@ fn compile_dfa(pattern: &str) -> Result<regex_automata::dfa::regex::Regex, Index
             detail: "unanchored leading .* is rejected; anchor the pattern instead".to_string(),
         });
     }
-    dense::Builder::new()
-        .configure(dense::Config::new().minimize(true).dfa_size_limit(Some(DFA_SIZE_LIMIT)))
-        .thompson(thompson::Config::new().nfa_size_limit(Some(NFA_SIZE_LIMIT)))
-        .build(pattern)
-        .map_err(|err| IndexError::QueryRejected { detail: format!("invalid pattern: {err}") })
+    let mut builder = regex::Builder::new();
+    builder
+        .dense(dense::Config::new().minimize(true).dfa_size_limit(Some(DFA_SIZE_LIMIT)))
+        .thompson(thompson::Config::new().nfa_size_limit(Some(NFA_SIZE_LIMIT)));
+    builder.build(pattern).map_err(|err| IndexError::QueryRejected {
+        detail: format!("invalid pattern: {err}"),
+    })
 }
 
 /// Metadata column allowlist for range queries.
@@ -392,6 +406,9 @@ struct Predicate {
     where_sql: String,
     match_expr: Option<String>,
     args: Vec<String>,
+    /// True when the query is unsatisfiable (e.g. a term normalizing to
+    /// empty): search returns zero hits without touching the engine.
+    unsatisfiable: bool,
 }
 
 impl Fts5Index {
@@ -401,13 +418,27 @@ impl Fts5Index {
         query: &FtsQuery,
         filters: &[crate::model::Filter],
     ) -> Result<Predicate, IndexError> {
+        // `FtsQuery::All` is the only query with no constraint at all; every
+        // other query form that yields no MATCH expression is unsatisfiable.
+        if matches!(query, FtsQuery::All) {
+            let (filter_sql, args) = Self::filter_clause(filters)?;
+            let where_sql = if filter_sql.is_empty() {
+                String::new()
+            } else {
+                format!("WHERE {filter_sql}")
+            };
+            return Ok(Predicate { where_sql, match_expr: None, args, unsatisfiable: false });
+        }
         let mut clauses = Vec::new();
         let mut match_expr = None;
+        let mut unsatisfiable = false;
         if let FtsQuery::Range { field, lo, hi } = query {
             clauses.push(range_clause(field, *lo, *hi)?);
         } else if let Some(expr) = self.match_expression(query).await? {
             clauses.push("ayah_fts MATCH ?".to_string());
             match_expr = Some(expr);
+        } else {
+            unsatisfiable = true;
         }
         let (filter_sql, args) = Self::filter_clause(filters)?;
         if !filter_sql.is_empty() {
@@ -415,7 +446,7 @@ impl Fts5Index {
         }
         let where_sql =
             if clauses.is_empty() { String::new() } else { format!("WHERE {}", clauses.join(" AND ")) };
-        Ok(Predicate { where_sql, match_expr, args })
+        Ok(Predicate { where_sql, match_expr, args, unsatisfiable })
     }
 
     /// Exact count behind one predicate.
@@ -535,6 +566,9 @@ impl FullTextIndex for Fts5Index {
     async fn search(&self, query: &FtsQuery, opts: &SearchOpts) -> Result<FtsResults, IndexError> {
         let opts = opts.clone().normalized();
         let predicate = self.predicate(query, &opts.filters).await?;
+        if predicate.unsatisfiable {
+            return Ok(FtsResults { hits: Vec::new(), total_matches: 0, truncated: false });
+        }
         let total_matches = self.count_predicate(&predicate).await?;
         let order = order_clause(opts.order);
         let sql = format!(
@@ -581,6 +615,9 @@ impl FullTextIndex for Fts5Index {
 
     async fn count(&self, query: &FtsQuery) -> Result<u64, IndexError> {
         let predicate = self.predicate(query, &[]).await?;
+        if predicate.unsatisfiable {
+            return Ok(0);
+        }
         self.count_predicate(&predicate).await
     }
 
