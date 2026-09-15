@@ -50,7 +50,7 @@ fn schema() -> FtsSchema {
 /// Hostile sample: diacritics, wasla, hamza carriers, tatweel, marks,
 /// Persian code points, digits, punctuation, zero-width, presentation
 /// forms, spaces, and plain ASCII.
-const SAMPLE: &str = "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ، وَٱلْحَمْدُ ک weekend ۱۲۳ ﻻ​ﬁﬂ  x  ﭐﻷَرْضِ ۖ test";
+const SAMPLE: &str = "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ، وَٱلْحَمْدُ ک weekend ۱۲۳ ﻻ\u{200B}ﬁﬂ  x  ﭐﻷَرْضِ ۖ test";
 
 /// Deterministic char-boundary substrings of `SAMPLE` (5,000 cases).
 fn substrings() -> Vec<String> {
