@@ -11,8 +11,9 @@ use sqlx::Row;
 use storage::error::StorageError;
 use storage::quran::{
     ActiveEditionRow, AyahRow, CitationRow, DifferenceReportRow, DivisionRow, ImportRunRow,
-    QuranEditionRow, QuranRepository, SeparatorRow, StagedEditionRef, SurahRow, TokenRow,
-    TranslationEditionRow, TranslationPassageRow, ValidationReportRow,
+    NormalizationProfileRow, NormalizationRuleRow, QuranEditionRow, QuranRepository, SeparatorRow,
+    StagedEditionRef, SurahRow, TokenRow, TranslationEditionRow, TranslationPassageRow,
+    ValidationReportRow,
 };
 
 use super::{SharedTx, map_sqlx_error};
@@ -1270,5 +1271,92 @@ impl QuranRepository for SqliteQuranRepository {
                 imported_at: r.get("imported_at"),
             })
             .collect())
+    }
+
+    async fn list_normalization_rules(&self) -> Result<Vec<NormalizationRuleRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT rule_id, version, kind, description
+             FROM normalization_rules ORDER BY rule_id, version",
+        )
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows
+            .iter()
+            .map(|r| NormalizationRuleRow {
+                rule_id: r.get("rule_id"),
+                version: r.get("version"),
+                kind: r.get("kind"),
+                description: r.get("description"),
+            })
+            .collect())
+    }
+
+    async fn list_normalization_profiles(
+        &self,
+    ) -> Result<Vec<NormalizationProfileRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT profile_id, version, label, rules_json, indexed, heuristic, experimental
+             FROM normalization_profiles ORDER BY profile_id, version",
+        )
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows.iter().map(decode_profile).collect())
+    }
+
+    async fn get_normalization_profile(
+        &self,
+        profile_id: &str,
+        version: &str,
+    ) -> Result<Option<NormalizationProfileRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query(
+            "SELECT profile_id, version, label, rules_json, indexed, heuristic, experimental
+             FROM normalization_profiles WHERE profile_id = ? AND version = ?",
+        )
+        .bind(profile_id)
+        .bind(version)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(row.map(|r| decode_profile(&r)))
+    }
+
+    async fn insert_normalization_profile(
+        &mut self,
+        row: NormalizationProfileRow,
+    ) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query(
+            "INSERT INTO normalization_profiles
+                (profile_id, version, label, rules_json, indexed, heuristic, experimental)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&row.profile_id)
+        .bind(&row.version)
+        .bind(&row.label)
+        .bind(&row.rules_json)
+        .bind(row.indexed as i64)
+        .bind(row.heuristic as i64)
+        .bind(row.experimental as i64)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+}
+
+fn decode_profile(row: &sqlx::sqlite::SqliteRow) -> NormalizationProfileRow {
+    NormalizationProfileRow {
+        profile_id: row.get("profile_id"),
+        version: row.get("version"),
+        label: row.get("label"),
+        rules_json: row.get("rules_json"),
+        indexed: row.get::<i64, _>("indexed") != 0,
+        heuristic: row.get::<i64, _>("heuristic") != 0,
+        experimental: row.get::<i64, _>("experimental") != 0,
     }
 }
