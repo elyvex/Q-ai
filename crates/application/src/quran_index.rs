@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use quran_search::{
-    Diagnostic as IndexDiagnostic, FieldId, FtsDoc, FullTextIndex, Fts5Index, IndexError,
+    Diagnostic as IndexDiagnostic, FieldId, Fts5Index, FtsDoc, FullTextIndex, IndexError,
     IndexManifest, SemVer, TokenizerFamily,
 };
 use storage::Database as _;
@@ -132,7 +132,9 @@ impl storage::error::Diagnostic for IndexBuildError {
     fn remedy(&self) -> Option<String> {
         Some(match self {
             Self::Storage(_) => "Check the database and retry the build.".to_string(),
-            Self::Forms(_) => "Fix the forms layer first (see its remedy), then rebuild.".to_string(),
+            Self::Forms(_) => {
+                "Fix the forms layer first (see its remedy), then rebuild.".to_string()
+            }
             Self::Index(inner) => inner.remedy().unwrap_or_else(|| "See above.".to_string()),
             Self::Cancelled => "Rerun the build; staging is wiped and rebuilt.".to_string(),
         })
@@ -201,7 +203,9 @@ pub async fn rebuild_index(
     checkpoint("resolved");
 
     // 2. MV-018 pre-check: stop before ANY write on drift.
-    crate::quran_forms::verify_canonical_unchanged(db, &edition_id).await.map_err(IndexBuildError::Forms)?;
+    crate::quran_forms::verify_canonical_unchanged(db, &edition_id)
+        .await
+        .map_err(IndexBuildError::Forms)?;
     checkpoint("mv018-pre");
 
     // 3. Seeded definitions prove the seed per build; family pins versions.
@@ -212,11 +216,12 @@ pub async fn rebuild_index(
         uow.rollback().await.map_err(IndexBuildError::storage)?;
         rows
     };
-    let registry = crate::quran_normalize::registry_from_rows(&profile_rows)
-        .map_err(|err| IndexBuildError::Index(IndexError::BuildFailed {
+    let registry = crate::quran_normalize::registry_from_rows(&profile_rows).map_err(|err| {
+        IndexBuildError::Index(IndexError::BuildFailed {
             stage: "resolve".to_string(),
             detail: err.to_string(),
-        }))?;
+        })
+    })?;
     let ladder = {
         let mut version = SemVer::new(0, 0, 0);
         for id in ProfileId::all() {
@@ -255,7 +260,11 @@ pub async fn rebuild_index(
     // 4. Stage the next generation.
     let generation = {
         let mut uow = db.write().await.map_err(IndexBuildError::storage)?;
-        let max = uow.quran().max_build_generation(&params.index_id).await.map_err(IndexBuildError::storage)?;
+        let max = uow
+            .quran()
+            .max_build_generation(&params.index_id)
+            .await
+            .map_err(IndexBuildError::storage)?;
         uow.rollback().await.map_err(IndexBuildError::storage)?;
         (max + 1).max(1) as u64
     };
@@ -300,8 +309,9 @@ pub async fn rebuild_index(
 
     // 5. Stream ayah docs from stored forms (canonical text feeds `text_exact`
     //    and the L1 field; the adapter re-normalizes idempotently).
-    let l1 = quran_normalization::NormalizationPipeline::for_profile(&registry, ProfileId::L1, ladder)
-        .map_err(|err| {
+    let l1 =
+        quran_normalization::NormalizationPipeline::for_profile(&registry, ProfileId::L1, ladder)
+            .map_err(|err| {
             IndexBuildError::Index(IndexError::BuildFailed {
                 stage: "build".to_string(),
                 detail: err.to_string(),
@@ -309,18 +319,22 @@ pub async fn rebuild_index(
         })?;
     let surahs = {
         let mut uow = db.write().await.map_err(IndexBuildError::storage)?;
-        let surahs = uow.quran().list_surahs(&edition_id).await.map_err(IndexBuildError::storage)?;
+        let surahs =
+            uow.quran().list_surahs(&edition_id).await.map_err(IndexBuildError::storage)?;
         uow.rollback().await.map_err(IndexBuildError::storage)?;
         surahs
     };
     let revelation: BTreeMap<i64, String> = surahs
         .iter()
-        .map(|s| (i64::from(s.number), s.revelation_place.clone().unwrap_or_default()))
+        .map(|s| (s.number, s.revelation_place.clone().unwrap_or_default()))
         .collect();
     let ayahs = {
         let mut uow = db.write().await.map_err(IndexBuildError::storage)?;
-        let ayahs =
-            uow.quran().list_ayahs_range(&edition_id, 1, i64::MAX).await.map_err(IndexBuildError::storage)?;
+        let ayahs = uow
+            .quran()
+            .list_ayahs_range(&edition_id, 1, i64::MAX)
+            .await
+            .map_err(IndexBuildError::storage)?;
         uow.rollback().await.map_err(IndexBuildError::storage)?;
         let mut ordered = ayahs;
         ordered.sort_by_key(|a| (a.surah, a.ayah));
@@ -346,7 +360,10 @@ pub async fn rebuild_index(
             fail_run(db, &run_id, &format!("missing forms for {}:{}", ayah.surah, ayah.ayah)).await;
             return Err(IndexBuildError::Index(IndexError::BuildFailed {
                 stage: "build".to_string(),
-                detail: format!("missing forms for {}:{}; rebuild forms first", ayah.surah, ayah.ayah),
+                detail: format!(
+                    "missing forms for {}:{}; rebuild forms first",
+                    ayah.surah, ayah.ayah
+                ),
             }));
         };
         let mut fields: BTreeMap<FieldId, String> = BTreeMap::new();
@@ -393,16 +410,25 @@ pub async fn rebuild_index(
     let manifest_hash = quran_corpus::sha256_hex(
         format!(
             "{}|{}|{}@{}|{}|{}",
-            params.index_id, corpus_generation, params.edition_slug,
-            params.edition_version, stamp.doc_count, ladder
+            params.index_id,
+            corpus_generation,
+            params.edition_slug,
+            params.edition_version,
+            stamp.doc_count,
+            ladder
         )
         .as_bytes(),
     );
     let manifest_hash = format!("sha256:{manifest_hash}");
-    let manifest = IndexManifest { doc_count: stamp.doc_count, content_hash: manifest_hash.clone(), ..manifest };
-    let serving = Fts5Index::open(&index_root, generation, manifest.clone(), family_from(&registry, ladder)?)
-        .await
-        .map_err(IndexBuildError::Index)?;
+    let manifest = IndexManifest {
+        doc_count: stamp.doc_count,
+        content_hash: manifest_hash.clone(),
+        ..manifest
+    };
+    let serving =
+        Fts5Index::open(&index_root, generation, manifest.clone(), family_from(&registry, ladder)?)
+            .await
+            .map_err(IndexBuildError::Index)?;
     set_run_state(db, &run_id, "verifying", stamp.doc_count as i64, &manifest_hash, None).await;
     let report = serving.verify().await.map_err(IndexBuildError::Index)?;
     if !report.ok {
@@ -416,23 +442,29 @@ pub async fn rebuild_index(
 
     // 7. MV-018 post-check, then the atomic flip (pointer + run states).
     let mv018 =
-        crate::quran_forms::verify_canonical_unchanged(db, &edition_id).await.map_err(|err| match err {
-            crate::quran_forms::FormsError::Index(inner) => IndexBuildError::Index(inner),
-            crate::quran_forms::FormsError::Normalization(inner) => {
-                IndexBuildError::Index(IndexError::BuildFailed {
+        crate::quran_forms::verify_canonical_unchanged(db, &edition_id).await.map_err(|err| {
+            match err {
+                crate::quran_forms::FormsError::Index(inner) => IndexBuildError::Index(inner),
+                crate::quran_forms::FormsError::Normalization(inner) => {
+                    IndexBuildError::Index(IndexError::BuildFailed {
+                        stage: "mv018".to_string(),
+                        detail: inner.to_string(),
+                    })
+                }
+                other => IndexBuildError::Index(IndexError::BuildFailed {
                     stage: "mv018".to_string(),
-                    detail: inner.to_string(),
-                })
+                    detail: other.to_string(),
+                }),
             }
-            other => IndexBuildError::Index(IndexError::BuildFailed {
-                stage: "mv018".to_string(),
-                detail: other.to_string(),
-            }),
         })?;
     let finished_at = domain::Timestamp::now().to_string();
     let previous_generation = {
         let mut uow = db.write().await.map_err(IndexBuildError::storage)?;
-        let previous = uow.quran().get_index_pointer(&params.index_id).await.map_err(IndexBuildError::storage)?;
+        let previous = uow
+            .quran()
+            .get_index_pointer(&params.index_id)
+            .await
+            .map_err(IndexBuildError::storage)?;
         let manifest_json = serde_json::to_string(&manifest).map_err(|err| {
             IndexBuildError::Index(IndexError::BuildFailed {
                 stage: "activate".to_string(),
@@ -451,17 +483,36 @@ pub async fn rebuild_index(
             .map_err(IndexBuildError::storage)?;
         // The previously serving run steps aside; it stays on disk.
         if let Some(previous) = previous.as_ref() {
-            for run in uow.quran().list_build_runs(&params.index_id).await.map_err(IndexBuildError::storage)? {
+            for run in uow
+                .quran()
+                .list_build_runs(&params.index_id)
+                .await
+                .map_err(IndexBuildError::storage)?
+            {
                 if run.generation == previous.generation && run.state == "active" {
                     uow.quran()
-                        .set_build_run_state(&run.id, "superseded", run.doc_count, &run.manifest_hash, None, &finished_at)
+                        .set_build_run_state(
+                            &run.id,
+                            "superseded",
+                            run.doc_count,
+                            &run.manifest_hash,
+                            None,
+                            &finished_at,
+                        )
                         .await
                         .map_err(IndexBuildError::storage)?;
                 }
             }
         }
         uow.quran()
-            .set_build_run_state(&run_id, "active", stamp.doc_count as i64, &manifest_hash, None, &finished_at)
+            .set_build_run_state(
+                &run_id,
+                "active",
+                stamp.doc_count as i64,
+                &manifest_hash,
+                None,
+                &finished_at,
+            )
             .await
             .map_err(IndexBuildError::storage)?;
         uow.commit().await.map_err(IndexBuildError::storage)?;
