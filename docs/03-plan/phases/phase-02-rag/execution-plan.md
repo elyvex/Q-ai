@@ -653,3 +653,34 @@ quran-normalization` as the next command.
 - **Next concrete action (M2 continued):** FTS5 adapter (P2-T30): schema,
   writer/reader, `ar_*` tokenizers on the shared pipeline (P2-T31), parity
   test (P2-T32); next command `cargo test -p quran-search`.
+
+---
+
+## 24. Session checkpoint — 2026-09-15 (M2: T30/T31/T32 done)
+
+- **Completed:** `Fts5Index` adapter (stage/open/create/add_batch/commit/
+  search/count/delete/stats/verify), `ar_*` `TokenizerFamily` (7 fields,
+  shared instance both paths), 5,000-substring parity suite, `regex-automata
+  0.4` workspace dep (offline-cached 0.4.18, dense-DFA builds with NFA/DFA
+  budgets).
+- **Tasks flipped ☑:** P2-T30, P2-T31, P2-T32 (evidence in `done.md` §2).
+- **Findings fixed during implementation:** `CREATE VIRTUAL TABLE` (not
+  `CREATE TABLE`) for FTS5; `fts5vocab(..., 'col')` (not `'row'`) for
+  per-column terms; FTS5 has no `AND NOT`/leading `NOT` (exclusion is
+  `<expr> NOT <expr>`; must-not-only rejected); `offsets()` restricted →
+  `highlight()`; emptied terms are unsatisfiable (never match-all);
+  `Box::pin` for async boolean recursion; `dfa::regex::Builder` (not dense
+  `Builder`) for a usable DFA handle.
+- **Ladder-correctness call:** wasla folds at L4, so bare-field tests use
+  wasla-free data and wasla coverage runs on `text_hamza` — a wrong
+  expectation here would have encoded an L3 behavior the plan forbids.
+- **Verification (all green in scope):** `quran-search` 10 lib + 5 backend
+  + 3 parity (incl. 5 s loop); `clippy -D warnings` clean (incl. a fixed
+  `invisible_characters` on intentional hostile input); `arch-check` OK;
+  per-file rustfmt clean.
+- **Deferred to M3/T49:** per-hit highlight markers (no carrier on `FtsHit`
+  yet); wall-clock regex budget (construction + expansion caps enforced;
+  timeout wraps at the tool layer); trigram skeleton postings (T36).
+- **Next concrete action (M2 continued):** `0016_quran_indexes` +
+  `index_pointers` (P2-T33) + `quran.index.build` job with staging →
+  verify → atomic flip (P2-T34); next command `cargo test -p quran-search`.
