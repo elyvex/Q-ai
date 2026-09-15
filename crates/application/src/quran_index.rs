@@ -387,10 +387,14 @@ pub async fn rebuild_index(
 
     // 6. Commit, reopen with the counted manifest, verify.
     let stamp = staged.commit().await.map_err(IndexBuildError::Index)?;
+    // Identity-bound (not row-surrogate-bound): re-imports of the same
+    // edition version reproduce the same hash, so drift reports compare
+    // derivations, not import runs.
     let manifest_hash = quran_corpus::sha256_hex(
         format!(
-            "{}|{}|{}|{}|{}",
-            params.index_id, corpus_generation, edition_id, stamp.doc_count, ladder
+            "{}|{}|{}@{}|{}|{}",
+            params.index_id, corpus_generation, params.edition_slug,
+            params.edition_version, stamp.doc_count, ladder
         )
         .as_bytes(),
     );
