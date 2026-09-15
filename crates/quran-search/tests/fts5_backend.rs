@@ -104,7 +104,7 @@ fn schema() -> FtsSchema {
 async fn staged(docs: Vec<FtsDoc>) -> (tempfile::TempDir, Fts5Index, IndexManifest, CommitStamp) {
     let dir = tempfile::tempdir().unwrap();
     let manifest = manifest(docs.len() as u64);
-    let index = Fts5Index::stage(dir.path(), manifest.clone(), family()).await.unwrap();
+    let index = Fts5Index::stage(dir.path(), 7, manifest.clone(), family()).await.unwrap();
     index.create(&schema()).await.unwrap();
     index.add_batch(docs).await.unwrap();
     let stamp = index.commit().await.unwrap();
@@ -262,11 +262,11 @@ async fn tokenizer_mismatch_and_generation_lifecycle() {
     // Family version disagreeing with the manifest refuses to stage.
     let mut mismatched = manifest(0);
     mismatched.tokenizer_version = SemVer::new(9, 9, 9);
-    let err = Fts5Index::stage(dir.path(), mismatched, family()).await.unwrap_err();
+    let err = Fts5Index::stage(dir.path(), 7, mismatched, family()).await.unwrap_err();
     assert_eq!(err.code(), quran_search::codes::MANIFEST_MISMATCH);
 
     // Deleting a missing generation is a no-op zero.
-    let index = Fts5Index::stage(dir.path(), manifest(1), family()).await.unwrap();
+    let index = Fts5Index::stage(dir.path(), 7, manifest(1), family()).await.unwrap();
     index.create(&schema()).await.unwrap();
     index.add_batch(vec![doc("d1", 1, 1, 1, "نص")]).await.unwrap();
     index.commit().await.unwrap();
@@ -274,6 +274,6 @@ async fn tokenizer_mismatch_and_generation_lifecycle() {
     assert_eq!(index.delete_by_generation(7).await.unwrap(), 1);
     assert!(!dir.path().join("gen-7").exists());
     // Opening a deleted generation fails typed.
-    let err = Fts5Index::open(dir.path(), manifest(1), family()).await.unwrap_err();
+    let err = Fts5Index::open(dir.path(), 7, manifest(1), family()).await.unwrap_err();
     assert_eq!(err.code(), quran_search::codes::BUILD_FAILED);
 }
