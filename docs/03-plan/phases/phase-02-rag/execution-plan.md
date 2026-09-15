@@ -739,3 +739,31 @@ quran-normalization` as the next command.
   span was right and the expectation wrong).
 - **Next concrete action (M3):** exact + normalized search tools (P2-T41/T42)
   on the assembly path; next command `cargo test -p quran-search`.
+
+---
+
+## 27. Session checkpoint — 2026-09-15 (M3: T41/T42 done)
+
+- **Completed:** `application::quran_search` — `search_exact` (L0/L1) and
+  `search_normalized` (L0–L5 indexed, L7/L8/adhoc scanned+verified) with
+  whole-token (FTS), substring/prefix (exact Rust scans), filters, paging,
+  explain-driven relevance, Persian zero-result hints, drift warnings, and
+  edition gating, all assembling through `SearchHit::new`.
+- **Tasks flipped ☑:** P2-T41, P2-T42 (evidence in `done.md` §2).
+- **Verification (all green in scope):** `search_tools.rs` 5/5 on real
+  SQLite (exactness incl. no-fold proof, diacritic bridging with traces,
+  hint behavior, edition rejection, filters/paging/explain contract);
+  `clippy -D warnings` clean; per-file rustfmt clean.
+- **Contract decisions:** `explain: false` = canonical order without scores,
+  `explain: true` = relevance with BM25 breakdowns (plan §5.2); scan modes
+  always canonical (no backend rank exists); one hit per ayah so backend
+  doc counts stay exact; profile+rules unrepresentable by type;
+  mushaf reference-set goldens (AC-P2-07/09) await a licensed corpus.
+- **Repaired mid-session:** helper-signature drift across three edits
+  (unified on pipeline-based matching); 9-arg clippy lint (RunContext);
+  FTS5 `AND NOT` inexpressibility (space-joined `NOT`, must-not-only
+  rejected); wasla test data corrected to ladder rung (again — the ladder
+  decides, twice in two sessions).
+- **Next concrete action (M3):** phrase + concatenated search (P2-T43/T44:
+  slop/unordered-near, skeleton trigram candidates → verify → segment);
+  next command `cargo test -p quran-search`.
