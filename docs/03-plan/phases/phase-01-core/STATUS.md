@@ -12,15 +12,15 @@
 
 | Dimension | State |
 |---|---|
-| Task rows (excluding 3 sequencing notes) | **46 ☑ / 3 ◐ / 16 ☐** of 65 |
+| Task rows (excluding 3 sequencing notes) | **47 ☑ / 2 ◐ / 16 ☐** of 65 |
 | Acceptance criteria | **10 ◐ / 11 ☐** of 21 (none marked fully verified — rituals pending) |
-| ADRs | **11 Accepted**, 3 Draft (0101, 0112, 0114) |
+| ADRs | **12 Accepted**, 2 Draft (0101, 0114) |
 | Phase-1 migrations | **6 / 6** (`0007`–`0012`); workspace now at 14 (Phase-2 added `0013`–`0014`) |
 | D1.14 documents | **5 / 5** published |
 | Gate | `clippy -D warnings` clean · `cargo test --workspace` 135 suites ok · `arch-check` OK · `migrate-check` OK · `fmt` clean for Phase-1 files |
 
 Remaining task IDs: `P1-X01..X05`, `P1-T01`, `P1-T02`, `P1-T03`, `P1-T26◐`,
-`P1-T38`, `P1-T39`, `P1-T40`, `P1-T42◐`, `P1-T54`, `P1-T55`,
+`P1-T38`, `P1-T39`, `P1-T40`, `P1-T54`, `P1-T55`,
 `P1-T56`, `P1-T58`, `P1-T60` (and `P1-T04◐`).
 
 ## 1. Implemented (by surface)
@@ -114,8 +114,6 @@ board was not flipped.
 | Task | What remains |
 |---|---|
 | `P1-T38` | Word-gloss dataset import (table + reader field exist; no importer/CLI path) |
-| `P1-T39`, `P1-T40` | API v1 handlers + OpenAPI spec **exist**; remaining work is depth (per-endpoint schema detail) and flipping the ledger |
-| `P1-T42` | ADR-0112 is written but still **Draft** (ADR-0113 accepted) |
 | `P1-T54` | Debug reader exists with RTL + label; **missing the web font**, and the ledger is still ☐ |
 | `P1-T56` | Golden-set expansion to §5.2 edge cases — **blocked on a real dataset** (ADR-0101); must not be filled with fabricated scripture |
 | `P1-T58` | Full-corpus soak (import → validate → activate → 10k lookups → `doctor --deep`) — needs a standard edition to be meaningful |
@@ -153,8 +151,9 @@ board was not flipped.
   (queue-timing race). De-flake before the exit ritual.
 - **Standard-edition timings unverified:** `doctor --quran --deep` < 30 s and the
   full-corpus soak both need a real dataset (ADR-0101).
-- **ADR-0111/0112 Draft:** deep-link and translation-alignment contracts are
-  frozen in code but not yet ratified.
+- **ADR-0111/0112 accepted:** deep-link and translation-alignment contracts were
+  accepted 2026-09-15 on their own shipped-code conditions (P1-T46/T47 + citation
+  endpoint; P1-T36/T37).
 - **Board drift:** several tasks/criteria are more complete than `tasks.md` /
   `acceptance.md` indicate; sync before the exit gate walks the ledgers.
 
