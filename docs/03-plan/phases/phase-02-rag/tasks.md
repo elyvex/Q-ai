@@ -111,9 +111,9 @@ properties, and the fuzz battery; `normalize --explain` teaches the transformati
 | P2-T27 | Skeleton builder (ayah + 3-ayah windows) + span maps | D2.4 | T26 | 2.5 | BE | ☑ |
 | P2-T28 | MV-018 canonical-unchanged verifier wired into every build job | D2.10 | T26 | 1.5 | BE | ☑ |
 | P2-T29 | `FullTextIndex` trait + `IndexManifest` + `FtsQuery`/`SearchOpts` types | D2.3 | T13 | 2.5 | SRCH | ☑ |
-| P2-T30 | Tantivy backend: schema, writer, reader, commit stamps | D2.3 | T29 | 3.5 | SRCH | ☐ |
-| P2-T31 | Custom `ar_*` tokenizers wired to `NormalizationPipeline` (shared query/index path) | D2.3 | T30,T18 | 3.0 | SRCH | ☐ |
-| P2-T32 | Query/index tokenizer-parity test (5,000 random substrings) | D2.13 | T31 | 1.5 | QA | ☐ |
+| P2-T30 | Tantivy backend: schema, writer, reader, commit stamps | D2.3 | T29 | 3.5 | SRCH | ☑ |
+| P2-T31 | Custom `ar_*` tokenizers wired to `NormalizationPipeline` (shared query/index path) | D2.3 | T30,T18 | 3.0 | SRCH | ☑ |
+| P2-T32 | Query/index tokenizer-parity test (5,000 random substrings) | D2.13 | T31 | 1.5 | QA | ☑ |
 | P2-T33 | Migration `0023_quran_indexes` + `index_pointers` + build-run tracking | D2.10 | T25 | 1.5 | BE | ☐ |
 | P2-T34 | `quran.index.build` job: staging dir → verify → atomic pointer flip | D2.10 | T30,T33 | 3.0 | SRCH | ☐ |
 | P2-T35 | Index generation retention, `gc`, single-step rollback | D2.10 | T34 | 1.5 | SRCH | ☐ |
