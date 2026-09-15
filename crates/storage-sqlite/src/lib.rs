@@ -28,6 +28,7 @@ use storage::{
     quran::QuranRepository,
     repository::{
         ApprovalRow, AuditEvent, AuditRepository, ChainVerificationResult, GenerationRow,
+        PrincipalRow,
         JobRecord, JobRepository, NewOutboxEvent, OutboxEventRow, OutboxRepository,
         ProvenanceRecord, ProvenanceRepository, ReviewRecord, SettingRow, SettingsRepository,
         SourceRepository, SourceRow, SourceVersionRow, StateTransitionRow, TombstoneRow,
@@ -476,8 +477,7 @@ impl SourceRepository for SqliteSourceRepository {
         Ok(())
     }
 
-    async fn get_approval(&self, id: &str) -> Result<Option<ApprovalRow>, StorageError> {
-        let mut tx = self.tx.lock().await;
+    async fn get_approval(&self, id: &str) -> Result<Option<ApprovalRow>, StorageError> {        let mut tx = self.tx.lock().await;
         let row = sqlx::query("SELECT * FROM approvals WHERE id = ?")
             .bind(id)
             .fetch_optional(&mut **tx)
@@ -495,6 +495,23 @@ impl SourceRepository for SqliteSourceRepository {
             requested_at: r.get("requested_at"),
             decided_at: r.get("decided_at"),
         }))
+    }
+
+    async fn upsert_principal(&mut self, principal: PrincipalRow) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query(
+            "INSERT INTO principals (id, kind, display_name, created_at)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(&principal.id)
+        .bind(&principal.kind)
+        .bind(&principal.display_name)
+        .bind(&principal.created_at)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
     }
 }
 
