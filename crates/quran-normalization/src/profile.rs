@@ -308,7 +308,7 @@ mod tests {
         let v = SemVer::new(1, 0, 0);
         // Identical re-registration is a no-op.
         let same = registry.get(ProfileId::L3, v).unwrap().clone();
-        assert_eq!(registry.register(same).unwrap(), false);
+        assert!(!registry.register(same).unwrap());
         // Same key, different rules: rejected, original untouched.
         let mut tampered = registry.get(ProfileId::L3, v).unwrap().clone();
         tampered.rules.push(RuleId::N12);
@@ -319,7 +319,7 @@ mod tests {
         let mut v2 = registry.get(ProfileId::L3, v).unwrap().clone();
         v2.version = SemVer::new(2, 0, 0);
         v2.rules.push(RuleId::N12);
-        assert_eq!(registry.register(v2).unwrap(), true);
+        assert!(registry.register(v2).unwrap());
         assert_eq!(registry.latest(ProfileId::L3).unwrap().version, SemVer::new(2, 0, 0));
     }
 
