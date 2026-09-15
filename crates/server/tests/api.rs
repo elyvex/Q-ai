@@ -206,13 +206,13 @@ async fn get(
     let status: u16 = status_line.split_whitespace().nth(1).unwrap_or("0").parse().unwrap_or(0);
     let mut headers = HeaderMap::new();
     for line in lines {
-        if let Some((name, value)) = line.split_once(':') {
-            if let (Ok(name), Ok(value)) = (
+        if let Some((name, value)) = line.split_once(':')
+            && let (Ok(name), Ok(value)) = (
                 name.trim().parse::<axum::http::HeaderName>(),
                 value.trim().parse::<axum::http::HeaderValue>(),
-            ) {
-                headers.insert(name, value);
-            }
+            )
+        {
+            headers.insert(name, value);
         }
     }
     (StatusCode::from_u16(status).unwrap(), headers, body.as_bytes().to_vec())
