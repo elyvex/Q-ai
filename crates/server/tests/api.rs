@@ -438,6 +438,9 @@ async fn debug_reader_is_labelled_rtl_without_persistence() {
     assert!(text.contains("debug view"), "labelled as debug");
     assert!(text.contains("dir=\"rtl\""), "correct RTL");
     assert!(text.contains("quran:test@0.1.0:1:1"));
+    assert!(text.contains("font-family"), "declares an Arabic font stack");
+    assert!(text.contains("class=\"ayah\""), "one marked block per ayah");
+    assert!(text.contains("class=\"marker\""), "ayah markers present");
     assert_eq!(headers.get("content-type").unwrap(), "text/html; charset=utf-8");
     handle.abort();
 }
