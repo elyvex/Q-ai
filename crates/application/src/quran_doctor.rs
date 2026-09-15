@@ -110,8 +110,7 @@ pub async fn run_quran_checks(
     };
     let edition_id = edition.id.clone();
     let surahs = uow.quran().list_surahs(&edition_id).await?;
-    let ayahs =
-        uow.quran().list_ayahs_range(&edition_id, 1, i64::MAX).await?;
+    let ayahs = uow.quran().list_ayahs_range(&edition_id, 1, i64::MAX).await?;
     let mut tokens_by_ayah: BTreeMap<(i64, i64), Vec<storage::quran::TokenRow>> = BTreeMap::new();
     for ayah in &ayahs {
         tokens_by_ayah.insert(
@@ -147,8 +146,7 @@ pub async fn run_quran_checks(
 
     // Hash recomputation from stored rows.
     let texts: Vec<&str> = ayahs.iter().map(|row| row.text.as_str()).collect();
-    let recomputed_text =
-        tagged_hex(&text_hash(&edition.slug, &edition.version, &texts));
+    let recomputed_text = tagged_hex(&text_hash(&edition.slug, &edition.version, &texts));
     checks.push(if recomputed_text == edition.text_hash {
         pass("quran.edition_checksum", format!("text_hash matches ({})", short(&edition.text_hash)))
     } else {
@@ -159,10 +157,8 @@ pub async fn run_quran_checks(
         )
     });
 
-    let surah_pairs: Vec<(u16, u16)> = surahs
-        .iter()
-        .map(|row| (row.number as u16, row.ayah_count as u16))
-        .collect();
+    let surah_pairs: Vec<(u16, u16)> =
+        surahs.iter().map(|row| (row.number as u16, row.ayah_count as u16)).collect();
     let layouts: Vec<AyahLayout> = ayahs
         .iter()
         .map(|row| AyahLayout {
@@ -206,8 +202,7 @@ pub async fn run_quran_checks(
             }
         }
     }
-    let recomputed_order =
-        tagged_hex(&token_order_hash(&edition.slug, &edition.version, &orders));
+    let recomputed_order = tagged_hex(&token_order_hash(&edition.slug, &edition.version, &orders));
     checks.push(if recomputed_order == edition.token_order_hash {
         pass("quran.token_order_hash", "token order hash matches".to_string())
     } else {
@@ -345,7 +340,10 @@ pub async fn run_quran_checks(
         }
     }
     checks.push(if coverage_ok {
-        pass("quran.division_coverage", format!("juz coverage contiguous ({} divisions)", divisions_juz.len()))
+        pass(
+            "quran.division_coverage",
+            format!("juz coverage contiguous ({} divisions)", divisions_juz.len()),
+        )
     } else {
         fail(
             "quran.division_coverage",
@@ -355,8 +353,8 @@ pub async fn run_quran_checks(
     });
 
     // Basmala policy stated everywhere.
-    let basmala_ok = !edition.basmala_policy.is_empty()
-        && surahs.iter().all(|row| !row.basmala.is_empty());
+    let basmala_ok =
+        !edition.basmala_policy.is_empty() && surahs.iter().all(|row| !row.basmala.is_empty());
     checks.push(if basmala_ok {
         pass("quran.basmala_policy", "basmala policy declared for every surah".to_string())
     } else {
@@ -444,7 +442,9 @@ pub async fn run_quran_checks(
     ));
     let license_status = serde_json::from_str::<serde_json::Value>(&edition.license_json)
         .ok()
-        .and_then(|value| value.get("status").and_then(|status| status.as_str()).map(str::to_string))
+        .and_then(|value| {
+            value.get("status").and_then(|status| status.as_str()).map(str::to_string)
+        })
         .unwrap_or_default();
     checks.push(if license_status != "Unknown" && !license_status.is_empty() {
         pass("quran.license_status", format!("active edition license: {license_status}"))
