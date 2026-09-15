@@ -387,6 +387,98 @@ async fn activation_service_requires_a_granted_approval() {
     uow.rollback().await.unwrap();
 }
 
+/// AC-P1-09 (runtime half): a refused activation must change no canonical
+/// state. The error alone is not the guarantee; the active pointer stays
+/// absent and no canonical ayah rows appear, so there is no write path that
+/// bypasses a granted approval.
+async fn assert_no_canonical(db: &SqliteDatabase) {
+    let mut uow = db.write().await.unwrap();
+    assert!(uow.quran().get_active().await.unwrap().is_none(), "no active pointer");
+    assert_eq!(uow.quran().count_ayahs("run-1").await.unwrap(), 0, "no canonical ayahs");
+    uow.rollback().await.unwrap();
+}
+
+#[tokio::test]
+async fn rejected_activations_leave_canonical_state_untouched() {
+    let (_dir, db) = migrated_db().await;
+    run_import(
+        &db,
+        &input("run-1", BASE_MANIFEST, None),
+        &ImportOptions::default(),
+        &AtomicBool::new(false),
+        ImportProgress::new(),
+    )
+    .await
+    .unwrap();
+    assert_no_canonical(&db).await;
+
+    // Missing approval.
+    let err =
+        activate_edition(&db, "test-edition-min", "0.1.0", &principal(), "missing", &timestamp())
+            .await
+            .unwrap_err();
+    assert!(matches!(err, application::quran::ActivationError::ApprovalMissing { .. }));
+    assert_no_canonical(&db).await;
+
+    // Denied and mismatched approvals.
+    let mut uow = db.write().await.unwrap();
+    for (id, decision, subject) in
+        [("appr-denied", "denied", V1_URN), ("appr-other", "approved", "quran-edition:other@9.9.9")]
+    {
+        uow.sources()
+            .insert_approval(storage::repository::ApprovalRow {
+                id: id.into(),
+                subject_urn: subject.into(),
+                kind: "CanonicalChange".into(),
+                requested_by: Some(PRINCIPAL.into()),
+                decided_by: Some(PRINCIPAL.into()),
+                decision: Some(decision.into()),
+                request_payload: "{}".into(),
+                decision_note: None,
+                requested_at: CREATED_AT.into(),
+                decided_at: Some(CREATED_AT.into()),
+            })
+            .await
+            .unwrap();
+    }
+    uow.commit().await.unwrap();
+    let err = activate_edition(
+        &db,
+        "test-edition-min",
+        "0.1.0",
+        &principal(),
+        "appr-denied",
+        &timestamp(),
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(err, application::quran::ActivationError::ApprovalNotGranted { .. }));
+    assert_no_canonical(&db).await;
+    let err = activate_edition(
+        &db,
+        "test-edition-min",
+        "0.1.0",
+        &principal(),
+        "appr-other",
+        &timestamp(),
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(err, application::quran::ActivationError::ApprovalSubjectMismatch { .. }));
+    assert_no_canonical(&db).await;
+
+    // Positive control: a granted approval moves canonical state exactly once.
+    let generation =
+        activate_edition(&db, "test-edition-min", "0.1.0", &principal(), "appr-1", &timestamp())
+            .await
+            .unwrap();
+    assert_eq!(generation, 1);
+    let mut uow = db.write().await.unwrap();
+    assert!(uow.quran().get_active().await.unwrap().is_some());
+    assert_eq!(uow.quran().count_ayahs("run-1").await.unwrap(), 14);
+    uow.rollback().await.unwrap();
+}
+
 #[tokio::test]
 async fn rollback_service_restores_the_prior_version() {
     let (_dir, db) = migrated_db().await;
