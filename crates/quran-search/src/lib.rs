@@ -19,7 +19,7 @@ pub mod tokenizer;
 pub use domain::SemVer;
 pub use error::{Diagnostic, DiagnosticCode, IndexError, codes};
 pub use fts5::Fts5Index;
-pub use hit::{ScoreExplain, SearchHit, SearchHitParts, Warning};
+pub use hit::{ScoreExplain, SearchHit, SearchHitParts, Segmentation, Warning};
 pub use index::FullTextIndex;
 pub use model::{
     CommitStamp, FieldId, Filter, FtsBackend, FtsDoc, FtsHit, FtsIntegrityReport, FtsQuery,
