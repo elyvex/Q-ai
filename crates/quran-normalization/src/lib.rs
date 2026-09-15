@@ -21,7 +21,7 @@ pub mod span;
 pub mod trace;
 
 pub use error::{Diagnostic, DiagnosticCode, NormalizationError, codes};
-pub use pipeline::NormalizationPipeline;
+pub use pipeline::{NormalizationPipeline, StepOutput};
 pub use profile::{Profile, ProfileId, ProfileRegistry};
 pub use rule::{NormalizationRule, NormalizedText, RuleId, RuleKind, SemVer};
 pub use rules::{all_rules, by_id, heuristic_rules};
