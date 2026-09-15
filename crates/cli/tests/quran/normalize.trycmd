@@ -185,7 +185,7 @@ atomically; the previous generation stays on disk.
 ```console
 $ qai quran index rebuild
 index quran.ayah.v1 generation 1 active: 14 docs (corpus generation 1)
-manifest: sha256:[..]
+manifest: sha256:9d1c3cfec9084d2471310ae8319fa06ec2a216decdf66dfe4eee6127dd056c2c
 previous generation: none
 
 ```
@@ -199,7 +199,7 @@ index quran.ayah.v1 generation 1 healthy: 14 docs
 ```console
 $ qai quran index rebuild
 index quran.ayah.v1 generation 2 active: 14 docs (corpus generation 1)
-manifest: sha256:[..]
+manifest: sha256:9d1c3cfec9084d2471310ae8319fa06ec2a216decdf66dfe4eee6127dd056c2c
 previous generation: 1
 
 ```
