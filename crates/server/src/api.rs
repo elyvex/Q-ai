@@ -707,20 +707,51 @@ async fn debug_reader_handler(
         Ok((_, views)) => views,
         Err(error) => return tool_error_response(error),
     };
+    // Debug typography (P1-T54): explicit RTL, an Arabic-capable font stack,
+    // and one marked block per ayah. This is a system stack, not a bundled
+    // `@font-face`: shipping a font binary needs a font/licensing decision
+    // (see the T54 ledger note). Text is HTML-escaped so a mangled dataset
+    // cannot break the page it is meant to expose.
     let mut body = String::from(
         "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\">\
-         <title>qai debug reader (not the product UI)</title></head>\
+         <title>qai debug reader (not the product UI)</title>\
+         <style>body{font-family:\"Amiri\",\"Noto Naskh Arabic\",\"Scheherazade New\",\
+         \"Geeza Pro\",\"Traditional Arabic\",serif;line-height:2}\
+         .ayah{margin:0.6em 0}.marker{display:inline-block;min-width:3em;\
+         font-family:sans-serif;font-size:0.8em;opacity:0.75}\
+         .ref{font-family:sans-serif;font-size:0.75em;opacity:0.6}</style></head>\
          <body><p><strong>debug view</strong> — engineering preview, no persistence</p>",
     );
     for view in &views {
+        let (start, _) = view.canonical.ayah_range();
         body.push_str(&format!(
-            "<p>{} <span>{}</span></p>",
-            view.canonical.reference(),
-            view.canonical.arabic_text()
+            "<article class=\"ayah\"><span class=\"marker\">{}:{}</span> \
+             <span class=\"text\">{}</span><br>\
+             <span class=\"ref\">{}</span></article>",
+            view.canonical.surah_number().get(),
+            start.get(),
+            escape_html(view.canonical.arabic_text()),
+            escape_html(view.canonical.reference())
         ));
     }
     body.push_str("</body></html>");
     (StatusCode::OK, [("content-type", "text/html; charset=utf-8")], body).into_response()
+}
+
+/// Minimal HTML escaping for debug rendering: the reader exists to expose
+/// mangled datasets, so its own markup must survive hostile text.
+fn escape_html(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            _ => out.push(ch),
+        }
+    }
+    out
 }
 
 /// Build the router (health + API v1 + debug reader).
@@ -993,6 +1024,15 @@ mod tests {
         ] {
             assert!(value.get(key).is_some(), "missing meta key {key}");
         }
+    }
+
+    #[test]
+    fn debug_escape_html_neutralizes_markup() {
+        assert_eq!(escape_html("بِسْمِ"), "بِسْمِ");
+        assert_eq!(
+            escape_html("<b>&\"x\"</b>"),
+            "&lt;b&gt;&amp;&quot;x&quot;&lt;/b&gt;"
+        );
     }
 
     #[test]
