@@ -1,7 +1,7 @@
 # Phase 2 — Completion Ledger
 
 **Phase:** P2 — Quran Search, Arabic Normalization, Morphology & Word Families
-**Status:** 🟡 In Progress — 8 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 2 / 6 migrations
+**Status:** 🟡 In Progress — 11 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 2 / 6 migrations
 **Started:** 2026-09-14
 **Completed:** —
 
@@ -47,12 +47,12 @@ with what evidence.
 | X — External-lead-time decisions | 5 | 0 | — | — | ☐ |
 | 2.0 — Dataset & Linguistic Decisions | 12 | 0 | 30.5 | — | ☐ |
 | 2.1 — Normalization Engine | 12 | 3 | 28.5 | — | ☐ |
-| 2.2 — Derived Forms & FTS Foundation | 15 | 5 | 33.5 | — | ☐ |
+| 2.2 — Derived Forms & FTS Foundation | 15 | 8 | 33.5 | — | ☐ |
 | 2.3 — Search Tools | 17 | 0 | 42.0 | — | ☐ |
 | 2.4 — Morphology Import & Lexicons | 18 | 0 | 45.0 | — | ☐ |
 | 2.5 — Morphology & Family Tools | 19 | 0 | 47.5 | — | ☐ |
 | 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 0 | 51.0 | — | ☐ |
-| **Total** | **114 + 5** | **8** | **278.0** | **—** | **7%** |
+| **Total** | **114 + 5** | **11** | **278.0** | **—** | **10%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -165,6 +165,33 @@ _None completed yet._
 - **Evidence:** `verify_canonical_unchanged` + in-transaction `verify_canonical_unchanged_in` (Phase-1 `text_hash` recipe replayed over ordered canonical rows); `QAI-IDX-0005 CanonicalChanged` (fatal, stops builds); wired pre-write AND pre-commit in `rebuild_forms`; `mv018_passes_with_compared_hashes` + hash-stability assertions in `forms_rebuild.rs`
 - **DoD:** ✅ all items / drift fails the build instead of warning; negative path structurally covered (canonical tables are trigger-guarded, so drift is unreachable except by offline tampering — which the verifier would catch)
 - **Notes:** MV-018 is defined here because the forms job needs it first; M4 (MV-001…018) reuses this verifier and code rather than inventing a second one. Every future build job MUST wire both checks (recorded as a review rule in `execution-plan.md` §23).
+
+### P2-T30 — FTS backend: schema, writer, reader, commit stamps
+- **Deliverable:** D2.3
+- **Completed:** 2026-09-15
+- **Owner:** agent (SRCH)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/quran-search/src/fts5.rs`)
+- **Evidence:** `crates/quran-search/src/fts5.rs` (`Fts5Index`: stage/open/create/add_batch/commit/search/count/delete/stats/verify over real FTS5 in tempdirs); `crates/quran-search/tests/fts5_backend.rs` 5/5 (round-trip + exact totals, both-paths normalization, phrase/boolean/filters/limits/scores, regex guards + anchored expansion, tokenizer-mismatch refusal, generation lifecycle)
+- **DoD:** ✅ all items / generation directories (`gen-<N>`), transactioned batches, exact `count()` separate from ranked `search()`, FTS/content consistency by single-table design (UNINDEXED metadata columns, no join drift)
+- **Notes:** Tantivy deferred per DEV-05; the port is unchanged so a future adapter needs no API breakage. `highlight()` (not `offsets()`) is the supported introspection on current SQLite — recorded for T49. `opts.highlight` is accepted but unwired (no carrier on `FtsHit` yet; T49 wires it into `SearchHit`).
+
+### P2-T31 — Custom `ar_*` tokenizers wired to `NormalizationPipeline`
+- **Deliverable:** D2.3
+- **Completed:** 2026-09-15
+- **Owner:** agent (SRCH)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/quran-search/src/tokenizer.rs`)
+- **Evidence:** `crates/quran-search/src/tokenizer.rs` (`ArTokenizer` per field, `TokenizerFamily` shared by both paths, field→profile map per plan §4.2); unit tests (resolution, bare/exact/folded behavior, version-pinned trace labels); adapter normalizes documents AND terms through the family
+- **DoD:** ✅ all items / one shared instance for both paths (R6 by construction); unknown fields fail closed
+- **Notes:** FTS5 cannot host custom C tokenizers — the `ar_*` family is Rust preprocessing in front of FTS5 (DEV-05 annex, documented in-module). Full C-tokenizer semantics (positions/offsets) arrive with a future Tantivy adapter if ever adopted.
+
+### P2-T32 — Query/index tokenizer-parity test (5,000 random substrings)
+- **Deliverable:** D2.13
+- **Completed:** 2026-09-15
+- **Owner:** agent (QA)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/quran-search/tests/search_parity.rs`)
+- **Evidence:** `crates/quran-search/tests/search_parity.rs` 3/3: 5,000 hostile substrings × 7 fields (totality, determinism, agreement with the shared pipeline) + ladder-order rule ids + end-to-end both-directions spot checks through a real staged index
+- **DoD:** ✅ all items / R6 locked by wiring proof, not just function equality (a bypass on either path fails one direction)
+- **Notes:** deterministic char-stride sampling (no RNG seed to manage); wasla pairs deliberately excluded from the bare-field loop (ladder-correct: wasla folds at L4, covered per field in the backend suite).
 
 ### Sprint 2.3 — Search Tools
 
