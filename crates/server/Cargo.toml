@@ -6,9 +6,24 @@ publish = false
 
 [dependencies]
 tokio = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+async-trait = { workspace = true }
 config = { path = "../config" }
+storage = { path = "../storage" }
+application = { path = "../application" }
+tool-registry = { path = "../tool-registry" }
+tools = { path = "../tools" }
+citations = { path = "../citations" }
+quran-core = { path = "../quran-core" }
+axum = { workspace = true }
+tower-http = { workspace = true }
+tower = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+tempfile = { workspace = true }
+sqlx = { workspace = true }
