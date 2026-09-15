@@ -4,7 +4,27 @@ All notable changes to Q-ai are documented here.
 
 ## [Unreleased]
 
+### Added — Phase 2 Quran Search, Normalization & Linguistics (in progress)
+
+- **quran-normalization** (new crate, M1a): `QAI-NORM-*` errors with the
+  Phase-2 `Diagnostic` contract, `RuleId` N01–N24 catalog identity with
+  heuristic/reserved flags, the `NormalizationRule` trait, `NormalizedText`,
+  and the bidirectional composable `SpanMap` (I10) with unit + proptest
+  coverage (identity, composition associativity, round-trip containment).
+- **docs**: `docs/03-plan/phases/phase-02-rag/execution-plan.md` — reconciled
+  M1a..M7 plan (migration mapping `0013`–`0018`, FTS5-first fallback DEV-05).
+- **xtask**: `arch-check` allowlist gains `[quran-normalization]`
+  (`domain` only; no llm/embeddings/retrieval/vector-store edges).
+
 ### Added — Phase 1 Canonical Quran Core (in progress)
+- **quran-corpus**: 13-checkpoint importer driver, char-level differ, frozen
+  hashing recipes; `QAI-QUR-02xx` diagnostics.
+- **application**: `quran.import` job handler, approval-gated activation/rollback,
+  hash-chained audit bridge, deterministic `QuranReader` + generation-keyed cache.
+- **storage**: `QuranRepository` (staging, atomic activation, reads, reports,
+  citations, translations), approval rows, audit sequence queries.
+- **docs**: ADR-0101…0114 (0101/0114 + 0111/0112 drafts pending owners/deliverables).
+
 
 - **quran-core** (new crate): pure domain — `SurahNumber`/`AyahNumber`/`TokenPosition`
   newtypes, edition/enum vocabulary, `QuranEdition`/`EditionStatistics`,
