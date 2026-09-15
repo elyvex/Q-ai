@@ -32,11 +32,11 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
+use axum::Router;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
-use axum::Router;
 use quran_core::{AyahOptions, AyahView, Surah};
 use serde::{Deserialize, Serialize};
 use tool_registry::{BackendMeta, ToolRegistry};
@@ -211,8 +211,9 @@ fn tool_status(error: &ToolError) -> StatusCode {
     match error {
         ToolError::InvalidInput { .. } => StatusCode::BAD_REQUEST,
         ToolError::Backend { code, .. } => match code.as_str() {
-            "QAI-QUR-0306" | "QAI-QUR-0307" | "QAI-QUR-0308" | "QAI-QUR-0309"
-            | "QAI-QUR-0322" => StatusCode::NOT_FOUND,
+            "QAI-QUR-0306" | "QAI-QUR-0307" | "QAI-QUR-0308" | "QAI-QUR-0309" | "QAI-QUR-0322" => {
+                StatusCode::NOT_FOUND
+            }
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         },
     }
@@ -264,12 +265,7 @@ fn ok_envelope<T: Serialize>(data: T, meta: Meta, headers: &HeaderMap) -> Respon
         }
     }
     let etag = etag_for(&meta);
-    json_response(
-        StatusCode::OK,
-        &Envelope { api_version: API_VERSION, data, meta },
-        etag,
-        true,
-    )
+    json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, etag, true)
 }
 
 fn tool_error_response(error: ToolError) -> Response {
@@ -320,7 +316,12 @@ async fn edition_handler(State(state): State<AppState>, Path(slug): Path<String>
     };
     let mut meta = empty_meta();
     meta.execution_time_ms = started.elapsed().as_secs_f64() * 1000.0;
-    json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data: edition, meta }, None, false)
+    json_response(
+        StatusCode::OK,
+        &Envelope { api_version: API_VERSION, data: edition, meta },
+        None,
+        false,
+    )
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -491,7 +492,12 @@ async fn divisions_handler(
     let started = Instant::now();
     let views = match state
         .api
-        .api_division(query.edition.as_deref().unwrap_or(""), &kind, number, &AyahOptions::default())
+        .api_division(
+            query.edition.as_deref().unwrap_or(""),
+            &kind,
+            number,
+            &AyahOptions::default(),
+        )
         .await
     {
         Ok(views) => views,
@@ -512,12 +518,7 @@ async fn divisions_handler(
         meta.canonical_reference = first.canonical.reference().to_string();
     }
     let _ = headers;
-    json_response(
-        StatusCode::OK,
-        &Envelope { api_version: API_VERSION, data, meta },
-        None,
-        true,
-    )
+    json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, true)
 }
 
 async fn tokens_handler(
@@ -526,10 +527,7 @@ async fn tokens_handler(
     Query(query): Query<SurahsQuery>,
 ) -> Response {
     let started = Instant::now();
-    let tokens = match state
-        .api
-        .api_tokens(&qualified(&reference, query.edition.as_deref()))
-        .await
+    let tokens = match state.api.api_tokens(&qualified(&reference, query.edition.as_deref())).await
     {
         Ok(tokens) => tokens,
         Err(error) => return tool_error_response(error),
@@ -550,12 +548,7 @@ async fn tokens_handler(
         .collect();
     let mut meta = empty_meta();
     meta.execution_time_ms = started.elapsed().as_secs_f64() * 1000.0;
-    json_response(
-        StatusCode::OK,
-        &Envelope { api_version: API_VERSION, data, meta },
-        None,
-        true,
-    )
+    json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, true)
 }
 
 #[derive(Debug, Deserialize)]
@@ -588,10 +581,7 @@ async fn resolve_handler(
     json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, false)
 }
 
-async fn citation_handler(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Response {
+async fn citation_handler(State(state): State<AppState>, Path(id): Path<String>) -> Response {
     let started = Instant::now();
     let resolved = match state.api.api_citation(&id).await {
         Ok(resolved) => resolved,
@@ -599,7 +589,12 @@ async fn citation_handler(
     };
     let mut meta = empty_meta();
     meta.execution_time_ms = started.elapsed().as_secs_f64() * 1000.0;
-    json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data: resolved, meta }, None, false)
+    json_response(
+        StatusCode::OK,
+        &Envelope { api_version: API_VERSION, data: resolved, meta },
+        None,
+        false,
+    )
 }
 
 async fn debug_reader_handler(
@@ -614,11 +609,7 @@ async fn debug_reader_handler(
         )
             .into_response();
     }
-    let views = match state
-        .api
-        .api_surah(&edition, surah, &AyahOptions::default())
-        .await
-    {
+    let views = match state.api.api_surah(&edition, surah, &AyahOptions::default()).await {
         Ok((_, views)) => views,
         Err(error) => return tool_error_response(error),
     };
@@ -635,35 +626,33 @@ async fn debug_reader_handler(
         ));
     }
     body.push_str("</body></html>");
-    (
-        StatusCode::OK,
-        [("content-type", "text/html; charset=utf-8")],
-        body,
-    )
-        .into_response()
+    (StatusCode::OK, [("content-type", "text/html; charset=utf-8")], body).into_response()
 }
 
 /// Build the router (health + API v1 + debug reader).
 pub fn router(state: AppState) -> Router {
     Router::new()
-            .route("/healthz", get(|| async { "ok" }))
-            .route("/readyz", get(|| async { "ready" }))
-            .route("/api/v1/quran/editions", get(editions_handler))
-            .route("/api/v1/quran/editions/{slug}", get(edition_handler))
-            .route("/api/v1/quran/surahs", get(surahs_handler))
-            .route("/api/v1/quran/surahs/{number}", get(surah_handler))
-            .route("/api/v1/quran/ayahs/{reference}", get(ayahs_handler))
-            .route("/api/v1/quran/context/{reference}", get(context_handler))
-            .route("/api/v1/quran/divisions/{kind}/{number}", get(divisions_handler))
-            .route("/api/v1/quran/tokens/{reference}", get(tokens_handler))
-            .route("/api/v1/quran/resolve", get(resolve_handler))
-            .route("/api/v1/quran/citations/{id}", get(citation_handler))
-            .route("/debug/read/{edition}/{surah}", get(debug_reader_handler))
-            .layer(tower_http::trace::TraceLayer::new_for_http())
-            .layer(tower_http::limit::RequestBodyLimitLayer::new(1024 * 1024))
-            .layer(tower_http::timeout::TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, std::time::Duration::from_secs(30)))
-            .layer(tower::limit::ConcurrencyLimitLayer::new(128))
-            .with_state(state)
+        .route("/healthz", get(|| async { "ok" }))
+        .route("/readyz", get(|| async { "ready" }))
+        .route("/api/v1/quran/editions", get(editions_handler))
+        .route("/api/v1/quran/editions/{slug}", get(edition_handler))
+        .route("/api/v1/quran/surahs", get(surahs_handler))
+        .route("/api/v1/quran/surahs/{number}", get(surah_handler))
+        .route("/api/v1/quran/ayahs/{reference}", get(ayahs_handler))
+        .route("/api/v1/quran/context/{reference}", get(context_handler))
+        .route("/api/v1/quran/divisions/{kind}/{number}", get(divisions_handler))
+        .route("/api/v1/quran/tokens/{reference}", get(tokens_handler))
+        .route("/api/v1/quran/resolve", get(resolve_handler))
+        .route("/api/v1/quran/citations/{id}", get(citation_handler))
+        .route("/debug/read/{edition}/{surah}", get(debug_reader_handler))
+        .layer(tower_http::trace::TraceLayer::new_for_http())
+        .layer(tower_http::limit::RequestBodyLimitLayer::new(1024 * 1024))
+        .layer(tower_http::timeout::TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            std::time::Duration::from_secs(30),
+        ))
+        .layer(tower::limit::ConcurrencyLimitLayer::new(128))
+        .with_state(state)
 }
 
 /// Serve until the process is killed.
@@ -708,17 +697,11 @@ mod tests {
             StatusCode::BAD_REQUEST
         );
         assert_eq!(
-            tool_status(&ToolError::Backend {
-                code: "QAI-QUR-0307".into(),
-                detail: "d".into()
-            }),
+            tool_status(&ToolError::Backend { code: "QAI-QUR-0307".into(), detail: "d".into() }),
             StatusCode::NOT_FOUND
         );
         assert_eq!(
-            tool_status(&ToolError::Backend {
-                code: "QAI-QUR-0310".into(),
-                detail: "d".into()
-            }),
+            tool_status(&ToolError::Backend { code: "QAI-QUR-0310".into(), detail: "d".into() }),
             StatusCode::INTERNAL_SERVER_ERROR
         );
     }
@@ -785,10 +768,9 @@ impl QuranApiBackend for ReaderBackend {
         use application::quran_reader::QuranReader;
         let selector = quran_core::EditionSelector::Slug(slug.to_string());
         let edition = self.reader.get_edition(&selector).await.map_err(|err| match err {
-            application::quran_reader::ReaderError::EditionNotFound(_) => ToolError::Backend {
-                code: "QAI-QUR-0306".into(),
-                detail: err.to_string(),
-            },
+            application::quran_reader::ReaderError::EditionNotFound(_) => {
+                ToolError::Backend { code: "QAI-QUR-0306".into(), detail: err.to_string() }
+            }
             other => application::quran_tools::to_tool_error(other),
         })?;
         if edition.slug != slug {
@@ -819,14 +801,21 @@ impl QuranApiBackend for ReaderBackend {
             detail: format!("bad surah number {surah}"),
         })?;
         let reference = quran_core::QuranRef::Surah { edition: selector, surah: number };
-        let views = self.reader.get_ayahs(&reference, options).await.map_err(application::quran_tools::to_tool_error)?;
+        let views = self
+            .reader
+            .get_ayahs(&reference, options)
+            .await
+            .map_err(application::quran_tools::to_tool_error)?;
         let surahs = self
             .reader
             .list_surahs(reference.edition())
             .await
             .map_err(application::quran_tools::to_tool_error)?;
         let meta = surahs.into_iter().find(|row| row.number == number).ok_or_else(|| {
-            ToolError::Backend { code: "QAI-QUR-0307".into(), detail: format!("surah {surah} not found") }
+            ToolError::Backend {
+                code: "QAI-QUR-0307".into(),
+                detail: format!("surah {surah} not found"),
+            }
         })?;
         Ok((meta, views))
     }
@@ -856,7 +845,10 @@ impl QuranApiBackend for ReaderBackend {
         };
         let selector = edition_selector(edition)?;
         let reference = quran_core::QuranRef::Division { edition: selector, kind, number };
-        self.reader.get_ayahs(&reference, options).await.map_err(application::quran_tools::to_tool_error)
+        self.reader
+            .get_ayahs(&reference, options)
+            .await
+            .map_err(application::quran_tools::to_tool_error)
     }
 
     async fn api_tokens(&self, reference: &str) -> Result<Vec<quran_core::Token>, ToolError> {
@@ -870,15 +862,10 @@ impl QuranApiBackend for ReaderBackend {
 
     async fn api_citation(&self, id: &str) -> Result<citations::ResolvedCitation, ToolError> {
         use storage::Database as _;
-        let mut uow = self
-            .reader
-            .database()
-            .write()
-            .await
-            .map_err(|err| ToolError::Backend {
-                code: "QAI-QUR-0310".into(),
-                detail: err.to_string(),
-            })?;
+        let mut uow = self.reader.database().write().await.map_err(|err| ToolError::Backend {
+            code: "QAI-QUR-0310".into(),
+            detail: err.to_string(),
+        })?;
         let row = uow
             .quran()
             .get_citation(id)
@@ -912,7 +899,9 @@ impl QuranApiBackend for ReaderBackend {
             edition_version: row
                 .edition_ref
                 .as_deref()
-                .and_then(|reference| reference.split_once('@').map(|(_, version)| version.to_string()))
+                .and_then(|reference| {
+                    reference.split_once('@').map(|(_, version)| version.to_string())
+                })
                 .unwrap_or_default(),
             surah: location.get("surah").and_then(|value| value.as_u64()).unwrap_or(0) as u16,
             ayah: location.get("ayah").and_then(|value| value.as_u64()).unwrap_or(0) as u32,
