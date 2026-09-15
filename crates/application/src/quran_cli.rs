@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 use quran_core::{AyahOptions, ContextBoundary, ContextSpec, EditionSelector, QuranRef};
 use quran_corpus::error::QuranDiagnostic as _;
+use storage::Database as _;
 use storage::error::StorageError;
 use storage_sqlite::SqliteDatabase;
 
@@ -520,10 +521,13 @@ pub async fn cmd_import(db_path: &str, manifest: &str, adapter: &str, dry_run: b
         created_at: at,
     };
     match super::quran::run_import_job(&db, input).await {
-        Ok(outcome) => CommandOutput::ok(
-            format!("imported to Staged ({})\n", outcome.result.unwrap_or_default()),
-            serde_json::json!({"job": outcome.result}),
-        ),
+        Ok(outcome) => {
+            let job = outcome.result.clone().unwrap_or_default();
+            CommandOutput::ok(
+                format!("imported to Staged ({job})\n"),
+                serde_json::json!({"job": job}),
+            )
+        }
         Err(err) => CommandOutput::err(exit::INTERNAL, err.to_string()),
     }
 }
@@ -555,7 +559,7 @@ pub async fn cmd_validate(
             Ok(db) => Arc::new(db),
             Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
         };
-        match super::quran::validate_staged(&db, slug, version).await {
+        match super::quran::validate_staged(&*db, slug, version).await {
             Ok(report) => report,
             Err(err) => {
                 let message = err.to_string();
@@ -962,56 +966,6 @@ async fn ensure_translation_source(
     let manifest: super::quran::TranslationManifest = serde_json::from_str(manifest_text)
         .map_err(|err| CommandOutput::err(exit::VALIDATION, format!("bad manifest: {err}")))?;
     ensure_source_version(db, &manifest.translation.slug, &manifest.translation.version, at).await
-}
-
-async fn ensure_source_version(
-    db: &Arc<SqliteDatabase>,
-    slug: &str,
-    version: &str,
-    at: &str,
-) -> Result<String, CommandOutput> {
-    ensure_principal_or_err(db, at).await?;
-    let source_id = format!("src-{slug}");
-    let version_id = format!("sv-{slug}-{version}");
-    let mut uow = db.write().await.map_err(|err: StorageError| {
-        CommandOutput::err(exit::INTERNAL, err.to_string())
-    })?;
-    if uow.sources().get(&source_id).await.map_err(|err: StorageError| {
-        CommandOutput::err(exit::INTERNAL, err.to_string())
-    })?.is_none() {
-        uow.sources()
-            .insert_source(storage::repository::SourceRow {
-                id: source_id.clone(),
-                title: slug.to_string(),
-                content_type: "quran_edition".to_string(),
-                language: Some("ar".to_string()),
-                created_at: at.to_string(),
-            })
-            .await
-            .map_err(|err: StorageError| CommandOutput::err(exit::INTERNAL, err.to_string()))?;
-    }
-    let versions = uow.sources().list_versions(&source_id).await.map_err(|err: StorageError| {
-        CommandOutput::err(exit::INTERNAL, err.to_string())
-    })?;
-    if !versions.iter().any(|row| row.version == version) {
-        uow.sources()
-            .insert_version(storage::repository::SourceVersionRow {
-                id: version_id.clone(),
-                source_id: source_id.clone(),
-                version: version.to_string(),
-                state: "Staged".to_string(),
-                trust_level: "ImportedUnverified".to_string(),
-                license_status: "Unknown".to_string(),
-                content_hash: None,
-                manifest_blob_id: None,
-            })
-            .await
-            .map_err(|err: StorageError| CommandOutput::err(exit::INTERNAL, err.to_string()))?;
-    }
-    uow.commit().await.map_err(|err: StorageError| {
-        CommandOutput::err(exit::INTERNAL, err.to_string())
-    })?;
-    Ok(version_id)
 }
 
 /// `quran translation show`.
