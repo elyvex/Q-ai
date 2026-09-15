@@ -65,9 +65,7 @@ impl Fts5Index {
     async fn connect(path: &Path, create: bool) -> Result<SqlitePool, IndexError> {
         SqlitePoolOptions::new()
             .max_connections(4)
-            .connect_with(
-                SqliteConnectOptions::new().filename(path).create_if_missing(create),
-            )
+            .connect_with(SqliteConnectOptions::new().filename(path).create_if_missing(create))
             .await
             .map_err(|err| IndexError::BuildFailed {
                 stage: "connect".to_string(),
@@ -151,7 +149,10 @@ impl Fts5Index {
                 .map(|c| format!("{c} UNINDEXED")),
         );
         columns.push("revelation UNINDEXED".to_string());
-        let ddl = format!("CREATE VIRTUAL TABLE IF NOT EXISTS ayah_fts USING fts5({})", columns.join(", "));
+        let ddl = format!(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS ayah_fts USING fts5({})",
+            columns.join(", ")
+        );
         sqlx::query(&ddl).execute(&self.pool).await.map_err(|err| IndexError::BuildFailed {
             stage: "create".to_string(),
             detail: err.to_string(),
@@ -199,7 +200,11 @@ impl Fts5Index {
                     return Ok(None);
                 }
                 if *ordered && *slop == 0 {
-                    let phrase = normalized.iter().map(|t| quote_phrase_term(t)).collect::<Vec<_>>().join(" ");
+                    let phrase = normalized
+                        .iter()
+                        .map(|t| quote_phrase_term(t))
+                        .collect::<Vec<_>>()
+                        .join(" ");
                     Ok(Some(format!("{{ {field} }} : \"{phrase}\"")))
                 } else {
                     let inner = normalized.join(" ");
@@ -258,7 +263,9 @@ impl Fts5Index {
                 Ok(Some(expression))
             }
             FtsQuery::Range { .. } => Err(IndexError::QueryRejected {
-                detail: "range queries are metadata-only; use SearchOpts filters or a top-level scan".to_string(),
+                detail:
+                    "range queries are metadata-only; use SearchOpts filters or a top-level scan"
+                        .to_string(),
             }),
             FtsQuery::Regex { field, pattern } => self.regex_expression(field, pattern).await,
             FtsQuery::All => Ok(None),
@@ -281,20 +288,21 @@ impl Fts5Index {
             });
         }
         let dfa = compile_dfa(pattern)?;
-        let terms: Vec<String> =
-            sqlx::query_scalar("SELECT term FROM vocab WHERE col = ?")
-                .bind(field)
-                .fetch_all(&self.pool)
-                .await
-                .map_err(|err| IndexError::BuildFailed {
-                    stage: "search".to_string(),
-                    detail: err.to_string(),
-                })?;
+        let terms: Vec<String> = sqlx::query_scalar("SELECT term FROM vocab WHERE col = ?")
+            .bind(field)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|err| IndexError::BuildFailed {
+                stage: "search".to_string(),
+                detail: err.to_string(),
+            })?;
         let mut matched = Vec::new();
         for (examined, term) in terms.iter().enumerate() {
             if examined >= MAX_VOCAB_SCAN {
                 return Err(IndexError::QueryRejected {
-                    detail: format!("regex scanned over {MAX_VOCAB_SCAN} terms; narrow the pattern"),
+                    detail: format!(
+                        "regex scanned over {MAX_VOCAB_SCAN} terms; narrow the pattern"
+                    ),
                 });
             }
             if dfa.is_match(term) {
@@ -315,7 +323,9 @@ impl Fts5Index {
     }
 
     /// WHERE clause for metadata filters (UNINDEXED columns allow plain SQL).
-    fn filter_clause(filters: &[crate::model::Filter]) -> Result<(String, Vec<String>), IndexError> {
+    fn filter_clause(
+        filters: &[crate::model::Filter],
+    ) -> Result<(String, Vec<String>), IndexError> {
         use crate::model::Filter;
         let mut clauses = Vec::new();
         let mut args = Vec::new();
@@ -325,7 +335,8 @@ impl Fts5Index {
                     if ids.is_empty() {
                         clauses.push("1 = 0".to_string());
                     } else {
-                        let list = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+                        let list =
+                            ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
                         clauses.push(format!("surah IN ({list})"));
                     }
                 }
@@ -336,7 +347,8 @@ impl Fts5Index {
                     if pages.is_empty() {
                         clauses.push("1 = 0".to_string());
                     } else {
-                        let list = pages.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+                        let list =
+                            pages.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
                         clauses.push(format!("page IN ({list})"));
                     }
                 }
@@ -384,9 +396,9 @@ fn compile_dfa(pattern: &str) -> Result<regex_automata::dfa::regex::Regex, Index
     builder
         .dense(dense::Config::new().minimize(true).dfa_size_limit(Some(DFA_SIZE_LIMIT)))
         .thompson(thompson::Config::new().nfa_size_limit(Some(NFA_SIZE_LIMIT)));
-    builder.build(pattern).map_err(|err| IndexError::QueryRejected {
-        detail: format!("invalid pattern: {err}"),
-    })
+    builder
+        .build(pattern)
+        .map_err(|err| IndexError::QueryRejected { detail: format!("invalid pattern: {err}") })
 }
 
 /// Metadata column allowlist for range queries.
@@ -436,11 +448,8 @@ impl Fts5Index {
         // other query form that yields no MATCH expression is unsatisfiable.
         if matches!(query, FtsQuery::All) {
             let (filter_sql, args) = Self::filter_clause(filters)?;
-            let where_sql = if filter_sql.is_empty() {
-                String::new()
-            } else {
-                format!("WHERE {filter_sql}")
-            };
+            let where_sql =
+                if filter_sql.is_empty() { String::new() } else { format!("WHERE {filter_sql}") };
             return Ok(Predicate { where_sql, match_expr: None, args, unsatisfiable: false });
         }
         let mut clauses = Vec::new();
@@ -458,8 +467,11 @@ impl Fts5Index {
         if !filter_sql.is_empty() {
             clauses.push(filter_sql);
         }
-        let where_sql =
-            if clauses.is_empty() { String::new() } else { format!("WHERE {}", clauses.join(" AND ")) };
+        let where_sql = if clauses.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", clauses.join(" AND "))
+        };
         Ok(Predicate { where_sql, match_expr, args, unsatisfiable })
     }
 
@@ -473,9 +485,8 @@ impl Fts5Index {
         for arg in &predicate.args {
             query = query.bind(arg);
         }
-        let count: i64 = query.fetch_one(&self.pool).await.map_err(|err| IndexError::BuildFailed {
-            stage: "search".to_string(),
-            detail: err.to_string(),
+        let count: i64 = query.fetch_one(&self.pool).await.map_err(|err| {
+            IndexError::BuildFailed { stage: "search".to_string(), detail: err.to_string() }
         })?;
         Ok(count.max(0) as u64)
     }
@@ -526,9 +537,8 @@ impl FullTextIndex for Fts5Index {
         for doc in &docs {
             let normalized = self.normalize_doc(doc)?;
             let cell = |field: &str| normalized.get(field).cloned().unwrap_or_default();
-            let int_meta = |key: &str| {
-                doc.metadata.get(key).and_then(|v| v.parse::<i64>().ok()).unwrap_or(0)
-            };
+            let int_meta =
+                |key: &str| doc.metadata.get(key).and_then(|v| v.parse::<i64>().ok()).unwrap_or(0);
             sqlx::query(
                 "INSERT INTO ayah_fts
                     (doc_id, text_exact, text_ws, text_marks, text_bare, text_hamza,
@@ -566,10 +576,13 @@ impl FullTextIndex for Fts5Index {
     }
 
     async fn commit(&self) -> Result<CommitStamp, IndexError> {
-        let doc_count: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM ayah_fts").fetch_one(&self.pool).await.map_err(
-                |err| IndexError::BuildFailed { stage: "commit".to_string(), detail: err.to_string() },
-            )?;
+        let doc_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ayah_fts")
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|err| IndexError::BuildFailed {
+                stage: "commit".to_string(),
+                detail: err.to_string(),
+            })?;
         Ok(CommitStamp {
             generation: self.manifest.corpus_generation,
             doc_count: doc_count.max(0) as u64,
@@ -643,10 +656,13 @@ impl FullTextIndex for Fts5Index {
         // Count inside the target generation before removing it.
         let path = Self::db_path(&self.root, generation);
         let pool = Self::connect(&path, false).await?;
-        let removed: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM ayah_fts").fetch_one(&pool).await.map_err(
-                |err| IndexError::BuildFailed { stage: "delete".to_string(), detail: err.to_string() },
-            )?;
+        let removed: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ayah_fts")
+            .fetch_one(&pool)
+            .await
+            .map_err(|err| IndexError::BuildFailed {
+                stage: "delete".to_string(),
+                detail: err.to_string(),
+            })?;
         pool.close().await;
         std::fs::remove_dir_all(&dir).map_err(|err| IndexError::BuildFailed {
             stage: "delete".to_string(),
@@ -656,10 +672,13 @@ impl FullTextIndex for Fts5Index {
     }
 
     async fn stats(&self) -> Result<FtsStats, IndexError> {
-        let doc_count: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM ayah_fts").fetch_one(&self.pool).await.map_err(
-                |err| IndexError::BuildFailed { stage: "stats".to_string(), detail: err.to_string() },
-            )?;
+        let doc_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ayah_fts")
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|err| IndexError::BuildFailed {
+                stage: "stats".to_string(),
+                detail: err.to_string(),
+            })?;
         Ok(FtsStats {
             backend: FtsBackend::Fts5,
             doc_count: doc_count.max(0) as u64,
@@ -668,10 +687,13 @@ impl FullTextIndex for Fts5Index {
     }
 
     async fn verify(&self) -> Result<FtsIntegrityReport, IndexError> {
-        let doc_count: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM ayah_fts").fetch_one(&self.pool).await.map_err(
-                |err| IndexError::BuildFailed { stage: "verify".to_string(), detail: err.to_string() },
-            )?;
+        let doc_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ayah_fts")
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|err| IndexError::BuildFailed {
+                stage: "verify".to_string(),
+                detail: err.to_string(),
+            })?;
         let doc_count = doc_count.max(0) as u64;
         let mut findings = Vec::new();
         if doc_count != self.manifest.doc_count {
