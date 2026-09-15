@@ -217,6 +217,14 @@ impl ReadTx for SqliteReadTx {
             .map_err(|_| StorageError::StorageUnavailable)?;
         Ok(row.map(|r| r.get::<String, _>(0)))
     }
+
+    async fn query_list(&self, sql: &str) -> Result<Vec<String>, StorageError> {
+        let rows = sqlx::query(sql)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|_| StorageError::StorageUnavailable)?;
+        Ok(rows.iter().map(|r| r.get::<String, _>(0)).collect())
+    }
 }
 
 // ─── UnitOfWork ─────────────────────────────────────────────────────────
