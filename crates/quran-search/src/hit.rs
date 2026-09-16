@@ -128,6 +128,10 @@ pub struct SearchHitParts {
     /// Display text with the span wrapped in `<b>` markers, when the calling
     /// tool requested highlighting (T49). Rendered, never stored.
     pub highlighted: Option<String>,
+    /// True when the match crosses an ayah boundary (concatenated window
+    /// matches, P2-T45). Lets the UI show the reader that a match spans
+    /// verses instead of silently presenting a fragment as one verse.
+    pub spans_ayah_boundary: bool,
     /// Advisories.
     pub warnings: Vec<Warning>,
 }
@@ -149,6 +153,9 @@ pub struct SearchHit {
     explanation: NormalizationTrace,
     segmentation: Vec<Segmentation>,
     highlighted: Option<String>,
+    /// Defaults to `false` when reading hits serialized before P2-T45.
+    #[serde(default)]
+    spans_ayah_boundary: bool,
     warnings: Vec<Warning>,
 }
 
@@ -219,6 +226,7 @@ impl SearchHit {
             explanation: parts.explanation,
             segmentation: parts.segmentation,
             highlighted: parts.highlighted,
+            spans_ayah_boundary: parts.spans_ayah_boundary,
             warnings: parts.warnings,
         })
     }
@@ -287,6 +295,12 @@ impl SearchHit {
     #[must_use]
     pub fn highlighted(&self) -> Option<&str> {
         self.highlighted.as_deref()
+    }
+
+    /// True when the match crosses an ayah boundary (P2-T45).
+    #[must_use]
+    pub fn spans_ayah_boundary(&self) -> bool {
+        self.spans_ayah_boundary
     }
 
     /// Advisories.
@@ -359,6 +373,7 @@ pub(crate) fn sample_parts() -> SearchHitParts {
             canonical_surface: "بِسْمِ".to_string(),
         }],
         highlighted: Some("<b>بِسْمِ ٱللَّه</b>ِ".to_string()),
+        spans_ayah_boundary: false,
         warnings: vec![],
     }
 }
