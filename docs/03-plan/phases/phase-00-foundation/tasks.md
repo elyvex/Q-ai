@@ -70,7 +70,7 @@ placeholder — this exists now so Phase 1/2 do not rework the type.
 | P0-T13 | Config validation rules + 16-case precedence matrix tests | D0.4 | T12 | 1.5 | BE | ☑ |
 | P0-T14 | `Secret<T>`, `SecretRef`, `SecretStore` trait | D0.5 | T09 | 1.0 | SEC | ☑ |
 | P0-T15 | Env + keychain + age-encrypted-file backends | D0.5 | T14 | 2.5 | SEC | ☑ |
-| P0-T16 | Global redaction tracing layer + secret-leak sentinel suite | D0.5, D0.16 | T14 | 2.0 | SEC | ☐ |
+| P0-T16 | Global redaction tracing layer + secret-leak sentinel suite | D0.5, D0.16 | T14 | 2.0 | SEC | ☑ |
 | P0-T17 | `storage` traits: `Database`, `ReadTx`, `UnitOfWork`, repo traits, `StorageError` | D0.6 | T09 | 2.0 | BE | ☑ |
 | P0-T18 | `storage-sqlite`: dual pools, pragmas, tx semantics, health | D0.6 | T17 | 2.5 | BE | ☑ |
 | P0-T19 | Migration runner: apply, checksum verify, status, plan, backup/restore | D0.7 | T18 | 2.5 | BE | ☑ |
