@@ -51,6 +51,19 @@ pub struct Fts5Index {
     pool: SqlitePool,
 }
 
+/// Compiled MATCH plan: an expression, possibly with regex provenance.
+///
+/// `Unsatisfiable` matches nothing (an emptied term, an empty expansion);
+/// `Unconstrained` is `FtsQuery::All`. Only a top-level regex carries its
+/// expansion stats; nested regexes contribute their expression alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum MatchPlan {
+    Unsatisfiable,
+    Unconstrained,
+    Expr(String),
+    Regex { expr: String, terms: Vec<String>, examined: u64 },
+}
+
 impl Fts5Index {
     /// Generation directory for `generation` under `root`.
     fn gen_dir(root: &Path, generation: u64) -> PathBuf {
@@ -178,44 +191,9 @@ impl Fts5Index {
         }
         Ok(out)
     }
-
-/// Compiled MATCH plan: an expression, possibly with regex provenance.
-///
-/// `Unsatisfiable` matches nothing (an emptied term, an empty expansion);
-/// `Unconstrained` is `FtsQuery::All`. Only a top-level regex carries its
-/// expansion stats; nested regexes contribute their expression alone.
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum MatchPlan {
-    Unsatisfiable,
-    Unconstrained,
-    Expr(String),
-    Regex { expr: String, terms: Vec<String>, examined: u64 },
-}
-
-impl MatchPlan {
-    /// The MATCH expression, if the plan constrains anything.
-    fn expression(self) -> Option<String> {
-        match self {
-            Self::Expr(expr) | Self::Regex { expr, .. } => Some(expr),
-            Self::Unsatisfiable | Self::Unconstrained => None,
-        }
-    }
-
-    /// Regex expansion provenance, if this plan is a top-level regex.
-    fn regex_stats(&self) -> Option<(&[String], u64)> {
-        match self {
-            Self::Regex { terms, examined, .. } => Some((terms, *examined)),
-            _ => None,
-        }
-    }
 }
 
 impl Fts5Index {
-    /// Compiled MATCH plan: an expression, possibly with regex provenance.
-    ///
-    /// `Unsatisfiable` matches nothing (an emptied term, an empty expansion);
-    /// `Unconstrained` is `FtsQuery::All`. Only a top-level regex carries its
-    /// expansion stats; nested regexes contribute their expression alone.
     async fn match_expression(&self, query: &FtsQuery) -> Result<MatchPlan, IndexError> {
         match query {
             FtsQuery::Term { field, term } => {
@@ -320,12 +298,12 @@ impl Fts5Index {
     ///
     /// Guard chain (I16): length cap → anchor rule → DFA-only compile with
     /// construction budgets → bounded dictionary scan → expansion cap.
-    /// A pattern matching no terms yields `None` (unsatisfiable).
+    /// A pattern matching no terms yields `Unsatisfiable`.
     async fn regex_expression(
         &self,
         field: &str,
         pattern: &str,
-    ) -> Result<Option<String>, IndexError> {
+    ) -> Result<MatchPlan, IndexError> {
         if TEXT_COLUMNS.iter().all(|col| *col != field) {
             return Err(IndexError::QueryRejected {
                 detail: format!("regex is only allowed against indexed text fields, not '{field}'"),
@@ -341,6 +319,7 @@ impl Fts5Index {
                 detail: err.to_string(),
             })?;
         let mut matched = Vec::new();
+        let mut matched_terms = Vec::new();
         for (examined, term) in terms.iter().enumerate() {
             if examined >= MAX_VOCAB_SCAN {
                 return Err(IndexError::QueryRejected {
@@ -351,6 +330,7 @@ impl Fts5Index {
             }
             if dfa.is_match(term) {
                 matched.push(format!("{{ {field} }} : {}", quote(term)));
+                matched_terms.push(term.clone());
                 if matched.len() > MAX_REGEX_EXPANSION {
                     return Err(IndexError::QueryRejected {
                         detail: format!(
@@ -361,9 +341,13 @@ impl Fts5Index {
             }
         }
         if matched.is_empty() {
-            return Ok(None);
+            return Ok(MatchPlan::Unsatisfiable);
         }
-        Ok(Some(matched.join(" OR ")))
+        Ok(MatchPlan::Regex {
+            expr: matched.join(" OR "),
+            terms: matched_terms,
+            examined: terms.len() as u64,
+        })
     }
 
     /// WHERE clause for metadata filters (UNINDEXED columns allow plain SQL).
@@ -520,7 +504,14 @@ impl Fts5Index {
         } else {
             format!("WHERE {}", clauses.join(" AND "))
         };
-        Ok(Predicate { where_sql, match_expr, args, unsatisfiable })
+        Ok(Predicate {
+            where_sql,
+            match_expr,
+            args,
+            unsatisfiable,
+            regex_terms,
+            terms_examined,
+        })
     }
 
     /// Exact count behind one predicate.
@@ -642,7 +633,13 @@ impl FullTextIndex for Fts5Index {
         let opts = opts.clone().normalized();
         let predicate = self.predicate(query, &opts.filters).await?;
         if predicate.unsatisfiable {
-            return Ok(FtsResults { hits: Vec::new(), total_matches: 0, truncated: false });
+            return Ok(FtsResults {
+                hits: Vec::new(),
+                total_matches: 0,
+                truncated: false,
+                regex_terms: Vec::new(),
+                terms_examined: 0,
+            });
         }
         let total_matches = self.count_predicate(&predicate).await?;
         let order = order_clause(opts.order);
@@ -685,7 +682,13 @@ impl FullTextIndex for Fts5Index {
         // wires snippet retrieval into `SearchHit` there.
         let truncated = u64::try_from(hits.len()).unwrap_or(u64::MAX) >= u64::from(opts.limit)
             && total_matches > u64::from(opts.limit);
-        Ok(FtsResults { hits, total_matches, truncated })
+        Ok(FtsResults {
+            hits,
+            total_matches,
+            truncated,
+            regex_terms: predicate.regex_terms,
+            terms_examined: predicate.terms_examined,
+        })
     }
 
     async fn count(&self, query: &FtsQuery) -> Result<u64, IndexError> {

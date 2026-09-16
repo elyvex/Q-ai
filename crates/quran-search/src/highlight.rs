@@ -63,7 +63,7 @@ mod tests {
         // Multiple ranges in order.
         assert_eq!(
             apply_markers(text, &[(0, 1), (13, 14)], "<b>", "</b>"),
-            Some(format!("<b>ب</b>ِسْمِ ٱللَّه<b>ِ</b>"))
+            Some("<b>ب</b>ِسْمِ ٱللَّه<b>ِ</b>".to_string())
         );
     }
 
