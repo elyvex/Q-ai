@@ -8,6 +8,8 @@
 
 use std::fmt::{self, Write as FmtWrite};
 
+use crate::redaction;
+
 /// Unique identifier for a diagnostic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DiagnosticId(u64);
@@ -63,22 +65,28 @@ pub struct DiagnosticCode {
 impl Diagnostic {
     /// Render the diagnostic as a human-readable string.
     pub fn render_human(&self) -> String {
+        let message = redaction::redact_text(&self.message);
+        let location = self.location.as_ref().map(|l| redaction::redact_text(l));
+        let affected_resource = self.affected_resource.as_ref().map(|r| redaction::redact_text(r));
+        let remedy = self.remedy.as_ref().map(|r| redaction::redact_text(r));
+        let next_command = self.next_command.as_ref().map(|c| redaction::redact_text(c));
+
         let mut out = String::new();
         let _ = write!(
             out,
             "[{}] {:?} [{}] {}",
-            self.timestamp, self.severity, self.code, self.message
+            self.timestamp, self.severity, self.code, message
         );
-        if let Some(ref loc) = self.location {
+        if let Some(ref loc) = location {
             let _ = write!(out, " at {}", loc);
         }
-        if let Some(ref res) = self.affected_resource {
+        if let Some(ref res) = affected_resource {
             let _ = write!(out, " (resource: {})", res);
         }
-        if let Some(ref remedy) = self.remedy {
+        if let Some(ref remedy) = remedy {
             let _ = write!(out, "\nRemedy: {}", remedy);
         }
-        if let Some(ref cmd) = self.next_command {
+        if let Some(ref cmd) = next_command {
             let _ = write!(out, "\nNext: {}", cmd);
         }
         out
@@ -86,22 +94,28 @@ impl Diagnostic {
 
     /// Render the diagnostic as a compact JSON object.
     pub fn render_json(&self) -> String {
+        let message = redaction::redact_text(&self.message);
+        let location = self.location.as_ref().map(|l| redaction::redact_text(l));
+        let affected_resource = self.affected_resource.as_ref().map(|r| redaction::redact_text(r));
+        let remedy = self.remedy.as_ref().map(|r| redaction::redact_text(r));
+        let next_command = self.next_command.as_ref().map(|c| redaction::redact_text(c));
+
         let mut out = String::new();
         let _ = write!(
             out,
             "{{\"id\":{},\"timestamp\":\"{}\",\"severity\":\"{:?}\",\"code\":\"{}\",\"category\":\"{:?}\",\"message\":\"{}\"",
-            self.id.0, self.timestamp, self.severity, self.code, self.category, self.message
+            self.id.0, self.timestamp, self.severity, self.code, self.category, message
         );
-        if let Some(ref loc) = self.location {
+        if let Some(ref loc) = location {
             let _ = write!(out, ",\"location\":\"{}\"", loc);
         }
-        if let Some(ref res) = self.affected_resource {
+        if let Some(ref res) = affected_resource {
             let _ = write!(out, ",\"affected_resource\":\"{}\"", res);
         }
-        if let Some(ref remedy) = self.remedy {
+        if let Some(ref remedy) = remedy {
             let _ = write!(out, ",\"remedy\":\"{}\"", remedy);
         }
-        if let Some(ref cmd) = self.next_command {
+        if let Some(ref cmd) = next_command {
             let _ = write!(out, ",\"next_command\":\"{}\"", cmd);
         }
         out.push('}');
