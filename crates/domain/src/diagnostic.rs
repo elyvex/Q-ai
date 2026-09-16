@@ -14,6 +14,16 @@ use crate::redaction;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DiagnosticId(u64);
 
+impl DiagnosticId {
+    /// Create a diagnostic ID with an explicit numeric value.
+    ///
+    /// Intended for test/sample use; production code should use `DiagnosticId::new()`
+    /// if random generation is preferred.
+    pub fn explicit(value: u64) -> Self {
+        Self(value)
+    }
+}
+
 /// The severity of a diagnostic event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DiagnosticSeverity {
