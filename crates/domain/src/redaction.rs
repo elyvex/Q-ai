@@ -104,11 +104,7 @@ pub fn redact_text(input: &str) -> Cow<'_, str> {
         }
     }
 
-    if wrote {
-        Cow::Owned(out)
-    } else {
-        Cow::Borrowed(input)
-    }
+    if wrote { Cow::Owned(out) } else { Cow::Borrowed(input) }
 }
 
 fn redact_line(input: &str) -> Cow<'_, str> {
@@ -142,15 +138,16 @@ fn redact_line(input: &str) -> Cow<'_, str> {
                     while val_start < input.len() && input.as_bytes()[val_start] == b' ' {
                         val_start += 1;
                     }
-                    if val_start < input.len() && input.as_bytes()[val_start] != b' '
+                    if val_start < input.len()
+                        && input.as_bytes()[val_start] != b' '
                         && input.as_bytes()[val_start] != b'\n'
                     {
                         // Find value end (next space, comma, semicolon, or end)
                         let mut val_end = val_start;
                         while val_end < input.len() {
                             match input.as_bytes()[val_end] {
-                                b' ' | b',' | b';' | b'\n' | b'\r' | b'"' | b'\'' | b')'
-                                | b'}' | b']' => break,
+                                b' ' | b',' | b';' | b'\n' | b'\r' | b'"' | b'\'' | b')' | b'}'
+                                | b']' => break,
                                 _ => val_end += 1,
                             }
                         }
@@ -179,8 +176,17 @@ mod tests {
     #[test]
     fn is_secret_key_matches_expected_names() {
         for key in &[
-            "api_key", "API_KEY", "password", "secret", "token", "credential",
-            "api-key", "apiKey", "user_secret", "access_token", "auth_credential",
+            "api_key",
+            "API_KEY",
+            "password",
+            "secret",
+            "token",
+            "credential",
+            "api-key",
+            "apiKey",
+            "user_secret",
+            "access_token",
+            "auth_credential",
         ] {
             assert!(is_secret_key(key), "expected `{key}` to be recognized");
         }
@@ -188,9 +194,7 @@ mod tests {
 
     #[test]
     fn is_secret_key_rejects_benign_names() {
-        for key in &[
-            "name", "job_id", "duration_ms", "status", "version", "path",
-        ] {
+        for key in &["name", "job_id", "duration_ms", "status", "version", "path"] {
             assert!(!is_secret_key(key), "`{key}` must NOT be flagged");
         }
     }

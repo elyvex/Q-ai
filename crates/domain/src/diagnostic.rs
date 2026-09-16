@@ -82,11 +82,7 @@ impl Diagnostic {
         let next_command = self.next_command.as_ref().map(|c| redaction::redact_text(c));
 
         let mut out = String::new();
-        let _ = write!(
-            out,
-            "[{}] {:?} [{}] {}",
-            self.timestamp, self.severity, self.code, message
-        );
+        let _ = write!(out, "[{}] {:?} [{}] {}", self.timestamp, self.severity, self.code, message);
         if let Some(ref loc) = location {
             let _ = write!(out, " at {}", loc);
         }
