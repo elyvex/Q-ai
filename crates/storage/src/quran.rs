@@ -970,6 +970,12 @@ pub trait QuranRepository: Send + Sync {
     async fn cache_enforce_cap(&mut self, _max_bytes: i64) -> Result<u64, StorageError> {
         Err(StorageError::StorageUnavailable)
     }
+
+    /// Delete every entry from other generations (wholesale invalidation on
+    /// a corpus-generation bump). Returns deleted entries.
+    async fn cache_delete_stale(&mut self, _keep_generation: i64) -> Result<u64, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
 }
 
 /// One cached search response (migration `0016`, derived data).
