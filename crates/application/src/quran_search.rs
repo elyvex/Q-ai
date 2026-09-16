@@ -64,7 +64,7 @@ impl ExactField {
 }
 
 /// Shared tool parameters.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SearchParams {
     /// Query text.
     pub text: String,
@@ -86,7 +86,7 @@ pub struct SearchParams {
 }
 
 /// Tool output: hits plus exact totals and provenance.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SearchOutput {
     /// Hits in the requested order (one per matching ayah).
     pub hits: Vec<SearchHit>,
@@ -100,6 +100,23 @@ pub struct SearchOutput {
     pub generation: i64,
     /// Output-level advisories (zero-result hints, drift notes).
     pub warnings: Vec<Warning>,
+    /// Regex provenance (pattern, field, expansion, dictionary scanned).
+    /// `None` for non-regex tools.
+    pub regex_report: Option<RegexReport>,
+}
+
+/// Regex execution report (plan §5.5: terms examined and scanned documents
+/// are always reported, never hidden).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RegexReport {
+    /// The pattern as given.
+    pub pattern: String,
+    /// Indexed normalized field it ran against.
+    pub field: String,
+    /// Dictionary terms the pattern expanded to.
+    pub terms_matched: Vec<String>,
+    /// Dictionary terms examined during expansion.
+    pub terms_examined: u64,
 }
 
 /// Search-service failures.
@@ -128,6 +145,9 @@ pub enum SearchError {
         /// Index id.
         index_id: String,
     },
+    /// Regex budget exceeded for a principal.
+    #[error(transparent)]
+    RateLimited(IndexError),
 }
 
 impl SearchError {
@@ -156,6 +176,8 @@ impl storage::error::Diagnostic for SearchError {
             }
             Self::EditionNotIndexed { .. } => storage::error::DiagnosticCode::new("QAI-IDX", 2),
             Self::NoServingIndex { .. } => storage::error::DiagnosticCode::new("QAI-IDX", 3),
+            // Only ever constructed with `RateLimited` inside.
+            Self::RateLimited(_) => storage::error::DiagnosticCode::new("QAI-IDX", 7),
         }
     }
 
@@ -172,6 +194,7 @@ impl storage::error::Diagnostic for SearchError {
                 "Search the indexed edition, or build an index for the requested one.".to_string()
             }
             Self::NoServingIndex { .. } => "Run `qai quran index rebuild` first.".to_string(),
+            Self::RateLimited(inner) => inner.remedy().unwrap_or_else(|| "See above.".to_string()),
         })
     }
 
@@ -538,6 +561,7 @@ async fn run_search(
         rule_set: ctx.trace.profile.clone(),
         generation: serving.generation,
         warnings: serving.stale.clone().into_iter().collect(),
+        regex_report: None,
     })
 }
 
@@ -1223,6 +1247,7 @@ pub async fn search_phrase(
             rule_set: trace.profile.clone(),
             generation: serving.generation,
             warnings: serving.stale.clone().into_iter().collect(),
+            regex_report: None,
         });
     }
 
@@ -1455,6 +1480,7 @@ pub async fn search_concatenated(
             rule_set: trace.profile.clone(),
             generation: serving.generation,
             warnings: serving.stale.clone().into_iter().collect(),
+            regex_report: None,
         });
     }
 
@@ -1660,4 +1686,162 @@ mod tests {
         assert_eq!(tokens[0].0, 0..3);
         assert_eq!(tokens[1].0, 4..8);
     }
+}
+
+/// Sliding-window rate limiter for regex search (I16, T46).
+///
+/// Per principal, per 60-second window, at most `max_per_minute` requests
+/// (default 10). In-process and intentionally simple: a single server keeps
+/// one instance for the regex tool; counts reset with the process.
+/// Multi-instance deployments enforce per instance (documented limitation,
+/// acceptable for a local-first product).
+#[derive(Debug)]
+pub struct RateLimiter {
+    max_per_minute: u32,
+    hits: std::sync::Mutex<std::collections::HashMap<String, std::collections::VecDeque<std::time::Instant>>>,
+}
+
+impl RateLimiter {
+    /// Build a limiter admitting `max_per_minute` requests per principal.
+    #[must_use]
+    pub fn new(max_per_minute: u32) -> Self {
+        Self { max_per_minute: max_per_minute.max(1), hits: std::sync::Mutex::new(std::collections::HashMap::new()) }
+    }
+
+    /// Default limiter: 10 regex searches per minute per principal.
+    #[must_use]
+    pub fn default_regex() -> Self {
+        Self::new(10)
+    }
+
+    /// Admit one request for `principal` or reject with a retry hint.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SearchError::RateLimited`] (`QAI-IDX-0007`) when the
+    /// principal exhausted its window. The error names no other principal
+    /// and carries no usage data.
+    pub fn check(&self, principal: &str) -> Result<(), SearchError> {
+        let now = std::time::Instant::now();
+        let mut hits = self.hits.lock().unwrap_or_else(|poison| poison.into_inner());
+        let window = hits.entry(principal.to_string()).or_default();
+        while window.front().is_some_and(|first| now.duration_since(*first).as_secs() >= 60) {
+            window.pop_front();
+        }
+        if window.len() as u32 >= self.max_per_minute {
+            let retry_after_secs =
+                window.front().map(|first| 60u64.saturating_sub(now.duration_since(*first).as_secs())).unwrap_or(60);
+            return Err(SearchError::RateLimited(IndexError::RateLimited { retry_after_secs }));
+        }
+        window.push_back(now);
+        Ok(())
+    }
+}
+
+/// `quran.search_regex` (P2-T46): DFA-only patterns over indexed normalized
+/// fields, with the full I16 guard chain.
+///
+/// Guards, in order: per-principal rate limit → field allowlist (indexed
+/// `text_*` fields only, never a raw canonical scan) → length cap → anchor
+/// rule → DFA-only compile with construction budgets → bounded dictionary
+/// scan → bounded expansion. Timeouts wrap the backend call (`timeout_ms`,
+/// default 3000, ceiling 10000): an expired budget fails the query, never
+/// the process.
+///
+/// Agent-policy gating (deny unless the agent's policy grants
+/// `quran.search_regex`) is NOT enforced here: the policy engine lands in
+/// Phase 7, so agent calls must pass through the tool-registry gate (T110),
+/// which is the only path that will check grants.
+#[allow(clippy::too_many_arguments)]
+pub async fn search_regex(
+    db: &SqliteDatabase,
+    index_root: &std::path::Path,
+    params: &SearchParams,
+    field: &str,
+    pattern: &str,
+    principal: &str,
+    limiter: &RateLimiter,
+    timeout_ms: u64,
+) -> Result<SearchOutput, SearchError> {
+    limiter.check(principal)?;
+    if quran_search::tokenizer::INDEXED_FIELDS.iter().all(|allowed| *allowed != field) {
+        return Err(SearchError::Index(IndexError::QueryRejected {
+            detail: format!("regex is only allowed against indexed text fields, not '{field}'"),
+        }));
+    }
+    // Compile up front so malformed patterns fail before opening anything.
+    let dfa = quran_search::compile_dfa(pattern).map_err(SearchError::Index)?;
+    let serving = open_serving(db, index_root, params.edition.as_deref()).await?;
+    let registry = db_registry(db).await?;
+    let profile = quran_search::profile_for_field(field).ok_or_else(|| {
+        SearchError::Index(IndexError::QueryRejected {
+            detail: format!("regex is only allowed against indexed text fields, not '{field}'"),
+        })
+    })?;
+    let pipeline = quran_normalization::NormalizationPipeline::for_profile(
+        &registry,
+        profile,
+        latest_version(&registry, profile)?,
+    )
+    .map_err(SearchError::Normalization)?;
+    let trace = empty_trace_for(&pipeline);
+
+    let query = FtsQuery::Regex { field: field.to_string(), pattern: pattern.to_string() };
+    let order = if params.explain { ResultOrder::Relevance } else { ResultOrder::CanonicalOrder };
+    let opts = quran_search::SearchOpts {
+        limit: 1000,
+        offset: 0,
+        filters: params.filters.clone(),
+        order,
+        highlight: false,
+        timeout_ms: timeout_ms.clamp(1, 10_000),
+        explain: params.explain,
+    };
+    let budget = std::time::Duration::from_millis(opts.timeout_ms);
+    let results = tokio::time::timeout(budget, serving.index.search(&query, &opts))
+        .await
+        .map_err(|_| {
+            SearchError::Index(IndexError::QueryRejected {
+                detail: format!("regex exceeded its {}ms budget", opts.timeout_ms),
+            })
+        })?
+        .map_err(SearchError::Index)?;
+    let total_matches = results.total_matches;
+    let regex_report = RegexReport {
+        pattern: pattern.to_string(),
+        field: field.to_string(),
+        terms_matched: results.regex_terms.clone(),
+        terms_examined: results.terms_examined,
+    };
+
+    // Span resolution runs the identical automaton over normalized ayah text
+    // (the backend only returns doc ids for regex hits).
+    let mut candidates = Vec::new();
+    for hit in &results.hits {
+        let (surah, ayah) =
+            parse_doc_id(&hit.doc_id, &serving.manifest.index_id, &serving.edition_id)?;
+        candidates.push(Candidate { surah, ayah, score: hit.score });
+    }
+    let field_owned = field.to_string();
+    let ctx = RunContext {
+        db,
+        serving: &serving,
+        trace,
+        params,
+        field: &field_owned,
+        stats_docs: stats_docs(&serving).await?,
+    };
+    let mut output = run_search(&ctx, candidates, total_matches, |ayah_text, tokens| {
+        let derived = pipeline.apply(ayah_text).0;
+        let range = quran_search::first_match(&dfa, derived.text())?;
+        let span = derived.spans().to_canonical(range);
+        let matched = overlapping_tokens(ayah_text, tokens, &span);
+        if matched.is_empty() {
+            return None;
+        }
+        Some(AyahMatch { span, matched, segmentation: Vec::new() })
+    })
+    .await?;
+    output.regex_report = Some(regex_report);
+    Ok(output)
 }
