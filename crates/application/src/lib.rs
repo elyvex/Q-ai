@@ -15,6 +15,7 @@ pub mod quran_forms;
 pub mod quran_index;
 pub mod quran_normalize;
 pub mod quran_search;
+pub mod quran_search_cache;
 pub mod quran_reader;
 pub mod quran_tools;
 
