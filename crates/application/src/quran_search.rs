@@ -2049,10 +2049,6 @@ pub async fn search_regex(
     Ok(output)
 }
 
-    output.regex_report = Some(regex_report);
-    Ok(output)
-}
-
 #[cfg(test)]
 mod filter_tests {
     use super::*;
