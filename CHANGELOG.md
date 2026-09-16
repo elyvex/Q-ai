@@ -4,7 +4,29 @@ All notable changes to Q-ai are documented here.
 
 ## [Unreleased]
 
-### Added — Phase 2 Quran Search, Normalization & Linguistics (in progress)
+### Added — Global Redaction Hardening (P0-T16 / FU-01)
+
+- **domain** (new module `redaction`): single source of truth for secret
+  redaction Rules A/B/C — key-level (`secret|password|api_key|token|credential`
+  → marker), free-text `key=value` scrubbing, URL userinfo replacement;
+  returns borrowed input on clean paths (zero-alloc hot path).
+- **audit**: `redact_audit_value` delegates to `domain::redaction`
+  (behavior-preserving; removes bare-substring match on string values,
+  eliminating the "approval token issued" false positive).
+- **observability**: `InitOptions { redact_secrets: bool }` + `init_with_options`
+  + `RedactingWriter` wrapping stderr; field-name scrubbing on every write;
+  default-on (deny-by-default), explicit `redact_secrets=false` escape hatch.
+- **application**: re-exports `domain::redaction`; threads
+  `cfg.logging.redact_secrets` into subscriber init (wires the dead flag).
+- **diagnostic**: `render_human` / `render_json` apply `redact_text` at
+  render time (stored structs untouched; existing tests unchanged).
+- **cli**: `config show` and `doctor --json` redact-then-print via shared
+  helper; doctor JSON schema shape preserved.
+- **testkit**: 6 new sentinel tests (traced fields, Secret-typed values,
+  free-text key=value, URL userinfo, config/doctor JSON, escape-hatch);
+  original 3 leak tests pass unchanged.
+- **xtask**: `allowlist.toml` gains `observability → domain` (one-line,
+  justified leaf-ward edge; recorded in plan.md Complexity Tracking).
 
 - **quran-normalization** (new crate, M1a): `QAI-NORM-*` errors with the
   Phase-2 `Diagnostic` contract, `RuleId` N01–N24 catalog identity with
@@ -82,9 +104,27 @@ All notable changes to Q-ai are documented here.
   unordered-near with FTS recall prefilter and exact Rust verification of
   gap/window semantics) and `quran.search_concatenated` (trigram recall
   over skeletons, exact verify, re-normalization check, per-token
-  segmentation tiling the query; cross-ayah rejected until P2-T45);
+  segmentation tiling the query; cross-ayah windows added in P2-T45);
   `Segmentation` on `SearchHit`; cluster→char unit boundary helper
   (Phase-1 token offsets are grapheme clusters, spans are scalars).
+- **application** (M3): `quran.search_regex` (DFA-only engine, I16 guard
+  chain, per-principal 10/min sliding-window limiter, timeout budgets,
+  `RegexReport` provenance; `QAI-IDX-0007`); scan-path metadata filters
+  with FTS-identical NULL semantics; `<b>` highlight rendering on
+  `SearchHit.highlighted`; generation-keyed result cache (`cache_key` binds
+  tool+params+profile+generation, read-time generation check, garbage-as-miss,
+  LRU cap, wholesale invalidation; migration `0016`).
+- **quran-search** (M3): single-engine `regex` module (`compile_dfa` +
+  `first_match`; backend delegates to it), `FtsResults` regex provenance
+  (`regex_terms`, `terms_examined`), `highlight` module (`apply_markers`).
+- **application** (M3, P2-T45): `quran.search_concatenated` now supports
+  cross-ayah windows — `verify_concatenated_window` + `WindowPart` verify in
+  joined normalized space, re-normalization-check each ayah's portion, and
+  return per-ayah `AyahMatch` parts; ayah-level-wins dedup (no reference
+  twice); `spans_ayah_boundary` on `AyahMatch` and `SearchHit`; `max_ayah_span`
+  window budget (over-budget or `allow_cross_ayah=false` serve ayah-local
+  only, never a silent cross-verse fragment). `segment_concatenated`'s
+  span/map/offset quartet bundled into a public `MatchGeometry` struct.
 
 ### Added — Phase 1 Canonical Quran Core (in progress)
 - **cli**: read verbs `quran get/context/surah/division/resolve` and lifecycle verbs
