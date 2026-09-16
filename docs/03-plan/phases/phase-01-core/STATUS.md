@@ -15,7 +15,7 @@
 | Task rows (excluding 3 sequencing notes) | **50 ☑ / 2 ◐ / 13 ☐** of 65 |
 | Acceptance criteria | **19 ◐ / 2 ☐** of 21 (none marked fully verified — rituals pending) |
 | ADRs | **12 Accepted**, 2 Draft (0101, 0114) |
-| Phase-1 migrations | **6 / 6** (`0007`–`0012`); workspace now at 14 (Phase-2 added `0013`–`0014`) |
+| Phase-1 migrations | **6 / 6** (`0007`–`0012`); workspace now at 16 (Phase-2 added `0013`–`0016`) |
 | D1.14 documents | **5 / 5** published |
 | Gate | `clippy -D warnings` clean · `cargo test --workspace` 135 suites ok · `arch-check` OK · `migrate-check` OK · `fmt` clean for Phase-1 files |
 
@@ -220,3 +220,10 @@ Targeted verification (2026-09-15, AC-P1-09 hardening):
 `cargo test -p application --test quran_import` 9/9 green in an isolated
 worktree (incl. new `rejected_activations_leave_canonical_state_untouched`);
 rustfmt clean. AC-P1-09 flipped to ◐ (code review + ritual pending).
+
+Targeted verification (2026-09-16, gates):
+`cargo xtask arch-check` OK · `cargo xtask migrate-check` OK (16 migrations
+ordered, checksums stable). `cargo fmt --all -- --check` still shows a pending
+diff in the concurrent writer's `crates/application/src/lib.rs` (module order;
+not a Phase-1 file, left for its owner). Full `cargo test --workspace` not
+re-run: shared tree has uncommitted Phase-2 churn.
