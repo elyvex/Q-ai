@@ -1,7 +1,7 @@
 # Phase 2 — Completion Ledger
 
 **Phase:** P2 — Quran Search, Arabic Normalization, Morphology & Word Families
-**Status:** 🟡 In Progress — 18 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 3 / 6 migrations
+**Status:** 🟡 In Progress — 24 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 4 / 6 migrations
 **Started:** 2026-09-14
 **Completed:** —
 
@@ -48,18 +48,18 @@ with what evidence.
 | 2.0 — Dataset & Linguistic Decisions | 12 | 0 | 30.5 | — | ☐ |
 | 2.1 — Normalization Engine | 12 | 3 | 28.5 | — | ☐ |
 | 2.2 — Derived Forms & FTS Foundation | 15 | 10 | 33.5 | — | ☐ |
-| 2.3 — Search Tools | 17 | 5 | 42.0 | — | ☐ |
+| 2.3 — Search Tools | 17 | 11 | 42.0 | — | ☐ |
 | 2.4 — Morphology Import & Lexicons | 18 | 0 | 45.0 | — | ☐ |
 | 2.5 — Morphology & Family Tools | 19 | 0 | 47.5 | — | ☐ |
 | 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 0 | 51.0 | — | ☐ |
-| **Total** | **114 + 5** | **18** | **278.0** | **—** | **16%** |
+| **Total** | **114 + 5** | **24** | **278.0** | **—** | **21%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
 | Deliverables (D2.1–D2.13) | 0 | 13 |
 | Acceptance criteria (AC-P2-01…50) | 0 | 50 |
 | ADRs accepted (+ 2 reserved) | 0 | 14 + 2 |
-| Migrations applied (`0013`–`0018` per DEV-04) | 3 | 6 |
+| Migrations applied (`0013`–`0018` per DEV-04) | 4 | 6 |
 | Required test suites green | 0 | 17 |
 | D2.13 documents published | 0 | 6 |
 
@@ -258,6 +258,66 @@ _None completed yet._
 - **DoD:** ✅ all items / every hit carries `segmentation` with query parts tiling the skeleton; `spans_token_boundary` semantics hold by construction (L6 removes spaces); `allow_cross_ayah=true` fails typed until P2-T45, never silently ayah-local
 - **Notes:** trigram probes are Rust-side `contains` until the T36 posting index replaces the scan. `Segmentation` lives on `SearchHit` (empty for other tools); `AyahMatch` made public for reuse.
 
+### P2-T45 — Cross-ayah window dedup + `spans_ayah_boundary` labeling
+- **Deliverable:** D2.4
+- **Completed:** 2026-09-16
+- **Owner:** agent (SRCH)
+- **PR / commit:** `d901a14` (window verify + dedup) + parallel-session test repair (tight-hull assertion); verified by second agent session (see Notes)
+- **Evidence:** `verify_concatenated_window` + `WindowPart` (joined-space verify → re-normalization check → per-ayah portions with tiling segmentation); dedup ayah-level-wins in `search_concatenated`; `spans_ayah_boundary` on `AyahMatch` + `SearchHit`; `search_tools.rs::concatenated_window_verify_tiles_across_ayahs` (tight-hull property + slice re-normalization round-trip) + `::concatenated_cross_ayah_windows_span_verse_breaks` (boundary flags, tiling, no duplicate refs, `max_ayah_span` budget)
+- **DoD:** ✅ all items / window matches deduped against ayah matches (ayah-level always wins, no reference twice); every multi-part hit labeled `spans_ayah_boundary`; `allow_cross_ayah=false` and over-budget windows serve ayah-local only, never a silent cross-verse fragment as one verse
+- **Notes:** verification sweep 2026-09-16 (second session, after COR-01): `search_tools` 14/14,
+  `cargo check -p application --all-targets` and
+  `cargo clippy -p application -p quran-search --all-targets -- -D warnings` both clean. One real
+  defect found in review (over-strict test expecting full-ayah span 0..7 where tight-hull 0..6 is
+  correct — trailing kasra normalizes away; ayah-level path yields 0..6 for identical content,
+  proven by execution); repaired as a property assertion. `segment_concatenated` argument list
+  bundled into `MatchGeometry`. See COR-01 for the broken-commit record.
+
+### P2-T46 — `quran.search_regex` with DFA engine + all I16 guards + rate limit
+- **Deliverable:** D2.5
+- **Completed:** 2026-09-15
+- **Owner:** agent (SRCH)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/application/src/quran_search.rs crates/quran-search/src/regex.rs`)
+- **Evidence:** `quran-search/src/regex.rs` (single DFA-only engine: `compile_dfa` + `first_match`; backend `fts5.rs` delegates to it — one engine, no fallback); `search_regex` service (rate limit → field allowlist → up-front compile → FTS vocab expansion → timeout-wrapped search → identical-automaton span resolution); `search_tools.rs::regex_matches_with_provenance_and_guards` (literal match with trace + `RegexReport` provenance) + `::regex_rate_limit_is_per_principal` (2/2 admitted, 3rd `QAI-IDX-0007`, other principal unaffected); guard rejections (`.*` anchor rule, 512-char cap, non-text field) all `QAI-IDX-0002`
+- **DoD:** ✅ all items / no backtracking engine anywhere in the path (a DFA build failure is a rejection, never a retry elsewhere); per-principal 10/min sliding window; timeout budget wraps the backend call (default 3000, ceiling 10000); expansion terms + examined counts always reported via `RegexReport`
+- **Notes:** `QAI-IDX-0007 RateLimited` opened. Agent-policy gating is NOT enforced in the service (policy engine lands Phase 7) — agent calls must pass the tool-registry gate (T110), the only path that will check grants. Timeout behavioral test omitted (racy on a 14-ayah fixture); budget enforcement is structural (`tokio::time::timeout` + clamp), latency-gated in T55.
+
+### P2-T47 — Exact `total_matches` counting path (separate from ranked search)
+- **Deliverable:** D2.5
+- **Completed:** 2026-09-15
+- **Owner:** agent (SRCH)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/application/src/quran_search.rs`)
+- **Evidence:** `search_tools.rs::totals_stay_exact_under_truncation` on real SQLite (unlimited total == limit=1 total == offset=1 total; `truncated` true exactly when total > limit; page contents differ across offsets)
+- **DoD:** ✅ all items / totals come from the separate count/verify path, never from hit-list length; truncation reporting is exact, not estimated
+- **Notes:** no new code — the task is the proof. The design (count-before-page at FTS, verified-count for scan/concat paths) already separated the paths; this suite locks the contract.
+
+### P2-T48 — Filters: surah/juz/page/revelation-place/global-range
+- **Deliverable:** D2.5
+- **Completed:** 2026-09-15
+- **Owner:** agent (BE)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/application/src/quran_search.rs`)
+- **Evidence:** `passes_filters` applied in all three scan paths (exact substring/prefix, normalized scan modes, concatenated verify loop) with FTS-identical NULL semantics; `search_tools.rs::scan_path_filters_match_fts_semantics` (surah narrowing, empty-result consistency, concatenated filter); per-kind NULL/range semantics unit-pinned in `quran_search.rs` tests module
+- **DoD:** ✅ all items / every tool honors every filter kind; NULL division fields never match a range; empty filter lists match everything
+- **Notes:** FTS path already filtered at the engine (T41/T42); this task closed the scan-path gap. Revelation data comes from `list_surahs` per call (fixture-small; revisit if profiling flags it).
+
+### P2-T49 — Highlighting: canonical char ranges → display markers
+- **Deliverable:** D2.5
+- **Completed:** 2026-09-15
+- **Owner:** agent (BE)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/quran-search/src/highlight.rs crates/quran-search/src/hit.rs`)
+- **Evidence:** `quran-search/src/highlight.rs` (`apply_markers`: sorted/non-overlapping/in-bounds or `None`, multibyte-safe; `<b>`/`</b>` v1 markers); `SearchHit.highlighted` (rendered, never stored); `search_tools.rs::highlight_wraps_spans_or_stays_absent` (markers present, strip-equals-canonical, absent when disabled)
+- **DoD:** ✅ all items / highlighting renders from validated spans only; invalid ranges fail closed (`None`, never guessed markers); disabled highlighting stores nothing
+- **Notes:** marker vocabulary is v1 (`<b>`); richer snippet windows (context chars around the span) belong to the API/CLI surfaces (T51/T52), not the hit type.
+
+### P2-T50 — Result cache (`0025`) + generation invalidation + LRU cap
+- **Deliverable:** D2.10
+- **Completed:** 2026-09-15
+- **Owner:** agent (BE)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- migrations/sqlite/0016* crates/application/src/quran_search_cache.rs`)
+- **Evidence:** `migrations/sqlite/0016_quran_search_cache.up.sql` (+ checksums; `migrate-check` 16 ordered); `quran_search_cache.rs` (`cache_key` binds tool+params+profile+extra+generation, `cache_lookup` validates generation + shape and touches LRU, `cache_store` + cap enforcement, `cache_invalidate` wholesale); `search_cache.rs` 6/6 (round-trip byte-identity, generation-miss deletes stale row, garbage-miss deletes garbage, LRU recency incl. touch reorder, wholesale keeps current, stats)
+- **DoD:** ✅ all items / no stale generation ever served (key namespace + read-time generation check + wholesale invalidation); unparseable payloads are misses; 128 MiB default cap with single-statement LRU eviction
+- **Notes:** tool-level wiring (services consulting the cache) lands with the API/CLI surfaces (T51/T52) — the cache contract is proven standalone here so wiring cannot weaken it. Plan table shape differs slightly (`tool_name`/`hit_count` live inside the key/payload instead of columns); recorded as DEV-08 below.
+
 ### Sprint 2.4 — Morphology Import & Lexicons
 
 ### Sprint 2.5 — Morphology & Family Tools
@@ -387,6 +447,15 @@ _None accepted yet._
 
 ## 5. Deviations From Plan
 
+### DEV-08 — Cache table shape differs slightly from the plan sketch
+- **Date:** 2026-09-15
+- **Plan reference:** plan.md §13 (`0025_quran_search_cache.up.sql`) / P2-T50
+- **Planned:** columns `(cache_key, tool_name, corpus_generation, result_json, hit_count, created_at, last_used_at)` + `ix_cache_gen` / `ix_cache_lru`
+- **Delivered:** `migrations/sqlite/0016_quran_search_cache.up.sql` with `(key, generation, payload_json, bytes, created_at, last_hit_at)` + `ix_cache_age`
+- **Reason:** `tool_name` and `hit_count` live inside the key and payload instead of columns (the key already binds the tool; hit count derives from the payload); `bytes` is new (LRU cap needs per-row accounting); index names follow the column names
+- **Scope impact:** none — all plan-mandated behaviors (generation-keyed invalidation, LRU cap) implemented and tested against the delivered shape
+- **Phase-3 impact:** none; cache rows are derived data, safe to wipe
+- **Approved by:** agent (owner to ratify)
 ### DEV-07 — Migration numbering follows physical build order, not the DEV-04 map
 - **Date:** 2026-09-15
 - **Plan reference:** DEV-04 mapping (`0020`–`0025` → `0013`–`0018`) / P2-T33
@@ -435,7 +504,33 @@ counting-rules transparency (I15, ADR-0211).
 
 ## 6. Corrections
 
-_None._
+### COR-01 — correction to `P2-T45` (entry of 2026-09-16)
+- **Date:** 2026-09-16
+- **Original entry:** P2-T45, recorded 2026-09-16
+- **What was wrong:** The entry read as if the task were already verified and the test repair
+  already landed. It was not: revision `d901a14` contained a stray duplicate tail after
+  `search_regex` (`output.regex_report = Some(regex_report); Ok(output); }` appearing a second
+  time at module top level), so `d901a14` and its descendants did **not** compile. The new
+  suite was also red (`concatenated_window_verify_tiles_across_ayahs`, over-strict full-ayah
+  0..7 span expectation) and `clippy -D warnings` failed twice on the new code.
+- **Correct record:** P2-T45 is complete only as of this correction, with the following landed in
+  the working tree on top of `d901a14`:
+  1. stray duplicate block removed (restores a compilable `application`);
+  2. `segment_concatenated` re-argumented from 8 params to 5 via a new public `MatchGeometry`
+     struct (`clippy::too_many_arguments` at 8/7) — callers `verify_concatenated` and
+     `verify_concatenated_window` updated;
+  3. the failing test repaired into a property assertion (per-part slice of the tight hull,
+     re-normalized, must equal that part's query text) plus `clippy::collapsible_if` /
+     `clippy::single_match` fixes in `search_tools.rs`.
+  Verification 2026-09-16: `cargo check -p application --all-targets` EXIT 0;
+  `cargo clippy -p application -p quran-search --all-targets -- -D warnings` EXIT 0;
+  `cargo test -p application --test search_tools` 14 passed / 0 failed. To be re-confirmed after
+  the fixes are committed (the ledger records working-tree state until then).
+- **Cause:** a parallel session recorded the completion and the intended repair before the
+  repairing edits were actually applied, and an owner commit (`d901a14`) captured a partially
+  applied edit that left duplicated code at module scope. Lesson: re-run
+  `cargo check`/`clippy`/the named suite immediately before writing a completion entry, and never
+  record a repair that has not been executed.
 
 **Entry format**
 
