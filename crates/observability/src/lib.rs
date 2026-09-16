@@ -45,6 +45,17 @@ impl Default for InitOptions {
     }
 }
 
+impl InitOptions {
+    /// Explicit opt-out for debugging: no redaction layer.
+    ///
+    /// Test/documentation helper so the escape hatch is expressible and
+    /// comparable; `init_with_options` with this value omits the
+    /// `RedactingWriter` entirely.
+    pub fn default_off_for_debug() -> Self {
+        Self { format: Format::Text, redact_secrets: false }
+    }
+}
+
 /// Wraps any `io::Write` to scrub secret field patterns before forwarding.
 ///
 /// Rule A (`key=value` pairs where `key` is a recognized secret key) are
@@ -165,13 +176,15 @@ pub fn init(format: Format) -> Shutdown {
 ///
 /// Matches `key=<value>` patterns where `key` is a recognized secret key
 /// and replaces the value portion with `***REDACTED***`.
-fn redact_log_fields(formatted: &str) -> String {
+pub fn redact_log_fields(formatted: &str) -> String {
     let mut result = formatted.to_string();
     let keys = ["api_key", "apikey", "api-key", "password", "secret", "token", "credential"];
     for key in &keys {
         let pattern = format!("{key}=");
-        while let Some(pos) = result.to_lowercase().find(&pattern.to_lowercase()) {
-            let val_start = pos + key.len() + 1;
+        let mut search_start = 0;
+        while let Some(pos) = result[search_start..].to_lowercase().find(&pattern.to_lowercase()) {
+            let actual_pos = search_start + pos;
+            let val_start = actual_pos + key.len() + 1;
             let mut val_end = val_start;
             while val_end < result.len() {
                 match result.as_bytes()[val_end] {
@@ -181,7 +194,11 @@ fn redact_log_fields(formatted: &str) -> String {
             }
             if val_end > val_start {
                 result.replace_range(val_start..val_end, "***REDACTED***");
+                search_start = val_start + "***REDACTED***".len();
             } else {
+                search_start = val_start;
+            }
+            if search_start >= result.len() {
                 break;
             }
         }

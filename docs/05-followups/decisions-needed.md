@@ -1,0 +1,164 @@
+# Decisions Needed From the Owner
+
+> **Purpose:** every question in this file can only be answered by a human
+> owner/editor — not by an agent. Each item blocks the listed tasks or
+> acceptance criteria. Nothing here is invented: owners, dates, datasets,
+> reviewers, and licenses are `_unassigned_` / `TBD` until a human writes them
+> in.
+>
+> **How to answer:** reply with the item ID (e.g. `OD-01`) plus the answer.
+> The answering agent will record it in the ADR / task / criterion named in
+> "Recorded in" and flip the blocked rows. Do not answer by editing this file
+> directly unless that is the agreed workflow.
+>
+> **Scope:** Phase 1 (Canonical Quran Core). Phase-0 items live in
+> `docs/05-followups/phase-0-remaining-work.md`; Phase-2+ technical questions
+> live in `docs/05-followups/open-questions.md`.
+>
+> **Status key:** 🔴 unanswered · 🟢 answered (with date + where recorded)
+
+---
+
+## OD-01 — Licensed Quran dataset + bundle policy (blocks AC-P1-01, T58)
+
+- **Status:** 🔴 unanswered
+- **Question:** Which Arabic edition is the canonical dataset (script,
+  riwayah, numbering, normalization), is redistribution licensed, and do we
+  bundle it or ship the fixture with user-supplied import?
+- **Options (ADR-0101):** A. bundle a licensed edition · B. ship
+  `test-edition-min`, user imports their own approved edition (current
+  fallback) · C. defer Phase 1 until licensed.
+- **Needed:** dataset identity + license evidence + policy choice (A/B/C).
+- **Blocks:** `P1-X01`, `P1-T01`, `P1-T02`, `P1-T56`, `P1-T58`, `AC-P1-01`.
+- **Current fallback:** engineering runs on synthetic `test-edition-min`;
+  candidates surveyed in ADR-0101 are all unverified.
+- **Recorded in:** `docs/02-architecture/decisions/ADR-0101-initial-quran-dataset.md`
+  (Draft), `tasks.md` §1/`§2`, `acceptance.md` §1.1.
+
+## OD-02 — Named editorial reviewer + `verified_by` sign-off
+
+- **Status:** 🔴 unanswered
+- **Question:** Who is the qualified reviewer that compares the text against a
+  recognized printed muṣḥaf, and what sample + method did they sign?
+- **Needed:** reviewer name + sample + comparison method, recorded in the
+  edition's `verified_by` field.
+- **Blocks:** `P1-X02`, `P1-T55`, `AC-P1-01` (with OD-01).
+- **Recorded in:** ADR-0101, `tasks.md` §1/`§7`.
+
+## OD-03 — Reference corpus + comparison procedure + sign-off
+
+- **Status:** 🔴 unanswered
+- **Question:** Which independent reference corpus, which comparison procedure,
+  and who signs off?
+- **Needed:** corpus identity + procedure + signer name. Until then QV-015
+  stays a recorded skip (Info, never silent pass).
+- **Blocks:** `P1-X03`, `P1-T03`, `P1-T26◐`, QV-015.
+- **Recorded in:** `docs/02-architecture/decisions/ADR-0114-reference-corpus-comparison.md`
+  (Draft), `tasks.md` §1/`§4.2`.
+
+## OD-04 — Debug-reader web font: name + license (blocks T54 / AC-P1-18)
+
+- **Status:** 🔴 unanswered
+- **Question:** Which web font ships with the debug reader (bundled
+  `@font-face`), and is its license cleared for redistribution?
+- **Needed:** font name + license sign-off. The reader works today on a CSS
+  system stack (Amiri → Noto Naskh Arabic → Scheherazade New → platform
+  fonts); only the bundled binary needs this decision.
+- **Blocks:** `P1-T54`, `AC-P1-18`.
+- **Recorded in:** `tasks.md` §7, `acceptance.md` §1.6, `STATUS.md` §3.2.
+
+## OD-05 — Estimate / schedule gap: 82 ed stated vs 131.0 ed summed
+
+- **Status:** 🔴 unanswered
+- **Question:** Accept ~8.7 weeks, cut scope explicitly, or add a fourth
+  engineer? (Includes the Sprint 1.2 42-ed overload and the 1.2a/1.2b split.)
+- **Needed:** one of the three options, recorded; retrofit-impossible
+  deliverables (D1.1, D1.4, D1.5, D1.6, D1.13) must not absorb a cut.
+- **Blocks:** Phase-1 scheduling (`tasks.md` §9, `README.md` §9.1).
+- **Recorded in:** `tasks.md` §9.1/`§9.2`, `done.md` §7 (OWN-03).
+
+## OD-06 — Provisional HTTP stack: ratify or redirect axum + tower-http
+
+- **Status:** 🔴 unanswered
+- **Question:** Ratify axum + tower-http for API v1, or redirect to another
+  framework?
+- **Blocks:** `AC-P1-14` final wording; health endpoints unchanged either way.
+- **Recorded in:** `done.md` §7 (OWN-04), `technology-stack.md` §4.
+
+## OD-07 — Coverage gates: ratify the proposed floors
+
+- **Status:** 🔴 unanswered
+- **Question:** Ratify the `acceptance.md` §4 floors (quran-core ≥ 90%,
+  validation/tokenize/hashing ≥ 90%, adapters/differ ≥ 80%, citations ≥ 85%,
+  storage-sqlite ≥ 80%, surfaces smoke-only)?
+- **Blocks:** `acceptance.md` §4, exit gate coverage row.
+- **Recorded in:** `acceptance.md` §4 ("Owner to ratify before Sprint 1.2").
+
+## OD-08 — Exit rituals: reviewer identity + recording archive
+
+- **Status:** 🔴 unanswered
+- **Question:** Who (not the implementer) performs the §5 live walkthrough,
+  and where is the recording archived?
+- **Needed:** reviewer name + recording link, then per-criterion sign-off.
+- **Blocks:** all 19 ◐ criteria (ritual half), `P1-T60`, `acceptance.md` §5/`§6`.
+- **Recorded in:** `acceptance.md` §5/`§6`, `done.md` §3 (all "—").
+
+## OD-09 — Exit-gate sign-off rows: owners + dates
+
+- **Status:** 🔴 unanswered
+- **Question:** Fill every `acceptance.md` §6 row (13 plan + 8 supporting
+  criteria, coverage, DoD, suites, 14 ADRs, 6 migrations, editorial sign-off,
+  ritual, handoff, swimlane X, Phase-1-accepted).
+- **Needed:** owner + date per row.
+- **Blocks:** `P1-T60`, Phase-2 unblocking.
+- **Recorded in:** `acceptance.md` §6 (all Owner/Date cells empty).
+
+## OD-10 — Swimlane X ownership: assign every row
+
+- **Status:** 🔴 unanswered
+- **Question:** Owner + decision-open date for `P1-X01`…`P1-X05` (all
+  `_unassigned_` / `TBD`).
+- **Blocks:** tracking of OD-01/OD-03 and Phase-2 inputs (OD-11, OD-12).
+- **Recorded in:** `tasks.md` §1.
+
+## OD-11 — Morphology dataset selection & licensing (Phase-2 input)
+
+- **Status:** 🔴 unanswered
+- **Question:** Which morphology dataset, under what license (ADR-0203)?
+- **Needed:** dataset + license, before Phase 2 starts.
+- **Blocks:** `P1-X04`.
+- **Recorded in:** `tasks.md` §1.
+
+## OD-12 — Normalization rule catalog + linguist engagement (Phase-2 input)
+
+- **Status:** 🔴 unanswered
+- **Question:** Which normalization rule catalog, and who is the engaged
+  linguist (ADR-0204)?
+- **Needed:** catalog + linguist name, before Phase 2 starts.
+- **Blocks:** `P1-X05`.
+- **Recorded in:** `tasks.md` §1.
+
+## OD-13 — Phase-0 exit discrepancy reconciliation
+
+- **Status:** 🔴 unanswered
+- **Question:** Reconcile `status.md`'s outstanding Phase-0 items against the
+  build prompt's Phase-0-complete declaration.
+- **Blocks:** Phase-0 exit (not Phase-1 engineering).
+- **Recorded in:** `done.md` §7 (OWN-05).
+
+## OD-14 — `server` layering: accept allowlist or schedule the routing fix
+
+- **Status:** 🔴 unanswered (deferred, not blocking Phase 1)
+- **Question:** Accept `server` reaching `storage` + `tools` directly
+  (allowlisted), or schedule routing through `application` + tightening the
+  allowlist (suggested Phase 3)?
+- **Blocks:** nothing in Phase 1; Phase-3/server-hardening scope.
+- **Recorded in:** `done.md` §7 (OWN-06).
+
+---
+
+### Answer log
+
+| Date | Item | Answer | Recorded in |
+|---|---|---|---|
+| — | — | _none yet_ | — |
