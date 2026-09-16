@@ -791,3 +791,72 @@ quran-normalization` as the next command.
   (T36), highlight markers (T49), mushaf goldens (need licensed corpus).
 - **Next concrete action (M3):** regex + total/filters/highlight/cache
   (P2-T46/T47/T48/T49/T50); next command `cargo test -p quran-search`.
+
+---
+
+## 29. Session checkpoint — 2026-09-15 (M3: T46/T47/T48/T49/T50 done)
+
+- **Completed:** `search_regex` + `RateLimiter` (T46), truncated-total proof
+  (T47, no new code — the suite locks the existing separate-count design),
+  scan-path filters + per-kind unit tests (T48), highlight renderer +
+  `SearchHit.highlighted` (T49), generation-keyed cache service + migration
+  `0016` + eviction/invalidation (T50).
+- **Tasks flipped ☑:** P2-T46, P2-T47, P2-T48, P2-T49, P2-T50 (evidence in
+  `done.md` §2). Sprint 2.3: 10/17 done.
+- **Verification (all green in scope):** `search_tools.rs` 12/12 (5 new:
+  scan filters, highlight, truncation proof, regex provenance+guards,
+  per-principal rate limit); `search_cache.rs` 6/6 (round-trip, generation
+  miss, garbage miss, LRU+touch, wholesale, stats); application lib incl. 5
+  filter unit tests + key determinism; quran-search 18 lib + 5 backend + 3
+  parity; `clippy -D warnings` clean; `arch-check` OK; `migrate-check` OK
+  (16); per-file rustfmt clean.
+- **Repairs:** serde derives on `MatchMode`/`ExactField`/`PhraseMode`
+  (cache keys serialize params); LRU test committed instead of rolled back
+  (rollback undid the eviction under test); struct-field pileups from
+  parallel edits (checked by compile).
+- **Deferred, explicitly:** regex timeout behavioral test (racy on a
+  14-ayah fixture; enforcement structural, latency-gated T55);
+  tool-level cache wiring (T51/T52 surfaces consult the cache; contract
+  proven standalone so wiring cannot weaken it); per-kind filter coverage
+  beyond surah on live data (NULL semantics unit-pinned; fixture divisions
+  are synthetic); snippet windows beyond span markers (T51/T52).
+- **Next concrete action:** P2-T45 cross-ayah dedup + `spans_ayah_boundary`
+  (last D2.4 item), then T51/T52 API+CLI surfaces; next command
+  `cargo test -p quran-search`.
+
+---
+
+## 30. Session checkpoint — 2026-09-16 (M3 complete: T45 done + repair)
+
+- **Completed:** P2-T45 cross-ayah window dedup + `spans_ayah_boundary`
+  (landed as owner commit `d901a14`: `verify_concatenated_window` +
+  `WindowPart`, ayah-level-wins dedup, `spans_ayah_boundary` flag on
+  `AyahMatch`/`SearchHit`, `max_ayah_span` budget). Sprint 2.3: 11/17.
+- **Tasks flipped ☑:** P2-T45 (evidence in `done.md` §2). Running total
+  24/114 tasks, 4/6 migrations, 0/50 ACs, 0/14 ADRs.
+- **Repairs (landed in working tree on top of `d901a14`):**
+  1. `d901a14` did not compile — a stray duplicate tail after `search_regex`
+     left `output.regex_report = …; Ok(output); }` at module scope; removed.
+  2. `segment_concatenated` hit `clippy::too_many_arguments` (8/7) — the
+     span/map/derived-len/image-offset quartet bundled into a new public
+     `MatchGeometry` struct (5 params); both callers updated.
+  3. `search_tools.rs`: the over-strict full-ayah span expectation (0..7 vs
+     correct tight-hull 0..6) replaced by a property assertion (slice each
+     part's hull, re-normalize, assert it equals that part's query text);
+     `collapsible_if` + `single_match` lint fixes. Recorded as `done.md`
+     §6 COR-01.
+- **Verification (green in scope):** `cargo check -p application
+  --all-targets` EXIT 0; `cargo clippy -p application -p quran-search
+  --all-targets -- -D warnings` EXIT 0; `cargo test -p application --test
+  search_tools` 14/14 (incl. `concatenated_window_verify_tiles_across_ayahs`
+  and `concatenated_cross_ayah_windows_span_verse_breaks`).
+- **Repairs/observations:** the `d901a14` revision was pushed to the ledger as
+  complete before its suite was green — the completion-record rule
+  (`done.md` §How-To rule 3) requires running the named suite immediately
+  before appending; see COR-01 for the process fix.
+- **Deferred, explicitly:** committing the T45 repair + doc flips (owner
+  session owns commits; working tree left staged-ready); trigram posting
+  index for concat recall (still Rust-side `contains`, T36).
+- **Next concrete action:** commit the T45 repair, then P2-T51/T52
+  (`quran.search` API endpoints + SSE; CLI search command group); next
+  command `cargo test -p quran-search`.
