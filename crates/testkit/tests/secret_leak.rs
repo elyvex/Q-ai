@@ -140,7 +140,7 @@ fn sentinel_userinfo_scrubbed() {
 
     // Verify via Diagnostic as well (free text path)
     let diag = Diagnostic {
-        id: DiagnosticId(2),
+        id: DiagnosticId::from_str_unchecked("00000000-0000-0000-0000-000000000002"),
         timestamp: "2026-01-01T00:00:00Z".to_string(),
         severity: DiagnosticSeverity::Error,
         code: DiagnosticCode { namespace: "QAI-DOM", code: 1002 },
