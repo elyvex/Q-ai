@@ -148,12 +148,12 @@ before opening the sprint.
 | P2-T42 | `quran.search_normalized` incl. ad-hoc rule sets + `explain` | D2.5 | T41 | 3.0 | SRCH | ☑ |
 | P2-T43 | `quran.search_phrase` (ordered/near/unordered, slop) | D2.5 | T41 | 2.5 | SRCH | ☑ |
 | P2-T44 | `quran.search_concatenated`: candidate gen → verify → segmentation explanation | D2.4 | T36,T40 | 4.5 | SRCH | ☑ |
-| P2-T45 | Cross-ayah window dedup + `spans_ayah_boundary` labeling | D2.4 | T44 | 2.0 | SRCH | ☐ |
-| P2-T46 | `quran.search_regex` with DFA engine + all I16 guards + rate limit | D2.5 | T41 | 3.0 | SRCH | ☐ |
-| P2-T47 | Exact `total_matches` counting path (separate from ranked search) | D2.5 | T41 | 1.5 | SRCH | ☐ |
-| P2-T48 | Filters: surah/juz/page/revelation-place/global-range | D2.5 | T41 | 2.0 | BE | ☐ |
-| P2-T49 | Highlighting: canonical char ranges → display markers | D2.5 | T40 | 2.0 | BE | ☐ |
-| P2-T50 | Result cache (`0025`) + generation invalidation + LRU cap | D2.10 | T40 | 2.0 | BE | ☐ |
+| P2-T45 | Cross-ayah window dedup + `spans_ayah_boundary` labeling | D2.4 | T44 | 2.0 | SRCH | ☑ |
+| P2-T46 | `quran.search_regex` with DFA engine + all I16 guards + rate limit | D2.5 | T41 | 3.0 | SRCH | ☑ |
+| P2-T47 | Exact `total_matches` counting path (separate from ranked search) | D2.5 | T41 | 1.5 | SRCH | ☑ |
+| P2-T48 | Filters: surah/juz/page/revelation-place/global-range | D2.5 | T41 | 2.0 | BE | ☑ |
+| P2-T49 | Highlighting: canonical char ranges → display markers | D2.5 | T40 | 2.0 | BE | ☑ |
+| P2-T50 | Result cache (`0025`) + generation invalidation + LRU cap | D2.10 | T40 | 2.0 | BE | ☑ |
 | P2-T51 | Search API endpoints + SSE streaming variant | D2.11 | T41–T46 | 3.0 | BE | ☐ |
 | P2-T52 | CLI search command group with all flags + `--json` | D2.12 | T41–T46 | 2.5 | BE | ☐ |
 | P2-T53 | Search golden-set suite (400 queries × expected reference sets) | D2.13 | T44,T46 | 4.0 | QA | ☐ |
