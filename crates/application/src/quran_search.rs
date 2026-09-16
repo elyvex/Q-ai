@@ -2048,3 +2048,99 @@ pub async fn search_regex(
     output.regex_report = Some(regex_report);
     Ok(output)
 }
+
+    output.regex_report = Some(regex_report);
+    Ok(output)
+}
+
+#[cfg(test)]
+mod filter_tests {
+    use super::*;
+
+    fn ayah(
+        surah: i64,
+        juz: Option<i64>,
+        page: Option<i64>,
+        global: i64,
+    ) -> storage::quran::AyahRow {
+        storage::quran::AyahRow {
+            edition_id: "ed".to_string(),
+            surah,
+            ayah: 1,
+            text: "نص".to_string(),
+            text_hash: "sha256:00".to_string(),
+            char_count: 2,
+            token_count: 1,
+            global_ayah_index: global,
+            juz,
+            hizb: None,
+            rub: None,
+            manzil: None,
+            ruku: None,
+            page,
+            sajdah: None,
+            provenance_id: "prov".to_string(),
+        }
+    }
+
+    #[test]
+    fn empty_filters_match_everything() {
+        let ayah = ayah(1, None, None, 1);
+        assert!(passes_filters(&ayah, None, &[]));
+    }
+
+    #[test]
+    fn surah_membership() {
+        let ayah = ayah(2, None, None, 10);
+        assert!(passes_filters(&ayah, None, &[Filter::Surah(vec![1, 2])]));
+        assert!(!passes_filters(&ayah, None, &[Filter::Surah(vec![1, 3])]));
+        assert!(!passes_filters(&ayah, None, &[Filter::Surah(vec![])]));
+    }
+
+    #[test]
+    fn null_divisions_never_match_ranges() {
+        // NULL juz/page behave SQL-like: a range cannot match unknown.
+        let bare = ayah(1, None, None, 5);
+        assert!(!passes_filters(&bare, None, &[Filter::JuzRange(1, 30)]));
+        assert!(!passes_filters(&bare, None, &[Filter::Page(vec![1])]));
+        let placed = ayah(1, Some(3), Some(42), 5);
+        assert!(passes_filters(&placed, None, &[Filter::JuzRange(1, 30)]));
+        assert!(!passes_filters(&placed, None, &[Filter::JuzRange(4, 30)]));
+        assert!(passes_filters(&placed, None, &[Filter::Page(vec![42])]));
+        assert!(!passes_filters(&placed, None, &[Filter::Page(vec![43])]));
+    }
+
+    #[test]
+    fn revelation_and_global_ranges() {
+        let ayah = ayah(1, Some(1), Some(1), 100);
+        assert!(passes_filters(
+            &ayah,
+            Some("makki"),
+            &[Filter::RevelationPlace("makki".to_string())]
+        ));
+        assert!(!passes_filters(
+            &ayah,
+            Some("madani"),
+            &[Filter::RevelationPlace("makki".to_string())]
+        ));
+        assert!(!passes_filters(&ayah, None, &[Filter::RevelationPlace("makki".to_string())]));
+        assert!(passes_filters(&ayah, None, &[Filter::GlobalRange(100, 100)]));
+        assert!(passes_filters(&ayah, None, &[Filter::GlobalRange(1, 200)]));
+        assert!(!passes_filters(&ayah, None, &[Filter::GlobalRange(101, 200)]));
+    }
+
+    #[test]
+    fn filters_conjoin() {
+        let ayah = ayah(2, Some(5), Some(10), 50);
+        assert!(passes_filters(
+            &ayah,
+            Some("makki"),
+            &[Filter::Surah(vec![2]), Filter::JuzRange(1, 10)]
+        ));
+        assert!(!passes_filters(
+            &ayah,
+            Some("makki"),
+            &[Filter::Surah(vec![2]), Filter::JuzRange(6, 10)]
+        ));
+    }
+}
