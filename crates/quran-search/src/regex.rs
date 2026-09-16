@@ -39,9 +39,9 @@ pub fn compile_dfa(pattern: &str) -> Result<regex_automata::dfa::regex::Regex, I
     builder
         .dense(dense::Config::new().minimize(true).dfa_size_limit(Some(DFA_SIZE_LIMIT)))
         .thompson(thompson::Config::new().nfa_size_limit(Some(NFA_SIZE_LIMIT)));
-    builder.build(pattern).map_err(|err| IndexError::QueryRejected {
-        detail: format!("invalid pattern: {err}"),
-    })
+    builder
+        .build(pattern)
+        .map_err(|err| IndexError::QueryRejected { detail: format!("invalid pattern: {err}") })
 }
 
 /// First match of a compiled pattern as a char range, if any.

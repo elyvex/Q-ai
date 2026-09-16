@@ -299,11 +299,7 @@ impl Fts5Index {
     /// Guard chain (I16): length cap → anchor rule → DFA-only compile with
     /// construction budgets → bounded dictionary scan → expansion cap.
     /// A pattern matching no terms yields `Unsatisfiable`.
-    async fn regex_expression(
-        &self,
-        field: &str,
-        pattern: &str,
-    ) -> Result<MatchPlan, IndexError> {
+    async fn regex_expression(&self, field: &str, pattern: &str) -> Result<MatchPlan, IndexError> {
         if TEXT_COLUMNS.iter().all(|col| *col != field) {
             return Err(IndexError::QueryRejected {
                 detail: format!("regex is only allowed against indexed text fields, not '{field}'"),
@@ -504,14 +500,7 @@ impl Fts5Index {
         } else {
             format!("WHERE {}", clauses.join(" AND "))
         };
-        Ok(Predicate {
-            where_sql,
-            match_expr,
-            args,
-            unsatisfiable,
-            regex_terms,
-            terms_examined,
-        })
+        Ok(Predicate { where_sql, match_expr, args, unsatisfiable, regex_terms, terms_examined })
     }
 
     /// Exact count behind one predicate.

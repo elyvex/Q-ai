@@ -13,12 +13,7 @@
 ///
 /// Returns `None` on any violation (fail-closed display).
 #[must_use]
-pub fn apply_markers(
-    text: &str,
-    ranges: &[(u32, u32)],
-    open: &str,
-    close: &str,
-) -> Option<String> {
+pub fn apply_markers(text: &str, ranges: &[(u32, u32)], open: &str, close: &str) -> Option<String> {
     let total_chars = text.chars().count() as u32;
     let mut cursor = 0u32;
     for (start, end) in ranges {

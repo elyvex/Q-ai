@@ -22,12 +22,12 @@ pub use domain::SemVer;
 pub use error::{Diagnostic, DiagnosticCode, IndexError, codes};
 pub use fts5::Fts5Index;
 pub use highlight::apply_markers;
-pub use regex::{DFA_SIZE_LIMIT, MAX_PATTERN_LEN, NFA_SIZE_LIMIT, compile_dfa, first_match};
 pub use hit::{ScoreExplain, SearchHit, SearchHitParts, Segmentation, Warning};
 pub use index::FullTextIndex;
 pub use model::{
     CommitStamp, FieldId, Filter, FtsBackend, FtsDoc, FtsHit, FtsIntegrityReport, FtsQuery,
     FtsResults, FtsSchema, FtsStats, IndexManifest, ResultOrder, SearchOpts,
 };
+pub use regex::{DFA_SIZE_LIMIT, MAX_PATTERN_LEN, NFA_SIZE_LIMIT, compile_dfa, first_match};
 pub use skeleton::{BuiltSkeleton, ayah_skeleton, skeletons_for_surah};
 pub use tokenizer::{ArTokenizer, INDEXED_FIELDS, TokenizerFamily, profile_for_field};
