@@ -1,7 +1,7 @@
 # Phase 1 — Completion Ledger
 
 **Phase:** P1 — Canonical Quran Core
-**Status:** 🟡 In Progress — 43 / 65 task rows ☑ · 18 / 21 acceptance criteria partial (automated-green, ritual pending) · 10 / 14 ADRs Accepted · 6 / 6 migrations applied
+**Status:** 🟡 In Progress — 50 / 65 task rows ☑ · 19 / 21 acceptance criteria partial (automated-green, ritual pending) · 12 / 14 ADRs Accepted · 6 / 6 migrations applied
 **Started:** 2026-09-14
 **Completed:** —
 
@@ -57,8 +57,8 @@ with what evidence.
 |---|---|---|
 | Deliverables (D1.1–D1.14) | 0 | 14 |
 | Acceptance criteria (AC-P1-01…21) fully verified | 0 | 21 |
-| Acceptance criteria partial (automated-green, ritual pending) | 18 | 21 |
-| ADRs accepted | 10 | 14 |
+| Acceptance criteria partial (automated-green, ritual pending) | 19 | 21 |
+| ADRs accepted | 12 | 14 |
 | Migrations applied (`0007`–`0012`) | 6 | 6 |
 | Required test suites green | 0 | 15 |
 | D1.14 documents published | 5 | 5 |
