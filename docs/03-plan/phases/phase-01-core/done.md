@@ -826,7 +826,7 @@ the implementer.
 
 ## 4. Accepted ADRs
 
-**10 Accepted**, 4 Draft (0101, 0111, 0112, 0114 pending owners/deliverables).
+**12 Accepted**, 2 Draft (0101, 0114 pending owners).
 
 **Entry format**
 
@@ -854,8 +854,8 @@ the implementer.
 | ADR-0108 | Corpus hashing scheme (`text_hash` / `structure_hash` / `token_order_hash`) | D1.3, D1.4 | | ✅ Accepted |
 | ADR-0109 | Edition difference algorithm for canonical text | D1.3 | | ✅ Accepted |
 | ADR-0110 | Basmala representation policy | D1.1 | | ✅ Accepted |
-| ADR-0111 | Citation identity and deep-link URL/URN format | D1.9 | | 📝 Draft |
-| ADR-0112 | Translation alignment and attribution model | D1.4 | | 📝 Draft |
+| ADR-0111 | Citation identity and deep-link URL/URN format | D1.9 | | ✅ Accepted |
+| ADR-0112 | Translation alignment and attribution model | D1.4 | | ✅ Accepted |
 | ADR-0113 | Canonical lookup caching & invalidation | D1.6 | | ✅ Accepted |
 | ADR-0114 | Reference-corpus comparison procedure and who signs off | D1.4 | | 📝 Draft |
 
