@@ -11,14 +11,12 @@ use std::sync::atomic::AtomicBool;
 
 use application::quran::activate_edition;
 use application::quran_forms::{RebuildParams, rebuild_forms};
-use application::quran_index::{
-    IndexBuildParams, IndexBuildHandler, QURAN_AYAH_INDEX_ID,
-};
+use application::quran_index::{IndexBuildHandler, IndexBuildParams, QURAN_AYAH_INDEX_ID};
 use domain::{PrincipalId, Timestamp};
 use jobs::{JobContext, JobHandler};
 use quran_corpus::import::{ImportInput, ImportOptions, ImportOutcome, ImportProgress, run_import};
 use quran_corpus::sha256_hex;
-use quran_search::{FullTextIndex, Fts5Index, TokenizerFamily};
+use quran_search::{Fts5Index, FullTextIndex, TokenizerFamily};
 use storage::Database as _;
 use storage::repository::JobRecord;
 use storage_sqlite::SqliteDatabase;
@@ -172,8 +170,7 @@ async fn first_build_activates_and_serves() {
         serde_json::from_str(&pointer.manifest_json).unwrap();
     assert_eq!(manifest.doc_count, 14);
     let registry = application::quran_normalize::builtin_registry();
-    let family =
-        TokenizerFamily::new(&registry, manifest.tokenizer_version).unwrap();
+    let family = TokenizerFamily::new(&registry, manifest.tokenizer_version).unwrap();
     let index =
         Fts5Index::open(&data_dir, 1, manifest, family).await.expect("serving generation opens");
     let total = index.count(&quran_search::FtsQuery::All).await.unwrap();
@@ -188,9 +185,14 @@ async fn first_build_activates_and_serves() {
 async fn second_build_flips_and_retains_previous() {
     let (dir, db, _edition) = ready_db().await;
     let data_dir = dir.path().join("index");
-    application::quran_index::rebuild_index(&db, &params(&data_dir, "t1"), &AtomicBool::new(false), |_| {})
-        .await
-        .unwrap();
+    application::quran_index::rebuild_index(
+        &db,
+        &params(&data_dir, "t1"),
+        &AtomicBool::new(false),
+        |_| {},
+    )
+    .await
+    .unwrap();
     let second = application::quran_index::rebuild_index(
         &db,
         &params(&data_dir, "t2"),
@@ -221,9 +223,14 @@ async fn second_build_flips_and_retains_previous() {
 async fn cancelled_build_changes_nothing() {
     let (dir, db, _edition) = ready_db().await;
     let data_dir = dir.path().join("index");
-    application::quran_index::rebuild_index(&db, &params(&data_dir, "t1"), &AtomicBool::new(false), |_| {})
-        .await
-        .unwrap();
+    application::quran_index::rebuild_index(
+        &db,
+        &params(&data_dir, "t1"),
+        &AtomicBool::new(false),
+        |_| {},
+    )
+    .await
+    .unwrap();
     let err = application::quran_index::rebuild_index(
         &db,
         &params(&data_dir, "t2"),
