@@ -50,7 +50,7 @@ pub fn first_match(
     dfa: &regex_automata::dfa::regex::Regex,
     text: &str,
 ) -> Option<std::ops::Range<u32>> {
-    let found = dfa.try_search(text).ok()??;
+    let found = dfa.try_search(&regex_automata::Input::new(text)).ok()??;
     let (start_byte, end_byte) = (found.start(), found.end());
     let start = text[..start_byte].chars().count() as u32;
     let end = start + text[start_byte..end_byte].chars().count() as u32;
@@ -74,8 +74,12 @@ mod tests {
     #[test]
     fn first_match_reports_char_ranges() {
         let dfa = compile_dfa("^ا?ل?رحم").unwrap();
-        assert_eq!(first_match(&dfa, "الرحمن"), Some(0..4));
-        assert_eq!(first_match(&dfa, "xxالرحمن"), Some(2..6));
+        assert_eq!(first_match(&dfa, "الرحمن"), Some(0..5));
+        // `^` anchors: no match when the text starts elsewhere.
+        assert_eq!(first_match(&dfa, "xxالرحمن"), None);
         assert_eq!(first_match(&dfa, "xyz"), None);
+        // Unanchored patterns report inner offsets in chars, not bytes.
+        let dfa = compile_dfa("رحم").unwrap();
+        assert_eq!(first_match(&dfa, "xxالرحمن"), Some(4..7));
     }
 }

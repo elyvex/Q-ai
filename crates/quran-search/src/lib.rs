@@ -14,6 +14,7 @@ pub mod highlight;
 pub mod hit;
 pub mod index;
 pub mod model;
+pub mod regex;
 pub mod skeleton;
 pub mod tokenizer;
 
@@ -21,6 +22,7 @@ pub use domain::SemVer;
 pub use error::{Diagnostic, DiagnosticCode, IndexError, codes};
 pub use fts5::Fts5Index;
 pub use highlight::apply_markers;
+pub use regex::{DFA_SIZE_LIMIT, MAX_PATTERN_LEN, NFA_SIZE_LIMIT, compile_dfa, first_match};
 pub use hit::{ScoreExplain, SearchHit, SearchHitParts, Segmentation, Warning};
 pub use index::FullTextIndex;
 pub use model::{

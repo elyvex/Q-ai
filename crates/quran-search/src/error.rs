@@ -99,6 +99,8 @@ pub mod codes {
     pub const CANONICAL_CHANGED: DiagnosticCode = DiagnosticCode::new("QAI-IDX", 5);
     /// A search hit failed assembly validation (trace/span/quotation fault).
     pub const INVALID_HIT: DiagnosticCode = DiagnosticCode::new("QAI-IDX", 6);
+    /// A principal exceeded its regex search rate (default 10/min).
+    pub const RATE_LIMITED: DiagnosticCode = DiagnosticCode::new("QAI-IDX", 7);
     /// Index is stale relative to corpus/profile/dataset inputs (warning,
     /// never an error: drift is reported, never auto-repaired).
     pub const STALE_INDEX: DiagnosticCode = DiagnosticCode::new("QAI-IDX", 101);
@@ -158,6 +160,15 @@ pub enum IndexError {
         /// What failed validation.
         detail: String,
     },
+    /// A principal exceeded its regex search budget.
+    ///
+    /// Rate limiting is per principal per minute; the caller learns only
+    /// when to retry, never anyone else's usage.
+    #[error("regex search rate limit exceeded; retry in {retry_after_secs}s")]
+    RateLimited {
+        /// Seconds until the next request is admitted.
+        retry_after_secs: u64,
+    },
 }
 
 impl Diagnostic for IndexError {
@@ -169,6 +180,7 @@ impl Diagnostic for IndexError {
             Self::ManifestMismatch { .. } => codes::MANIFEST_MISMATCH,
             Self::CanonicalChanged { .. } => codes::CANONICAL_CHANGED,
             Self::InvalidHit { .. } => codes::INVALID_HIT,
+            Self::RateLimited { .. } => codes::RATE_LIMITED,
         }
     }
 
@@ -184,6 +196,7 @@ impl Diagnostic for IndexError {
                 Some(format!("canonical text of {edition_urn}"))
             }
             Self::InvalidHit { .. } => None,
+            Self::RateLimited { .. } => None,
             Self::QueryRejected { .. } | Self::ManifestMismatch { .. } => None,
         }
     }
@@ -208,12 +221,16 @@ impl Diagnostic for IndexError {
             Self::InvalidHit { .. } => {
                 "Fix the assembling tool: hits must carry a trace, a span inside the text, and valid references.".to_string()
             }
+            Self::RateLimited { retry_after_secs } => {
+                format!("Wait {retry_after_secs}s and retry; regex search allows 10 requests per minute per principal.")
+            }
         })
     }
 
     fn next_command(&self) -> Option<String> {
         Some(match self {
             Self::QueryRejected { .. } => "qai quran normalize --list-profiles".to_string(),
+            Self::RateLimited { .. } => "qai quran search --help".to_string(),
             Self::BuildFailed { .. } => "qai quran index rebuild --all".to_string(),
             Self::BackendUnavailable { .. }
             | Self::CanonicalChanged { .. }
@@ -246,6 +263,7 @@ mod tests {
         assert_eq!(codes::STALE_INDEX.to_string(), "QAI-IDX-0101");
         assert_eq!(codes::CANONICAL_CHANGED.to_string(), "QAI-IDX-0005");
         assert_eq!(codes::INVALID_HIT.to_string(), "QAI-IDX-0006");
+        assert_eq!(codes::RATE_LIMITED.to_string(), "QAI-IDX-0007");
     }
 
     #[test]
