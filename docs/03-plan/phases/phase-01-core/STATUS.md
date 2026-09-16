@@ -227,3 +227,11 @@ ordered, checksums stable). `cargo fmt --all -- --check` still shows a pending
 diff in the concurrent writer's `crates/application/src/lib.rs` (module order;
 not a Phase-1 file, left for its owner). Full `cargo test --workspace` not
 re-run: shared tree has uncommitted Phase-2 churn.
+
+Targeted verification (2026-09-16, clean-crate regression sweep):
+`cargo test -p quran-core -p citations -p tools -p tool-registry` green
+(47 passed: quran-core 31 + reference_grammar 6, citations 4, tool-registry 4,
+tools 2) · `cargo test -p quran-corpus` green (36 passed). Crates with dirty
+Phase-2 dependencies (`application`, `storage-sqlite`, `cli`, `server`)
+deliberately not re-run here; their results would measure concurrent churn,
+not Phase-1 regressions.
