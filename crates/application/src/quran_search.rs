@@ -35,7 +35,7 @@ use crate::quran_normalize;
 pub const SEARCH_INDEX_ID: &str = crate::quran_index::QURAN_AYAH_INDEX_ID;
 
 /// Token match mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum MatchMode {
     /// Whole-token equality after normalization.
     WholeToken,
@@ -46,7 +46,7 @@ pub enum MatchMode {
 }
 
 /// Exact-search field (`L0` identity or `L1` whitespace profile).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ExactField {
     /// Canonical surface, no linguistic expansion.
     TextExact,
@@ -1072,7 +1072,7 @@ fn persian_fold_differs(text: &str) -> bool {
 }
 
 /// Phrase match mode (plan §5.4).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum PhraseMode {
     /// Ordered tokens, no gaps.
     OrderedExact,

@@ -19,5 +19,6 @@
   "0012_quran_validation.up.sql": "sha256:5ef779bf604ea383346c86f59b1301ac0ea0afdedd9b616f3c58cf143abbf3e2",
   "0013_quran_normalization.up.sql": "sha256:3a744e9162140756b7cbd56b4d35ca84bdb87cc36ecaecf8aa593b00dbb99373",
   "0014_quran_forms.up.sql": "sha256:d696579e24af623e06832cea45bd7a10b4e104bb16b49b6e5b6789f1e4b14753",
-  "0015_quran_indexes.up.sql": "sha256:609ce3ef201d4f619adbf94e0283da84361310e3886415d0b4d6d914e8bb204e"
+  "0015_quran_indexes.up.sql": "sha256:609ce3ef201d4f619adbf94e0283da84361310e3886415d0b4d6d914e8bb204e",
+  "0016_quran_search_cache.up.sql": "sha256:870c11bad93bfa7097cee0b1356551f6bf0d3a5e657c43a76f0cb5b1568caa3e"
 }
