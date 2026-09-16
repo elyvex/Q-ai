@@ -5,7 +5,6 @@
 //! global tracing redaction layer (P0-T16 / FU-01) covering log emission,
 //! diagnostic renderers, `config show`, and `doctor --json`.
 
-use config::Secret;
 use domain::redaction;
 use domain::Diagnostic;
 use domain::DiagnosticCode;
@@ -101,7 +100,7 @@ fn sentinel_key_value_pairs_scrubbed_from_free_text() {
 
     // Via Diagnostic human rendering
     let diag = Diagnostic {
-        id: DiagnosticId(1),
+        id: DiagnosticId::from_str_unchecked("00000000-0000-0000-0000-000000000001"),
         timestamp: "2026-01-01T00:00:00Z".to_string(),
         severity: DiagnosticSeverity::Error,
         code: DiagnosticCode { namespace: "QAI-DOM", code: 1001 },
