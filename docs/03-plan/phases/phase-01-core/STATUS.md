@@ -118,11 +118,12 @@ AC-P1-09 joined on 2026-09-15 via the activation-rejection state test.
 | `P1-T60` | Exit-gate review + handoff sign-off |
 
 ### 3.3 Board/ritual debt
-- `acceptance.md`: flip AC-P1-02/03/05/06/07/10/11 to ◐ (automated evidence
-  exists) and record the ritual steps.
-- `acceptance.md` / `done.md` §4: ADR statuses are stale (10 are Accepted); sync.
-- `tasks.md`: T39/T40/T54 are ☐ despite shipped code; reconcile after the API
-  depth pass.
+- `acceptance.md`: AC-P1-02/03/05/06/07/10/11 are ◐ with evidence recorded;
+  remaining ritual steps belong to the exit ritual (P1-T60), not board debt.
+- `done.md` §4: ADR table still shows 0111/0112 as Draft (header: 10 Accepted);
+  reality is 12 Accepted with 0101/0114 Draft pending owners — needs sync.
+- `tasks.md`: T39/T40 reconciled (☑); T54 correctly ☐ pending the font-asset
+  owner decision.
 
 ## 4. Follow-ups & deviations
 
