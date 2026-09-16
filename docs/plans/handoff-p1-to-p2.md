@@ -1,6 +1,6 @@
 # Handoff — Phase 1 → Phase 2
 
-> **From:** Phase 1 — Canonical Quran Core (in progress, ~60% of task rows ☑)
+> **From:** Phase 1 — Canonical Quran Core (in progress, ~77% of task rows ☑)
 > **To:** Phase 2 — Quran Search, Normalization & Linguistics
 > **Author:** Phase-1 agent (owner to ratify)
 > **Date:** 2026-09-15
@@ -97,7 +97,7 @@ must remain strictly read-only (Phase-0 AC-P0-14).
 |---|---|---|
 | ADR-0101 dataset + license + named editorial reviewer | Swimlane X (owner) | Engineering runs on the synthetic `test-edition-min` fixture; ADR-0101 stays Draft (OWN-01) |
 | ADR-0114 reference corpus + sign-off procedure | Swimlane X (owner) | QV-015 is skip-when-unconfigured, never a silent pass (OWN-02) |
-| ADR-0111 / ADR-0112 | Phase 1/2 | Stay Draft until the resolver endpoint / translation alignment surface is signed off |
+| ADR-0111 / ADR-0112 | — (accepted 2026-09-15) | Accepted on shipped-code conditions (resolver + citation endpoint, P1-T46/T47; translation import + type guards, P1-T36/T37); see done.md P1-T42/P1-T53 |
 | Estimate gap 82 ed vs 131.0 ed summed | phase owner | Proceeded incrementally; no silent compression (OWN-03) |
 | axum + tower-http | phase owner | Adopted provisionally for API v1; ADR still to ratify (OWN-04) |
 | Phase-0 exit discrepancy | phase owner | `status.md` lists outstanding Phase-0 items while the build prompt declared Phase 0 complete (OWN-05) |
@@ -130,9 +130,10 @@ must remain strictly read-only (Phase-0 AC-P0-14).
 
 ## 8. Phase-1 closure state at handoff
 
-- 41 / 68 task rows ☑; 10 / 21 acceptance criteria partial (automated-green, ritual
-  pending); 0 / 14 ADRs Accepted (0101/0111/0112/0114 Draft, others Proposed); 6 / 6
-  Phase-1 migrations applied and checksummed.
+- 50 / 65 task rows ☑ (2 ◐ / 13 ☐, excluding 3 sequencing notes); 19 / 21
+  acceptance criteria partial (automated-green, ritual pending; ☐ are AC-P1-01
+  dataset/license and AC-P1-18 web font); 12 / 14 ADRs Accepted (0101/0114 Draft
+  pending owners); 6 / 6 Phase-1 migrations applied and checksummed.
 - Phase-1 exit gate (`done.md` §8) is **not** signed: it requires the Swimlane-X
   decisions, 15 green suites, and the 9-step ritual recording. The five D1.14 docs
   are now published (5/5), and the read/CLI/doctor surfaces are automated-green.
