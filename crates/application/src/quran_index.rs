@@ -326,10 +326,8 @@ pub async fn rebuild_index(
         uow.rollback().await.map_err(IndexBuildError::storage)?;
         surahs
     };
-    let revelation: BTreeMap<i64, String> = surahs
-        .iter()
-        .map(|s| (s.number, s.revelation_place.clone().unwrap_or_default()))
-        .collect();
+    let revelation: BTreeMap<i64, String> =
+        surahs.iter().map(|s| (s.number, s.revelation_place.clone().unwrap_or_default())).collect();
     let ayahs = {
         let mut uow = db.write().await.map_err(IndexBuildError::storage)?;
         let ayahs = uow
