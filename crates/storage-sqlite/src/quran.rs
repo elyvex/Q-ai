@@ -12,9 +12,9 @@ use storage::error::StorageError;
 use storage::quran::{
     ActiveEditionRow, AyahFormRow, AyahRow, CitationRow, DifferenceReportRow, DivisionRow,
     ImportRunRow, IndexBuildRunRow, IndexPointerRow, NormalizationProfileRow, NormalizationRuleRow,
-    QuranEditionRow, QuranRepository, SeparatorRow, SkeletonRow, StagedEditionRef, SurahRow,
-    TokenFormRow, TokenRow, TranslationEditionRow, TranslationPassageRow, ValidationReportRow,
-    WordGlossRow,
+    QuranEditionRow, QuranRepository, SearchCacheRow, SeparatorRow, SkeletonRow, StagedEditionRef,
+    SurahRow, TokenFormRow, TokenRow, TranslationEditionRow, TranslationPassageRow,
+    ValidationReportRow, WordGlossRow,
 };
 
 use super::{SharedTx, map_sqlx_error};
@@ -1695,6 +1695,101 @@ impl QuranRepository for SqliteQuranRepository {
                 .await
                 .map_err(map_sqlx_error)?;
         Ok(max.unwrap_or(0))
+    }
+
+    async fn cache_get(&self, key: &str) -> Result<Option<SearchCacheRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query(
+            "SELECT key, generation, payload_json, bytes, created_at, last_hit_at
+             FROM search_result_cache WHERE key = ?",
+        )
+        .bind(key)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(row.map(|r| SearchCacheRow {
+            key: r.get("key"),
+            generation: r.get("generation"),
+            payload_json: r.get("payload_json"),
+            bytes: r.get("bytes"),
+            created_at: r.get("created_at"),
+            last_hit_at: r.get("last_hit_at"),
+        }))
+    }
+
+    async fn cache_put(&mut self, row: SearchCacheRow) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query(
+            "INSERT INTO search_result_cache
+                (key, generation, payload_json, bytes, created_at, last_hit_at)
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON CONFLICT (key) DO UPDATE SET
+                generation = excluded.generation,
+                payload_json = excluded.payload_json,
+                bytes = excluded.bytes,
+                created_at = excluded.created_at,
+                last_hit_at = excluded.last_hit_at",
+        )
+        .bind(&row.key)
+        .bind(row.generation)
+        .bind(&row.payload_json)
+        .bind(row.bytes)
+        .bind(&row.created_at)
+        .bind(&row.last_hit_at)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn cache_touch(&mut self, key: &str, at: &str) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query("UPDATE search_result_cache SET last_hit_at = ? WHERE key = ?")
+            .bind(at)
+            .bind(key)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn cache_delete(&mut self, key: &str) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query("DELETE FROM search_result_cache WHERE key = ?")
+            .bind(key)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn cache_stats(&self) -> Result<(i64, i64), StorageError> {
+        let mut tx = self.tx.lock().await;
+        let row: (i64, Option<i64>) =
+            sqlx::query_as("SELECT COUNT(*), SUM(bytes) FROM search_result_cache")
+                .fetch_one(&mut **tx)
+                .await
+                .map_err(map_sqlx_error)?;
+        Ok((row.0, row.1.unwrap_or(0)))
+    }
+
+    async fn cache_enforce_cap(&mut self, max_bytes: i64) -> Result<u64, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let deleted: u64 = sqlx::query_scalar::<_, String>(
+            "WITH ranked AS (
+               SELECT key,
+                      SUM(bytes) OVER (ORDER BY last_hit_at DESC ROWS UNBOUNDED PRECEDING) AS running
+               FROM search_result_cache
+             )
+             DELETE FROM search_result_cache WHERE key IN (SELECT key FROM ranked WHERE running > ?)
+             RETURNING key",
+        )
+        .bind(max_bytes)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?
+        .len() as u64;
+        Ok(deleted)
     }
 }
 

@@ -937,4 +937,58 @@ pub trait QuranRepository: Send + Sync {
     async fn max_build_generation(&self, _index_id: &str) -> Result<i64, StorageError> {
         Err(StorageError::StorageUnavailable)
     }
+
+    // ─── Phase 2 — search result cache (migration 0016) ──────────────
+
+    /// Fetch a cache entry by key (no generation check; the caller validates).
+    async fn cache_get(&self, _key: &str) -> Result<Option<SearchCacheRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Insert or replace a cache entry.
+    async fn cache_put(&mut self, _row: SearchCacheRow) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Refresh an entry's `last_hit_at` (LRU touch on cache hits).
+    async fn cache_touch(&mut self, _key: &str, _at: &str) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Delete one cache entry (generation mismatches, invalidation).
+    async fn cache_delete(&mut self, _key: &str) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Entry count and total bytes.
+    async fn cache_stats(&self) -> Result<(i64, i64), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Evict least-recently-hit entries until at most `max_bytes` remain.
+    /// Returns evicted entries. Single statement, no read-modify-write race.
+    async fn cache_enforce_cap(&mut self, _max_bytes: i64) -> Result<u64, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+}
+
+/// One cached search response (migration `0016`, derived data).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchCacheRow {
+    /// Cache key (binds tool, query, profile, filters, paging, generation).
+    pub key: String,
+    /// Corpus generation served.
+    pub generation: i64,
+    /// Serialized search-output JSON.
+    ///
+    /// The payload type lives in `application` (this crate must not depend
+    /// on it); the service validates the shape on read and treats garbage
+    /// as a miss.
+    pub payload_json: String,
+    /// Payload size in bytes (eviction accounting).
+    pub bytes: i64,
+    /// Insert timestamp (RFC 3339).
+    pub created_at: String,
+    /// Last-hit timestamp (RFC 3339, LRU order).
+    pub last_hit_at: String,
 }
