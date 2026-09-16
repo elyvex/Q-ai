@@ -247,13 +247,13 @@ suite is green; `doctor --quran --deep` passes on the fixture edition.
 | Sprint | Scope | Tasks | Est (ed) | Done | Status |
 |---|---|---|---|---|---|
 | X — External-lead-time decisions | 5 | — | — | 0 | ☐ Not Started |
-| 1.0 — Data & Decisions | 5 | 11.5 | 0 | ☐ Not Started |
-| 1.1 — Domain & Addressing | 9 | 19.5 | 0 | ☐ Not Started |
-| 1.2 — Import & Validation | 17 | 42.0 ⚠️ | 0 | ☐ Not Started |
-| 1.3 — Reader, Translations, API | 11 | 21.5 | 0 | ☐ Not Started |
-| 1.4 — Tools, Citations, CLI, Doctor | 11 | 21.5 | 0 | ☐ Not Started |
-| 1.5 — Debug Reader, Hardening, Exit | 7 | 15.0 | 0 | ☐ Not Started |
-| **Total** | **60 + 5** | **131.0** | **0** | **0%** |
+| 1.0 — Data & Decisions | 5 | 11.5 | 1 | ◐ In Progress |
+| 1.1 — Domain & Addressing | 9 | 19.5 | 9 | ☑ Done |
+| 1.2 — Import & Validation | 17 | 42.0 ⚠️ | 16 | ◐ In Progress |
+| 1.3 — Reader, Translations, API | 11 | 21.5 | 11 | ☑ Done |
+| 1.4 — Tools, Citations, CLI, Doctor | 11 | 21.5 | 11 | ☑ Done |
+| 1.5 — Debug Reader, Hardening, Exit | 7 | 15.0 | 2 | ◐ In Progress |
+| **Total** | **60 + 5** | **131.0** | **50** | **77%** |
 
 By role: **BE ≈ 81.0 ed** · **QA ≈ 23.0 ed** · **DOC ≈ 10.0 ed** · **DATA ≈ 9.0 ed** ·
 **EDIT ≈ 6.5 ed** · shared/all 1.5 ed.
