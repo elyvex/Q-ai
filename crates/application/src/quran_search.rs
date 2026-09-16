@@ -1382,25 +1382,35 @@ fn query_trigrams(skeleton: &str) -> Vec<String> {
     chars.windows(3).map(|window| window.iter().collect()).collect()
 }
 
+/// Geometry of a verified concatenated match, in normalized-input space.
+///
+/// `span` and `map` images live in the normalized input's char space:
+/// single-ayah matches pass `image_offset = 0` (input is that ayah), window
+/// matches pass the ayah's char offset inside the joined text so images
+/// translate down into the ayah's own space.
+pub struct MatchGeometry<'a> {
+    /// The verified match span (in the map's input space).
+    pub span: &'a quran_normalization::CanonicalSpan,
+    /// The pipeline's offset map for the normalized input.
+    pub map: &'a quran_normalization::SpanMap,
+    /// Char length of the normalized input.
+    pub derived_len: u32,
+    /// Char offset of this ayah inside the normalized input.
+    pub image_offset: u32,
+}
+
 /// Segment a verified concatenated match into per-token query parts.
 ///
 /// Public so tools and tests share the exact segmentation the service
 /// returns (no second implementation to drift).
-///
-/// `span`, token ranges, and `ayah_text` are in one ayah's char space, while
-/// `map` images live in the normalized input's space: for single-ayah
-/// matches the two coincide (`image_offset = 0`); for window matches pass
-/// the ayah's char offset inside the joined text so images translate down.
 pub fn segment_concatenated(
     query_skeleton: &str,
     ayah_text: &str,
     derived_match_start: u32,
-    span: &quran_normalization::CanonicalSpan,
-    map: &quran_normalization::SpanMap,
-    ayah_derived_len: u32,
-    image_offset: u32,
+    geometry: &MatchGeometry<'_>,
     tokens: &[storage::quran::TokenRow],
 ) -> Vec<quran_search::Segmentation> {
+    let MatchGeometry { span, map, derived_len, image_offset } = *geometry;
     // Char→byte table for slicing the query skeleton: `byte_of[i]` is the
     // byte offset of char `i`, with the string length as the sentinel.
     let mut byte_of: Vec<u32> =
@@ -1417,7 +1427,6 @@ pub fn segment_concatenated(
     // inside the match window participate, so each part tiles the query.
     // Images live in the map's input space; translate them into this ayah's
     // space before comparing with token ranges and the span.
-    let derived_len = ayah_derived_len;
     let match_end = derived_match_start + query_skeleton.chars().count() as u32;
     let span_start = span.char_range.start + image_offset;
     let span_end = span.char_range.end + image_offset;
@@ -1682,10 +1691,7 @@ pub fn verify_concatenated(
         query_skeleton,
         ayah_text,
         start,
-        &span,
-        derived.spans(),
-        derived_len,
-        0,
+        &MatchGeometry { span: &span, map: derived.spans(), derived_len, image_offset: 0 },
         tokens,
     );
     Some(AyahMatch { span, matched, segmentation, spans_ayah_boundary: false })
@@ -1773,10 +1779,12 @@ pub fn verify_concatenated_window(
             query_skeleton,
             ayah_text,
             start,
-            &local,
-            derived.spans(),
-            derived_len,
-            offsets[index],
+            &MatchGeometry {
+                span: &local,
+                map: derived.spans(),
+                derived_len,
+                image_offset: offsets[index],
+            },
             tokens,
         );
         parts.push(WindowPart {
