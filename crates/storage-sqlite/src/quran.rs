@@ -1791,6 +1791,19 @@ impl QuranRepository for SqliteQuranRepository {
         .len() as u64;
         Ok(deleted)
     }
+
+    async fn cache_delete_stale(&mut self, keep_generation: i64) -> Result<u64, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let deleted: u64 = sqlx::query_scalar::<_, String>(
+            "DELETE FROM search_result_cache WHERE generation != ? RETURNING key",
+        )
+        .bind(keep_generation)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?
+        .len() as u64;
+        Ok(deleted)
+    }
 }
 
 fn decode_token_form(row: &sqlx::sqlite::SqliteRow) -> TokenFormRow {
