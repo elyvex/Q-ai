@@ -81,6 +81,28 @@ fn reference_comparison_skips_unconfigured_and_rejects_incompatible_readings() {
 }
 
 #[test]
+fn golden_ayah_texts_match_the_imported_fixture() {
+    let source = JsonAdapter.parse(MIN_MANIFEST).unwrap();
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/quran/golden/ayah_texts.jsonl");
+    let golden = std::fs::read_to_string(path).expect("golden ayah_texts.jsonl");
+    let mut expected = std::collections::BTreeMap::new();
+    for line in golden.lines().filter(|line| !line.trim().is_empty()) {
+        let value: serde_json::Value = serde_json::from_str(line).expect("golden row is JSON");
+        let surah = value["surah"].as_u64().expect("golden surah") as u16;
+        let ayah = value["ayah"].as_u64().expect("golden ayah") as u32;
+        let text = value["text"].as_str().expect("golden text").to_string();
+        assert!(expected.insert((surah, ayah), text).is_none(), "duplicate golden row");
+    }
+    assert_eq!(expected.len(), source.ayahs.len(), "golden set must cover every fixture ayah");
+    for row in &source.ayahs {
+        let got = expected
+            .get(&(row.surah, row.ayah))
+            .unwrap_or_else(|| panic!("golden set missing {}:{}", row.surah, row.ayah));
+        assert_eq!(*got, row.text, "golden text for {}:{}", row.surah, row.ayah);
+    }
+}
+
+#[test]
 fn test_edition_min_parses_with_expected_shape() {
     let source: EditionSource = JsonAdapter.parse(MIN_MANIFEST).unwrap();
     assert_eq!(source.edition.slug, "test-edition-min");
