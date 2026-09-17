@@ -248,7 +248,38 @@ pub fn dispatch(cli: Cli) -> i32 {
         Commands::Secret { .. } => phase_stub("secret", 11),
         Commands::Source { .. } => phase_stub("source", 1),
         Commands::Job { .. } => phase_stub("job", 1),
-        Commands::Audit { .. } => phase_stub("audit", 1),
+        Commands::Audit { action: AuditAction::Verify } => {
+            let path = db_path_for(&cfg, cli.data_dir.as_deref());
+            match block_on(application::audit_bridge::verify_persisted_audit(&path)) {
+                Ok(report) => {
+                    if cli.json {
+                        println!("{}", serde_json::to_string(&report).unwrap());
+                    } else {
+                        println!(
+                            "audit chain {}: {} events checked; gaps: {:?}; tampered sequences: {:?}",
+                            if report.valid { "valid" } else { "INVALID" },
+                            report.checked_events,
+                            report.gaps,
+                            report.tampered_sequences,
+                        );
+                    }
+                    if report.valid { exit_code::OK } else { exit_code::VALIDATION }
+                }
+                Err(_) => {
+                    if cli.json {
+                        println!(
+                            r#"{{"valid":false,"error":"audit verification could not complete","remedy":"check database availability, migrations, and audit record integrity"}}"#
+                        );
+                    } else {
+                        eprintln!(
+                            "audit verification could not complete; check database availability, migrations, and audit record integrity"
+                        );
+                    }
+                    exit_code::GENERIC
+                }
+            }
+        }
+        Commands::Audit { action: AuditAction::List } => phase_stub("audit list", 1),
         Commands::Serve { bind } => {
             if !server::is_loopback(&bind) {
                 eprintln!("error: Phase 0 restricts server bind to loopback; refusing `{bind}`");
