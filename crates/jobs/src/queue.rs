@@ -102,6 +102,47 @@ impl InMemoryJobQueue {
         Self::default()
     }
 
+    fn claim_next_at(
+        &self,
+        owner: &str,
+        lease: Duration,
+        now: &str,
+    ) -> Result<Option<JobRecord>, JobError> {
+        let order = self.order.lock().unwrap().clone();
+        let mut jobs = self.jobs.lock().unwrap();
+        for id in order {
+            let Some(job) = jobs.get_mut(&id) else { continue };
+            let claimable = matches!(job.state.as_str(), "Queued" | "Interrupted" | "Checkpointed")
+                && rfc3339_le(&job.available_at, now);
+            if claimable {
+                job.state = "Running".to_string();
+                job.lease_owner = Some(owner.to_string());
+                job.lease_expires_at = Some(plus(lease));
+                job.attempts += 1;
+                return Ok(Some(job.clone()));
+            }
+        }
+        Ok(None)
+    }
+
+    fn reap_expired_at(&self, now: &str) -> Vec<String> {
+        let order = self.order.lock().unwrap().clone();
+        let mut jobs = self.jobs.lock().unwrap();
+        let mut reaped = Vec::new();
+        for id in order {
+            if let Some(job) = jobs.get_mut(&id)
+                && job.state == "Running"
+                && job.lease_expires_at.as_deref().is_some_and(|t| rfc3339_le(t, now))
+            {
+                job.state = "Interrupted".to_string();
+                job.lease_owner = None;
+                job.lease_expires_at = None;
+                reaped.push(id);
+            }
+        }
+        reaped
+    }
+
     fn with_job<R>(&self, id: &str, f: impl FnOnce(&mut JobRecord) -> R) -> Option<R> {
         let mut jobs = self.jobs.lock().unwrap();
         jobs.get_mut(id).map(f)
@@ -126,22 +167,7 @@ impl JobQueue for InMemoryJobQueue {
         owner: &str,
         lease: Duration,
     ) -> Result<Option<JobRecord>, JobError> {
-        let now = now_rfc3339();
-        let order = self.order.lock().unwrap().clone();
-        let mut jobs = self.jobs.lock().unwrap();
-        for id in order {
-            let Some(job) = jobs.get_mut(&id) else { continue };
-            let claimable = matches!(job.state.as_str(), "Queued" | "Interrupted" | "Checkpointed")
-                && rfc3339_le(&job.available_at, &now);
-            if claimable {
-                job.state = "Running".to_string();
-                job.lease_owner = Some(owner.to_string());
-                job.lease_expires_at = Some(plus(lease));
-                job.attempts += 1;
-                return Ok(Some(job.clone()));
-            }
-        }
-        Ok(None)
+        self.claim_next_at(owner, lease, &now_rfc3339())
     }
 
     async fn heartbeat(
@@ -217,22 +243,7 @@ impl JobQueue for InMemoryJobQueue {
     }
 
     async fn reap_expired(&self) -> Result<Vec<String>, JobError> {
-        let now = now_rfc3339();
-        let order = self.order.lock().unwrap().clone();
-        let mut jobs = self.jobs.lock().unwrap();
-        let mut reaped = Vec::new();
-        for id in order {
-            if let Some(job) = jobs.get_mut(&id)
-                && job.state == "Running"
-                && job.lease_expires_at.as_deref().is_some_and(|t| rfc3339_le(t, &now))
-            {
-                job.state = "Interrupted".to_string();
-                job.lease_owner = None;
-                job.lease_expires_at = None;
-                reaped.push(id);
-            }
-        }
-        Ok(reaped)
+        Ok(self.reap_expired_at(&now_rfc3339()))
     }
 
     async fn queued_count(&self) -> Result<u64, JobError> {
@@ -255,11 +266,38 @@ mod tests {
         assert!(!rfc3339_le("2026-01-01T00:00:00.123001Z", "2026-01-01T00:00:00.123Z"));
         assert!(rfc3339_le("2026-01-01T00:00:00Z", "2026-01-01T00:00:00.000000Z"));
         assert!(rfc3339_le("2026-01-01T00:00:00.000000Z", "2026-01-01T00:00:00Z"));
-        // Ordering across the second boundary stays correct.
         assert!(rfc3339_le("2026-01-01T00:00:00.999999Z", "2026-01-01T00:00:01Z"));
         assert!(!rfc3339_le("2026-01-01T00:00:01Z", "2026-01-01T00:00:00.999999Z"));
         assert!(!rfc3339_le("not-a-time", "2026-01-01T00:00:00Z"));
         assert!(!rfc3339_le("2026-01-01T00:00:00Z", "not-a-time"));
+    }
+
+    #[tokio::test]
+    async fn mixed_precision_timestamps_control_claims_and_reaping() {
+        let now = "2026-01-01T00:00:00.123456Z";
+        for (timestamp, eligible) in [
+            ("2026-01-01T00:00:00.123Z", true),
+            ("2026-01-01T00:00:00.123456000Z", true),
+            ("2026-01-01T00:00:00.123457Z", false),
+            ("not-a-time", false),
+        ] {
+            let q = InMemoryJobQueue::new();
+            let mut job = record("claim", "system.noop_test", "Queued");
+            job.available_at = timestamp.into();
+            q.enqueue(job).await.unwrap();
+            let claimed = q.claim_next_at("worker", Duration::from_secs(60), now).unwrap();
+            assert_eq!(claimed.is_some(), eligible, "claim {timestamp}");
+            assert_eq!(q.get("claim").await.unwrap().unwrap().attempts, u32::from(eligible));
+
+            let mut job = record("lease", "system.noop_test", "Running");
+            job.lease_owner = Some("worker".into());
+            job.lease_expires_at = Some(timestamp.into());
+            q.enqueue(job).await.unwrap();
+            assert_eq!(q.reap_expired_at(now).contains(&"lease".to_string()), eligible);
+            let job = q.get("lease").await.unwrap().unwrap();
+            assert_eq!(job.state, if eligible { "Interrupted" } else { "Running" });
+            assert_eq!(job.lease_owner.is_none(), eligible);
+        }
     }
 
     #[tokio::test]
