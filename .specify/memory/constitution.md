@@ -1,16 +1,25 @@
 <!-- Sync Impact Report (remove before commit):
-Version change: 1.0.0 → 1.0.1 (PATCH)
-- Modified principles: none renamed; Principle V (Test-First and Quality Gates)
-  clarified to include per-crate test-target runs and the
-  `quran_doctor`-style integration suites already required by CI
-- Added sections: none
-- Removed sections: none
-- Verification notes (2026-09-16): all principle claims re-checked against the
-  live tree — workspace lints (`unsafe_code = "forbid"`, edition 2024 crates),
-  rust-toolchain 1.97.1, CI fmt/clippy/arch-check/migrate-check, xtask
-  coverage-gate (≥85% domain/provenance/audit/sources), testkit suites, ADR
-  numbering, and the placeholder-crate convention in Cargo.toml all match.
-- Follow-up TODOs: none — all placeholders resolved
+Version change: 1.0.1 → 1.0.2 (PATCH)
+- Modified principles: none renamed; Principle VII clarified to state the
+  existing structural rules explicitly (domain has no I/O/async;
+  deterministic canonical path has zero model/vector dependencies;
+  doctor never mutates); Principle V gate list unchanged.
+- Tech Stack corrections: edition 2024 (was "2021+"), toolchain pinned to
+  1.97.1 per rust-toolchain.toml, migration path corrected to
+  migrations/sqlite/ with append-only + checksummed discipline and
+  forward-only canonical tables.
+- Workflow clarification: human-only gates (dataset licensing, editorial
+  sign-off, exit rituals) cannot be performed or simulated by agents.
+- Scale typo: "114 surah" → "114 surahs".
+- Removed sections: none. Added sections: none.
+- Verification notes (2026-09-17): claims re-checked against the live tree —
+  Cargo.toml workspace resolver = "2", edition = "2024",
+  unsafe_code = "forbid", rust-toolchain channel 1.97.1, migrations
+  0001–0016 contiguous under migrations/sqlite/, placeholder crates remain
+  by design (prior report line "all placeholders resolved" was inaccurate
+  and is superseded here).
+- Follow-up TODOs: none — FTS5-vs-Tantivy, synthetic-fixture, and phase-board
+  drift items belong in ADRs/specs/ledgers, not in the constitution.
 -->
 # Q-ai Constitution
 
@@ -98,8 +107,10 @@ Start simple (YAGNI); no organizational-only crates. Respect the
 workspace dependency layering enforced by `cargo xtask arch-check`
 (`server` → `application` → domain/storage/tools, never sideways);
 route new cross-crate access through `application` and record any
-temporary allowlist as a follow-up with an owner. Record significant
-decisions as ADRs under `docs/02-architecture/decisions/`
+temporary allowlist as a follow-up with an owner. `domain` has no I/O
+or async runtime; the deterministic canonical Quran path has zero
+model/vector/embeddings dependencies; `doctor` never mutates data.
+Record significant decisions as ADRs under `docs/02-architecture/decisions/`
 (`ADR-nnnn-title.md`). Prefer SQLite-adjacent, zero-extra-dependency
 solutions (e.g. adjacency tables + bounded CTEs per ADR-0202) unless a
 spike with benchmarks justifies an accelerator. Search normalization
@@ -107,23 +118,25 @@ MUST NEVER modify displayed canonical text.
 
 ## Technology Stack & Architectural Constraints
 
-**Language/Version**: Rust (workspace `resolver = "2"`, edition 2021+;
-see `rust-toolchain.toml`). **Primary dependencies**: tokio, axum +
+**Language/Version**: Rust (workspace `resolver = "2"`, edition 2024;
+toolchain pinned to **1.97.1** in `rust-toolchain.toml`). **Primary dependencies**: tokio, axum +
 tower-http (API v1), sqlx/SQLite (+ FTS5), clap (CLI), tracing +
 OpenTelemetry, unicode-segmentation / unicode-normalization,
 regex-automata (DFA-only), csv, similar, lru. **Storage**: SQLite with
-checksummed, contiguous migrations (`migrations/`, `VACUUM INTO`
-backups); canonical tables insert-only via triggers. **Testing**: `cargo
+checksummed, contiguous, append-only migrations (`migrations/sqlite/`,
+`VACUUM INTO` backups); canonical tables insert-only via triggers and
+forward-only (deactivation, never deletion). **Testing**: `cargo
 test --workspace`, trycmd CLI snapshots, insta snapshots, proptest,
 `testkit` fixtures. **Target platforms**: local-first CLI (`qai`), TUI
 (ratatui/crossterm), server (`/healthz`, `/readyz`, API v1), library
 crates per surface. **Constraints**: `<30s` `doctor --quran --deep` on a
 standard edition (pending real dataset per ADR-0101); bounded regex and
 graph queries (resource-limited, N-hop caps); RTL-correct display with
-Web GUI authoritative for rich reading. **Scale/scope**: 114 surah /
+Web GUI authoritative for rich reading. **Scale/scope**: 114 surahs /
 6236-ayah-class canonical corpus, multi-collection hadith/tafsir/
-scripture graphs. Migrations MUST remain contiguous; `arch-check`
-violations MUST be fixed or ADR-justified, never silently allowlisted.
+scripture graphs. Migrations MUST remain contiguous and append-only;
+`arch-check` violations MUST be fixed or ADR-justified, never silently
+allowlisted. Placeholder crates stay empty until their phase starts.
 
 ## Development Workflow & Quality Gates
 
@@ -138,7 +151,10 @@ justification; never mark complete until acceptance criteria
 (`AC-Pn-nn`) are satisfied. Completion ritual per task: implement →
 tests → lint/checks → update task doc → phase progress →
 `docs/06-progress/task-done-rollup.md` → follow-ups in
-`docs/05-followups/` → `CHANGELOG.md` when appropriate. All PRs MUST
+`docs/05-followups/` → `CHANGELOG.md` when appropriate. Human-only gates
+(dataset licensing, editorial/reviewer sign-off, exit rituals) cannot be
+performed or simulated by agents; mark them pending with a named owner
+request. All PRs MUST
 verify constitution compliance; complexity MUST be justified in the plan.
 
 ## Governance
@@ -152,4 +168,4 @@ with a migration plan where behavior changes. Use
 `.specify/templates/constitution-template.md` resolution at amendment
 time; write only `.specify/memory/constitution.md`.
 
-**Version**: 1.0.1 | **Ratified**: 2026-09-15 | **Last Amended**: 2026-09-16
+**Version**: 1.0.2 | **Ratified**: 2026-09-15 | **Last Amended**: 2026-09-17
