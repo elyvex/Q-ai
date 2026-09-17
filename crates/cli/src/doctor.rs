@@ -129,16 +129,21 @@ pub fn run_checks(cfg: &Config, probe: &DbProbe, json: bool, repair_preview: boo
     }
 
     if json {
-        let doc = checks_json(&results);
+        let mut doc = checks_json(&results);
+        // US3 redact-then-print (001-redaction-hardening, T022): scrub before
+        // emission; `redact_json_value` never alters keys/nesting, so the
+        // doctor schema shape is preserved.
+        application::redaction::redact_json_value(&mut doc);
         println!("{}", serde_json::to_string_pretty(&doc).unwrap());
     } else {
         for r in &results {
-            println!("[{}] {} — {}", r.status.label(), r.id, r.summary);
+            let line = format!("[{}] {} — {}", r.status.label(), r.id, r.summary);
+            println!("{}", application::redaction::redact_text(&line));
             if let Some(rem) = &r.remedy {
-                println!("      remedy: {rem}");
+                println!("      remedy: {}", application::redaction::redact_text(rem));
             }
             if let Some(cmd) = &r.next_command {
-                println!("      next: {cmd}");
+                println!("      next: {}", application::redaction::redact_text(cmd));
             }
         }
     }
@@ -740,6 +745,11 @@ pub fn doctor_report(
             None => code = code.max(exit_code::INTERNAL),
         }
     }
+    // US3 redact-then-print (001-redaction-hardening, T022): scrub the merged
+    // document and human text at the emission boundary. `redact_json_value`
+    // never alters keys/nesting, so the doctor schema shape is preserved.
+    application::redaction::redact_json_value(&mut doc);
+    let human = application::redaction::redact_text(&human).into_owned();
     (doc, human, code)
 }
 
@@ -878,5 +888,38 @@ mod tests {
 
         let after = std::fs::read(&cfg.storage.sqlite.path).unwrap();
         assert_eq!(before, after, "doctor must not write to the database");
+    }
+
+    /// US3/T022: `doctor_report` scrubs credential-shaped config values echoed
+    /// by checks (Rule C userinfo here) from both the JSON document and the
+    /// human text, while preserving the schema shape.
+    #[test]
+    fn doctor_report_scrubs_credential_shaped_config_values() {
+        const SENTINEL: &str = "SENTINEL_9f3c__DO_NOT_LEAK";
+        let dir = tempfile::tempdir().unwrap();
+        let mut cfg = Config::default();
+        cfg.app.data_dir = dir.path().display().to_string();
+        cfg.storage.sqlite.path = dir.path().join("qai.db").display().to_string();
+        cfg.storage.objects.root = dir.path().join("objects").display().to_string();
+        // Credential-shaped bind value echoed verbatim by the bind-address
+        // check summary; still loopback so the check itself stays passing.
+        cfg.server.bind = format!("127.0.0.1+postgresql://admin:{SENTINEL}@localhost");
+        let probe = DbProbe { reachable: false, ..Default::default() };
+
+        // Guard against a vacuous test: the raw checks must echo the sentinel.
+        let raw = serde_json::to_string(&checks_json(&checks(&cfg, &probe))).unwrap();
+        assert!(raw.contains(SENTINEL), "test setup must echo the sentinel pre-scrub");
+
+        let (doc, human, _code) = doctor_report(&cfg, &probe, false, false);
+        let json = serde_json::to_string(&doc).unwrap();
+        assert!(!json.contains(SENTINEL), "doctor JSON leaked: {json}");
+        assert!(!human.contains(SENTINEL), "doctor text leaked: {human}");
+        assert!(json.contains("***REDACTED***"), "doctor JSON lost marker");
+        assert!(human.contains("***REDACTED***"), "doctor text lost marker");
+        // Schema shape preserved: single top-level `checks` array, populated.
+        let object = doc.as_object().expect("doctor doc is an object");
+        assert_eq!(object.len(), 1, "only `checks` allowed at top level: {object:?}");
+        assert!(!doc["checks"].as_array().expect("checks array").is_empty());
+        assert!(human.contains("bind_address_safe"), "human text lost check content");
     }
 }
