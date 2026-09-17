@@ -4,6 +4,12 @@
 
 ## Phase 1 — Canonical Quran Core (in progress)
 
+### Session: 2026-09-17 — P1-T58 fixture soak / P1-T60 gate preparation
+
+- P1-T58 remains partial: added `quran_doctor.rs::fixture_soak_ten_thousand_lookups_preserves_corpus_integrity`; existing harness imports, validates, and activates the synthetic fixture, then the test performs 10,000 seeded lookups, verifies exact text and token offsets, and requires post-soak hashes and round-trip checks to pass. A licensed standard-edition soak is still pending.
+- P1-T60 preparation: `cargo test -p application -- --test-threads=1` (110 tests), workspace fmt/clippy/check, architecture check, and migration check passed. Initial parallel application run timed out; serial rerun passed. No full-workspace test, coverage, dependency-audit, or reviewer ritual claim.
+- No dataset, reference corpus, font-license choice, or editorial approval was invented; T26 remains unchanged and partial.
+
 ### Session: 2026-09-15 — M9a/M9b tools, citations, API, CLI, doctor
 
 **Tools, citations, API (`crates/tools`, `tool-registry`, `citations`, `server`)**

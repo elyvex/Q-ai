@@ -999,3 +999,10 @@ Carried into `docs/plans/handoff-p1-to-p2.md` by task P1-T60.
 > (morphology, normalization + linguist) are needed at the start of Phase 2. A green Phase 1
 > with any of these unowned means Phase 2 starts stalled on a decision that was visible from
 > week 1. Recording this as a closure gate is the only reliable defence.
+
+## 2026-09-17 — P1-T58 partial implementation and P1-T60 gate preparation
+
+- **Owner:** implementation agent; no editorial or reviewer sign-off.
+- **P1-T58 evidence:** `crates/application/tests/quran_doctor.rs::fixture_soak_ten_thousand_lookups_preserves_corpus_integrity` passes: synthetic-fixture import/validation/activation through the existing harness, 10,000 deterministic random lookups with all fixture ayahs visited, exact source-text and edition identity assertions, token-offset verification, and all 19 post-soak deep checks with no failures. Hash and round-trip checks must explicitly pass.
+- **Verification:** `cargo test -p application -- --test-threads=1` passed (110 tests); `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo check --workspace`, `cargo xtask arch-check`, and `cargo xtask migrate-check` passed. The initial parallel application run timed out during doctor tests; the serial rerun passed.
+- **Exceptions:** T58 remains partial pending a licensed full-corpus run. This fixture run is not standard-edition timing evidence. T60 remains open: workspace tests, coverage, dependency audits, licensed data, and independent recorded review are not certified by this session. T26 comparator was not changed; reference-corpus selection/procedure remains unresolved. Existing unrelated worktree edits were preserved.
