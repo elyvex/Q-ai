@@ -144,6 +144,11 @@ pub struct ImportOptions {
     /// Stop after recording this checkpoint (dry-run / chaos support).
     /// `None` runs the full pipeline.
     pub stop_after: Option<ImportCheckpoint>,
+    /// Independent reference corpus snapshot for the QV-015 comparison
+    /// (ADR-0114). `None` records the explicit skip; `Some` forces the
+    /// exact byte-for-byte comparison and the run fails closed on any
+    /// mismatch, missing ayah, or incompatible edition policy.
+    pub reference: Option<EditionSource>,
 }
 
 pub fn compare_reference(
@@ -171,6 +176,20 @@ pub fn compare_reference(
             "edition",
             "reference edition has incompatible script, reading, numbering, or basmala policy",
         ));
+    }
+    let reference_surahs: BTreeMap<_, _> =
+        reference.surahs.iter().map(|surah| (surah.number, surah)).collect();
+    for surah in &source.surahs {
+        if let Some(expected) = reference_surahs.get(&surah.number)
+            && surah.basmala != expected.basmala
+        {
+            findings.push(Finding::new(
+                "QV-015",
+                Severity::Fatal,
+                format!("surah {}", surah.number),
+                "reference surah has incompatible basmala policy",
+            ));
+        }
     }
     let mut maps = Vec::new();
     for (label, edition) in [("import", source), ("reference", reference)] {
@@ -600,31 +619,53 @@ impl<'a> Driver<'a> {
         let edition = &doc.edition;
         let edition_urn = format!("quran-edition:{}@{}", edition.slug, edition.version);
 
+        let reference_snapshot_hash = self
+            .options
+            .reference
+            .as_ref()
+            .map(crate::validation::intermediate_hash)
+            .transpose()?
+            .map(|hash| tagged(&hash));
         let mut uow = self.db.write().await.map_err(storage_err)?;
-        uow.provenance()
-            .insert(ProvenanceRecord {
-                id: provenance_id.clone(),
-                layer: "canonical_source".to_string(),
-                subject_urn: edition_urn.clone(),
-                attribution_kind: "dataset".to_string(),
-                attribution_json: format!(
-                    "{{\"dataset_name\":{:?},\"dataset_version\":{:?},\"source_version_id\":{:?}}}",
-                    edition.slug,
-                    edition.version.to_string(),
-                    self.input.source_version_id
-                ),
-                source_version_id: Some(self.input.source_version_id.clone()),
-                trust_level: "ImportedUnverified".to_string(),
-                verification_status: "unverified".to_string(),
-                confidence: None,
-                versions_json: format!(
-                    "{{\"source_version_id\":{:?},\"parser_version\":\"1.0.0\",\"schema_version\":1}}",
-                    self.input.source_version_id
-                ),
-                created_by: self.input.invoked_by.clone(),
+        let record = ProvenanceRecord {
+            id: provenance_id.clone(),
+            layer: "canonical_source".to_string(),
+            subject_urn: edition_urn.clone(),
+            attribution_kind: "dataset".to_string(),
+            attribution_json: format!(
+                "{{\"dataset_name\":{:?},\"dataset_version\":{:?},\"source_version_id\":{:?}}}",
+                edition.slug,
+                edition.version.to_string(),
+                self.input.source_version_id
+            ),
+            source_version_id: Some(self.input.source_version_id.clone()),
+            trust_level: "ImportedUnverified".to_string(),
+            verification_status: "unverified".to_string(),
+            confidence: None,
+            versions_json: serde_json::json!({
+                "source_version_id": self.input.source_version_id,
+                "parser_version": "1.0.0",
+                "schema_version": 1,
+                "manifest_hash": self.manifest_hash,
+                "reference_snapshot_hash": reference_snapshot_hash,
             })
-            .await
-            .map_err(storage_err)?;
+            .to_string(),
+            created_by: self.input.invoked_by.clone(),
+        };
+        if let Some(existing) = uow.provenance().get(&provenance_id).await.map_err(storage_err)? {
+            if existing.versions_json != record.versions_json
+                || existing.created_by != record.created_by
+            {
+                uow.quran().set_import_run_state(&run_id, "Failed").await.map_err(storage_err)?;
+                uow.commit().await.map_err(storage_err)?;
+                return Err(CorpusError::ImportFailed {
+                    step: "staged",
+                    detail: "retry input or reference changed; use a new run id".into(),
+                });
+            }
+        } else {
+            uow.provenance().insert(record).await.map_err(storage_err)?;
+        }
 
         uow.quran().clear_staging(&run_id).await.map_err(storage_err)?;
         uow.quran()
@@ -865,25 +906,179 @@ impl<'a> Driver<'a> {
 
     async fn compared(&mut self) -> Result<(), CorpusError> {
         let doc = self.doc.as_ref().expect("parsed before comparison");
-        if doc.expected.reference_corpus_id.is_some() || doc.expected.reference_text_hash.is_some()
+        let mut findings = Vec::new();
+        if let Some(reference) = &self.options.reference {
+            let snapshot_hash = tagged(&crate::validation::intermediate_hash(reference)?);
+            let mut reference = reference.clone();
+            reference.ayahs.sort_by_key(|ayah| (ayah.surah, ayah.ayah));
+            reference.surahs.sort_by_key(|surah| surah.number);
+            if let Err(error) = reference.validate() {
+                findings.push(Finding::new(
+                    "QV-015",
+                    Severity::Fatal,
+                    "reference",
+                    format!("invalid reference format: {error}"),
+                ));
+            }
+            findings.extend(
+                validate_edition(&reference)
+                    .findings
+                    .into_iter()
+                    .filter(|finding| matches!(finding.severity, Severity::Fatal | Severity::Error))
+                    .map(|finding| {
+                        Finding::new(
+                            "QV-015",
+                            Severity::Fatal,
+                            format!("reference {}", finding.location),
+                            format!("invalid reference: {}: {}", finding.rule_id, finding.message),
+                        )
+                    }),
+            );
+            let reference_id = &reference.edition.slug;
+            let version = reference.edition.version.to_string();
+            let texts: Vec<_> = reference.ayahs.iter().map(|ayah| ayah.text.as_str()).collect();
+            let hash = tagged(&text_hash(reference_id, &version, &texts));
+            if let Some(expected) = &doc.expected.reference_corpus_id
+                && expected != reference_id
+            {
+                findings.push(Finding::new(
+                    "QV-015",
+                    Severity::Fatal,
+                    "reference",
+                    format!("reference_corpus_id mismatch: expected {expected:?}, observed {reference_id:?}"),
+                ));
+            }
+            if let Some(expected) = &doc.expected.reference_text_hash
+                && expected != &hash
+            {
+                findings.push(Finding::new(
+                    "QV-015",
+                    Severity::Fatal,
+                    "reference",
+                    format!(
+                        "reference_text_hash mismatch: expected {expected:?}, observed {hash:?}"
+                    ),
+                ));
+            }
+            findings.extend(compare_reference(doc, Some(&reference)));
+            findings.push(Finding::new(
+                "QV-015",
+                Severity::Info,
+                format!("quran-edition:{reference_id}@{version}"),
+                serde_json::json!({
+                    "method": "exact-ayah-bytes-v1",
+                    "reference_corpus_id": reference_id,
+                    "reference_version": version,
+                    "reference_text_hash": hash,
+                    "reference_snapshot_hash": snapshot_hash,
+                    "outcome": if findings.iter().any(|f| f.severity == Severity::Fatal) {
+                        "fail"
+                    } else {
+                        "pass"
+                    },
+                })
+                .to_string(),
+            ));
+        } else if doc.expected.reference_corpus_id.is_some()
+            || doc.expected.reference_text_hash.is_some()
         {
-            self.fail_run("Failed").await;
+            findings.push(Finding::new(
+                "QV-015",
+                Severity::Fatal,
+                "reference",
+                "requested reference corpus is unavailable; comparison cannot be skipped",
+            ));
+        } else {
+            findings.extend(compare_reference(doc, None));
+        }
+        let failed = findings.iter().any(|finding| finding.severity == Severity::Fatal);
+        self.findings.extend(findings);
+        if failed {
+            let row = self.findings_row()?;
+            let mut uow = self.db.write().await.map_err(storage_err)?;
+            let existing =
+                uow.quran().get_validation_report(self.run_id()).await.map_err(storage_err)?;
+            if let Some(existing) = existing {
+                if existing.findings_json != row.findings_json {
+                    uow.quran()
+                        .set_import_run_state(self.run_id(), "Failed")
+                        .await
+                        .map_err(storage_err)?;
+                    uow.commit().await.map_err(storage_err)?;
+                    return Err(CorpusError::ImportFailed {
+                        step: "reference_comparison",
+                        detail: "QV-015: retry evidence changed; use a new run id".into(),
+                    });
+                }
+            } else {
+                uow.quran().insert_validation_report(row).await.map_err(storage_err)?;
+            }
+            uow.quran().set_import_run_state(self.run_id(), "Failed").await.map_err(storage_err)?;
+            uow.commit().await.map_err(storage_err)?;
             return Err(CorpusError::ImportFailed {
                 step: "reference_comparison",
-                detail: "QV-015: requested reference corpus is unavailable; comparison cannot be skipped".into(),
+                detail: "QV-015: reference comparison failed; see validation report".into(),
             });
         }
-        self.findings
-            .extend(compare_reference(self.doc.as_ref().expect("parsed before comparison"), None));
         Ok(())
+    }
+
+    fn findings_row(&self) -> Result<ValidationReportRow, CorpusError> {
+        let doc = self.doc.as_ref().expect("parsed before findings");
+        let fatal_count =
+            self.findings.iter().filter(|f| f.severity == Severity::Fatal).count() as i64;
+        let error_count =
+            self.findings.iter().filter(|f| f.severity == Severity::Error).count() as i64;
+        let warning_count =
+            self.findings.iter().filter(|f| f.severity == Severity::Warning).count() as i64;
+        Ok(ValidationReportRow {
+            id: self.run_id().to_string(),
+            subject_urn: format!("quran-edition:{}@{}", doc.edition.slug, doc.edition.version),
+            validator: crate::validation::VALIDATOR_NAME.to_string(),
+            validator_version: crate::validation::VALIDATOR_VERSION.to_string(),
+            outcome: if fatal_count > 0 || error_count > 0 {
+                "fail"
+            } else if warning_count > 0 {
+                "pass_with_warnings"
+            } else {
+                "pass"
+            }
+            .to_string(),
+            fatal_count,
+            error_count,
+            warning_count,
+            findings_json: serde_json::to_string(&self.findings).map_err(|error| {
+                CorpusError::ImportFailed {
+                    step: "reference_comparison",
+                    detail: format!("cannot serialize findings: {error}"),
+                }
+            })?,
+            created_at: self.input.created_at.clone(),
+        })
     }
 
     async fn diffed(&mut self) -> Result<(), CorpusError> {
         let run_id = self.run_id().to_string();
         let doc = self.doc.as_ref().expect("parsed before diff").clone();
         let edition_urn = format!("quran-edition:{}@{}", doc.edition.slug, doc.edition.version);
+        let report = self.findings_row()?;
 
         let mut uow = self.db.write().await.map_err(storage_err)?;
+        if let Some(existing) =
+            uow.quran().get_validation_report(&run_id).await.map_err(storage_err)?
+        {
+            if existing.findings_json == report.findings_json && existing.outcome == report.outcome
+            {
+                uow.commit().await.map_err(storage_err)?;
+                return Ok(());
+            }
+            uow.quran().set_import_run_state(&run_id, "Failed").await.map_err(storage_err)?;
+            uow.commit().await.map_err(storage_err)?;
+            return Err(CorpusError::ImportFailed {
+                step: "diffed",
+                detail: "retry validation evidence changed; use a new run id".into(),
+            });
+        }
         let active = uow.quran().get_active().await.map_err(storage_err)?;
         let (old_list, from_version, metadata_changed) = match active {
             Some(pointer) => {
@@ -944,43 +1139,7 @@ impl<'a> Driver<'a> {
             .await
             .map_err(storage_err)?;
 
-        let findings = std::mem::take(&mut self.findings);
-        let fatal_count = findings.iter().filter(|f| f.severity == Severity::Fatal).count() as u32;
-        let error_count = findings.iter().filter(|f| f.severity == Severity::Error).count() as u32;
-        let warning_count =
-            findings.iter().filter(|f| f.severity == Severity::Warning).count() as u32;
-        let outcome = if fatal_count > 0 || error_count > 0 {
-            Outcome::Fail
-        } else if warning_count > 0 {
-            Outcome::PassWithWarnings
-        } else {
-            Outcome::Pass
-        };
-        let findings_json =
-            serde_json::to_string(&findings).map_err(|err| CorpusError::ImportFailed {
-                step: "diffed",
-                detail: format!("cannot serialize findings: {err}"),
-            })?;
-        uow.quran()
-            .insert_validation_report(ValidationReportRow {
-                id: run_id.clone(),
-                subject_urn: edition_urn,
-                validator: crate::validation::VALIDATOR_NAME.to_string(),
-                validator_version: crate::validation::VALIDATOR_VERSION.to_string(),
-                outcome: match outcome {
-                    Outcome::Pass => "pass".to_string(),
-                    Outcome::PassWithWarnings => "pass_with_warnings".to_string(),
-                    Outcome::Fail => "fail".to_string(),
-                },
-                fatal_count: fatal_count as i64,
-                error_count: error_count as i64,
-                warning_count: warning_count as i64,
-                findings_json,
-                created_at: self.input.created_at.clone(),
-            })
-            .await
-            .map_err(storage_err)?;
-        self.findings = findings;
+        uow.quran().insert_validation_report(report).await.map_err(storage_err)?;
         uow.commit().await.map_err(storage_err)?;
         Ok(())
     }
