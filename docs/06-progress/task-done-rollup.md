@@ -2,6 +2,25 @@
 
 > Completed tasks across all phases. Newest first.
 
+## Phase 0 — P0-T39/T40 timestamp ordering, 2026-09-17
+
+- In-memory claims and expired-lease recovery compare parsed RFC3339 instants; malformed timestamps are ineligible. Private fixed-time entry points exercise the same implementations without sleeps.
+- Mixed precision, equality, future timestamps, invalid timestamps, and state transitions covered by two regression tests.
+- Verified: 25 consecutive `cargo test -q -p jobs` runs (21 passing each), focused exact tests, jobs formatting, clippy all-targets with denied warnings, and check.
+- Remaining: subsecond-delay truncation, SQLite scheduling validation, and full Phase-0 gates. No commit made.
+
+## Phase 0 — P0-T57 deterministic fixtures, 2026-09-17
+
+- Completed FU-06: controllable `FixtureClock`, typed `fixture_id`, and `sample_job_record_at` in `crates/testkit/src/lib.rs`; existing random fixture API unchanged.
+- Three regression tests; full testkit suite 40 passing. Testkit fmt, clippy all-targets with denied warnings, and type check passed.
+- Jobs scheduling follow-up remains open; these helpers do not change production clocks.
+
+## Phase 0 — targeted retry hardening, 2026-09-17
+
+- P0-T39/T40: restored failure-path idempotency enforcement and post-jitter delay cap in `crates/jobs/src/worker.rs`, with two regression tests.
+- Verified: fully qualified exact backoff test (1 test); `cargo test -p jobs -- --test-threads=1` (19 tests); `cargo fmt -p jobs -- --check`; `cargo clippy -p jobs --all-targets -- -D warnings`; `cargo check -p jobs`.
+- Initial parallel jobs run: 18 passed, `retries_then_succeeds` returned Idle; isolated and serial reruns passed. Follow-up remains open. No workspace or phase-exit verification claimed; T57/T56/CLI work not completed.
+
 ## Phase 1 — Canonical Quran Core (in progress)
 
 ### Session: 2026-09-17 — P1-T58 fixture soak / P1-T60 gate preparation
