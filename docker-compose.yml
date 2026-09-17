@@ -1,0 +1,23 @@
+services:
+  app:
+    build:
+      context: .
+    user: "65532:65532"
+    working_dir: /app
+    environment:
+      QAI_DATA_DIR: /data
+    command: ["serve", "--bind", "127.0.0.1:8737"]
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - qai-data:/data
+    init: true
+
+volumes:
+  qai-data:
