@@ -1,7 +1,15 @@
 # Phase 4 — Quran Knowledge Graph
 
-Status: Proposed (planning)
+Status: Proposed (planning); no graph implementation delivered (reviewed 2026-09-17)
 Depends on: Phase 1 (canonical corpus) + Phase 2 morphology datasets/FTS
+
+`crates/graph`, `crates/quran-graph` and `crates/isnad-graph` remain placeholders.
+The backend policy and deliverables below are proposals, not installed adapters or
+available CLI commands. Phase-2 morphology datasets are not yet implemented.
+
+This directory uses Phase 4 numbering while the PRD roadmap places Quran graph work
+in Phase 3; numbering reconciliation remains open. See the
+[project README](../../../../README.md#phase-tracking) for current implementation status.
 
 ## Objective
 
