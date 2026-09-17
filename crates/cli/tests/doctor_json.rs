@@ -7,6 +7,78 @@
 //! could consume it. Merging them into a single `checks` array is asserted here.
 
 #[test]
+fn audit_verify_rejects_corrupt_chain_without_modifying_database() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("qai.db");
+    let run = || {
+        std::process::Command::new(env!("CARGO_BIN_EXE_qai"))
+            .args(["--data-dir", dir.path().to_str().unwrap(), "audit", "verify", "--json"])
+            .output()
+            .unwrap()
+    };
+    let missing = run();
+    assert!(!missing.status.success());
+    assert!(!path.exists());
+    let missing_json: serde_json::Value = serde_json::from_slice(&missing.stdout).unwrap();
+    assert_eq!(missing_json["valid"], false);
+
+    let mut cfg = config::Config::default();
+    cfg.storage.sqlite.path = path.display().to_string();
+    let migrations =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../migrations/sqlite");
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    runtime.block_on(application::db::migrate_database(&cfg, &migrations)).unwrap();
+    let empty = run();
+    assert!(empty.status.success());
+    let report: serde_json::Value = serde_json::from_slice(&empty.stdout).unwrap();
+    assert_eq!(report["valid"], true);
+    assert_eq!(report["checked_events"], 0);
+
+    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/quran/test-edition-min/manifest.json");
+    let imported = std::process::Command::new(env!("CARGO_BIN_EXE_qai"))
+        .args([
+            "--data-dir",
+            dir.path().to_str().unwrap(),
+            "quran",
+            "import",
+            manifest.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(imported.status.success(), "{}", String::from_utf8_lossy(&imported.stderr));
+    let valid = run();
+    assert!(valid.status.success(), "{}", String::from_utf8_lossy(&valid.stdout));
+    let valid_report: serde_json::Value = serde_json::from_slice(&valid.stdout).unwrap();
+    assert_eq!(valid_report["valid"], true);
+    let event_count = valid_report["checked_events"].as_u64().unwrap();
+    assert!(event_count > 0);
+
+    runtime.block_on(async {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .connect_with(sqlx::sqlite::SqliteConnectOptions::new().filename(&path))
+            .await.unwrap();
+        sqlx::query("DROP TRIGGER trg_audit_no_update").execute(&pool).await.unwrap();
+        sqlx::query("UPDATE audit_events SET chain_hash = ?, reason = ? WHERE sequence = (SELECT MAX(sequence) FROM audit_events)")
+            .bind(format!("sha256:{}", "ab".repeat(32)))
+            .bind("password=CLI_AUDIT_SENTINEL")
+            .execute(&pool).await.unwrap();
+        sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)").execute(&pool).await.unwrap();
+        pool.close().await;
+    });
+    let before = std::fs::read(&path).unwrap();
+    let corrupt = run();
+    assert_eq!(corrupt.status.code(), Some(3));
+    let report: serde_json::Value = serde_json::from_slice(&corrupt.stdout).unwrap();
+    assert_eq!(report["valid"], false);
+    assert_eq!(report["checked_events"], event_count);
+    assert_eq!(report["tampered_sequences"], serde_json::json!([event_count]));
+    assert!(!String::from_utf8_lossy(&corrupt.stdout).contains("CLI_AUDIT_SENTINEL"));
+    assert!(!String::from_utf8_lossy(&corrupt.stderr).contains("CLI_AUDIT_SENTINEL"));
+    assert_eq!(before, std::fs::read(&path).unwrap());
+}
+
+#[test]
 fn doctor_quran_json_is_a_single_merged_document() {
     let dir = tempfile::tempdir().unwrap();
     let mut cfg = config::Config::default();
