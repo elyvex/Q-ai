@@ -1,5 +1,19 @@
 # Open Questions
 
+## Container verification — P0-T56, 2026-09-17
+
+- Added `Dockerfile`, `docker-compose.yml`, and allowlisted `.dockerignore`. Compose configuration validation passed; Docker CLI is installed but its daemon socket is unavailable.
+- Runtime image builds, shared-library compatibility, named-volume ownership and non-root execution remain unverified. Once the daemon is available, run `docker compose build`, `docker compose run --rm app db migrate`, `docker compose run --rm app db verify`, then `docker compose up`.
+- The stub intentionally uses `network_mode: none` and publishes no ports: the current server permits loopback only. Access stays inside the container network namespace; no unauthenticated public binding is enabled. Database migration is an explicit initialization step, not an automatic startup mutation.
+- Verify UID 65532, persisted database access and `/healthz`, `/readyz`, `/api/v1/meta` from inside that network namespace before closing T56.
+
+## Jobs scheduling — P0-T39/T40, 2026-09-17
+
+- `cargo test -p jobs` intermittently returned Idle rather than Succeeded in `worker::tests::retries_then_succeeds` after zero-delay rescheduling. Isolated and serial runs pass.
+- Timestamp ordering corrected in `InMemoryJobQueue`: claim and lease reaping compare parsed instants, not variable-precision RFC3339 strings. Fixed-time regression tests pass; 25 consecutive parallel jobs-suite runs passed (21 tests each).
+- Still open: `plus` discards subsecond delays; production SQLite scheduling and wall-clock behavior need separate validation. This fix does not address those paths.
+- Restored failure-path idempotency and jitter-cap tests pass. Lease-recovery retry policy still needs separate validation.
+
 ## Graph backends
 
 ### Q: Which graph backend should ship for Phase 4?
