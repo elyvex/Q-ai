@@ -1191,3 +1191,35 @@ Carried into `docs/plans/handoff-p0-to-p1.md` by task P0-T60.
 > end of Phase 0 and ADR-0203/0204 by the start of Phase 2; a green Phase 0 with all three
 > unowned means Phase 1 or 2 starts stalled on an external decision that engineering cannot
 > compress. Recording this as a closure gate is the only reliable defence.
+
+## 9. Targeted correction — 2026-09-17, P0-T39/T40
+
+- Owner: implementing assistant; changes remain uncommitted by this session.
+- Restored the handler idempotency gate on failure and the post-jitter backoff cap in `crates/jobs/src/worker.rs`.
+- Evidence: `non_idempotent_failures_are_never_automatically_retried` and `backoff_is_deterministic_distributed_and_bounded`; jobs serial suite 19 passing; jobs fmt, clippy all-targets with denied warnings, and check pass.
+- FU-03 failure-retry/distribution coverage addressed. This does not establish non-idempotent lease-recovery safety.
+- Initial parallel run failed the existing retry-success test (Idle); isolated and serial reruns passed. Scheduling follow-up recorded in `docs/05-followups/open-questions.md`.
+- Phase acceptance, T57, T56, CLI stubs, and full verification remain pending.
+
+## 10. P0-T57 / FU-06 — deterministic fixtures, 2026-09-17
+
+- Owner: implementing assistant; no commit created by this session.
+- Added `FixtureClock` with explicit set/read operations, typed reproducible UUID fixtures over a u64 index, and deterministic job fixtures without RNG or wall-clock calls. Existing random job fixtures retain their behavior.
+- Evidence: three new unit tests cover explicit time control, UUID boundary indices and typed replay, every job-record field, and independence between fixture calls.
+- Verification: `cargo test -p testkit -- --test-threads=1` (40 passing), `cargo fmt -p testkit -- --check`, `cargo clippy -p testkit --all-targets -- -D warnings`, `cargo check -p testkit` all passed.
+- FU-06 addressed; no claim that production scheduling uses this clock or that the scheduling flake is resolved.
+
+## 11. P0-T56 — container stub, partial, 2026-09-17
+
+- Added a multi-stage Rust build and distroless non-root runtime, migration assets, persistent data directory, and a build-context allowlist.
+- Compose uses UID 65532, read-only root filesystem, dropped capabilities, no-new-privileges, no networking or published ports, and an explicit migration initialization step.
+- `docker compose config --quiet`, workspace `cargo check`, and architecture check passed. Docker daemon unavailable, so image build and runtime smoke tests were not run. T56 remains partial; follow-up commands recorded in `docs/05-followups/open-questions.md`.
+
+## 12. P0-T39/T40 — in-memory timestamp ordering, 2026-09-17
+
+- Owner: implementing assistant; changes not committed by this session.
+- Replaced lexicographic eligibility comparisons with parsed instant comparisons in claim and lease-reap paths. Equal expiry is treated as expired; malformed timestamps remain ineligible.
+- Corrected the initial test typo and reversed inequality; deterministic tests cover mixed precision and actual claim/reap state transitions through private fixed-time entry points.
+- Evidence: both exact regression tests pass; 25 consecutive full jobs-suite runs pass (21 tests each). Jobs formatting, clippy all-targets with denied warnings, and type checks pass.
+- Negative control: temporarily restoring the original lexicographic claim comparison made `mixed_precision_timestamps_control_claims_and_reaping` fail deterministically for `.123Z` at `.123456Z`. Restoring parsed comparison made the same exact test pass; lint and check passed again.
+- This addresses the observed in-memory ordering defect, not subsecond delay truncation, production SQLite ordering, or non-idempotent lease recovery. Those remain follow-ups; phase closure remains open.
