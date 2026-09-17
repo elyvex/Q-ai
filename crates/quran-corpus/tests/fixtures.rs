@@ -19,6 +19,68 @@ fn adversarial(name: &str) -> EditionSource {
 }
 
 #[test]
+fn reference_comparison_is_exact_and_independent_of_row_order() {
+    let source = JsonAdapter.parse(MIN_MANIFEST).unwrap();
+    let mut reference = source.clone();
+    reference.ayahs.reverse();
+    assert!(quran_corpus::import::compare_reference(&source, Some(&reference)).is_empty());
+    reference.ayahs[0].text.push(' ');
+    let findings = quran_corpus::import::compare_reference(&source, Some(&reference));
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].rule_id, "QV-015");
+    assert_eq!(findings[0].severity, quran_corpus::validation::Severity::Fatal);
+    assert_eq!(findings[0].message, "text differs byte-for-byte");
+}
+
+#[test]
+fn reference_comparison_rejects_missing_duplicate_and_empty_rows() {
+    let source = JsonAdapter.parse(MIN_MANIFEST).unwrap();
+    let mut reference = source.clone();
+    reference.ayahs.pop();
+    let findings = quran_corpus::import::compare_reference(&source, Some(&reference));
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].message, "ayah missing from reference corpus");
+    let findings = quran_corpus::import::compare_reference(&reference, Some(&source));
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].message, "ayah missing from imported corpus");
+    reference = source.clone();
+    reference.ayahs.push(reference.ayahs[0].clone());
+    assert!(
+        quran_corpus::import::compare_reference(&source, Some(&reference))
+            .iter()
+            .any(|f| f.message.contains("duplicate"))
+    );
+    assert!(
+        quran_corpus::import::compare_reference(&reference, Some(&source))
+            .iter()
+            .any(|f| f.message.contains("duplicate"))
+    );
+    reference.ayahs.clear();
+    assert!(
+        quran_corpus::import::compare_reference(&reference, Some(&reference))
+            .iter()
+            .all(|f| f.severity == quran_corpus::validation::Severity::Fatal)
+    );
+    assert!(!quran_corpus::import::compare_reference(&reference, Some(&reference)).is_empty());
+}
+
+#[test]
+fn reference_comparison_skips_unconfigured_and_rejects_incompatible_readings() {
+    let source = JsonAdapter.parse(MIN_MANIFEST).unwrap();
+    let findings = quran_corpus::import::compare_reference(&source, None);
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].rule_id, "QV-015");
+    assert_eq!(findings[0].severity, quran_corpus::validation::Severity::Info);
+    assert!(findings[0].message.contains("skipped"));
+    let mut reference = source.clone();
+    reference.edition.riwayah = Some("different test reading".into());
+    let findings = quran_corpus::import::compare_reference(&source, Some(&reference));
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].severity, quran_corpus::validation::Severity::Fatal);
+    assert!(findings[0].message.contains("incompatible"));
+}
+
+#[test]
 fn test_edition_min_parses_with_expected_shape() {
     let source: EditionSource = JsonAdapter.parse(MIN_MANIFEST).unwrap();
     assert_eq!(source.edition.slug, "test-edition-min");

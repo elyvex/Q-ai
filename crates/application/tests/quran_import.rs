@@ -151,6 +151,36 @@ async fn import_runs_end_to_end_to_staged() {
 }
 
 #[tokio::test]
+async fn requested_reference_cannot_be_silently_skipped() {
+    let (_dir, db) = migrated_db().await;
+    let mut manifest: serde_json::Value = serde_json::from_str(BASE_MANIFEST).unwrap();
+    manifest["expected"]["reference_corpus_id"] = "unavailable-test-reference".into();
+    let manifest = serde_json::to_string(&manifest).unwrap();
+    let progress = ImportProgress::new();
+    let error = run_import(
+        &db,
+        &input("run-reference", &manifest, None),
+        &ImportOptions::default(),
+        &AtomicBool::new(false),
+        progress.clone(),
+    )
+    .await
+    .expect_err("a requested but unavailable reference must fail closed");
+    let quran_corpus::CorpusError::ImportFailed { step, detail } = error else {
+        panic!("expected reference comparison failure, got {error}");
+    };
+    assert_eq!(step, "reference_comparison");
+    assert!(detail.contains("QV-015"));
+    assert!(!progress.checkpoints().contains(&ImportCheckpoint::ApprovalRequested));
+    let mut uow = db.write().await.unwrap();
+    let run = uow.quran().get_import_run("run-reference").await.unwrap().unwrap();
+    assert_eq!(run.state, "Failed");
+    assert!(uow.quran().get_active().await.unwrap().is_none());
+    assert_eq!(uow.quran().count_ayahs("run-reference").await.unwrap(), 0);
+    uow.rollback().await.unwrap();
+}
+
+#[tokio::test]
 async fn crash_matrix_all_thirteen_checkpoints_leave_active_untouched() {
     let (_dir, db) = migrated_db().await;
     for (index, checkpoint) in ImportCheckpoint::ALL.iter().enumerate() {

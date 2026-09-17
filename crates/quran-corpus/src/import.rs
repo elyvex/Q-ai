@@ -16,7 +16,7 @@
 //! the crash matrix — not as transaction boundaries. Compute checkpoints
 //! re-run on retry; only staging writes persist.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use domain::ContentHash;
@@ -144,6 +144,74 @@ pub struct ImportOptions {
     /// Stop after recording this checkpoint (dry-run / chaos support).
     /// `None` runs the full pipeline.
     pub stop_after: Option<ImportCheckpoint>,
+}
+
+pub fn compare_reference(
+    source: &EditionSource,
+    reference: Option<&EditionSource>,
+) -> Vec<Finding> {
+    let Some(reference) = reference else {
+        return vec![Finding::new(
+            "QV-015",
+            Severity::Info,
+            "edition",
+            "reference-corpus comparison skipped: no reference corpus configured",
+        )];
+    };
+    let mut findings = Vec::new();
+    if source.edition.script != reference.edition.script
+        || source.edition.riwayah != reference.edition.riwayah
+        || source.edition.qiraah != reference.edition.qiraah
+        || source.edition.verse_numbering_scheme != reference.edition.verse_numbering_scheme
+        || source.edition.basmala_policy != reference.edition.basmala_policy
+    {
+        findings.push(Finding::new(
+            "QV-015",
+            Severity::Fatal,
+            "edition",
+            "reference edition has incompatible script, reading, numbering, or basmala policy",
+        ));
+    }
+    let mut maps = Vec::new();
+    for (label, edition) in [("import", source), ("reference", reference)] {
+        let mut map = BTreeMap::new();
+        if edition.ayahs.is_empty() {
+            findings.push(Finding::new(
+                "QV-015",
+                Severity::Fatal,
+                label,
+                "cannot compare an empty corpus",
+            ));
+        }
+        for ayah in &edition.ayahs {
+            let key = (ayah.surah, ayah.ayah);
+            if map.insert(key, ayah.text.as_str()).is_some() {
+                findings.push(Finding::new(
+                    "QV-015",
+                    Severity::Fatal,
+                    format!("{label} surah {} ayah {}", key.0, key.1),
+                    "duplicate ayah identifier in comparison input",
+                ));
+            }
+        }
+        maps.push(map);
+    }
+    let keys: BTreeSet<_> = maps[0].keys().chain(maps[1].keys()).copied().collect();
+    for key in keys {
+        let message = match (maps[0].get(&key), maps[1].get(&key)) {
+            (Some(actual), Some(expected)) if actual != expected => "text differs byte-for-byte",
+            (None, Some(_)) => "ayah missing from imported corpus",
+            (Some(_), None) => "ayah missing from reference corpus",
+            _ => continue,
+        };
+        findings.push(Finding::new(
+            "QV-015",
+            Severity::Fatal,
+            format!("surah {} ayah {}", key.0, key.1),
+            message,
+        ));
+    }
+    findings
 }
 
 /// A completed import.
@@ -796,14 +864,17 @@ impl<'a> Driver<'a> {
     }
 
     async fn compared(&mut self) -> Result<(), CorpusError> {
-        // QV-015: no reference corpus is configured in v1 (ADR-0114, blocker B2).
-        // The skip is recorded, never silently passed.
-        self.findings.push(Finding::new(
-            "QV-015",
-            Severity::Info,
-            "edition",
-            "reference-corpus comparison skipped: no reference corpus configured",
-        ));
+        let doc = self.doc.as_ref().expect("parsed before comparison");
+        if doc.expected.reference_corpus_id.is_some() || doc.expected.reference_text_hash.is_some()
+        {
+            self.fail_run("Failed").await;
+            return Err(CorpusError::ImportFailed {
+                step: "reference_comparison",
+                detail: "QV-015: requested reference corpus is unavailable; comparison cannot be skipped".into(),
+            });
+        }
+        self.findings
+            .extend(compare_reference(self.doc.as_ref().expect("parsed before comparison"), None));
         Ok(())
     }
 

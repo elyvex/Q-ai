@@ -242,6 +242,12 @@ suite is green; `doctor --quran --deep` passes on the fixture edition.
 > post-soak deep hashes/round-trip. The licensed standard-edition run remains blocked;
 > this is partial engineering evidence, not full-corpus acceptance.
 >
+> **T60 preparation (2026-09-17):** all 110 application tests passed with
+> `--test-threads=1`; workspace format, clippy, build, architecture, and migration
+> checks passed. This is preparation only: workspace-wide tests, coverage,
+> dependency audits, and the independent recorded walkthrough remain outstanding.
+> See `docs/05-followups/followups.md` items FU-P1-01 through FU-P1-03 for next actions.
+>
 > **T60 gate:** cannot close until every AC in `acceptance.md` passes and the recorded
 > exit-gate ritual is archived.
 
