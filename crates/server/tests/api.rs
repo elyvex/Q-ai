@@ -232,6 +232,7 @@ async fn openapi_spec_covers_every_route() {
     for path in [
         "/healthz",
         "/readyz",
+        "/api/v1/meta",
         "/api/v1/quran/editions",
         "/api/v1/quran/editions/{slug}",
         "/api/v1/quran/surahs",
@@ -374,6 +375,26 @@ async fn server_rejects_non_loopback_before_binding() {
             Err(server::ServerError::InvalidAddr(_))
         ));
     }
+}
+
+#[tokio::test]
+async fn metadata_endpoint_returns_only_public_build_information() {
+    let (addr, handle) = serve_once().await;
+    let (status, headers, body) = get(&addr, "/api/v1/meta", &[]).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(headers.get("content-type").unwrap(), "application/json; charset=utf-8");
+    let value = body_json(&body);
+    assert_envelope(&value);
+    assert_eq!(value["api_version"], "v1");
+    assert_eq!(
+        value["data"],
+        serde_json::json!({
+            "name": "Q-ai",
+            "version": env!("CARGO_PKG_VERSION"),
+        })
+    );
+    assert!(headers.get("etag").is_none());
+    handle.abort();
 }
 
 #[tokio::test]

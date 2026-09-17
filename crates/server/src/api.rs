@@ -759,6 +759,24 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .route("/readyz", get(|| async { "ready" }))
+        .route(
+            "/api/v1/meta",
+            get(|| async {
+                json_response(
+                    StatusCode::OK,
+                    &Envelope {
+                        api_version: API_VERSION,
+                        data: serde_json::json!({
+                            "name": "Q-ai",
+                            "version": env!("CARGO_PKG_VERSION"),
+                        }),
+                        meta: empty_meta(),
+                    },
+                    None,
+                    false,
+                )
+            }),
+        )
         .route("/api/v1/quran/editions", get(editions_handler))
         .route("/api/v1/quran/editions/{slug}", get(edition_handler))
         .route("/api/v1/quran/surahs", get(surahs_handler))

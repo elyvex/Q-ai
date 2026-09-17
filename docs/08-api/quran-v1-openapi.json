@@ -18,6 +18,17 @@
         "responses": {"200": {"description": "ready (text/plain)"}}
       }
     },
+    "/api/v1/meta": {
+      "get": {
+        "operationId": "serverMeta",
+        "responses": {
+          "200": {
+            "description": "server name and build version in the API envelope; no configuration or corpus data",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+          }
+        }
+      }
+    },
     "/api/v1/quran/editions": {
       "get": {
         "operationId": "listEditions",
