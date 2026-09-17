@@ -4,6 +4,13 @@ All notable changes to Q-ai are documented here.
 
 ## [Unreleased]
 
+### Fixed — Jobs retry policy (P0-T39/T40)
+
+- In-memory queue claim and expired-lease eligibility use parsed timestamps, avoiding incorrect ordering of mixed-precision RFC3339 strings.
+
+- Non-idempotent handler failures are dead-lettered instead of automatically rescheduled.
+- Retry delays respect `backoff_max` after jitter is applied; regression tests cover both failure forms and deterministic jitter distribution.
+
 ### Added — Global Redaction Hardening (P0-T16 / FU-01)
 
 - **domain** (new module `redaction`): single source of truth for secret
