@@ -176,10 +176,14 @@ fn test_state() -> AppState {
 }
 
 async fn serve_once() -> (String, tokio::task::JoinHandle<()>) {
+    serve_router(router(test_state())).await
+}
+
+async fn serve_router(app: axum::Router) -> (String, tokio::task::JoinHandle<()>) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap().to_string();
     let handle = tokio::spawn(async move {
-        axum::serve(listener, router(test_state())).await.unwrap();
+        axum::serve(listener, app).await.unwrap();
     });
     (addr, handle)
 }
@@ -461,6 +465,36 @@ async fn listings_divisions_tokens_resolve_citations() {
 
     let (status, _, _) = get(&addr, "/api/v1/quran/citations/missing", &[]).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
+    handle.abort();
+}
+
+#[tokio::test]
+async fn debug_reader_without_font_declares_local_only_stack() {
+    let (addr, handle) = serve_once().await;
+    let (_, headers, body) = get(&addr, "/debug/read/test/1", &[]).await;
+    assert_eq!(headers.get("content-type").unwrap(), "text/html; charset=utf-8");
+    let text = String::from_utf8_lossy(&body).into_owned();
+    assert!(text.contains("font-family"));
+    assert!(text.contains("\"Amiri\""));
+    assert!(!text.contains("@font-face"), "no @font-face unless a font is wired");
+    handle.abort();
+}
+
+#[tokio::test]
+async fn debug_reader_uses_local_font_asset_when_wired() {
+    let font: Vec<u8> = vec![0x77, 0x4F, 0x46, 0x32, 0x00, 0x01, 0x02, 0x03];
+    let app = server::api::router_with_debug_font(test_state(), font.clone());
+    let (addr, handle) = serve_router(app).await;
+    let (_, headers, body) = get(&addr, "/debug/assets/reader.woff2", &[]).await;
+    assert_eq!(headers.get("content-type").unwrap(), "font/woff2");
+    assert_eq!(headers.get("cache-control").unwrap(), "no-store");
+    assert_eq!(headers.get("x-content-type-options").unwrap(), "nosniff");
+    assert_eq!(body, font);
+    let (_, _, body) = get(&addr, "/debug/read/test/1", &[]).await;
+    let text = String::from_utf8_lossy(&body).into_owned();
+    assert!(text.contains("@font-face"));
+    assert!(text.contains("/debug/assets/reader.woff2"));
+    assert!(text.contains("font-family:\"Qai Debug Reader\""));
     handle.abort();
 }
 

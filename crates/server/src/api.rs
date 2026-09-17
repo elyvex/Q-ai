@@ -694,6 +694,7 @@ async fn normalization_profiles_handler() -> Response {
 async fn debug_reader_handler(
     State(state): State<AppState>,
     Path((edition, surah)): Path<(String, u16)>,
+    font: Option<axum::Extension<DebugFont>>,
 ) -> Response {
     if quran_core::SurahNumber::new(surah).is_err() {
         return (
@@ -708,15 +709,31 @@ async fn debug_reader_handler(
         Err(error) => return tool_error_response(error),
     };
     // Debug typography (P1-T54): explicit RTL, an Arabic-capable font stack,
-    // and one marked block per ayah. This is a system stack, not a bundled
-    // `@font-face`: shipping a font binary needs a font/licensing decision
-    // (see the T54 ledger note). Text is HTML-escaped so a mangled dataset
-    // cannot break the page it is meant to expose.
+    // and one marked block per ayah. Without a wired font the page uses a
+    // system stack; `router_with_debug_font` adds a locally served `@font-face`
+    // so no font is downloaded or bundled without a licensing decision. Text is
+    // HTML-escaped so a mangled dataset cannot break the page it exposes.
+    let font_css = match font {
+        Some(_) => concat!(
+            "@font-face{font-family:\"Qai Debug Reader\";",
+            "src:url(\"/debug/assets/reader.woff2\") format(\"woff2\");",
+            "font-display:swap}",
+            "body{font-family:\"Qai Debug Reader\",\"Amiri\",\"Noto Naskh Arabic\",",
+            "\"Scheherazade New\",\"Geeza Pro\",\"Traditional Arabic\",serif;",
+        ),
+        None => concat!(
+            "body{font-family:\"Amiri\",\"Noto Naskh Arabic\",\"Scheherazade New\",",
+            "\"Geeza Pro\",\"Traditional Arabic\",serif;",
+        ),
+    };
     let mut body = String::from(
         "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\">\
          <title>qai debug reader (not the product UI)</title>\
-         <style>body{font-family:\"Amiri\",\"Noto Naskh Arabic\",\"Scheherazade New\",\
-         \"Geeza Pro\",\"Traditional Arabic\",serif;line-height:2}\
+         <style>",
+    );
+    body.push_str(font_css);
+    body.push_str(
+        "line-height:2}\
          .ayah{margin:0.6em 0}.marker{display:inline-block;min-width:3em;\
          font-family:sans-serif;font-size:0.8em;opacity:0.75}\
          .ref{font-family:sans-serif;font-size:0.75em;opacity:0.6}</style></head>\
@@ -752,6 +769,30 @@ fn escape_html(text: &str) -> String {
         }
     }
     out
+}
+
+#[derive(Clone)]
+pub struct DebugFont(Arc<[u8]>);
+
+/// Build the debug-reader router with a locally served font asset. The font
+/// bytes stay in memory; nothing is bundled into releases or downloaded at
+/// runtime, so wiring this in tests implies no font/licensing decision.
+pub fn router_with_debug_font(state: AppState, woff2: Vec<u8>) -> Router {
+    router(state)
+        .route("/debug/assets/reader.woff2", get(debug_font_handler))
+        .layer(axum::Extension(DebugFont(woff2.into())))
+}
+
+async fn debug_font_handler(axum::Extension(font): axum::Extension<DebugFont>) -> Response {
+    (
+        [
+            ("content-type", "font/woff2"),
+            ("cache-control", "no-store"),
+            ("x-content-type-options", "nosniff"),
+        ],
+        font.0.to_vec(),
+    )
+        .into_response()
 }
 
 /// Build the router (health + API v1 + debug reader).
