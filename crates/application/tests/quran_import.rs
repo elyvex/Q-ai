@@ -145,6 +145,11 @@ async fn import_runs_end_to_end_to_staged() {
     let report = uow.quran().get_validation_report("run-1").await.unwrap().unwrap();
     assert_eq!(report.fatal_count, 0);
     assert_eq!(report.error_count, 0);
+    let findings: Vec<quran_corpus::validation::Finding> =
+        serde_json::from_str(&report.findings_json).unwrap();
+    assert!(findings.iter().any(|finding| finding.rule_id == "QV-015"
+        && finding.severity == quran_corpus::validation::Severity::Info
+        && finding.message.contains("skipped")));
     assert!(uow.quran().get_active().await.unwrap().is_none(), "no canonical writes");
     assert_eq!(uow.quran().count_ayahs("run-1").await.unwrap(), 0);
     uow.rollback().await.unwrap();
@@ -180,6 +185,258 @@ async fn requested_reference_cannot_be_silently_skipped() {
     uow.rollback().await.unwrap();
 }
 
+fn reference_fixture() -> quran_corpus::EditionSource {
+    let mut reference: quran_corpus::EditionSource = serde_json::from_str(BASE_MANIFEST).unwrap();
+    reference.edition.slug = "synthetic-reference".into();
+    reference
+}
+
+fn reference_text_hash(reference: &quran_corpus::EditionSource) -> String {
+    let mut ayahs: Vec<_> = reference.ayahs.iter().collect();
+    ayahs.sort_by_key(|ayah| (ayah.surah, ayah.ayah));
+    let texts: Vec<_> = ayahs.iter().map(|ayah| ayah.text.as_str()).collect();
+    quran_corpus::hashing::tagged(&quran_corpus::hashing::text_hash(
+        &reference.edition.slug,
+        &reference.edition.version.to_string(),
+        &texts,
+    ))
+}
+
+#[tokio::test]
+async fn configured_reference_records_exact_comparison_and_retries_every_checkpoint() {
+    let (_dir, db) = migrated_db().await;
+    let mut reference = reference_fixture();
+    let expected_hash = reference_text_hash(&reference);
+    reference.ayahs.reverse();
+    reference.surahs.reverse();
+    let original = serde_json::to_string(&reference).unwrap();
+    let mut manifest: serde_json::Value = serde_json::from_str(BASE_MANIFEST).unwrap();
+    manifest["expected"]["reference_corpus_id"] = reference.edition.slug.clone().into();
+    manifest["expected"]["reference_text_hash"] = expected_hash.clone().into();
+    let manifest = serde_json::to_string(&manifest).unwrap();
+    for (index, checkpoint) in ImportCheckpoint::ALL.iter().enumerate() {
+        let run_id = format!("configured-{index}");
+        let input = input(&run_id, &manifest, None);
+        let mut options =
+            ImportOptions { stop_after: Some(*checkpoint), reference: Some(reference.clone()) };
+        run_import(&db, &input, &options, &AtomicBool::new(false), ImportProgress::new())
+            .await
+            .unwrap();
+        options.stop_after = None;
+        for _ in 0..2 {
+            let progress = ImportProgress::new();
+            run_import(&db, &input, &options, &AtomicBool::new(false), progress.clone())
+                .await
+                .unwrap();
+            assert_eq!(progress.checkpoints(), ImportCheckpoint::ALL);
+            assert_eq!(staged_count(&db, &run_id).await, 14);
+        }
+        assert_eq!(serde_json::to_string(options.reference.as_ref().unwrap()).unwrap(), original);
+        let mut uow = db.write().await.unwrap();
+        let report = uow.quran().get_validation_report(&run_id).await.unwrap().unwrap();
+        assert_eq!(report.fatal_count, 0);
+        let findings: Vec<quran_corpus::validation::Finding> =
+            serde_json::from_str(&report.findings_json).unwrap();
+        let comparison: Vec<_> = findings.iter().filter(|f| f.rule_id == "QV-015").collect();
+        assert_eq!(comparison.len(), 1);
+        let evidence: serde_json::Value = serde_json::from_str(&comparison[0].message).unwrap();
+        assert_eq!(evidence["reference_corpus_id"], "synthetic-reference");
+        assert_eq!(evidence["reference_version"], "0.1.0");
+        assert_eq!(evidence["reference_text_hash"], expected_hash);
+        assert_eq!(evidence["method"], "exact-ayah-bytes-v1");
+        assert_eq!(evidence["outcome"], "pass");
+        let snapshot_hash = quran_corpus::hashing::tagged(
+            &quran_corpus::validation::intermediate_hash(&reference).unwrap(),
+        );
+        assert_eq!(evidence["reference_snapshot_hash"], snapshot_hash);
+        let provenance = uow.provenance().get(&run_id).await.unwrap().unwrap();
+        let versions: serde_json::Value = serde_json::from_str(&provenance.versions_json).unwrap();
+        assert_eq!(versions["reference_snapshot_hash"], snapshot_hash);
+        assert_eq!(provenance.verification_status, "unverified");
+        assert_eq!(uow.quran().get_import_run(&run_id).await.unwrap().unwrap().state, "Staged");
+        assert!(uow.quran().get_active().await.unwrap().is_none());
+        assert_eq!(uow.quran().count_ayahs(&run_id).await.unwrap(), 0);
+        uow.rollback().await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn configured_invalid_references_fail_closed_with_durable_findings() {
+    let (_dir, db) = migrated_db().await;
+    let base = reference_fixture();
+    let mut cases = Vec::new();
+    let mut reference = base.clone();
+    reference.ayahs[0].text.push(' ');
+    cases.push(("bytes", reference, "text differs byte-for-byte"));
+    let mut reference = base.clone();
+    reference.ayahs.remove(0);
+    cases.push(("missing", reference, "ayah missing from reference"));
+    let mut reference = base.clone();
+    let mut extra = reference.ayahs[0].clone();
+    extra.ayah = 4;
+    reference.ayahs.push(extra);
+    cases.push(("extra", reference, "ayah missing from imported"));
+    let mut reference = base.clone();
+    reference.ayahs.push(reference.ayahs[0].clone());
+    cases.push(("duplicate", reference, "duplicate ayah identifier"));
+    let mut reference = base.clone();
+    reference.ayahs.clear();
+    cases.push(("empty", reference, "empty corpus"));
+    let mut reference = base.clone();
+    reference.edition.script = quran_core::enums::Script::ImlaeiSimple;
+    cases.push(("script", reference, "incompatible script"));
+    let mut reference = base.clone();
+    reference.edition.riwayah = Some("synthetic-other".into());
+    cases.push(("riwayah", reference, "incompatible script"));
+    let mut reference = base.clone();
+    reference.edition.qiraah = Some("synthetic-other".into());
+    cases.push(("qiraah", reference, "incompatible script"));
+    let mut reference = base.clone();
+    reference.edition.verse_numbering_scheme =
+        quran_core::enums::NumberingScheme::Custom("synthetic".into());
+    cases.push(("numbering", reference, "incompatible script"));
+    let mut reference = base.clone();
+    reference.edition.basmala_policy = quran_core::enums::BasmalaPolicy::Absent;
+    cases.push(("basmala", reference, "incompatible script"));
+    let mut reference = base.clone();
+    reference.surahs[0].basmala = quran_core::enums::BasmalaPolicy::Absent;
+    cases.push(("surah-basmala", reference, "incompatible basmala"));
+    let mut reference = base.clone();
+    reference.expected.ayah_count += 1;
+    cases.push(("counts", reference, "QV-004"));
+    let mut reference = base.clone();
+    reference.format_version += 1;
+    cases.push(("format", reference, "invalid reference format"));
+    let mut reference = base.clone();
+    reference.edition.slug.clear();
+    cases.push(("identity", reference, "invalid reference format"));
+    let mut reference = base.clone();
+    reference.edition.language = "en".parse().unwrap();
+    cases.push(("language", reference, "QV-027"));
+    let mut reference = base.clone();
+    reference.ayahs[0].text.push('\u{202e}');
+    cases.push(("unicode", reference, "QV-008"));
+    let mut reference = base.clone();
+    reference.ayahs[0].text.clear();
+    cases.push(("empty-text", reference, "QV-006"));
+    for (name, reference, expected) in cases {
+        let run_id = format!("invalid-{name}");
+        let options = ImportOptions { reference: Some(reference), ..ImportOptions::default() };
+        let mut previous_report = None;
+        for _ in 0..2 {
+            let progress = ImportProgress::new();
+            let error = run_import(
+                &db,
+                &input(&run_id, BASE_MANIFEST, None),
+                &options,
+                &AtomicBool::new(false),
+                progress.clone(),
+            )
+            .await
+            .unwrap_err();
+            assert!(
+                matches!(
+                    error,
+                    quran_corpus::CorpusError::ImportFailed { step: "reference_comparison", .. }
+                ),
+                "{name}: {error}"
+            );
+            assert!(!progress.checkpoints().contains(&ImportCheckpoint::ReferenceCompared));
+            assert!(!progress.checkpoints().contains(&ImportCheckpoint::ApprovalRequested));
+            let mut uow = db.write().await.unwrap();
+            let report = uow.quran().get_validation_report(&run_id).await.unwrap().unwrap();
+            assert_eq!(report.outcome, "fail");
+            assert!(report.fatal_count > 0);
+            let findings: Vec<quran_corpus::validation::Finding> =
+                serde_json::from_str(&report.findings_json).unwrap();
+            assert!(
+                findings.iter().any(|f| f.rule_id == "QV-015"
+                    && f.severity == quran_corpus::validation::Severity::Fatal
+                    && f.message.contains(expected)),
+                "{name}: {findings:?}"
+            );
+            let evidence = findings
+                .iter()
+                .find_map(|f| serde_json::from_str::<serde_json::Value>(&f.message).ok())
+                .unwrap();
+            assert_eq!(evidence["outcome"], "fail");
+            assert!(evidence["reference_text_hash"].as_str().unwrap().starts_with("sha256:"));
+            if let Some(previous) = previous_report.replace(report.findings_json.clone()) {
+                assert_eq!(previous, report.findings_json);
+            }
+            assert_eq!(uow.quran().get_import_run(&run_id).await.unwrap().unwrap().state, "Failed");
+            assert!(uow.quran().get_active().await.unwrap().is_none());
+            assert_eq!(uow.quran().count_ayahs(&run_id).await.unwrap(), 0);
+            uow.rollback().await.unwrap();
+        }
+    }
+}
+
+#[tokio::test]
+async fn reference_manifest_pins_are_enforced_individually() {
+    let (_dir, db) = migrated_db().await;
+    for (index, (field, value, configured)) in [
+        ("reference_corpus_id", "wrong-reference".to_string(), true),
+        ("reference_corpus_id", String::new(), true),
+        ("reference_text_hash", format!("sha256:{}", "0".repeat(64)), true),
+        ("reference_text_hash", "malformed".to_string(), true),
+        ("reference_text_hash", reference_text_hash(&reference_fixture()), false),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut manifest: serde_json::Value = serde_json::from_str(BASE_MANIFEST).unwrap();
+        manifest["expected"][field] = value.into();
+        let manifest = serde_json::to_string(&manifest).unwrap();
+        let run_id = format!("pins-{index}");
+        let options = ImportOptions {
+            reference: configured.then(reference_fixture),
+            ..ImportOptions::default()
+        };
+        let error = run_import(
+            &db,
+            &input(&run_id, &manifest, None),
+            &options,
+            &AtomicBool::new(false),
+            ImportProgress::new(),
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            quran_corpus::CorpusError::ImportFailed { step: "reference_comparison", .. }
+        ));
+        let mut uow = db.write().await.unwrap();
+        let report = uow.quran().get_validation_report(&run_id).await.unwrap().unwrap();
+        assert!(report.fatal_count > 0);
+        assert!(!report.findings_json.contains("comparison skipped"));
+        uow.rollback().await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn retry_cannot_replace_a_configured_reference_or_its_evidence() {
+    let (_dir, db) = migrated_db().await;
+    let mut options =
+        ImportOptions { reference: Some(reference_fixture()), ..ImportOptions::default() };
+    let input = input("pinned-retry", BASE_MANIFEST, None);
+    run_import(&db, &input, &options, &AtomicBool::new(false), ImportProgress::new())
+        .await
+        .unwrap();
+    options.reference = None;
+    let error = run_import(&db, &input, &options, &AtomicBool::new(false), ImportProgress::new())
+        .await
+        .unwrap_err();
+    assert!(matches!(error, quran_corpus::CorpusError::ImportFailed { step: "staged", .. }));
+    let mut uow = db.write().await.unwrap();
+    assert_eq!(uow.quran().get_import_run(&input.run_id).await.unwrap().unwrap().state, "Failed");
+    let report = uow.quran().get_validation_report(&input.run_id).await.unwrap().unwrap();
+    assert!(report.findings_json.contains("synthetic-reference"));
+    assert!(!report.findings_json.contains("skipped"));
+    assert!(uow.quran().get_active().await.unwrap().is_none());
+    uow.rollback().await.unwrap();
+}
+
 #[tokio::test]
 async fn crash_matrix_all_thirteen_checkpoints_leave_active_untouched() {
     let (_dir, db) = migrated_db().await;
@@ -189,7 +446,7 @@ async fn crash_matrix_all_thirteen_checkpoints_leave_active_untouched() {
         let outcome = run_import(
             &db,
             &input(&run_id, BASE_MANIFEST, None),
-            &ImportOptions { stop_after: Some(*checkpoint) },
+            &ImportOptions { stop_after: Some(*checkpoint), ..ImportOptions::default() },
             &AtomicBool::new(false),
             progress.clone(),
         )
@@ -234,7 +491,7 @@ async fn cancel_cleans_staging_and_marks_cancelled() {
     run_import(
         &db,
         &input("run-1", BASE_MANIFEST, None),
-        &ImportOptions { stop_after: Some(ImportCheckpoint::Staged) },
+        &ImportOptions { stop_after: Some(ImportCheckpoint::Staged), ..ImportOptions::default() },
         &AtomicBool::new(false),
         progress,
     )
