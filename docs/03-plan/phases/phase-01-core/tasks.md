@@ -225,7 +225,7 @@ suite is green; `doctor --quran --deep` passes on the fixture edition.
 | P1-T55 | Editorial review pass: reviewer verifies sampled text against printed muṣḥaf; record `verified_by` | AC | T54 | 3.0 | EDIT | ☐ |
 | P1-T56 | Golden-set expansion to all §5.2 edge cases | D1.13 | T55 | 2.0 | QA | ☐ |
 | P1-T57 | Property-test suite (§5.4) | D1.13 | T32 | 2.0 | QA | ☑ |
-| P1-T58 | Full-corpus soak: import → validate → activate → 10k random lookups → `doctor --deep` | D1.13 | all | 2.0 | QA | ☐ |
+| P1-T58 | Full-corpus soak: import → validate → activate → 10k random lookups → `doctor --deep` | D1.13 | all | 2.0 | QA | ◐ |
 | P1-T59 | Docs: corpus architecture, import runbook, rollback runbook, citation spec, adapter authoring guide | D1.14 | all | 3.0 | DOC | ☑ |
 | P1-T60 | Phase-1 exit gate review + handoff to Phase 2 | — | all | 1.5 | all | ☐ |
 
@@ -236,6 +236,11 @@ suite is green; `doctor --quran --deep` passes on the fixture edition.
 >
 > **T55 is the human sign-off** behind AC-P1-01. The reviewer is named in `verified_by`; the
 > sample and comparison method are recorded. This task cannot be done by the implementer.
+>
+> **T58 progress (2026-09-17):** the synthetic-fixture 10k seeded lookup soak passes in
+> `crates/application/tests/quran_doctor.rs`, including exact text, token offsets, and
+> post-soak deep hashes/round-trip. The licensed standard-edition run remains blocked;
+> this is partial engineering evidence, not full-corpus acceptance.
 >
 > **T60 gate:** cannot close until every AC in `acceptance.md` passes and the recorded
 > exit-gate ritual is archived.

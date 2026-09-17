@@ -1,4 +1,4 @@
-# Phase 1 — Implementation Status (as of 2026-09-15)
+# Phase 1 — Implementation Status (snapshot 2026-09-15; T58 update 2026-09-17)
 
 > **Purpose:** one page that answers *what is implemented, what remains, and what
 > follows*. The authoritative, append-only ledgers are `done.md` (completion
@@ -12,7 +12,7 @@
 
 | Dimension | State |
 |---|---|
-| Task rows (excluding 3 sequencing notes) | **50 ☑ / 2 ◐ / 13 ☐** of 65 |
+| Task rows (excluding 3 sequencing notes) | **50 ☑ / 3 ◐ / 12 ☐** of 65 |
 | Acceptance criteria | **19 ◐ / 2 ☐** of 21 (none marked fully verified — rituals pending) |
 | ADRs | **12 Accepted**, 2 Draft (0101, 0114) |
 | Phase-1 migrations | **6 / 6** (`0007`–`0012`); workspace now at 16 (Phase-2 added `0013`–`0016`) |
@@ -114,7 +114,7 @@ AC-P1-09 joined on 2026-09-15 via the activation-rejection state test.
 |---|---|
 | `P1-T54` | Debug reader has RTL + label + CSS Arabic font stack + per-ayah markers + HTML escaping (tested); still ☐ pending a bundled-`@font-face` font/licensing choice, which needs an owner decision |
 | `P1-T56` | Golden-set expansion to §5.2 edge cases — **blocked on a real dataset** (ADR-0101); must not be filled with fabricated scripture |
-| `P1-T58` | Full-corpus soak (import → validate → activate → 10k lookups → `doctor --deep`) — needs a standard edition to be meaningful |
+| `P1-T58` | Partial: deterministic 10k-lookup synthetic-fixture soak implemented and passing (2026-09-17), including exact text, token offsets, and post-soak deep checks; standard licensed edition run still blocked |
 | `P1-T60` | Exit-gate review + handoff sign-off |
 
 ### 3.3 Board/ritual debt
