@@ -15,7 +15,20 @@ word inspector) · Phase 7 (hybrid retrieval reuses the FTS layer) · Phase 9
 **Target duration (plan):** 8 calendar weeks ≈ 22–24 engineer-weeks,
 3 engineers + part-time Arabic linguist (0.4 FTE)
 **Task-board estimate:** 278.0 ed across 114 tasks → see §9
-**Status:** 🔴 Not Started
+**Status:** In progress; normalization/indexing/search core implemented, exit gates open (reviewed 2026-09-17)
+
+The [completion ledger](done.md) and [execution plan](execution-plan.md) record the
+normalization pipeline, profiles and offset traces, derived-form rebuilds, FTS5 index
+builds, and exact/normalized/phrase/concatenated/cross-ayah/regex search services.
+Normalization and index-management CLI commands and normalization preview HTTP routes
+exist; search-query CLI/HTTP/SSE wiring, morphology, families, linguistic review and
+phase-wide hardening remain unfinished. No phase exit acceptance is recorded.
+
+The current backend is **SQLite FTS5**, not the Tantivy backend specified in the original
+plan (DEV-05). Scope/deliverable tables below retain that design target; they are not a
+claim that every feature is implemented. Dataset/licensing and linguist decisions remain
+open, and P1's outstanding source/acceptance gates still apply. The legacy directory
+name `phase-02-rag` does not describe this phase: multi-RAG is later work.
 
 **Companion documents**
 
@@ -216,9 +229,17 @@ is a gate failure and must not be merged.
 
 ---
 
-## 7. Migrations Delivered
+## 7. Migration Status
 
-| File | Contents |
+Implemented files under `migrations/sqlite/` are `0013_quran_normalization.up.sql`,
+`0014_quran_forms.up.sql`, `0015_quran_indexes.up.sql` and
+`0016_quran_search_cache.up.sql`. The normalization append-only trigger uses
+`QAI-NORM-0003`. Lexicon and morphology-staging migrations remain planned.
+See `done.md` DEV-04/06/07/08 for numbering and schema deviations.
+
+The following is the original design table, not the installed schema:
+
+| Planned file | Contents |
 |---|---|
 | `0020_quran_normalization.up.sql` | `normalization_rules`, `normalization_profiles` + append-only trigger `QAI-NORM-0001` |
 | `0021_quran_forms.up.sql` | `quran_token_forms`, `quran_ayah_forms`, `quran_skeletons` + lookup indexes |
@@ -228,9 +249,9 @@ is a gate failure and must not be merged.
 | `0025_quran_search_cache.up.sql` | `search_result_cache` (generation-keyed, LRU-capped at 128 MiB) |
 
 Migrations are **append-only and checksummed** (Phase 0 D0.7). Phase-1 migrations end at
-`0012` (see `../phase-01-core/done.md` DEV-02 for the 0010–0015 → 0007–0012 renumbering);
-Phase-2 numbering above assumes no intervening migrations land first. If they do, renumber
-contiguously and record the mapping in `done.md` — never leave a gap.
+`0012`; implemented Phase-2 migrations continue at `0013`–`0016`. Allocate future numbers
+from the actual migration directory, not the original table, and never renumber an
+applied migration.
 
 ---
 
@@ -341,31 +362,22 @@ other Phase-2 work.
 
 ## 10. Quick Start
 
+Build and initialize the synthetic demo using the [project quick start](../../../../README.md#quick-start),
+then run these commands from the repository root with the same `QAI_DATA_DIR`:
+
 ```bash
-# Full gate — must be green before any PR merges (extends Phase 1's gate)
-cargo xtask ci            # fmt, clippy -D warnings, test, deny, arch-check, migrate-check
-
-# Normalization introspection (once D2.1 lands)
-qai quran normalize "بِسْمِ ٱللَّهِ" --profile L3.diacritics --explain
-qai quran normalize --list-profiles
-qai quran normalize --show-rule N06
-
-# Search (once D2.5 lands)
-qai quran search "الرحمن"                              # defaults to L3.diacritics
-qai quran search "ٱلرَّحْمَٰنِ" --exact
-qai quran search "بسمالله" --concatenated [--cross-ayah]
-qai quran search --regex "^ا?ل?رحم" --field text_bare
-
-# Linguistics (once D2.7/D2.8 land)
-qai quran root "ر ح م" [--dataset quranic-corpus] [--group-by lemma]
-qai quran morphology 1:1:1 [--policy all]
-qai quran family "رحمة" [--include-suggestions]
-
-# Indexes + health
-qai quran index rebuild --all [--force]
-qai quran index verify <index-id>
-qai doctor --indexes [--json]
+./target/debug/qai quran normalize --list-profiles
+./target/debug/qai quran normalize --show-rule N06
+./target/debug/qai quran forms rebuild test-edition-min@0.1.0
+./target/debug/qai quran index rebuild
+./target/debug/qai quran index verify
 ```
+
+`qai quran search`, `root`, `morphology`, `family`, and `doctor --indexes` are planned,
+not current commands. Index options are `--index` and (for rebuild) `--edition`;
+`--all` and `--force` are not implemented. Search is currently a Rust service surface.
+See the [project verification commands](../../../../README.md#development-and-verification)
+for build and test gates.
 
 **Error-code namespaces:** `QAI-NORM-nnnn` (normalization), `QAI-IDX-nnnn` (indexes;
 `QAI-IDX-0101` = stale-index warning). Reference-grammar and canonical-table codes stay
