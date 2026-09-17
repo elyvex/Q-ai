@@ -242,6 +242,14 @@ suite is green; `doctor --quran --deep` passes on the fixture edition.
 > post-soak deep hashes/round-trip. The licensed standard-edition run remains blocked;
 > this is partial engineering evidence, not full-corpus acceptance.
 >
+> **T26/T54/T56 progress (2026-09-17):** unblocked engineering groundwork landed and
+> verified — `compare_reference` (exact Fatal-on-diff comparison + fail-closed guard when
+> a requested reference is unavailable), `router_with_debug_font` (in-memory woff2 route
+> + `@font-face` only when wired), and the golden `ayah_texts.jsonl` ↔ fixture byte-equality
+> test. All three stay ☐/◐ on their owner inputs: ADR-0114 corpus/sign-off (T26), a chosen
+> licensed font (T54), approved data + P1-T55 review (T56). Details in `followups.md`
+> FU-P1-03.
+>
 > **T60 preparation (2026-09-17):** all 110 application tests passed with
 > `--test-threads=1`; workspace format, clippy, build, architecture, and migration
 > checks passed. This is preparation only: workspace-wide tests, coverage,
