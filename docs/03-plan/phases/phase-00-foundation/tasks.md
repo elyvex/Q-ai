@@ -1,5 +1,22 @@
 # Phase 0 — Task Board
 
+> **2026-09-17 P0-T39/T40 scheduling correction:** in-memory claim and lease-reap
+> eligibility now compare parsed RFC3339 instants. Two deterministic regression
+> tests and 25 consecutive jobs-suite runs passed (21 tests each); jobs lint and
+> type check pass. Subsecond-delay truncation and SQLite scheduling remain open.
+
+> **2026-09-17 P0-T57:** FU-06 deterministic fixture helpers implemented:
+> `FixtureClock`, typed `fixture_id`, and `sample_job_record_at`; existing random
+> builders preserved. Testkit: 40 tests passing; crate fmt, clippy, and check pass.
+> Container delivery, CLI stubs, scheduling follow-up, and phase-exit gates remain open.
+
+> **2026-09-17 targeted update:** P0-T39/T40 failure-retry hardening restored:
+> non-idempotent handler failures are dead-lettered, and jitter is capped after
+> application. Both regression tests pass; the jobs suite passes 19 tests serially.
+> An initial parallel run failed `retries_then_succeeds` (Idle instead of Succeeded);
+> this intermittent scheduling issue remains open. No phase-exit claim. T57, T56,
+> CLI stubs and final verification remain pending.
+
 > **Update (2026-09-14, final):** Phase 0 implementation is complete — 65 of 67 tasks
 > done (T55, T56 deferred to Phase 1; see `done.md` §7). `cargo test --workspace` = **267
 > passing**; `cargo xtask ci` (9 steps) passes; `fmt`, `clippy -D warnings`, `arch-check`,
@@ -279,7 +296,7 @@ content, research questions, model responses must never be exportable.
 | P0-T53 | Phase-0 doctor checks (all listed in D0.14) + JSON schema | D0.14 | T52 | 2.5 | BE | ☑ |
 | P0-T54 | `--repair-preview` planner (no mutation) | D0.14 | T52 | 1.0 | BE | ☑ |
 | P0-T55 | `serve` stub: `/healthz`, `/readyz`, `/api/v1/meta`, localhost bind guard | D0.1 | T48 | 1.5 | BE | ☐ |
-| P0-T56 | Dockerfile + compose stub + non-root runtime | D0.1 | T55 | 1.5 | INF | ☐ |
+| P0-T56 | Dockerfile + compose stub + non-root runtime | D0.1 | T55 | 1.5 | INF | ◐ (files added; daemon unavailable for runtime verification) |
 | P0-T57 | `testkit` finalization + fixtures + deterministic clock/UUID | D0.16 | T18 | 2.0 | BE | ☑ |
 | P0-T58 | Architecture docs, runbooks, `CONTRIBUTING`/DoD PR template | D0.17 | all | 2.5 | DOC | ☑ |
 | P0-T59 | ADR-0010 + ADR index + template lint (all §48 fields present) | ADR | T09 | 1.0 | DOC | ☑ |
