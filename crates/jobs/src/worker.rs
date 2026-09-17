@@ -157,6 +157,16 @@ impl Worker {
                 if let Some(cp) = recorded {
                     self.queue.checkpoint(&job.id, None, Some(cp)).await?;
                 }
+                if !handler.is_idempotent() {
+                    self.queue
+                        .finish(
+                            &job.id,
+                            JobState::DeadLettered,
+                            Some("non-idempotent job cannot be retried automatically".into()),
+                        )
+                        .await?;
+                    return Ok(WorkerOutcome::DeadLettered { job_id: job.id });
+                }
                 self.handle_failure(&job).await
             }
         }
@@ -207,7 +217,7 @@ impl Worker {
         }
         let frac = (hash % 1000) as f64 / 1000.0;
         let factor = 1.0 + self.config.backoff_jitter * (frac * 2.0 - 1.0);
-        Duration::from_secs_f64((exp.as_secs_f64() * factor).max(0.0))
+        Duration::from_secs_f64((exp.as_secs_f64() * factor).max(0.0)).min(self.config.backoff_max)
     }
 }
 
@@ -419,6 +429,73 @@ mod tests {
             queue.reschedule("j-fail", Duration::ZERO, None).await.unwrap();
         }
         assert_eq!(outcome, WorkerOutcome::DeadLettered { job_id: "j-fail".into() });
+    }
+
+    struct NonIdempotentFailure {
+        calls: AtomicU32,
+        returns_error: bool,
+    }
+
+    #[async_trait::async_trait]
+    impl JobHandler for NonIdempotentFailure {
+        fn kind(&self) -> JobKind {
+            "test.non_idempotent".into()
+        }
+        fn payload_schema(&self) -> &'static str {
+            r#"{"type":"object"}"#
+        }
+        fn is_idempotent(&self) -> bool {
+            false
+        }
+        async fn run(&self, _ctx: JobContext, _p: Value) -> Result<JobOutcome, JobError> {
+            self.calls.fetch_add(1, AtomicOrdering::SeqCst);
+            if self.returns_error {
+                Err(JobError::Storage("test failure".into()))
+            } else {
+                Ok(JobOutcome::failure())
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn non_idempotent_failures_are_never_automatically_retried() {
+        for returns_error in [false, true] {
+            let handler =
+                Arc::new(NonIdempotentFailure { calls: AtomicU32::new(0), returns_error });
+            let (worker, queue) =
+                worker_with(HandlerRegistry::new().register(handler.clone())).await;
+            queue.enqueue(record("j-once", "test.non_idempotent", "Queued")).await.unwrap();
+            assert_eq!(
+                worker.run_once().await.unwrap(),
+                WorkerOutcome::DeadLettered { job_id: "j-once".into() }
+            );
+            assert_eq!(worker.run_once().await.unwrap(), WorkerOutcome::Idle);
+            let job = queue.get("j-once").await.unwrap().unwrap();
+            assert_eq!(job.state, "DeadLettered");
+            assert_eq!(job.attempts, 1);
+            assert_eq!(handler.calls.load(AtomicOrdering::SeqCst), 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn backoff_is_deterministic_distributed_and_bounded() {
+        let (worker, _) = worker_with(HandlerRegistry::new()).await;
+        let worker = worker.with_config(WorkerConfig::default());
+        let base = worker.config.backoff_base.as_secs_f64();
+        let mut buckets = [0; 10];
+        for n in 0..10_000 {
+            let id = format!("job-{n}");
+            let delay = worker.backoff(1, &id);
+            assert_eq!(delay, worker.backoff(1, &id));
+            let fraction = delay.as_secs_f64() / base;
+            assert!((0.8..=1.2).contains(&fraction));
+            let bucket = (((fraction - 0.8) / 0.4 * 10.0) as usize).min(9);
+            buckets[bucket] += 1;
+            for attempt in [0, 2, 8, 16, u32::MAX] {
+                assert!(worker.backoff(attempt, &id) <= worker.config.backoff_max);
+            }
+        }
+        assert!(buckets.iter().all(|count| (700..=1300).contains(count)), "{buckets:?}");
     }
 
     #[tokio::test]
