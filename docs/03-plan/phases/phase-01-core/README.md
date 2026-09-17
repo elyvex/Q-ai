@@ -11,7 +11,17 @@
 Phase 5 (Quran↔hadith/tafsir links)
 **Target duration (plan):** 6 calendar weeks ≈ 15–17 engineer-weeks, 3 engineers
 **Task-board estimate:** 131.0 ed across 60 tasks + 3 swimlane decisions → see §9
-**Status:** 🔴 Not Started
+**Status:** In progress; source decisions and exit gates pending (reviewed 2026-09-17)
+
+Canonical models, reference parsing, staged import/validation, activation/rollback,
+reader services, translations/glosses, citations, CLI, API and a labelled debug reader
+are implemented. See [STATUS.md](STATUS.md), [tasks.md](tasks.md) and [done.md](done.md)
+for evidence rather than the original schedule below.
+
+The bundled edition is synthetic, not Quran text. Dataset licensing/editorial approval,
+independent reference-corpus verification, full-edition golden/soak runs, debug-reader
+font licensing and the reviewer exit ritual remain open. Automated fixture evidence does
+not establish phase acceptance. P2 implementation has begun while these gates remain open.
 
 **Companion documents**
 
@@ -201,14 +211,19 @@ server          -> application, config, observability
 once the allowlist is extended; until then, adding those edges is a gate failure waiting to
 happen and must not be merged.
 
-Phase-1 crates are currently empty placeholders (`quran-core`, `quran-corpus`, `citations`);
-they move from `//! Phase 1` doc-comments to real crates in Sprint 1.1.
+`quran-core`, `quran-corpus` and `citations` are implemented. The dependency table above
+is the design baseline; actual allowed edges are maintained in `xtask/allowlist.toml`.
 
 ---
 
 ## 7. Migrations Delivered
 
-| File | Contents |
+The table retains the plan's numbering. Actual files are `0007_quran_editions`,
+`0008_quran_structure`, `0009_quran_divisions`, `0010_quran_translations`,
+`0011_quran_staging` and `0012_quran_validation` under `migrations/sqlite/`, all with
+`.up.sql` suffixes. See `done.md` DEV-02; do not create duplicate `0010`–`0015` migrations.
+
+| Planned file | Contents |
 |---|---|
 | `0010_quran_editions.up.sql` | `quran_editions` (+ identity/hash immutability trigger), `quran_active_edition` singleton pointer with `corpus_generation` |
 | `0011_quran_structure.up.sql` | `quran_surahs`, `quran_ayahs`, `quran_tokens` (+ insert-only triggers `QAI-QUR-0001…0005`), `quran_token_separators`, `quran_segments` |
@@ -325,18 +340,23 @@ work.
 
 ## 10. Quick Start
 
-```bash
-# Full gate — must be green before any PR merges (extends Phase 0's gate)
-cargo xtask ci            # fmt, clippy -D warnings, test, deny, arch-check, migrate-check
+From the repository root, build the CLI and isolate the synthetic fixture in a fresh
+data directory. These commands activate test data, not an approved Quran edition.
 
-# Corpus lifecycle (once D1.3/D1.10 land)
-qai quran import fixtures/quran/test-edition-min/manifest.json --dry-run
-qai quran validate hafs-uthmani@1.0.0 --report /tmp/report.json
-qai quran activate hafs-uthmani@1.0.0          # human-gated; writes approval + audit
-qai quran get 2:255 --json                      # meta envelope + reproducibility checksum
-qai quran context 18:60 --before 3 --after 3 --boundary surah
-qai doctor --quran --deep                       # full-corpus hash + token round-trip
+```bash
+cargo build -p cli --bin qai
+export QAI_DATA_DIR="$(mktemp -d)"
+./target/debug/qai db migrate
+./target/debug/qai quran import fixtures/quran/test-edition-min/manifest.json
+./target/debug/qai quran validate test-edition-min@0.1.0
+./target/debug/qai quran activate test-edition-min@0.1.0 --yes
+./target/debug/qai quran get 1:1 --json
+./target/debug/qai quran context 2:1 --before 1 --after 1 --boundary surah
+./target/debug/qai doctor --quran --deep
 ```
+
+Doctor may report unresolved configuration/source checks. See the
+[project README](../../../../README.md#development-and-verification) for repository gates.
 
 **Error-code namespace:** `QAI-QUR-nnnn` (reserved in Phase 0 D0.3; first used here).
 Reference-grammar errors are `QAI-QUR-01xx`; canonical-table trigger codes are
