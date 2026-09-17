@@ -231,6 +231,45 @@ pub async fn append_audit_event(
     Ok(event)
 }
 
+#[derive(Debug, serde::Serialize)]
+pub struct AuditVerificationReport {
+    pub valid: bool,
+    pub checked_events: usize,
+    pub gaps: Vec<u64>,
+    pub tampered_sequences: Vec<u64>,
+}
+
+pub async fn verify_persisted_audit(path: &str) -> Result<AuditVerificationReport, AuditError> {
+    use storage::Database as _;
+
+    let db = storage_sqlite::SqliteDatabase::open_read_only(path).await?;
+    let mut snapshot = db.write().await?;
+    let events = StorageAuditBridge::new(snapshot.audit()).list_by_sequence(0, None).await?;
+    let mut report = AuditVerificationReport {
+        valid: true,
+        checked_events: events.len(),
+        gaps: Vec::new(),
+        tampered_sequences: Vec::new(),
+    };
+    let mut previous = genesis_hash();
+    let mut expected_sequence = Some(1);
+    for event in events {
+        if Some(event.sequence) != expected_sequence {
+            report.gaps.push(event.sequence);
+        }
+        if event.prev_chain_hash != previous
+            || HashChainWriter::compute_chain_hash(&previous, &event) != event.chain_hash
+        {
+            report.tampered_sequences.push(event.sequence);
+        }
+        previous = event.chain_hash;
+        expected_sequence = event.sequence.checked_add(1);
+    }
+    report.valid = report.gaps.is_empty() && report.tampered_sequences.is_empty();
+    snapshot.rollback().await?;
+    Ok(report)
+}
+
 fn genesis_hash() -> ContentHash {
     ContentHash { algorithm: HashAlgorithm::Sha256, hex: "00".repeat(32) }
 }
@@ -255,6 +294,52 @@ mod tests {
             prev_chain_hash: ContentHash { algorithm: HashAlgorithm::Sha256, hex: "00".repeat(32) },
             chain_hash: ContentHash { algorithm: HashAlgorithm::Sha256, hex: "ff".repeat(32) },
         }
+    }
+
+    #[tokio::test]
+    async fn persisted_verification_checks_hashes_links_and_gaps() {
+        use storage::Database as _;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("qai.db");
+        let path = path.to_str().unwrap();
+        let migrations =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../migrations/sqlite");
+        storage_sqlite::migrate::apply_migrations(path, &migrations).await.unwrap();
+        let db = storage_sqlite::SqliteDatabase::new(path, 1, true).await.unwrap();
+        let mut tx = db.write().await.unwrap();
+        append_audit_event(&mut *tx, event("00000000-0000-4000-8000-000000000001")).await.unwrap();
+        append_audit_event(&mut *tx, event("00000000-0000-4000-8000-000000000002")).await.unwrap();
+        tx.commit().await.unwrap();
+        let clean = verify_persisted_audit(path).await.unwrap();
+        assert!(clean.valid);
+        assert_eq!(clean.checked_events, 2);
+
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .connect_with(sqlx::sqlite::SqliteConnectOptions::new().filename(path))
+            .await
+            .unwrap();
+        sqlx::query("DROP TRIGGER trg_audit_no_update").execute(&pool).await.unwrap();
+        sqlx::query("UPDATE audit_events SET reason = 'modified' WHERE sequence = 2")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(verify_persisted_audit(path).await.unwrap().tampered_sequences, vec![2]);
+        sqlx::query(
+            "UPDATE audit_events SET reason = NULL, prev_chain_hash = ? WHERE sequence = 2",
+        )
+        .bind(format!("sha256:{}", "ab".repeat(32)))
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert_eq!(verify_persisted_audit(path).await.unwrap().tampered_sequences, vec![2]);
+        sqlx::query("UPDATE audit_events SET sequence = 3 WHERE sequence = 2")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let broken = verify_persisted_audit(path).await.unwrap();
+        assert!(!broken.valid);
+        assert_eq!(broken.gaps, vec![3]);
+        pool.close().await;
     }
 
     #[test]
