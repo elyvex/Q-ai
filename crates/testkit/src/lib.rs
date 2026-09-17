@@ -19,6 +19,50 @@ use sources::{FileRole, SourceFile, SourceState, SourceVersion};
 use std::path::PathBuf;
 use tempfile::TempDir;
 
+#[derive(Debug, Clone, Copy)]
+pub struct FixtureClock {
+    now: Timestamp,
+}
+
+impl FixtureClock {
+    pub fn new(now: Timestamp) -> Self {
+        Self { now }
+    }
+
+    pub fn now(&self) -> Timestamp {
+        self.now
+    }
+
+    pub fn set(&mut self, now: Timestamp) {
+        self.now = now;
+    }
+}
+
+impl Default for FixtureClock {
+    fn default() -> Self {
+        Self::new(Timestamp::from_ymd_hms(2026, 1, 1, 0, 0, 0).expect("fixture timestamp"))
+    }
+}
+
+pub fn fixture_id<T>(index: u64) -> T
+where
+    T: std::str::FromStr,
+    T::Err: std::fmt::Debug,
+{
+    format!("{:08x}-0000-4000-8000-{:012x}", index >> 32, index & 0xffff_ffff)
+        .parse()
+        .expect("fixture UUID")
+}
+
+pub fn sample_job_record_at(clock: &FixtureClock, index: u64) -> storage::repository::JobRecord {
+    job_record(
+        fixture_id::<domain::JobId>(index).to_string(),
+        fixture_id::<PrincipalId>(0).to_string(),
+        clock.now(),
+        format!("noop-{index}"),
+    )
+}
+
 /// Create a temporary directory, removed on drop.
 pub fn temp_dir() -> TempDir {
     tempfile::tempdir().expect("tempdir")
@@ -106,23 +150,35 @@ pub fn sample_source_file(version: &SourceVersion) -> SourceFile {
 
 /// A canonical `JobRecord` fixture ready to be stored.
 pub fn sample_job_record() -> storage::repository::JobRecord {
-    use domain::ids::JobId;
-    let now = Timestamp::now().to_string();
+    job_record(
+        domain::JobId::new().to_string(),
+        PrincipalId::new().to_string(),
+        Timestamp::now(),
+        "noop-1".into(),
+    )
+}
+
+fn job_record(
+    id: String,
+    created_by: String,
+    now: Timestamp,
+    idempotency_key: String,
+) -> storage::repository::JobRecord {
     storage::repository::JobRecord {
-        id: JobId::new().to_string(),
+        id,
         kind: "system.noop_test".into(),
         payload_json: "{}".into(),
-        idempotency_key: Some("noop-1".into()),
+        idempotency_key: Some(idempotency_key),
         state: "Queued".into(),
         priority: 0,
         attempts: 0,
         max_attempts: 5,
-        available_at: now.clone(),
+        available_at: now.to_string(),
         lease_owner: None,
         lease_expires_at: None,
         checkpoint_json: None,
         cancel_requested: false,
-        created_by: PrincipalId::new().to_string(),
+        created_by,
     }
 }
 
@@ -242,6 +298,67 @@ impl audit::AuditRepository for MockAuditRepo {
 mod tests {
     use super::*;
     use audit::AuditRepository as _;
+
+    #[test]
+    fn fixture_clock_changes_only_when_set() {
+        let mut clock = FixtureClock::default();
+        let initial = clock.now();
+        assert_eq!(initial.to_string(), "2026-01-01T00:00:00Z");
+        assert_eq!(clock.now(), initial);
+        let later = Timestamp::from_ymd_hms(2026, 1, 2, 3, 4, 5).unwrap();
+        clock.set(later);
+        assert_eq!(clock.now(), later);
+        assert_eq!(FixtureClock::new(initial).now(), initial);
+        assert_eq!(FixtureClock::default().now(), initial);
+    }
+
+    #[test]
+    fn fixture_ids_are_stable_distinct_and_typed() {
+        let indices = [0, 1, u32::MAX as u64, 1u64 << 32, u64::MAX];
+        let mut ids = std::collections::HashSet::new();
+        for index in indices {
+            let id: domain::JobId = fixture_id(index);
+            assert_eq!(id, fixture_id::<domain::JobId>(index));
+            assert_eq!(id.to_string(), fixture_id::<SourceId>(index).to_string());
+            assert!(ids.insert(id));
+        }
+        assert_eq!(
+            fixture_id::<domain::JobId>(0).to_string(),
+            "00000000-0000-4000-8000-000000000000"
+        );
+    }
+
+    #[test]
+    fn deterministic_job_fixtures_replay_without_shared_state() {
+        let mut clock = FixtureClock::default();
+        let first = sample_job_record_at(&clock, 7);
+        let repeated = sample_job_record_at(&clock, 7);
+        assert_eq!(first.id, repeated.id);
+        assert_eq!(first.created_by, repeated.created_by);
+        assert_eq!(first.available_at, repeated.available_at);
+        assert_eq!(first.idempotency_key, repeated.idempotency_key);
+        assert_eq!(first.kind, repeated.kind);
+        assert_eq!(first.payload_json, repeated.payload_json);
+        assert_eq!(first.state, repeated.state);
+        assert_eq!(first.priority, repeated.priority);
+        assert_eq!(first.attempts, repeated.attempts);
+        assert_eq!(first.max_attempts, repeated.max_attempts);
+        assert_eq!(first.lease_owner, repeated.lease_owner);
+        assert_eq!(first.lease_expires_at, repeated.lease_expires_at);
+        assert_eq!(first.checkpoint_json, repeated.checkpoint_json);
+        assert_eq!(first.cancel_requested, repeated.cancel_requested);
+        assert_eq!(first.available_at, clock.now().to_string());
+        let other = sample_job_record_at(&clock, 8);
+        assert_ne!(first.id, other.id);
+        assert_ne!(first.idempotency_key, other.idempotency_key);
+        assert_eq!(first.created_by, other.created_by);
+        clock.set(Timestamp::from_ymd_hms(2026, 1, 3, 0, 0, 0).unwrap());
+        let later = sample_job_record_at(&clock, 7);
+        assert_eq!(first.id, later.id);
+        assert_ne!(first.available_at, later.available_at);
+        assert_eq!(later.available_at, clock.now().to_string());
+        assert_ne!(sample_job_record().id, sample_job_record().id);
+    }
 
     #[tokio::test]
     async fn mock_audit_repo_appends_and_tampers() {
