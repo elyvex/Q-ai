@@ -100,9 +100,9 @@ Status key: 🔴 open · 🟢 done (with date + where recorded).
 - **Closure boundary:** automated checks do not replace the independent recorded walkthrough, editorial approval, or handoff sign-off. P1-T60 remains open.
 
 ## FU-P1-03 — Resume owner-gated Phase-1 implementation
-- **Status:** open; engineering actions depend on existing owner decisions.
-- **Found:** 2026-09-17 (remaining-task review).
-- **P1-T26:** comparator unchanged; QV-015 currently records a skip. After ADR-0114 defines the reference corpus and comparison procedure, implement configured comparison with match/mismatch/missing-reference tests and preserve explicit unconfigured behavior.
-- **P1-T54:** after the font asset and license are approved, bundle the web font, wire `@font-face`, and verify rendering and route behavior. Existing RTL, labels, markers, and escaping are not completion of the web-font requirement.
-- **P1-T56:** after approved data and P1-T55 review, expand golden fixtures to every required edge case with traceable expected text/hashes; never substitute fabricated scripture.
+- **Status:** open; engineering groundwork landed 2026-09-17, owner decisions still pending.
+- **Found:** 2026-09-17 (remaining-task review; updated same day after T26/T54/T56 groundwork).
+- **P1-T26:** `quran_corpus::import::compare_reference` now implements exact, order-independent comparison (Fatal QV-015 on any text difference, missing/duplicate ayahs, empty corpus, or incompatible reading); `compared()` fails the import closed when the manifest requests a reference corpus that is unavailable (`requested_reference_cannot_be_silently_skipped` regression guards it). Remaining: a real reference corpus + procedure + sign-off (ADR-0114 owner) before any configured comparison runs against approved data.
+- **P1-T54:** `server::api::router_with_debug_font` serves a caller-supplied woff2 in memory at `/debug/assets/reader.woff2` (font/woff2, no-store, nosniff) and the debug page emits `@font-face` only when a font is wired; without it, the system Arabic stack remains and no `@font-face` is emitted. Remaining: an owner-chosen font asset + license before any release bundles one.
+- **P1-T56:** `golden_ayah_texts_match_the_imported_fixture` ties every fixture ayah to `fixtures/quran/golden/ayah_texts.jsonl` byte-for-byte; the 331-case reference golden set remains green. Remaining: expand fixtures only after approved data + P1-T55 review; never fabricate scripture.
 - **Decision tracking:** dataset/license/reviewer and reference-corpus choices remain the existing ADR-0101/ADR-0114 owner decisions, not approvals supplied by this follow-up.
