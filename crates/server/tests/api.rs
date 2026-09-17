@@ -363,6 +363,20 @@ async fn health_endpoints_keep_phase0_shapes() {
 }
 
 #[tokio::test]
+async fn server_rejects_non_loopback_before_binding() {
+    for addr in ["0.0.0.0:0", "[::]:0", "192.168.1.10:0"] {
+        let result = server::api::serve(addr, test_state()).await;
+        assert!(matches!(result, Err(server::ServerError::NonLoopback(_))), "{addr}");
+    }
+    for addr in ["localhost:invalid", "127.0.0.1.example:8737"] {
+        assert!(matches!(
+            server::api::serve(addr, test_state()).await,
+            Err(server::ServerError::InvalidAddr(_))
+        ));
+    }
+}
+
+#[tokio::test]
 async fn ayah_envelope_carries_meta_etag_and_language() {
     let (addr, handle) = serve_once().await;
     let (status, headers, body) = get(&addr, "/api/v1/quran/ayahs/1:1", &[]).await;

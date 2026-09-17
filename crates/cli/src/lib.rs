@@ -250,7 +250,7 @@ pub fn dispatch(cli: Cli) -> i32 {
         Commands::Job { .. } => phase_stub("job", 1),
         Commands::Audit { .. } => phase_stub("audit", 1),
         Commands::Serve { bind } => {
-            if !bind.starts_with("127.0.0.1") && !bind.starts_with("[::1]") {
+            if !server::is_loopback(&bind) {
                 eprintln!("error: Phase 0 restricts server bind to loopback; refusing `{bind}`");
                 return exit_code::POLICY;
             }

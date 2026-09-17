@@ -784,13 +784,8 @@ pub fn router(state: AppState) -> Router {
 
 /// Serve until the process is killed.
 pub async fn serve(addr: &str, state: AppState) -> Result<(), crate::ServerError> {
-    if !crate::is_loopback(addr) {
-        eprintln!(
-            "warning: server binding to non-loopback address `{addr}`; \
-             authentication enforcement is deferred until Phase 11"
-        );
-    }
-    let listener = tokio::net::TcpListener::bind(addr)
+    let socket = crate::loopback_addr(addr)?;
+    let listener = tokio::net::TcpListener::bind(socket)
         .await
         .map_err(|source| crate::ServerError::Bind { addr: addr.to_string(), source })?;
     axum::serve(listener, router(state)).await.map_err(crate::ServerError::from)
