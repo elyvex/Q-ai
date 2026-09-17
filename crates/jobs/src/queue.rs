@@ -78,6 +78,17 @@ fn plus(d: Duration) -> String {
     at.format(&time::format_description::well_known::Rfc3339).unwrap_or_default()
 }
 
+fn rfc3339_le(a: &str, b: &str) -> bool {
+    let parse = |s: &str| {
+        time::OffsetDateTime::parse(s, &time::format_description::well_known::Rfc3339)
+            .map(|dt| dt.unix_timestamp_nanos())
+    };
+    match (parse(a), parse(b)) {
+        (Ok(a), Ok(b)) => a <= b,
+        _ => false,
+    }
+}
+
 /// An in-memory [`JobQueue`] for tests and local/deterministic runs.
 #[derive(Default)]
 pub struct InMemoryJobQueue {
@@ -121,7 +132,7 @@ impl JobQueue for InMemoryJobQueue {
         for id in order {
             let Some(job) = jobs.get_mut(&id) else { continue };
             let claimable = matches!(job.state.as_str(), "Queued" | "Interrupted" | "Checkpointed")
-                && job.available_at <= now;
+                && rfc3339_le(&job.available_at, &now);
             if claimable {
                 job.state = "Running".to_string();
                 job.lease_owner = Some(owner.to_string());
@@ -213,7 +224,7 @@ impl JobQueue for InMemoryJobQueue {
         for id in order {
             if let Some(job) = jobs.get_mut(&id)
                 && job.state == "Running"
-                && job.lease_expires_at.as_deref().is_some_and(|t| t < now.as_str())
+                && job.lease_expires_at.as_deref().is_some_and(|t| rfc3339_le(t, &now))
             {
                 job.state = "Interrupted".to_string();
                 job.lease_owner = None;
@@ -233,6 +244,23 @@ impl JobQueue for InMemoryJobQueue {
 mod tests {
     use super::*;
     use crate::test_support::record;
+
+    #[test]
+    fn timestamp_comparison_handles_mixed_fraction_digits() {
+        assert!(rfc3339_le("2026-01-01T00:00:00.123Z", "2026-01-01T00:00:00.123456Z"));
+        assert!(!rfc3339_le("2026-01-01T00:00:00.123456Z", "2026-01-01T00:00:00.123Z"));
+        assert!(rfc3339_le("2026-01-01T00:00:00.123000Z", "2026-01-01T00:00:00.123Z"));
+        assert!(rfc3339_le("2026-01-01T00:00:00.123Z", "2026-01-01T00:00:00.123000Z"));
+        assert!(rfc3339_le("2026-01-01T00:00:00.122999Z", "2026-01-01T00:00:00.123Z"));
+        assert!(!rfc3339_le("2026-01-01T00:00:00.123001Z", "2026-01-01T00:00:00.123Z"));
+        assert!(rfc3339_le("2026-01-01T00:00:00Z", "2026-01-01T00:00:00.000000Z"));
+        assert!(rfc3339_le("2026-01-01T00:00:00.000000Z", "2026-01-01T00:00:00Z"));
+        // Ordering across the second boundary stays correct.
+        assert!(rfc3339_le("2026-01-01T00:00:00.999999Z", "2026-01-01T00:00:01Z"));
+        assert!(!rfc3339_le("2026-01-01T00:00:01Z", "2026-01-01T00:00:00.999999Z"));
+        assert!(!rfc3339_le("not-a-time", "2026-01-01T00:00:00Z"));
+        assert!(!rfc3339_le("2026-01-01T00:00:00Z", "not-a-time"));
+    }
 
     #[tokio::test]
     async fn claim_marks_running_and_increments_attempts() {
