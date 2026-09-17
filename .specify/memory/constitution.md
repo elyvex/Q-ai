@@ -1,8 +1,15 @@
 <!-- Sync Impact Report (remove before commit):
-Version change: (none) → 1.0.0 (initial ratification)
-- Modified principles: template slots [PRINCIPLE_1..5_NAME] → I–VII concrete Q-ai principles
-- Added sections: "Technology Stack & Architectural Constraints", "Development Workflow & Quality Gates"
-- Removed sections: none (renamed Section 2/3 placeholders)
+Version change: 1.0.0 → 1.0.1 (PATCH)
+- Modified principles: none renamed; Principle V (Test-First and Quality Gates)
+  clarified to include per-crate test-target runs and the
+  `quran_doctor`-style integration suites already required by CI
+- Added sections: none
+- Removed sections: none
+- Verification notes (2026-09-16): all principle claims re-checked against the
+  live tree — workspace lints (`unsafe_code = "forbid"`, edition 2024 crates),
+  rust-toolchain 1.97.1, CI fmt/clippy/arch-check/migrate-check, xtask
+  coverage-gate (≥85% domain/provenance/audit/sources), testkit suites, ADR
+  numbering, and the placeholder-crate convention in Cargo.toml all match.
 - Follow-up TODOs: none — all placeholders resolved
 -->
 # Q-ai Constitution
@@ -145,4 +152,4 @@ with a migration plan where behavior changes. Use
 `.specify/templates/constitution-template.md` resolution at amendment
 time; write only `.specify/memory/constitution.md`.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-15 | **Last Amended**: 2026-09-15
+**Version**: 1.0.1 | **Ratified**: 2026-09-15 | **Last Amended**: 2026-09-16
