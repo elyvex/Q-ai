@@ -347,20 +347,30 @@ fn loads_or_default(cli: &Cli) -> Config {
     cfg
 }
 
+/// Render `config show` output with secrets scrubbed (001-redaction-hardening,
+/// US3/T021): JSON goes through `redact_json_value` (structure-preserving),
+/// Debug text through `redact_text`. Routed via `application::redaction` so
+/// `cli` gains no new workspace edge (`arch-check`).
+fn render_config_show(cfg: &Config, json: bool) -> String {
+    if json {
+        let mut value = serde_json::to_value(cfg).unwrap_or(serde_json::Value::Null);
+        application::redaction::redact_json_value(&mut value);
+        serde_json::to_string_pretty(&value).unwrap_or_else(|_| "null".to_string())
+    } else {
+        application::redaction::redact_text(&format!("{cfg:?}")).into_owned()
+    }
+}
+
 fn handle_config_show(explain: bool, defaults: bool, json: bool) -> i32 {
     let cfg = Config::default();
     if defaults {
-        if json {
-            println!("{}", serde_json::to_string_pretty(&cfg).unwrap());
-        } else {
-            println!("{cfg:?}");
-        }
+        println!("{}", render_config_show(&cfg, json));
         return exit_code::OK;
     }
     if json {
-        println!("{}", serde_json::to_string_pretty(&cfg).unwrap());
+        println!("{}", render_config_show(&cfg, true));
     } else {
-        println!("config::default show: {cfg:?}");
+        println!("config::default show: {}", render_config_show(&cfg, false));
     }
     let _ = explain;
     exit_code::OK
@@ -534,5 +544,32 @@ mod tests {
         cfg.server.tls = "disabled".into();
         let err = cfg.validate().unwrap_err();
         assert!(err.to_string().contains("0.0.0.0"), "error must name the offending bind: {err}");
+    }
+
+    /// US3/T021: `config show` render path scrubs credential-shaped values
+    /// (Rule C userinfo here) in both JSON and text modes while preserving
+    /// non-secret surroundings byte-for-byte.
+    #[test]
+    fn config_show_scrubs_credential_shaped_values() {
+        const SENTINEL: &str = "SENTINEL_9f3c__DO_NOT_LEAK";
+        let mut cfg = Config::default();
+        cfg.storage.sqlite.path = format!("postgresql://admin:{SENTINEL}@localhost:5432/qai");
+        for json in [false, true] {
+            let out = render_config_show(&cfg, json);
+            assert!(!out.contains(SENTINEL), "config show (json={json}) leaked: {out}");
+            assert!(out.contains("***REDACTED***"), "config show (json={json}) lost marker: {out}");
+            assert!(
+                out.contains("localhost:5432"),
+                "config show (json={json}) mangled host: {out}"
+            );
+        }
+        // JSON stays a parseable object with non-secret leaves intact.
+        let doc: serde_json::Value =
+            serde_json::from_str(&render_config_show(&cfg, true)).expect("valid JSON");
+        assert_eq!(doc["server"]["bind"], "127.0.0.1");
+        // Default config carries no credential shapes: redaction is a no-op
+        // on normal output (FR-008).
+        let defaults = Config::default();
+        assert_eq!(render_config_show(&defaults, false), format!("{defaults:?}"));
     }
 }
