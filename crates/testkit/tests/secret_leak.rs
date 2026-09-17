@@ -128,9 +128,6 @@ fn sentinel_key_value_pairs_scrubbed_from_free_text() {
         "auth": { "api_key": SENTINEL, "backend": "env" }
     });
     let count = redaction::redact_json_value(&mut payload);
-    println!("DEBUG count: {}", count);
-    println!("DEBUG payload: {}", serde_json::to_string_pretty(&payload).unwrap());
-    println!("DEBUG auth.api_key: {}", payload["auth"]["api_key"]);
     assert_eq!(count, 1);
     assert!(!serde_json::to_string(&payload).unwrap().contains(SENTINEL));
     assert_eq!(payload["auth"]["api_key"], serde_json::json!("***REDACTED***"));
