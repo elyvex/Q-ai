@@ -6,7 +6,18 @@
 **Depends On:** — (first phase)
 **Blocks:** Phase 1 (Canonical Quran Core) and every later phase
 **Target Duration:** 5 calendar weeks (see §9 — capacity caveat)
-**Status:** 🔴 Not Started
+**Status:** Implementation complete; formal sign-off pending (reviewed 2026-09-17)
+
+The [completion ledger](done.md) records the implemented foundation, including durable
+jobs, outbox/generations/tombstones and secret backends. The [acceptance record](acceptance.md)
+still lists AC-P0-05 as partial; exit-ritual evidence, remaining secret-surface/OS-matrix
+verification and human sign-off must not be treated as complete. T55/T56 were deferred.
+The conflicting all-pass follow-up summary does not supersede these open gates.
+
+This document retains the Phase-0 scope and design baseline below. P1/P2 code has since
+landed; later crates are no longer all placeholders, and `qai serve` now exposes the
+local Quran API as well as health endpoints. See the [project README](../../../../README.md)
+for runnable current behavior.
 
 ---
 
