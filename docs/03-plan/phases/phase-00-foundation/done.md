@@ -1231,3 +1231,35 @@ Carried into `docs/plans/handoff-p0-to-p1.md` by task P0-T60.
 - Evidence: `application::audit_bridge::tests::persisted_verification_checks_hashes_links_and_gaps`; CLI `audit_verify_rejects_corrupt_chain_without_modifying_database` tests missing DB, empty chain, imported nonempty chain, corruption, unchanged database bytes, and no sentinel leakage.
 - Verified: full CLI suite (20 tests), focused application test, workspace clippy all-targets with denied warnings, workspace check and format, architecture and migration checks. Final strengthened CLI regression rerun passed.
 - Remaining stubs: `audit list`, source/job/secret groups, completions. No full Phase-0 acceptance claim, no commit created by this session. Docker daemon checked again and unavailable; T56 stays deferred.
+
+## 14. FU-10/DEV-02 — catalog CLI dispatch, 2026-09-18
+
+- Owner: implementing assistant; no commit created by this session.
+- `qai source list/show`, `job list/show`, `audit list`, `secret list` (env refs
+  only, never values), and static `completions` (bash/zsh/fish/powershell/elvish)
+  now dispatch to real implementations. All read paths open the database
+  read-only; listings cap at 1000 items with a truncation warning and omit
+  blobs/payloads; `show` returns redacted detail; missing ids exit 5.
+- Guarded mutations refuse with USAGE (2) and a next-step message instead of a
+  false-success stub: `source import` (needs manifest validation + approvals +
+  same-tx audit, Phase 1), `job cancel` (needs worker-lease coordination +
+  audit, Phase 1), `secret set/delete` (Phase 11 surface).
+- Integrity fix found by the new tests: JSON-encoded secrets inside string
+  columns (e.g. job `payload_json` = `{"password":"..."}`) evade free-text
+  credential scrubbing, so `get_job` now parses nested JSON columns and applies
+  key-level redaction before re-serializing (fallback: free-text scrub).
+- New `sqlx` main dependency for `application` (workspace-pinned; arch-check
+  unaffected — no new workspace edges; CLI still reaches storage only through
+  `application`, with `StorageError` re-exported as `application::db::CatalogError`).
+- Evidence: `application::db::tests::catalog_lists_seed_rows_and_show_round_trips`,
+  `catalog_helpers_never_modify_the_database` (logical whole-row dump comparison);
+  `cli/tests/catalog.rs::empty_catalog_lists_and_guarded_mutations`,
+  `seeded_catalog_shows_without_mutation_or_leak` (missing DB, empty chain,
+  seeded rows, corruption-free read-only bytes, sentinel-free output).
+- Verified: `cargo test -p cli -p application` (all 19 suites green),
+  `cargo clippy --workspace --all-targets -- -D warnings` clean,
+  `cargo fmt --all -- --check`, `git diff --check`, `cargo check --workspace`,
+  `arch-check` OK, `migrate-check` OK (16 migrations).
+- Remaining: T56 runtime (daemon still unavailable, rechecked 2026-09-18),
+  subsecond-delay truncation, SQLite scheduling validation, non-idempotent
+  lease recovery, and all human/external exit gates. No phase-acceptance claim.
