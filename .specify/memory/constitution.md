@@ -1,36 +1,22 @@
 <!-- Sync Impact Report (remove before commit):
-Version change: 1.0.2 → 1.1.0 (MINOR)
-- Modified principles:
-  - I. Canonical Text Integrity — now codifies the landed canonical engine:
-    `quran-core` immutable types and reference grammar, `quran-corpus`
-    validation rules QV-001…028, insert-only canonical tables
-    (migrations 0007–0012), approval-gated activation through
-    `CanonicalWriter` / `ApprovalToken`, and an atomic active-edition pointer
-    flip. Canonical lookup is deterministic and model-free.
-  - V. Test-First and Quality Gates — gate list extended to the current
-    workspace: `cargo check --workspace --all-targets` plus the Quran integrity
-    path (`qai quran forms rebuild`, `qai quran index rebuild|verify`,
-    approval-gated `qai quran activate`, `qai doctor --quran --deep`).
-  - VII. Simplicity and Architecture Discipline — records that SQLite FTS5 is
-    the implemented full-text backend (Tantivy remains an unaccepted proposal),
-    migrations are now 0001–0016, and Phase-1/2 crates (`quran-core`,
-    `quran-corpus`, `citations`, `quran-normalization`, `quran-search`) contain
-    real code rather than placeholders.
-- Materially expanded guidance: Technology Stack (PRD baseline v0.3.2,
-  migrations 0001–0016, FTS5, `qai quran` CLI group, Quran read/citation API
-  routes) and Development Workflow (P0 implementation complete with sign-off
-  pending; P1/P2 in progress).
-- Added sections: none. Removed sections: none. No principle removed or
-  redefined → not MAJOR.
-- Verification notes (2026-09-18): re-checked against the live tree —
-  `migrations/sqlite/` holds `0001`–`0016` + `checksums.json`; `crates/`
-  contains 49 crates including the Phase-1/2 canonical crates; README
-  (reviewed 2026-09-17) documents the synthetic `test-edition-min` fixture, the
-  FTS5 backend, and the QV validation path. Phase ledgers report P0 65/67 tasks
-  and 25/26 ACs, P1 50/65 tasks, P2 24/114 tasks.
-- Follow-up TODOs: none — phase sign-off/exit rituals, Swimlane-X ownership
-  (ADR-0101 / ADR-0203 / ADR-0204), and the FTS5-vs-Tantivy decision remain
-  tracked in phase ledgers and ADRs, not in the constitution.
+Version change: 1.1.0 → 1.2.0 (MINOR)
+- Modified principles: none renamed or redefined.
+- Added sections:
+  - VIII. Multi-Edition Quran Governance (NON-NEGOTIABLE) — codifies the
+    2026-09-18 owner direction: primary default (Uthmani script + Hafs
+    'an 'Asim) as script-plus-transmission only, one logical corpus with
+    many identified editions/readings, script/qira'ah/riwayah/edition/
+    version/source/licence separation, verbatim upstream slugs, staged
+    adapter ingestion, per-family licensing, first-class translations,
+    per-edition integrity, typed comparison, edition-relative morphology,
+    unknowns staying unknown, and non-blocking engineering.
+- Removed sections: none.
+- Materially expanded guidance: Technology Stack Scale/scope
+  (multi-edition / multilingual corpus) and Development Workflow
+  (owner-decisions log + upstream-sources references).
+- Follow-up TODOs: none — dataset identity, per-item licences, editorial
+  reviewer, reference corpus, morphology provider, and exit rituals remain
+  tracked in ADRs and phase ledgers, not in the constitution.
 -->
 # Q-ai Constitution
 
@@ -162,6 +148,47 @@ currently `0001`–`0016`); canonical tables are forward-only (deactivation,
 never deletion). Placeholder crates stay empty until their phase starts.
 Search normalization MUST NEVER modify displayed canonical text.
 
+### VIII. Multi-Edition Quran Governance (NON-NEGOTIABLE)
+
+The primary/default Quran representation is Uthmani script + Hafs
+'an 'Asim. This states an application default — script plus transmission —
+not a dataset: it MUST NEVER be read as an edition slug, publisher,
+release, licence, checksum, or source identity. Q-ai models one logical
+Quran corpus with multiple explicitly identified editions/readings;
+alternate editions MUST be representable without changing the core model,
+and different editions MUST NEVER be merged (extends invariant I3).
+Script, qira'ah, riwayah, edition, edition version, source, publisher,
+licence, attribution, provenance, and checksum are separate fields;
+inferences such as `Uthmani ⇒ Hafs` are forbidden unless the source
+explicitly establishes them. Upstream edition identifiers MUST be preserved
+verbatim as `upstream_edition_slug`; any Q-ai-internal id is an explicit
+mapping, never a rename. External data enters only through the staged
+adapter pipeline (source → raw artifact → extraction → validation →
+normalized dataset → storage), with repository, revision, path, retrieval
+date, source hash, transformation, validation result, licence state, and
+attribution recorded. A repository being open source MUST NEVER imply its
+contained data text is redistributable: every data family carries its own
+licence record, and data with unverified terms stays
+`metadata_only` / `pending_license_review` — never vendored, never labeled
+open. Translations are first-class records, many per language, never
+identified by language code alone, never canonical text. Each edition
+carries its own integrity manifest (verse/surah/edition scope, explicit
+algorithm and normalization); one reading's checksum MUST NEVER certify
+another, and translation integrity is hash-only with a root key distinct
+from the Quran root. Comparison is typed — integrity, version, readings,
+translation, reference — and every difference is classified; a difference
+between two legitimate readings is a readings comparison, never a
+corruption verdict. Morphology is edition-relative (edition, version,
+surah, ayah, token position) and bridged by explicit alignment tables;
+disagreeing tokenizations MUST NEVER be force-matched, and no LLM may
+generate roots/lemmas stored as dataset-supplied. Unverified fields MUST
+stay `unknown` / `pending_owner_verification` /
+`source_verification_required`; ADRs MUST NOT be marked Accepted to unblock
+development. Pending owner decisions MUST NOT block unrelated engineering:
+isolate the decision, record it, and build everything else. Enforced by
+`quran-core::catalog` types, the `sources::upstream` registry, and
+ADR-0101 / ADR-0114 / ADR-0203.
+
 ## Technology Stack & Architectural Constraints
 
 **Language/Version**: Rust (workspace `resolver = "2"`, edition 2024;
@@ -189,7 +216,10 @@ model-free; bounded regex and graph queries (resource-limited, N-hop caps);
 RTL-correct display with Web GUI authoritative for rich reading; async,
 non-blocking I/O with cancellation and query timeouts. **Scale/scope**: 114
 surahs / 6236-ayah-class canonical corpus, multi-collection hadith/tafsir/
-scripture graphs. Migrations MUST remain contiguous and append-only;
+scripture graphs. The Quran corpus is multi-edition/multi-riwayah by design
+(primary default: Uthmani script + Hafs 'an 'Asim) with per-edition
+integrity manifests; translations are multilingual, many per language.
+Migrations MUST remain contiguous and append-only;
 `arch-check` violations MUST be fixed or ADR-justified, never silently
 allowlisted.
 
@@ -209,11 +239,14 @@ tests → lint/checks → update task doc → phase progress →
 `docs/05-followups/` → `CHANGELOG.md` when appropriate. Human-only gates
 (dataset licensing, editorial/reviewer sign-off, exit rituals) cannot be
 performed or simulated by agents; mark them pending with a named owner
-request. Phase state is tracked in the phase ledgers, not here: as of
-2026-09-18, P0 is implementation-complete with sign-off and the exit ritual
-pending, P1 (canonical core) and P2 (normalization/search) are in progress
-with source decisions and exit gates open. All PRs MUST verify constitution
-compliance; complexity MUST be justified in the plan.
+request. Owner direction and the source-verification backlog live in
+`docs/05-followups/owner-decisions.md`; verified upstream facts live in
+`docs/02-architecture/upstream-sources.md`. Phase state is tracked in the
+phase ledgers, not here: as of 2026-09-18, P0 is implementation-complete
+with sign-off and the exit ritual pending, P1 (canonical core) and P2
+(normalization/search) are in progress with source decisions and exit
+gates open. All PRs MUST verify constitution compliance; complexity MUST
+be justified in the plan.
 
 ## Governance
 
@@ -226,4 +259,4 @@ with a migration plan where behavior changes. Use
 `.specify/templates/constitution-template.md` resolution at amendment
 time; write only `.specify/memory/constitution.md`.
 
-**Version**: 1.1.0 | **Ratified**: 2026-09-15 | **Last Amended**: 2026-09-18
+**Version**: 1.2.0 | **Ratified**: 2026-09-15 | **Last Amended**: 2026-09-18
