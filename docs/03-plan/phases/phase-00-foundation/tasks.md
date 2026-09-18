@@ -1,5 +1,15 @@
 # Phase 0 — Task Board
 
+> **2026-09-18 FU-10/DEV-02 closure:** `source list/show`, `job list/show`,
+> `audit list`, `secret list` (refs only), and static `completions` now dispatch
+> to real read-only implementations; guarded mutations (`source import`,
+> `job cancel`, `secret set/delete`) refuse with USAGE (2). New regressions:
+> `application::db` catalog tests + `cli/tests/catalog.rs`. Full `cli` +
+> `application` suites, workspace clippy `-D warnings`, fmt, arch-check, and
+> migrate-check green. T55 serve stub verified complete (meta route + loopback
+> guard); T56 still partial (daemon unavailable). Phase-exit human/external
+> gates remain open.
+
 > **2026-09-17 P0-T50 partial:** `audit verify` now reads a SQLite snapshot,
 > recomputes hashes, verifies links and sequence gaps, and returns nonzero for
 > corruption or unreadable records. CLI tests cover a real imported chain and
