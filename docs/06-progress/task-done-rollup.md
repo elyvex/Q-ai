@@ -2,6 +2,12 @@
 
 > Completed tasks across all phases. Newest first.
 
+## Phase 0 — P0-T50 audit verification subtask, 2026-09-17
+
+- `audit verify` now checks persisted hashes, links, and gaps read-only, with human/JSON output and failing exit codes for corruption/errors.
+- CLI regression verifies a real imported chain, then corrupts its hash and checks failure, no database mutation and no sensitive output. Application regression covers payload/link tampering and gaps.
+- Full CLI suite (20 tests), focused application tests, workspace fmt/clippy/check, architecture and migration checks passed. Other CLI stubs and full exit gates remain open; T56 runtime deferred on missing Docker daemon.
+
 ## Phase 0 — P0-T39/T40 timestamp ordering, 2026-09-17
 
 - In-memory claims and expired-lease recovery compare parsed RFC3339 instants; malformed timestamps are ineligible. Private fixed-time entry points exercise the same implementations without sleeps.
