@@ -6,6 +6,9 @@
 - Runtime image builds, shared-library compatibility, named-volume ownership and non-root execution remain unverified. Once the daemon is available, run `docker compose build`, `docker compose run --rm app db migrate`, `docker compose run --rm app db verify`, then `docker compose up`.
 - The stub intentionally uses `network_mode: none` and publishes no ports: the current server permits loopback only. Access stays inside the container network namespace; no unauthenticated public binding is enabled. Database migration is an explicit initialization step, not an automatic startup mutation.
 - Verify UID 65532, persisted database access and `/healthz`, `/readyz`, `/api/v1/meta` from inside that network namespace before closing T56.
+- Rechecked 2026-09-18: daemon socket still absent; T56 stays partial. Unrelated
+  Phase-0 CLI work (FU-10/DEV-02) completed the same session without touching
+  container files.
 
 ## Jobs scheduling — P0-T39/T40, 2026-09-17
 
