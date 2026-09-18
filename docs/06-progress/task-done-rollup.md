@@ -2,6 +2,17 @@
 
 > Completed tasks across all phases. Newest first.
 
+## Phase 0 — FU-10/DEV-02 catalog CLI dispatch, 2026-09-18
+
+- Real read-only dispatch for `source list/show`, `job list/show`, `audit list`,
+  `secret list` (refs only), and static shell `completions`; guarded mutations
+  refuse with exit 2. Fixed nested-JSON secret redaction in job payload columns.
+- Evidence: 2 new application catalog tests + 2 new CLI catalog tests; full
+  `cli` + `application` suites green; workspace clippy/fmt/check, arch-check,
+  and migrate-check green.
+- Remaining: T56 runtime (daemon unavailable), production scheduling validation,
+  and human/external gates. No commit made.
+
 ## Phase 0 — P0-T50 audit verification subtask, 2026-09-17
 
 - `audit verify` now checks persisted hashes, links, and gaps read-only, with human/JSON output and failing exit codes for corruption/errors.
