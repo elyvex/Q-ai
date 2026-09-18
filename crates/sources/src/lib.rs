@@ -1,8 +1,12 @@
 //! Phase 0 — Source catalog, manifest schema, and state machine (D0.10).
 
 pub mod registry;
+pub mod upstream;
 
 pub use registry::ValidatorRegistry;
+pub use upstream::{
+    DataRedistribution, KNOWN_UPSTREAMS, RepositoryLicense, UpstreamRepository, UpstreamRole,
+};
 
 use base64::Engine as _;
 use domain::{
