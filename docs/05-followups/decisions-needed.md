@@ -17,6 +17,12 @@
 >
 > **Status key:** 🔴 unanswered · 🟢 answered (with date + where recorded)
 
+> **Architecture direction (2026-09-18):** the owner's multi-edition /
+> multi-riwayah / multilingual decisions and the source-verification backlog are
+> recorded in `docs/05-followups/owner-decisions.md` and
+> `docs/02-architecture/upstream-sources.md`. Items there complement (do not
+> replace) the OD rows below.
+
 ---
 
 ## OD-01 — Licensed Quran dataset + bundle policy (blocks AC-P1-01, T58)
