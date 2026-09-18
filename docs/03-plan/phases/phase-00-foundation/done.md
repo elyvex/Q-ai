@@ -1223,3 +1223,11 @@ Carried into `docs/plans/handoff-p0-to-p1.md` by task P0-T60.
 - Evidence: both exact regression tests pass; 25 consecutive full jobs-suite runs pass (21 tests each). Jobs formatting, clippy all-targets with denied warnings, and type checks pass.
 - Negative control: temporarily restoring the original lexicographic claim comparison made `mixed_precision_timestamps_control_claims_and_reaping` fail deterministically for `.123Z` at `.123456Z`. Restoring parsed comparison made the same exact test pass; lint and check passed again.
 - This addresses the observed in-memory ordering defect, not subsecond delay truncation, production SQLite ordering, or non-idempotent lease recovery. Those remain follow-ups; phase closure remains open.
+
+## 13. P0-T50 — audit verification CLI, partial, 2026-09-17
+
+- Implemented `qai audit verify [--json]` using a database opened read-only and a rollback-only snapshot. Recomputes every event hash using the audit crate recipe and checks previous-hash linkage and sequence gaps.
+- Returns 0 for valid chains, 3 for detected corruption, 1 for verification errors. Output excludes event payloads and raw storage errors.
+- Evidence: `application::audit_bridge::tests::persisted_verification_checks_hashes_links_and_gaps`; CLI `audit_verify_rejects_corrupt_chain_without_modifying_database` tests missing DB, empty chain, imported nonempty chain, corruption, unchanged database bytes, and no sentinel leakage.
+- Verified: full CLI suite (20 tests), focused application test, workspace clippy all-targets with denied warnings, workspace check and format, architecture and migration checks. Final strengthened CLI regression rerun passed.
+- Remaining stubs: `audit list`, source/job/secret groups, completions. No full Phase-0 acceptance claim, no commit created by this session. Docker daemon checked again and unavailable; T56 stays deferred.
