@@ -13,6 +13,7 @@
 //! - [`numbers`] — validated `SurahNumber`, `AyahNumber`, `TokenPosition`
 //! - [`enums`] — script, numbering, basmala, Unicode, status and selector enums
 //! - [`edition`] — `QuranEdition`, `EditionStatistics`
+//! - [`catalog`] — upstream edition metadata, qiraʾah/riwayah, integrity refs
 //! - [`structure`] — `Surah`, `Ayah`, `Segment`, `Token`
 //! - [`reference`] — the frozen reference grammar (parser + serializer, ADR-0102)
 //! - [`quotation`] — `QuranQuotation`, the only type for quoted canonical text
@@ -24,6 +25,7 @@
 //! crates (`unicode-segmentation`). It must never pull in `storage`, `sqlx`,
 //! `tokio`, `llm`, `embeddings`, `retrieval`, or any vector store.
 
+pub mod catalog;
 pub mod edition;
 pub mod enums;
 pub mod error;
@@ -34,6 +36,10 @@ pub mod structure;
 pub mod text;
 pub mod view;
 
+pub use catalog::{
+    Attribution, DataQualityFlag, EditionContentKind, IntegrityManifestRef, IntegrityScope, Qiraah,
+    Riwayah, UpstreamEditionRef, UpstreamEditionSlug, UpstreamEditionSlugError, UpstreamSourceRef,
+};
 pub use edition::{EditionStatistics, QuranEdition};
 pub use enums::{
     BasmalaPolicy, ContextBoundary, EditionSelector, EditionStatus, NumberingScheme,
