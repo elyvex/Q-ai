@@ -10,6 +10,10 @@ use storage::Database as _;
 use storage::error::StorageError;
 use storage_sqlite::{SqliteDatabase, migrate};
 
+/// Re-exported so the CLI can map catalog errors to exit codes without
+/// taking a direct dependency on `storage` (arch-check boundary).
+pub use storage::error::StorageError as CatalogError;
+
 /// Outcome of `qai db status`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MigrationStatus {
@@ -195,6 +199,151 @@ pub async fn probe_database(cfg: &Config) -> DbProbe {
     probe
 }
 
+// ─── Read-only catalog listings (P0-T50 / FU-10) ─────────────────────
+//
+// All helpers open the database read-only and never write. Rows are fetched
+// as `json_object(...)` single-column strings through the `ReadTx`
+// abstraction (no new storage-trait methods, no SQL interpolation of user
+// input: `show` filters in Rust), parsed, redacted, and returned as JSON.
+
+const CATALOG_LIMIT: usize = 1000;
+
+fn parse_catalog_rows(rows: Vec<String>) -> Result<Vec<serde_json::Value>, StorageError> {
+    rows.into_iter()
+        .map(|row| serde_json::from_str(&row).map_err(|_| StorageError::StorageUnavailable))
+        .collect()
+}
+
+fn catalog_page(mut items: Vec<serde_json::Value>) -> serde_json::Value {
+    let truncated = items.len() > CATALOG_LIMIT;
+    items.truncate(CATALOG_LIMIT);
+    let mut page = serde_json::json!({"items": items, "truncated": truncated});
+    domain::redaction::redact_json_value(&mut page);
+    page
+}
+
+/// List all sources (id, title, content_type, language, created_at).
+pub async fn list_sources(path: &str) -> Result<serde_json::Value, StorageError> {
+    let db = SqliteDatabase::open_read_only(path).await?;
+    let rows = sqlx::query_scalar::<_, String>(
+        "SELECT json_object('id', id, 'title', title, 'content_type', content_type, \
+         'language', language, 'created_at', created_at) \
+         FROM sources ORDER BY id LIMIT 1001",
+    )
+    .fetch_all(db.read_pool())
+    .await
+    .map_err(|_| StorageError::StorageUnavailable)?;
+    Ok(catalog_page(parse_catalog_rows(rows)?))
+}
+
+/// Show one source with its versions. Versions expose only review-relevant
+/// metadata (no manifest blobs).
+pub async fn get_source(path: &str, id: &str) -> Result<serde_json::Value, StorageError> {
+    let db = SqliteDatabase::open_read_only(path).await?;
+    let row = sqlx::query_scalar::<_, String>(
+        "SELECT json_object('id', id, 'title', title, 'content_type', content_type, \
+         'language', language, 'created_at', created_at) \
+         FROM sources WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_optional(db.read_pool())
+    .await
+    .map_err(|_| StorageError::StorageUnavailable)?
+    .ok_or_else(|| StorageError::NotFound { urn: format!("source:{id}") })?;
+    let mut source: serde_json::Value =
+        serde_json::from_str(&row).map_err(|_| StorageError::StorageUnavailable)?;
+    let version_rows = sqlx::query_scalar::<_, String>(
+        "SELECT json_object('id', id, 'version', version, 'state', state, \
+         'trust_level', trust_level, 'license_status', license_status, \
+         'content_hash', content_hash) \
+         FROM source_versions WHERE source_id = ? ORDER BY version LIMIT 1001",
+    )
+    .bind(id)
+    .fetch_all(db.read_pool())
+    .await
+    .map_err(|_| StorageError::StorageUnavailable)?;
+    let mut versions = parse_catalog_rows(version_rows)?;
+    for version in &mut versions {
+        domain::redaction::redact_json_value(version);
+    }
+    source["versions"] = serde_json::Value::Array(versions);
+    domain::redaction::redact_json_value(&mut source);
+    Ok(source)
+}
+
+/// List all jobs (metadata only; payloads excluded from listings).
+pub async fn list_jobs(path: &str) -> Result<serde_json::Value, StorageError> {
+    let db = SqliteDatabase::open_read_only(path).await?;
+    let rows = sqlx::query_scalar::<_, String>(
+        "SELECT json_object('id', id, 'kind', kind, 'state', state, \
+         'priority', priority, 'attempts', attempts, 'max_attempts', max_attempts, \
+         'available_at', available_at, 'cancel_requested', cancel_requested) \
+         FROM jobs ORDER BY id LIMIT 1001",
+    )
+    .fetch_all(db.read_pool())
+    .await
+    .map_err(|_| StorageError::StorageUnavailable)?;
+    Ok(catalog_page(parse_catalog_rows(rows)?))
+}
+
+/// Redact a JSON-encoded string column: parse it, apply key-level redaction
+/// to the nested value, and re-serialize. String payloads such as
+/// `{"password":"..."}` evade free-text credential scrubbing (no `=`/`:` separator
+/// after the key), so nested parsing is required. Falls back to free-text
+/// scrubbing when the column is not valid JSON.
+fn redact_json_text_column(raw: &str) -> String {
+    match serde_json::from_str::<serde_json::Value>(raw) {
+        Ok(mut value) => {
+            domain::redaction::redact_json_value(&mut value);
+            serde_json::to_string(&value).unwrap_or_else(|_| raw.to_string())
+        }
+        Err(_) => domain::redaction::redact_text(raw).into_owned(),
+    }
+}
+
+/// Show one job, including its (redacted) payload.
+pub async fn get_job(path: &str, id: &str) -> Result<serde_json::Value, StorageError> {
+    let db = SqliteDatabase::open_read_only(path).await?;
+    let row = sqlx::query_scalar::<_, String>(
+        "SELECT json_object('id', id, 'kind', kind, 'state', state, \
+         'priority', priority, 'attempts', attempts, 'max_attempts', max_attempts, \
+         'available_at', available_at, 'cancel_requested', cancel_requested, \
+         'payload_json', payload_json, 'idempotency_key', idempotency_key, \
+         'lease_owner', lease_owner, 'checkpoint_json', checkpoint_json, \
+         'created_by', created_by) \
+         FROM jobs WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_optional(db.read_pool())
+    .await
+    .map_err(|_| StorageError::StorageUnavailable)?
+    .ok_or_else(|| StorageError::NotFound { urn: format!("job:{id}") })?;
+    let mut job: serde_json::Value =
+        serde_json::from_str(&row).map_err(|_| StorageError::StorageUnavailable)?;
+    for column in ["payload_json", "checkpoint_json"] {
+        if let Some(raw) = job.get(column).and_then(|value| value.as_str()) {
+            job[column] = serde_json::Value::String(redact_json_text_column(raw));
+        }
+    }
+    domain::redaction::redact_json_value(&mut job);
+    Ok(job)
+}
+
+/// List audit events (envelope only; before/after payloads excluded).
+pub async fn list_audit_events(path: &str) -> Result<serde_json::Value, StorageError> {
+    let db = SqliteDatabase::open_read_only(path).await?;
+    let rows = sqlx::query_scalar::<_, String>(
+        "SELECT json_object('id', id, 'sequence', sequence, 'occurred_at', occurred_at, \
+         'actor_kind', actor_kind, 'action', action, 'outcome', outcome, \
+         'subject_urn', subject_urn) \
+         FROM audit_events ORDER BY sequence LIMIT 1001",
+    )
+    .fetch_all(db.read_pool())
+    .await
+    .map_err(|_| StorageError::StorageUnavailable)?;
+    Ok(catalog_page(parse_catalog_rows(rows)?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -291,5 +440,188 @@ mod tests {
         let missing = dir.path().join("nope.db");
         let err = restore_database(&cfg, missing.to_str().unwrap(), &migrations_dir()).await;
         assert!(err.is_err());
+    }
+
+    const CATALOG_SENTINEL: &str = "SENTINEL_9f3c__DO_NOT_LEAK";
+
+    async fn seed_catalog(path: &str) {
+        use storage::Database as _;
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .connect_with(sqlx::sqlite::SqliteConnectOptions::new().filename(path))
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO sources (id, title, content_type, language, created_at, updated_at) \
+             VALUES ('src-1', 'Seed Source', 'quran_edition', 'ar', \
+             '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO source_versions (id, source_id, version, schema_version, state, \
+             trust_level, license_status, license_json, content_hash, created_at) \
+             VALUES ('ver-1', 'src-1', '1.0.0', 1, 'Staged', 'ImportedUnverified', \
+             'OpenLicense', '{}', 'sha256:aa', '2026-01-01T00:00:00Z')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let payload = format!(r#"{{"n":1,"password":"{CATALOG_SENTINEL}"}}"#);
+        sqlx::query(
+            "INSERT INTO jobs (id, kind, payload_json, state, priority, attempts, \
+             max_attempts, available_at, created_at) \
+             VALUES ('job-1', 'system.noop_test', ?, 'Queued', 0, 0, 5, \
+             '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+        )
+        .bind(&payload)
+        .execute(&pool)
+        .await
+        .unwrap();
+        pool.close().await;
+
+        let db = storage_sqlite::SqliteDatabase::new(path, 1, true).await.unwrap();
+        let mut uow = db.write().await.unwrap();
+        let event = audit::AuditEvent {
+            id: "00000000-0000-4000-8000-000000000001".parse().unwrap(),
+            sequence: 0,
+            occurred_at: domain::Timestamp::from_ymd_hms(2026, 1, 1, 0, 0, 0).unwrap(),
+            actor: audit::Actor::System { name: "catalog-test".into() },
+            action: audit::AuditAction::SourceStaged,
+            subject: domain::SubjectRef("urn:qai:test:catalog".into()),
+            outcome: audit::AuditOutcome::Allowed,
+            reason: None,
+            before: None,
+            after: None,
+            request_id: None,
+            prev_chain_hash: domain::ContentHash {
+                algorithm: domain::HashAlgorithm::Sha256,
+                hex: "00".repeat(32),
+            },
+            chain_hash: domain::ContentHash {
+                algorithm: domain::HashAlgorithm::Sha256,
+                hex: "ff".repeat(32),
+            },
+        };
+        crate::audit_bridge::append_audit_event(&mut *uow, event).await.unwrap();
+        uow.commit().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn catalog_lists_seed_rows_and_show_round_trips() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("qai.db");
+        let path = path.to_str().unwrap();
+        let mut cfg = Config::default();
+        cfg.storage.sqlite.path = path.to_string();
+        migrate_database(&cfg, &migrations_dir()).await.unwrap();
+
+        let empty_sources = list_sources(path).await.unwrap();
+        assert_eq!(empty_sources["items"].as_array().unwrap().len(), 0);
+        assert_eq!(empty_sources["truncated"], false);
+        assert!(get_source(path, "missing").await.is_err());
+        assert!(get_job(path, "missing").await.is_err());
+
+        seed_catalog(path).await;
+
+        let sources = list_sources(path).await.unwrap();
+        let items = sources["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["id"], "src-1");
+        assert_eq!(items[0]["title"], "Seed Source");
+        assert!(items[0].get("license_json").is_none(), "listings omit blobs");
+
+        let source = get_source(path, "src-1").await.unwrap();
+        assert_eq!(source["id"], "src-1");
+        let versions = source["versions"].as_array().unwrap();
+        assert_eq!(versions.len(), 1);
+        assert_eq!(versions[0]["version"], "1.0.0");
+        assert_eq!(versions[0]["state"], "Staged");
+        assert!(versions[0].get("source_id").is_none());
+
+        let jobs = list_jobs(path).await.unwrap();
+        let items = jobs["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["id"], "job-1");
+        assert!(items[0].get("payload_json").is_none(), "listings omit payloads");
+
+        let job = get_job(path, "job-1").await.unwrap();
+        assert_eq!(job["kind"], "system.noop_test");
+        let rendered = serde_json::to_string(&job).unwrap();
+        assert!(!rendered.contains(CATALOG_SENTINEL), "payload secrets redacted");
+        assert!(rendered.contains(domain::redaction::REDACTED_MARKER));
+
+        let events = list_audit_events(path).await.unwrap();
+        let items = events["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["action"], "source_staged");
+        assert!(items[0].get("before_json").is_none());
+        assert!(items[0].get("after_json").is_none());
+    }
+
+    #[tokio::test]
+    async fn catalog_helpers_never_modify_the_database() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("qai.db");
+        let path = path.to_str().unwrap();
+        let mut cfg = Config::default();
+        cfg.storage.sqlite.path = path.to_string();
+        migrate_database(&cfg, &migrations_dir()).await.unwrap();
+        seed_catalog(path).await;
+
+        // Logical content comparison (not raw bytes: pager flushes from the
+        // seed pool's background close can land after the snapshot).
+        async fn dump(path: &str) -> Vec<String> {
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .connect_with(sqlx::sqlite::SqliteConnectOptions::new().filename(path))
+                .await
+                .unwrap();
+            let mut out = Vec::new();
+            for (table, order) in [
+                ("sources", "id"),
+                ("source_versions", "id"),
+                ("jobs", "id"),
+                ("audit_events", "sequence"),
+            ] {
+                // Whole-row dump (ordered) so INSERTs, DELETEs, and UPDATEs
+                // are all visible to the comparison below.
+                let cols: String = sqlx::query_scalar::<_, String>(&format!(
+                    "SELECT group_concat(name, ',') FROM pragma_table_info('{table}')"
+                ))
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+                let concat = cols
+                    .split(',')
+                    .map(|column| format!("COALESCE(quote({column}), 'nil')"))
+                    .collect::<Vec<_>>()
+                    .join(" || '|' || ");
+                let full: Vec<String> = sqlx::query_scalar::<_, String>(&format!(
+                    "SELECT {concat} FROM {table} ORDER BY {order}"
+                ))
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+                out.push(format!("{table}:{}", full.join(",")));
+            }
+            let counts: Vec<i64> = sqlx::query_scalar::<_, i64>(
+                "SELECT COUNT(*) FROM sources UNION ALL SELECT COUNT(*) FROM source_versions \
+                 UNION ALL SELECT COUNT(*) FROM jobs UNION ALL SELECT COUNT(*) FROM audit_events",
+            )
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+            out.push(format!("counts:{counts:?}"));
+            pool.close().await;
+            out
+        }
+        let before = dump(path).await;
+        list_sources(path).await.unwrap();
+        get_source(path, "src-1").await.unwrap();
+        list_jobs(path).await.unwrap();
+        get_job(path, "job-1").await.unwrap();
+        list_audit_events(path).await.unwrap();
+        assert!(get_source(path, "missing").await.is_err());
+        assert_eq!(before, dump(path).await);
     }
 }
