@@ -4,6 +4,10 @@ All notable changes to Q-ai are documented here.
 
 ## [Unreleased]
 
+### Added — Audit verification CLI (P0-T50)
+
+- `qai audit verify [--json]` verifies persisted event hashes, previous-hash linkage and sequence continuity read-only; corruption returns exit 3 and verification errors exit 1.
+
 ### Fixed — Jobs retry policy (P0-T39/T40)
 
 - In-memory queue claim and expired-lease eligibility use parsed timestamps, avoiding incorrect ordering of mixed-precision RFC3339 strings.
