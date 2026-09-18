@@ -1,5 +1,12 @@
 # Phase 0 — Task Board
 
+> **2026-09-17 P0-T50 partial:** `audit verify` now reads a SQLite snapshot,
+> recomputes hashes, verifies links and sequence gaps, and returns nonzero for
+> corruption or unreadable records. CLI tests cover a real imported chain and
+> corruption; full CLI suite and workspace fmt/clippy/check passed. `audit list`,
+> source/job/secret dispatch, and completions remain stubs; Phase 0 is not complete.
+> T56 runtime verification remains deferred: Docker daemon still unavailable.
+
 > **2026-09-17 P0-T39/T40 scheduling correction:** in-memory claim and lease-reap
 > eligibility now compare parsed RFC3339 instants. Two deterministic regression
 > tests and 25 consecutive jobs-suite runs passed (21 tests each); jobs lint and
