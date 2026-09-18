@@ -245,9 +245,15 @@ pub fn dispatch(cli: Cli) -> i32 {
             ConfigAction::Validate { file } => handle_config_validate(file.as_deref()),
         },
         Commands::Db { action } => handle_db(action, &cfg, cli.json),
-        Commands::Secret { .. } => phase_stub("secret", 11),
-        Commands::Source { .. } => phase_stub("source", 1),
-        Commands::Job { .. } => phase_stub("job", 1),
+        Commands::Secret { action } => handle_secret(action, cli.json),
+        Commands::Source { action } => {
+            let path = db_path_for(&cfg, cli.data_dir.as_deref());
+            handle_source(action, &path, cli.json)
+        }
+        Commands::Job { action } => {
+            let path = db_path_for(&cfg, cli.data_dir.as_deref());
+            handle_job(action, &path, cli.json)
+        }
         Commands::Audit { action: AuditAction::Verify } => {
             let path = db_path_for(&cfg, cli.data_dir.as_deref());
             match block_on(application::audit_bridge::verify_persisted_audit(&path)) {
@@ -279,7 +285,19 @@ pub fn dispatch(cli: Cli) -> i32 {
                 }
             }
         }
-        Commands::Audit { action: AuditAction::List } => phase_stub("audit list", 1),
+        Commands::Audit { action: AuditAction::List } => {
+            let path = db_path_for(&cfg, cli.data_dir.as_deref());
+            match block_on(application::db::list_audit_events(&path)) {
+                Ok(page) => {
+                    print_catalog(&page, cli.json, "no audit events");
+                    exit_code::OK
+                }
+                Err(e) => {
+                    eprintln!("audit list failed: {e}");
+                    exit_code::GENERIC
+                }
+            }
+        }
         Commands::Serve { bind } => {
             if !server::is_loopback(&bind) {
                 eprintln!("error: Phase 0 restricts server bind to loopback; refusing `{bind}`");
@@ -318,7 +336,7 @@ pub fn dispatch(cli: Cli) -> i32 {
                 Err(code) => code,
             }
         }
-        Commands::Completions { .. } => phase_stub("completions", 13),
+        Commands::Completions { shell } => handle_completions(&shell),
         Commands::Quran { action } => {
             let db_path = db_path_for(&cfg, cli.data_dir.as_deref());
             quran::handle_quran(action, &db_path, cli.json, cli.yes)
@@ -535,9 +553,219 @@ fn block_on<F: std::future::Future>(fut: F) -> F::Output {
     }
 }
 
-fn phase_stub(name: &str, phase: u8) -> i32 {
-    println!("`qai {name}` will become available in Phase {phase}.");
-    exit_code::OK
+/// Print a catalog page: JSON document with `--json`, one human-readable
+/// line per item otherwise. Payloads are already redacted by the application
+/// layer; this function never touches secrets.
+fn print_catalog(page: &serde_json::Value, json: bool, empty_hint: &str) {
+    if json {
+        println!("{page}");
+        return;
+    }
+    let items = page["items"].as_array().cloned().unwrap_or_default();
+    if items.is_empty() {
+        println!("{empty_hint}");
+    }
+    for item in &items {
+        println!("{}", catalog_line(item));
+    }
+    if page["truncated"] == true {
+        eprintln!("warning: listing truncated to 1000 items; refine with `show <id>`");
+    }
+}
+
+/// One-line human summary for a catalog item. Matches on whichever
+/// descriptor fields the item carries (source / job / audit shapes).
+fn catalog_line(item: &serde_json::Value) -> String {
+    let id = item["id"].as_str().unwrap_or("?");
+    if let Some(action) = item["action"].as_str() {
+        let sequence = item["sequence"].as_u64().unwrap_or(0);
+        let outcome = item["outcome"].as_str().unwrap_or("?");
+        return format!("#{sequence} {action} [{outcome}] {id}");
+    }
+    if let Some(kind) = item["kind"].as_str() {
+        let state = item["state"].as_str().unwrap_or("?");
+        let attempts = item["attempts"].as_u64().unwrap_or(0);
+        return format!("{id} {kind} [{state}] attempts={attempts}");
+    }
+    let title = item["title"].as_str().unwrap_or("?");
+    let content_type = item["content_type"].as_str().unwrap_or("?");
+    format!("{id} {title} ({content_type})")
+}
+
+fn storage_error_code(err: &application::db::CatalogError) -> i32 {
+    match err {
+        application::db::CatalogError::NotFound { .. } => exit_code::NOT_FOUND,
+        application::db::CatalogError::MigrationRequired { .. }
+        | application::db::CatalogError::MigrationChecksumMismatch { .. } => exit_code::VALIDATION,
+        _ => exit_code::GENERIC,
+    }
+}
+
+fn handle_source(action: SourceAction, path: &str, json: bool) -> i32 {
+    match action {
+        SourceAction::List => match block_on(application::db::list_sources(path)) {
+            Ok(page) => {
+                print_catalog(&page, json, "no sources");
+                exit_code::OK
+            }
+            Err(e) => {
+                eprintln!("source list failed: {e}");
+                storage_error_code(&e)
+            }
+        },
+        SourceAction::Show { id } => match block_on(application::db::get_source(path, &id)) {
+            Ok(item) => {
+                if json {
+                    println!("{item}");
+                } else {
+                    println!("{}", catalog_line(&item));
+                    if let Some(versions) = item["versions"].as_array() {
+                        for version in versions {
+                            let version_id = version["version"].as_str().unwrap_or("?");
+                            let state = version["state"].as_str().unwrap_or("?");
+                            println!("  {version_id} [{state}]");
+                        }
+                    }
+                }
+                exit_code::OK
+            }
+            Err(e) => {
+                eprintln!("source show failed: {e}");
+                storage_error_code(&e)
+            }
+        },
+        SourceAction::Import { .. } => {
+            eprintln!(
+                "refusing `qai source import`: cataloged import requires manifest validation, \
+                 approval preconditions, and same-transaction audit (Phase 1); \
+                 use `qai quran import` for corpus editions"
+            );
+            exit_code::USAGE
+        }
+    }
+}
+
+fn handle_job(action: JobAction, path: &str, json: bool) -> i32 {
+    match action {
+        JobAction::List => match block_on(application::db::list_jobs(path)) {
+            Ok(page) => {
+                print_catalog(&page, json, "no jobs");
+                exit_code::OK
+            }
+            Err(e) => {
+                eprintln!("job list failed: {e}");
+                storage_error_code(&e)
+            }
+        },
+        JobAction::Show { id } => match block_on(application::db::get_job(path, &id)) {
+            Ok(item) => {
+                if json {
+                    println!("{item}");
+                } else {
+                    println!("{}", catalog_line(&item));
+                }
+                exit_code::OK
+            }
+            Err(e) => {
+                eprintln!("job show failed: {e}");
+                storage_error_code(&e)
+            }
+        },
+        JobAction::Cancel { .. } => {
+            eprintln!(
+                "refusing `qai job cancel`: cancellation must coordinate with the worker \
+                 lease and record an audit event in the same transaction (Phase 1)"
+            );
+            exit_code::USAGE
+        }
+    }
+}
+
+fn handle_secret(action: SecretAction, json: bool) -> i32 {
+    use config::{EnvSecretStore, SecretStore as _};
+    match action {
+        SecretAction::List => {
+            let refs = block_on(EnvSecretStore.list_refs());
+            match refs {
+                Ok(refs) => {
+                    let names: Vec<String> = refs.iter().map(ToString::to_string).collect();
+                    if json {
+                        println!("{}", serde_json::json!({"refs": names}));
+                    } else if names.is_empty() {
+                        println!("no secret references");
+                    } else {
+                        for name in &names {
+                            println!("{name}");
+                        }
+                    }
+                    exit_code::OK
+                }
+                Err(e) => {
+                    eprintln!("secret list failed: {e}");
+                    exit_code::GENERIC
+                }
+            }
+        }
+        SecretAction::Set { .. } => {
+            eprintln!(
+                "refusing `qai secret set`: durable secret writes live behind the \
+                 Phase 11 secret-management surface, not the Phase 0 chassis"
+            );
+            exit_code::USAGE
+        }
+        SecretAction::Delete { .. } => {
+            eprintln!(
+                "refusing `qai secret delete`: durable secret writes live behind the \
+                 Phase 11 secret-management surface, not the Phase 0 chassis"
+            );
+            exit_code::USAGE
+        }
+    }
+}
+
+fn handle_completions(shell: &str) -> i32 {
+    const COMMANDS: &[&str] = &[
+        "status",
+        "version",
+        "doctor",
+        "config",
+        "db",
+        "secret",
+        "source",
+        "job",
+        "audit",
+        "serve",
+        "quran",
+        "completions",
+    ];
+    let names = COMMANDS.join(" ");
+    match shell {
+        "bash" => {
+            println!(
+                "_qai_completions() {{ COMPREPLY=($(compgen -W \"{names}\" -- \"${{COMP_WORDS[COMP_CWORD]}}\")); }}\n\
+                 complete -F _qai_completions qai"
+            );
+            exit_code::OK
+        }
+        "zsh" => {
+            println!("#compdef qai\n_qai() {{ _arguments '1:command:({names})' }}\n_qai \"$@\"");
+            exit_code::OK
+        }
+        "fish" => {
+            println!("complete -c qai -f -n '__fish_use_subcommand' -a '{names}'");
+            exit_code::OK
+        }
+        "powershell" | "elvish" => {
+            println!("# qai {shell} completions (static Phase 0 set): {names}");
+            exit_code::OK
+        }
+        other => {
+            eprintln!(
+                "unsupported shell `{other}`; expected bash, zsh, fish, powershell, or elvish"
+            );
+            exit_code::USAGE
+        }
+    }
 }
 
 // exit codes and dispatch complete
