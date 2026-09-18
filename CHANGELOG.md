@@ -4,6 +4,40 @@ All notable changes to Q-ai are documented here.
 
 ## [Unreleased]
 
+### Added — Multi-edition / multi-riwayah Quran architecture (owner direction 2026-09-18)
+
+- **quran-core** (new module `catalog`): `Qiraah`, `Riwayah`,
+  `UpstreamEditionSlug` (preserved verbatim), `EditionContentKind`,
+  `DataQualityFlag`, `Attribution`, `IntegrityScope`, `IntegrityManifestRef`,
+  `UpstreamSourceRef`, `UpstreamEditionRef` — script/qiraah/riwayah/edition/
+  version/authority kept separate; unknowns stay `unknown`.
+- **sources** (new module `upstream`): verified registry of the three upstream
+  repositories (`quran-api`, `quran-database`, `quranchecksum`) with pinned
+  revisions, repository licence, and a separate data-redistribution posture —
+  an open repository licence never implies data-text rights.
+- Docs: expanded `ADR-0101` (multi-edition model, primary default = Uthmani +
+  Ḥafṣ ʿan ʿĀṣim, upstream-slug mapping, per-source licensing);
+  new `ADR-0203` (edition-relative morphology, provider unselected, Draft);
+  updated `ADR-0114` (typed comparison: integrity vs. edition/readings
+  differences); new `docs/02-architecture/upstream-sources.md` (verified
+  upstream facts and revisions); new `docs/05-followups/owner-decisions.md`
+  (decided / pending verification / explicitly unknown).
+
+### Added — Catalog CLI dispatch (FU-10/DEV-02)
+
+- `qai source list/show`, `job list/show`, and `audit list` read persisted rows
+  through read-only snapshots (`--json` supported; missing ids exit 5).
+- `qai secret list` shows env secret references without values; `qai completions
+  <shell>` emits static scripts for bash/zsh/fish/powershell/elvish.
+- Mutating stubs now refuse honestly with exit 2: `source import`, `job cancel`,
+  `secret set/delete`.
+
+### Fixed — Nested secret redaction in job payloads
+
+- `qai job show` parses JSON-encoded string columns and applies key-level
+  redaction to nested values, closing a leak where `{"password":"..."}` inside
+  `payload_json` evaded free-text credential scrubbing.
+
 ### Added — Audit verification CLI (P0-T50)
 
 - `qai audit verify [--json]` verifies persisted event hashes, previous-hash linkage and sequence continuity read-only; corruption returns exit 3 and verification errors exit 1.
