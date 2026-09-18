@@ -148,6 +148,10 @@ boundary. Placeholders must stay empty until their phase starts.
 - **ADR-0102–0114** Quran addressing grammar, numbering, Unicode, tokenization, storage layout,
   activation, hashing, diffing, basmala, citations, translations, caching, reference corpus.
   ADR-0101 (dataset/license) and ADR-0114 (reference corpus) are still **Draft** — the hard gates.
+- **ADR-0203** Quran morphology dataset (Draft, created 2026-09-18): edition-relative
+  morphology + alignment; provider/licence unselected. Multi-edition architecture and
+  verified upstream facts: `docs/02-architecture/upstream-sources.md`,
+  `docs/05-followups/owner-decisions.md`.
 - **ADR-0201** Full-text engine: plan says Tantivy; **shipped FTS5** (DEV-05, offline Cargo cache had
   no Tantivy). Treat FTS5 as current truth; ratification is an owner decision.
 - **ADR-0202** Graph store (Proposed): SQLite adjacency + bounded CTEs default; CozoDB and
@@ -441,6 +445,8 @@ cargo xtask arch-check | migrate-check | ci   # ci = full 9-step gate (xtask/src
 ```
 
 Key docs: PRD `docs/01-requirements/requirements.md` · architecture `docs/02-architecture/` ·
+upstream sources `docs/02-architecture/upstream-sources.md` ·
+owner decisions `docs/05-followups/owner-decisions.md` ·
 phases `docs/03-plan/phases/phase-{00-foundation,01-core,02-rag,04-quran-graph}/` · tasks
 `docs/04-tasks/` · follow-ups `docs/05-followups/` · progress `docs/06-progress/` · corpus
 `docs/07-technical/quran-{corpus-architecture,adapter-authoring,citation-spec}.md` · API
