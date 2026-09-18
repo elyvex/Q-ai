@@ -312,7 +312,7 @@ content, research questions, model responses must never be exportable.
 | P0-T52 | `doctor` engine: check registry, read-only enforcement, severity, remedies | D0.14 | T48 | 2.5 | BE | ☑ |
 | P0-T53 | Phase-0 doctor checks (all listed in D0.14) + JSON schema | D0.14 | T52 | 2.5 | BE | ☑ |
 | P0-T54 | `--repair-preview` planner (no mutation) | D0.14 | T52 | 1.0 | BE | ☑ |
-| P0-T55 | `serve` stub: `/healthz`, `/readyz`, `/api/v1/meta`, localhost bind guard | D0.1 | T48 | 1.5 | BE | ☐ |
+| P0-T55 | `serve` stub: `/healthz`, `/readyz`, `/api/v1/meta`, localhost bind guard | D0.1 | T48 | 1.5 | BE | ☑ (meta route + fail-closed loopback guard; server tests green) |
 | P0-T56 | Dockerfile + compose stub + non-root runtime | D0.1 | T55 | 1.5 | INF | ◐ (files added; daemon unavailable for runtime verification) |
 | P0-T57 | `testkit` finalization + fixtures + deterministic clock/UUID | D0.16 | T18 | 2.0 | BE | ☑ |
 | P0-T58 | Architecture docs, runbooks, `CONTRIBUTING`/DoD PR template | D0.17 | all | 2.5 | DOC | ☑ |
