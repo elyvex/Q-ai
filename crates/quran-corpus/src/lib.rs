@@ -11,6 +11,7 @@
 //!
 //! - [`format`] — the normalized intermediate edition format
 //! - [`adapters`] — dataset-shape adapters into the intermediate format
+//! - [`upstream_catalog`] — `quran-api` `editions.json` catalog metadata adapter
 //! - [`tokenize`] — lossless whitespace-preserving tokenization
 //! - [`hashing`] — `text_hash` / `structure_hash` / `token_order_hash`
 //! - [`unicode`] — Unicode auditor for canonical text
@@ -27,6 +28,7 @@ pub mod hashing;
 pub mod import;
 pub mod tokenize;
 pub mod unicode;
+pub mod upstream_catalog;
 pub mod validation;
 
 pub use adapters::{CsvAdapter, EditionAdapter, JsonAdapter, parse_with_adapter};
@@ -46,6 +48,10 @@ pub use import::{
 pub use tokenize::{ComputedToken, TokenizedAyah, reconstruct, tokenize};
 pub use unicode::{
     ForbiddenPoint, find_forbidden, first_unexpected, is_expected_code_point, normalization_form,
+};
+pub use upstream_catalog::{
+    CATALOG_PATH, NAME as UPSTREAM_CATALOG_NAME, REPOSITORY as UPSTREAM_CATALOG_REPOSITORY,
+    parse_catalog,
 };
 pub use validation::{
     Finding, Outcome, QuranEditionValidator, Severity, VALIDATOR_NAME, VALIDATOR_VERSION,
