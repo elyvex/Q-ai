@@ -144,9 +144,12 @@ transmission is read from the upstream name, not from an explicit field.
 Implemented and unit-tested (`quran-corpus/src/upstream_catalog.rs`, 11 tests;
 verified read-only against the pinned file: 492 entries → 20 QuranText /
 3 Tafsir / 285 Translation / 184 Transliteration, 11 named transmissions).
-Surfaced in the CLI as `qai quran catalog <editions.json> [--revision R] [--report P]`
-(`application::quran_cli::cmd_catalog`; metadata-only, no database, licences stay
-unknown; malformed catalog → exit 3, unreadable path → exit 2).
+Surfaced in the CLI as `qai quran catalog <editions.json> [--revision R] [--report P]
+[--database D]` (`application::quran_cli::cmd_catalog`; metadata-only, no database,
+licences stay unknown; malformed catalog → exit 3, unreadable path → exit 2).
+With `--database`, each entry is matched to its `<slug>.txt` mirror files and
+described (verse/line counts, `cr_lines`, sha256); unparsable files are per-file
+errors that never fail the run.
 The adapter MUST (and does):
 
 1. Read `editions.json` and preserve the exact `name` as `upstream_edition_slug`
@@ -162,6 +165,24 @@ The adapter MUST (and does):
 6. Default `license.status = unknown` unless per-edition terms are supplied;
    never inherit the repository Unlicense onto the data text.
 7. Run verse-count/structure validation before any promotion past staging.
+
+### 1.5 Vendored text mirror (offline-first, `pending_license_review`)
+
+Per owner direction the full text mirror lives in-repo at
+`fixtures/upstream/quran-api/` (provenance, hashes, and the redistribution
+warning in `fixtures/upstream/README.md`): `editions.json` plus
+`database/chapterverse/*.txt` (492 files, `surah|ayah|text` rows) and
+`database/linebyline/*.txt` (492 files, bare ordered lines). Binary-measured
+shape: every file = 6236 content lines + a 10-line JSON trailer whose `name`
+matches the filename slug; four translations carry intra-verse `\r`
+separators; three files carry empty verse texts the reader rejects
+fail-closed (`tam-abdulhameedbaqa-la{,-lad}` 2:282, `urd-muhammadtahirul`
+7:1–7:4). Readers: `quran_corpus::upstream_text` (`parse_chapterverse`,
+`parse_linebyline`; strictly increasing references, surah 1–114, non-empty
+text, trailer-name cross-check). The mirror is local-development-only text:
+per-edition redistribution rights are still unknown (OD-01 / ODV-02), and no
+vendored byte is canonical until it passes `qai quran import`, validation,
+and editorial sign-off.
 
 ---
 

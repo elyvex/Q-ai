@@ -1052,3 +1052,29 @@ Carried into `docs/plans/handoff-p1-to-p2.md` by task P1-T60.
   `arch-check` clean. No `Cargo.toml` / allowlist changes (all deps pre-approved).
 - **Board mirror:** unplanned-by-board work (brief P3); no task row flipped.
 - **Exceptions:** none. Owner questions unchanged.
+
+## 2026-09-20 — Offline text mirror + readers + `catalog --database` (owner-directed)
+
+- **Owner:** implementation agent, by explicit owner direction (offline-first, all
+  languages/formats); no editorial or reviewer sign-off.
+- **Mirror:** `fixtures/upstream/quran-api/` — `editions.json` (sha256-verified),
+  `database/chapterverse/` + `database/linebyline/` (492 files each, `diff -r -q`
+  clean against the side clone). Provenance, hashes, and the redistribution
+  warning in `fixtures/upstream/README.md`. Reference-clone side effect found and
+  reverted (stray nested copy removed; clone back to 492 entries).
+- **Readers:** `quran_corpus::upstream_text` (`parse_chapterverse`,
+  `parse_linebyline`): trailer split + JSON + slug cross-check, strictly
+  increasing `(surah, ayah)`, surah 1–114, non-empty text, verbatim keeping with
+  `cr_lines` counts; non-row lines collected as `annotations` (defensive — the
+  mirror has none; an early "annotation lines" reading was a Python
+  universal-newline artifact over `\r` bytes, corrected in the README).
+- **CLI:** `qai quran catalog --database <dir>` describes per-edition texts
+  (verses/lines, sha256); broken files are per-file errors. Full-mirror run:
+  492 entries, 489/492 chapterverse parse (3 empty-verse gaps reported per-file),
+  492/492 linebyline, 4 files with CR lines.
+- **Evidence:** `quran-corpus` upstream_text 5/5; `application quran_catalog` 4/4;
+  `cli quran` 3/3 suites (incl. new `--database` snapshot + mini mirror fixture);
+  fmt clean.
+- **Exceptions:** per-edition licences still unknown — mirror is
+  `pending_license_review`; pushing this repo redistributes 492 translations of
+  unverified status (OD-01 / ODV-02 still open). No vendored byte is canonical.
