@@ -646,6 +646,12 @@ pub async fn cmd_validate(db_path: &str, target: &str, report_path: Option<&str>
 /// `quran catalog`: parse an upstream `editions.json` catalog file into
 /// edition/translation metadata (no database, no text import).
 ///
+/// With `database` set to a directory holding `chapterverse/` and
+/// `linebyline/` mirrors (see `fixtures/upstream/README.md`), every catalog
+/// entry is additionally matched to its `<slug>.txt` text files: the files are
+/// parsed, counted, hashed (sha256 over the file bytes), and reported.
+/// Entries with no text files stay catalog-only (`text: null`).
+///
 /// Human output is a deterministic summary (snapshot-safe); `--json` carries
 /// the full entry array. A malformed catalog is a validation failure, never an
 /// internal error; an unreadable path or report destination is a usage error.
@@ -653,6 +659,7 @@ pub async fn cmd_catalog(
     catalog_path: &str,
     revision: Option<&str>,
     report_path: Option<&str>,
+    database: Option<&str>,
 ) -> CommandOutput {
     let text = match read_manifest(catalog_path) {
         Ok(text) => text,
@@ -680,6 +687,30 @@ pub async fn cmd_catalog(
         .collect();
     let revision_value =
         revision.filter(|revision| !revision.trim().is_empty()).map(str::to_string);
+    let texts: Vec<serde_json::Value> = match database {
+        Some(dir) => entries
+            .iter()
+            .map(|entry| catalog_text_entry(dir, entry.upstream_edition_slug.as_str()))
+            .collect(),
+        None => entries.iter().map(|_| serde_json::Value::Null).collect(),
+    };
+    /// A mirror file counts as present only when it parsed (objects carrying
+    /// `error` are broken, not coverage).
+    fn parsed(value: &serde_json::Value, format: &str) -> bool {
+        value.get(format).is_some_and(|file| file.is_object() && file.get("error").is_none())
+    }
+    let with_chapterverse = texts.iter().filter(|value| parsed(value, "chapterverse")).count();
+    let with_linebyline = texts.iter().filter(|value| parsed(value, "linebyline")).count();
+    let with_cr = texts
+        .iter()
+        .filter(|value| {
+            value
+                .get("chapterverse")
+                .and_then(|file| file.get("cr_lines"))
+                .and_then(serde_json::Value::as_u64)
+                .is_some_and(|count| count > 0)
+        })
+        .count();
     let summary = serde_json::json!({
         "catalog": catalog_path,
         "entries": entries.len(),
@@ -688,9 +719,13 @@ pub async fn cmd_catalog(
         "revision": revision_value,
         "pinned": revision_value.is_some(),
         "licenses": "all_unknown",
+        "database": database,
+        "with_chapterverse": with_chapterverse,
+        "with_linebyline": with_linebyline,
+        "with_cr_lines": with_cr,
     });
     if let Some(path) = report_path {
-        let report = serde_json::json!({"summary": summary, "entries": entries});
+        let report = serde_json::json!({"summary": summary, "entries": entries, "texts": texts});
         let json = serde_json::to_string_pretty(&report).unwrap_or_default();
         if let Err(err) = std::fs::write(path, json) {
             return CommandOutput::err(exit::USAGE, format!("cannot write report `{path}`: {err}"));
@@ -714,7 +749,65 @@ pub async fn cmd_catalog(
         "revision: {}\nlicenses: all unknown (redistribution not verified)\n",
         revision_value.as_deref().unwrap_or("unpinned"),
     ));
-    CommandOutput::ok(human, serde_json::json!({"summary": summary, "entries": entries}))
+    if let Some(dir) = database {
+        human.push_str(&format!(
+            "texts ({dir}): {with_chapterverse}/{} chapterverse, {with_linebyline}/{} linebyline, {with_cr} with CR lines\n",
+            entries.len(),
+            entries.len(),
+        ));
+    }
+    CommandOutput::ok(
+        human,
+        serde_json::json!({"summary": summary, "entries": entries, "texts": texts}),
+    )
+}
+
+/// Match one catalog slug to its mirrored text files. Parse failures are
+/// reported per file (`error`) rather than failing the whole catalog run:
+/// the operator sees exactly which mirror files need attention.
+fn catalog_text_entry(database: &str, slug: &str) -> serde_json::Value {
+    let chapterverse = read_text_file(database, "chapterverse", slug, |bytes| {
+        let text = std::str::from_utf8(bytes).map_err(|err| format!("not valid UTF-8: {err}"))?;
+        let file = quran_corpus::upstream_text::parse_chapterverse(slug, text)
+            .map_err(|err| err.to_string())?;
+        Ok(serde_json::json!({
+            "verses": file.verses.len(),
+            "annotations": file.annotations.len(),
+            "cr_lines": file.cr_lines,
+            "sha256": quran_corpus::hashing::sha256_hex(bytes),
+        }))
+    });
+    let linebyline = read_text_file(database, "linebyline", slug, |bytes| {
+        let text = std::str::from_utf8(bytes).map_err(|err| format!("not valid UTF-8: {err}"))?;
+        let file = quran_corpus::upstream_text::parse_linebyline(slug, text)
+            .map_err(|err| err.to_string())?;
+        Ok(serde_json::json!({
+            "lines": file.lines.len(),
+            "cr_lines": file.cr_lines,
+            "sha256": quran_corpus::hashing::sha256_hex(bytes),
+        }))
+    });
+    serde_json::json!({"chapterverse": chapterverse, "linebyline": linebyline})
+}
+
+/// Read and describe one mirror file: missing files stay `null` (catalog-only
+/// entries); unreadable or unparsable files become `{"error": …}`.
+fn read_text_file(
+    database: &str,
+    format: &str,
+    slug: &str,
+    describe: impl FnOnce(&[u8]) -> Result<serde_json::Value, String>,
+) -> serde_json::Value {
+    let path = format!("{database}/{format}/{slug}.txt");
+    let bytes = match std::fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return serde_json::Value::Null,
+        Err(err) => return serde_json::json!({"error": format!("cannot read `{path}`: {err}")}),
+    };
+    match describe(&bytes) {
+        Ok(value) => value,
+        Err(message) => serde_json::json!({"error": message}),
+    }
 }
 
 /// `quran diff`.

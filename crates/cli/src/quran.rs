@@ -95,6 +95,10 @@ pub enum QuranAction {
         /// Write the full JSON report here.
         #[arg(long)]
         report: Option<String>,
+        /// Directory holding `chapterverse/` + `linebyline/` text mirrors to
+        /// describe per edition (see `fixtures/upstream/README.md`).
+        #[arg(long)]
+        database: Option<String>,
     },
     /// Show the difference between two versions.
     Diff {
@@ -303,9 +307,14 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
         QuranAction::Validate { target, report } => {
             application::quran_cli::cmd_validate(db_path, &target, report.as_deref()).await
         }
-        QuranAction::Catalog { catalog, revision, report } => {
-            application::quran_cli::cmd_catalog(&catalog, revision.as_deref(), report.as_deref())
-                .await
+        QuranAction::Catalog { catalog, revision, report, database } => {
+            application::quran_cli::cmd_catalog(
+                &catalog,
+                revision.as_deref(),
+                report.as_deref(),
+                database.as_deref(),
+            )
+            .await
         }
         QuranAction::Diff { edition, from, to, format } => {
             application::quran_cli::cmd_diff(db_path, &edition, &from, &to, &format).await
