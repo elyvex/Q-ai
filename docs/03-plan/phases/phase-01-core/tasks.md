@@ -44,16 +44,26 @@ public-domain test fixture; user supplies the real edition via `qai quran import
 
 | ID | Task | Deliv. | Depends | Est | Role | Status |
 |---|---|---|---|---|---|---|
-| P1-T01 | Survey candidate Quran datasets: provenance, script, license, numbering | ADR-0101 | — | 3.0 | DATA | ☐ |
+| P1-T01 | Survey candidate Quran datasets: provenance, script, license, numbering | ADR-0101 | — | 3.0 | DATA | ☑ |
 | P1-T02 | Legal review of redistribution rights; decide bundle vs user-supplied | ADR-0101 | T01 | 2.0 | EDIT | ☐ |
 | P1-T03 | Select reference corpus + define comparison procedure and sign-off | ADR-0114 | T01 | 1.5 | EDIT | ☐ |
-| P1-T04 | Write ADR-0101 / 0104 / 0110 | ADR | T01–T03 | 2.0 | DOC | ◐ |
+| P1-T04 | Write ADR-0101 / 0104 / 0110 | ADR | T01–T03 | 2.0 | DOC | ☑ |
 | P1-T05 | Build `test-edition-min` + `adversarial/*` fixtures | D1.13 | T04 | 3.0 | QA | ☑ |
 
 > **T05 is not optional even if a real dataset is licensed.** The `test-edition-min` fixture
 > (structurally valid, ~5 surahs, public-domain-safe) keeps CI fast and lets the importer and
 > validator land before the real corpus does. The 16 `adversarial/*` corpora are the acceptance
 > corpus for AC-P1-04 and must each be engineered to trip one **specific** rule.
+>
+> **T01 closed 2026-09-20:** the dataset survey deliverable exists —
+> `docs/02-architecture/upstream-sources.md` (pinned revisions, 492-entry /
+> 98-language / 33 `ara-*` inventory, per-edition transmission table,
+> licence posture) plus the ADR-0101 candidate table. Dataset *selection* and
+> licensing remain owner-side (P1-X01 / OD-01), which T01 does not cover.
+>
+> **T04 closed 2026-09-20:** ADR-0101 (Draft, architecture complete, dataset
+> pending owner), ADR-0104 (Accepted), ADR-0110 (Accepted) are written. The
+> Draft status of ADR-0101 tracks P1-X01, not missing writing.
 
 **Sprint exit:** ADR-0101 and ADR-0114 are `Accepted` (or explicitly deferred with a recorded
 fallback decision), and the fixture set exists.
@@ -221,7 +231,7 @@ suite is green; `doctor --quran --deep` passes on the fixture edition.
 
 | ID | Task | Deliv. | Depends | Est | Role | Status |
 |---|---|---|---|---|---|---|
-| P1-T54 | Debug reader page (RTL, web font, ayah markers) | D1.12 | T39 | 1.5 | BE | ☐ |
+| P1-T54 | Debug reader page (RTL, web font, ayah markers) | D1.12 | T39 | 1.5 | BE | ◐ |
 | P1-T55 | Editorial review pass: reviewer verifies sampled text against printed muṣḥaf; record `verified_by` | AC | T54 | 3.0 | EDIT | ☐ |
 | P1-T56 | Golden-set expansion to all §5.2 edge cases | D1.13 | T55 | 2.0 | QA | ☐ |
 | P1-T57 | Property-test suite (§5.4) | D1.13 | T32 | 2.0 | QA | ☑ |
@@ -249,6 +259,11 @@ suite is green; `doctor --quran --deep` passes on the fixture edition.
 > test. All three stay ☐/◐ on their owner inputs: ADR-0114 corpus/sign-off (T26), a chosen
 > licensed font (T54), approved data + P1-T55 review (T56). Details in `followups.md`
 > FU-P1-03.
+>
+> **Re-verified 2026-09-20:** `cargo test -p server --test api debug` 3/3 green
+> (no-font system stack, RTL label, wired-font `@font-face`) — T54 engineering
+> holds at ◐ pending the OD-04 font asset. `fixture_soak_…` 10k-lookup soak
+> re-passes (8.6s) — T58 holds at ◐ pending the licensed full-corpus run.
 >
 > **T60 preparation (2026-09-17):** all 110 application tests passed with
 > `--test-threads=1`; workspace format, clippy, build, architecture, and migration

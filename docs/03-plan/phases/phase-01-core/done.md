@@ -1,7 +1,7 @@
 # Phase 1 — Completion Ledger
 
 **Phase:** P1 — Canonical Quran Core
-**Status:** 🟡 In Progress — 50 / 65 task rows ☑ · 19 / 21 acceptance criteria partial (automated-green, ritual pending) · 12 / 14 ADRs Accepted · 6 / 6 migrations applied
+**Status:** 🟡 In Progress — 52 / 65 task rows ☑ · 19 / 21 acceptance criteria partial (automated-green, ritual pending) · 12 / 14 ADRs Accepted · 6 / 6 migrations applied
 **Started:** 2026-09-14
 **Completed:** —
 
@@ -45,13 +45,13 @@ with what evidence.
 | Sprint | Tasks | Done | Est (ed) | Actual (ed) | Status |
 |---|---|---|---|---|---|
 | X — External-lead-time decisions | 5 | 0 | — | — | ☐ |
-| 1.0 — Data & Decisions | 5 | 1 | 11.5 | — | ◐ |
+| 1.0 — Data & Decisions | 5 | 3 | 11.5 | — | ◐ |
 | 1.1 — Domain & Addressing | 9 | 9 | 19.5 | — | ☑ |
 | 1.2 — Import & Validation | 17 | 16 | 42.0 | — | ◐ |
 | 1.3 — Reader, Translations, API | 11 | 11 | 21.5 | — | ☑ |
 | 1.4 — Tools, Citations, CLI, Doctor | 11 | 11 | 21.5 | — | ☑ |
 | 1.5 — Debug Reader, Hardening, Exit | 7 | 2 | 15.0 | — | ☐ |
-| **Total** | **65** | **50** | **131.0** | **—** | **77%** |
+| **Total** | **65** | **52** | **131.0** | **—** | **80%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -1006,3 +1006,32 @@ Carried into `docs/plans/handoff-p1-to-p2.md` by task P1-T60.
 - **P1-T58 evidence:** `crates/application/tests/quran_doctor.rs::fixture_soak_ten_thousand_lookups_preserves_corpus_integrity` passes: synthetic-fixture import/validation/activation through the existing harness, 10,000 deterministic random lookups with all fixture ayahs visited, exact source-text and edition identity assertions, token-offset verification, and all 19 post-soak deep checks with no failures. Hash and round-trip checks must explicitly pass.
 - **Verification:** `cargo test -p application -- --test-threads=1` passed (110 tests); `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo check --workspace`, `cargo xtask arch-check`, and `cargo xtask migrate-check` passed. The initial parallel application run timed out during doctor tests; the serial rerun passed.
 - **Exceptions:** T58 remains partial pending a licensed full-corpus run. This fixture run is not standard-edition timing evidence. T60 remains open: workspace tests, coverage, dependency audits, licensed data, and independent recorded review are not certified by this session. T26 comparator was not changed; reference-corpus selection/procedure remains unresolved. Existing unrelated worktree edits were preserved.
+
+## 2026-09-20 — P1-T01/T04 closure, P1-T54/T58 re-verification, quran-api catalog adapter
+
+- **Owner:** implementation agent; no editorial or reviewer sign-off.
+- **P1-T01 → ☑:** survey deliverable verified as existing — `docs/02-architecture/upstream-sources.md`
+  (pinned revisions, 492-entry / 98-language / 33 `ara-*` inventory, named-transmission table,
+  per-edition licence posture) plus the ADR-0101 candidate table. Dataset selection/licensing
+  stays owner-side (P1-X01 / OD-01).
+- **P1-T04 → ☑:** ADR-0101 (Draft, architecture complete), ADR-0104 (Accepted), ADR-0110 (Accepted)
+  are written. ADR-0101 Draft status tracks P1-X01, not missing writing.
+- **P1-T54 → ◐ (was ☐):** `cargo test -p server --test api debug` 3/3 green
+  (`debug_reader_without_font_declares_local_only_stack`,
+  `debug_reader_is_labelled_rtl_without_persistence`,
+  `debug_reader_uses_local_font_asset_when_wired`). Engineering holds; OD-04 font asset pending.
+- **P1-T58 holds ◐:** `fixture_soak_ten_thousand_lookups_preserves_corpus_integrity` re-passes (8.6s).
+  Full-corpus run still blocked on approved data.
+- **Adapter (unplanned-by-board, brief P2/P3):** new `quran_corpus::upstream_catalog` parses
+  `editions.json` into `UpstreamEditionRef` metadata (slugs verbatim, transmission inferred with
+  evidence, licence always unknown, fail-closed validation). 11 new unit tests; verified
+  read-only against the pinned upstream file: 492 entries → 20 QuranText / 3 Tafsir /
+  285 Translation / 184 Transliteration, 11 named transmissions matching `upstream-sources.md` §1.3.
+  Additive `DataQualityFlag::NonUnicode` in `quran-core`.
+- **Verification:** `cargo test -p quran-corpus -p quran-core` green (96 tests);
+  `cargo clippy -p quran-corpus -p quran-core --all-targets -- -D warnings` clean;
+  `cargo fmt --all -- --check` clean. No `Cargo.toml` / allowlist changes (deps already present).
+- **Board mirror:** `tasks.md` T01/T04 ☑, T54 ◐, progress notes dated; §1 counts 50→52 ☑ (80%).
+- **Exceptions:** no owner questions answered by this session; OD-01…OD-14 / ODV-01…ODV-10 unchanged.
+  Follow-ups filed in code: catalog type needs `direction` + `upstream_declared_source` fields
+  if surfaces require them.
