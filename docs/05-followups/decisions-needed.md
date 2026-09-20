@@ -38,6 +38,15 @@
 - **Blocks:** `P1-X01`, `P1-T01`, `P1-T02`, `P1-T56`, `P1-T58`, `AC-P1-01`.
 - **Current fallback:** engineering runs on synthetic `test-edition-min`;
   candidates surveyed in ADR-0101 are all unverified.
+- **Partial answer (2026-09-18, architectural intent only):** primary/default
+  representation = Uthmani script + Ḥafṣ ʿan ʿĀṣim; model must be
+  multi-edition/multi-riwayah/multilingual; `quran-api` is the preferred
+  catalog, `quran-database` a schema reference, `quranchecksum` an integrity
+  reference for compatible datasets. Recorded in
+  `docs/05-followups/owner-decisions.md` and ADR-0101 (still Draft).
+  Still pending: exact `upstream_edition_slug`, publisher/release metadata,
+  per-edition license evidence, numbering/normalization sign-off, and policy
+  choice (A/B/C). Status stays 🔴 until those land.
 - **Recorded in:** `docs/02-architecture/decisions/ADR-0101-initial-quran-dataset.md`
   (Draft), `tasks.md` §1/`§2`, `acceptance.md` §1.1.
 
@@ -167,4 +176,5 @@
 
 | Date | Item | Answer | Recorded in |
 |---|---|---|---|
-| — | — | _none yet_ | — |
+| 2026-09-18 | OD-01 (partial) | Primary/default = Uthmani script + Ḥafṣ ʿan ʿĀṣim (architectural intent, not a dataset selection); model must be multi-edition / multi-riwayah / multilingual. Exact slug, publisher/release, license evidence, numbering/normalization, and A/B/C policy still pending — OD-01 stays 🔴 | `owner-decisions.md`, ADR-0101 |
+| 2026-09-18 | Upstream roles (no OD closed) | `quran-api` = preferred edition/translation catalog; `quran-database` = schema/reference source; `quranchecksum` = integrity reference for compatible datasets only. Repository licence ≠ data licence; per-edition terms stay `unknown` until cleared | `owner-decisions.md`, `upstream-sources.md`, ADR-0101 |
