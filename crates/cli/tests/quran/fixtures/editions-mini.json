@@ -1,0 +1,22 @@
+{
+    "ara_quranuthmanihaf": {
+        "name": "ara-quranuthmanihaf",
+        "author": "Quran Uthmani Hafs",
+        "language": "Arabic",
+        "direction": "rtl",
+        "source": "https://qurancomplex.gov.sa/",
+        "comments": "Version 13",
+        "link": "https://cdn.example/ara-quranuthmanihaf.json",
+        "linkmin": "https://cdn.example/ara-quranuthmanihaf.min.json"
+    },
+    "eng_abdelhaleem": {
+        "name": "eng-abdelhaleem",
+        "author": "Abdel Haleem",
+        "language": "English",
+        "direction": "ltr",
+        "source": "",
+        "comments": "",
+        "link": "https://cdn.example/eng-abdelhaleem.json",
+        "linkmin": "https://cdn.example/eng-abdelhaleem.min.json"
+    }
+}

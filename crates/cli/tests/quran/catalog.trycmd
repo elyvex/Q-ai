@@ -1,0 +1,35 @@
+# CLI acceptance — upstream catalog ingestion (`qai quran catalog`).
+#
+# Metadata-only: parses a local `editions.json` into edition records without
+# touching the database or importing any text. Licences stay unknown.
+
+```console
+$ qai quran catalog tests/quran/fixtures/editions-mini.json
+catalog: tests/quran/fixtures/editions-mini.json
+entries: 2 (quran_text: 1, translation: 1, transliteration: 0, tafsir: 0, reference: 0, checksum: 0)
+named transmissions: 1
+  ara-quranuthmanihaf: hafs (inferred-from-upstream-name:uthmanihaf)
+revision: unpinned
+licenses: all unknown (redistribution not verified)
+
+```
+
+```console
+$ qai quran catalog tests/quran/fixtures/editions-mini.json --revision 47ca096b0976443ba2eab2e45cdf0fb4096a2610
+catalog: tests/quran/fixtures/editions-mini.json
+entries: 2 (quran_text: 1, translation: 1, transliteration: 0, tafsir: 0, reference: 0, checksum: 0)
+named transmissions: 1
+  ara-quranuthmanihaf: hafs (inferred-from-upstream-name:uthmanihaf)
+revision: 47ca096b0976443ba2eab2e45cdf0fb4096a2610
+licenses: all unknown (redistribution not verified)
+
+```
+
+A missing file is a usage error; the database is never opened.
+
+```console
+$ qai quran catalog tests/quran/fixtures/does-not-exist.json
+? 2
+error: cannot read manifest `tests/quran/fixtures/does-not-exist.json`: [..]
+
+```
