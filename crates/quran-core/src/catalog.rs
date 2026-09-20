@@ -301,6 +301,9 @@ pub enum DataQualityFlag {
     MachineTranscription,
     /// Community-contributed source.
     CommunitySource,
+    /// Stored in a legacy non-Unicode encoding (e.g. KFGQPC-font code points):
+    /// reference-only until a declared conversion to Unicode exists.
+    NonUnicode,
     /// The licence is not verified for this item.
     LicenseUnknown,
     /// The provenance chain is not fully known.
