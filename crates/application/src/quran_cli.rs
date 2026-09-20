@@ -643,6 +643,80 @@ pub async fn cmd_validate(db_path: &str, target: &str, report_path: Option<&str>
     }
 }
 
+/// `quran catalog`: parse an upstream `editions.json` catalog file into
+/// edition/translation metadata (no database, no text import).
+///
+/// Human output is a deterministic summary (snapshot-safe); `--json` carries
+/// the full entry array. A malformed catalog is a validation failure, never an
+/// internal error; an unreadable path or report destination is a usage error.
+pub async fn cmd_catalog(
+    catalog_path: &str,
+    revision: Option<&str>,
+    report_path: Option<&str>,
+) -> CommandOutput {
+    let text = match read_manifest(catalog_path) {
+        Ok(text) => text,
+        Err(output) => return output,
+    };
+    let entries = match quran_corpus::parse_catalog(&text, revision) {
+        Ok(entries) => entries,
+        Err(err) => return CommandOutput::err(exit::VALIDATION, err.to_string()),
+    };
+    let mut kind_counts = std::collections::BTreeMap::new();
+    for entry in &entries {
+        *kind_counts.entry(format!("{:?}", entry.content_kind)).or_insert(0usize) += 1;
+    }
+    let named: Vec<String> = entries
+        .iter()
+        .filter(|entry| entry.riwayah.is_known())
+        .map(|entry| {
+            format!(
+                "{}: {} ({})",
+                entry.upstream_edition_slug,
+                entry.riwayah,
+                entry.transmission_evidence.as_deref().unwrap_or("upstream-declared")
+            )
+        })
+        .collect();
+    let revision_value =
+        revision.filter(|revision| !revision.trim().is_empty()).map(str::to_string);
+    let summary = serde_json::json!({
+        "catalog": catalog_path,
+        "entries": entries.len(),
+        "kinds": kind_counts,
+        "named_transmissions": named,
+        "revision": revision_value,
+        "pinned": revision_value.is_some(),
+        "licenses": "all_unknown",
+    });
+    if let Some(path) = report_path {
+        let report = serde_json::json!({"summary": summary, "entries": entries});
+        let json = serde_json::to_string_pretty(&report).unwrap_or_default();
+        if let Err(err) = std::fs::write(path, json) {
+            return CommandOutput::err(exit::USAGE, format!("cannot write report `{path}`: {err}"));
+        }
+    }
+    let mut human = format!(
+        "catalog: {catalog_path}\nentries: {} (quran_text: {}, translation: {}, transliteration: {}, tafsir: {}, reference: {}, checksum: {})\n",
+        entries.len(),
+        kind_counts.get("QuranText").copied().unwrap_or(0),
+        kind_counts.get("Translation").copied().unwrap_or(0),
+        kind_counts.get("Transliteration").copied().unwrap_or(0),
+        kind_counts.get("Tafsir").copied().unwrap_or(0),
+        kind_counts.get("Reference").copied().unwrap_or(0),
+        kind_counts.get("Checksum").copied().unwrap_or(0),
+    );
+    human.push_str(&format!("named transmissions: {}\n", named.len()));
+    for line in &named {
+        human.push_str(&format!("  {line}\n"));
+    }
+    human.push_str(&format!(
+        "revision: {}\nlicenses: all unknown (redistribution not verified)\n",
+        revision_value.as_deref().unwrap_or("unpinned"),
+    ));
+    CommandOutput::ok(human, serde_json::json!({"summary": summary, "entries": entries}))
+}
+
 /// `quran diff`.
 pub async fn cmd_diff(
     db_path: &str,

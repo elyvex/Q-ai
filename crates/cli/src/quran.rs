@@ -84,6 +84,18 @@ pub enum QuranAction {
         #[arg(long)]
         report: Option<String>,
     },
+    /// Parse an upstream `editions.json` catalog into edition metadata (no
+    /// database, no text import; licences stay unknown).
+    Catalog {
+        /// Path to the `editions.json` file.
+        catalog: String,
+        /// Upstream commit/tag the file was read at (unpinned when absent).
+        #[arg(long)]
+        revision: Option<String>,
+        /// Write the full JSON report here.
+        #[arg(long)]
+        report: Option<String>,
+    },
     /// Show the difference between two versions.
     Diff {
         /// Edition slug.
@@ -290,6 +302,10 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
         }
         QuranAction::Validate { target, report } => {
             application::quran_cli::cmd_validate(db_path, &target, report.as_deref()).await
+        }
+        QuranAction::Catalog { catalog, revision, report } => {
+            application::quran_cli::cmd_catalog(&catalog, revision.as_deref(), report.as_deref())
+                .await
         }
         QuranAction::Diff { edition, from, to, format } => {
             application::quran_cli::cmd_diff(db_path, &edition, &from, &to, &format).await
