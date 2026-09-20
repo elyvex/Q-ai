@@ -139,9 +139,15 @@ transmission is read from the upstream name, not from an explicit field.
   `jalaladdinalmah` it is inferred from the author names and must be confirmed
   before classification. None may enter the canonical corpus.
 
-### 1.4 Adapter requirements (documented; not yet implemented)
+### 1.4 Adapter requirements (implemented as `quran_corpus::upstream_catalog`)
 
-An adapter for this repository MUST:
+Implemented and unit-tested (`quran-corpus/src/upstream_catalog.rs`, 11 tests;
+verified read-only against the pinned file: 492 entries → 20 QuranText /
+3 Tafsir / 285 Translation / 184 Transliteration, 11 named transmissions).
+Surfaced in the CLI as `qai quran catalog <editions.json> [--revision R] [--report P]`
+(`application::quran_cli::cmd_catalog`; metadata-only, no database, licences stay
+unknown; malformed catalog → exit 3, unreadable path → exit 2).
+The adapter MUST (and does):
 
 1. Read `editions.json` and preserve the exact `name` as `upstream_edition_slug`
    and the object key as `upstream_catalog_key`.

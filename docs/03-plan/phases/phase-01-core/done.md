@@ -1035,3 +1035,20 @@ Carried into `docs/plans/handoff-p1-to-p2.md` by task P1-T60.
 - **Exceptions:** no owner questions answered by this session; OD-01…OD-14 / ODV-01…ODV-10 unchanged.
   Follow-ups filed in code: catalog type needs `direction` + `upstream_declared_source` fields
   if surfaces require them.
+
+## 2026-09-20 — `qai quran catalog` CLI wiring (follows the catalog adapter session)
+
+- **Owner:** implementation agent; no editorial or reviewer sign-off.
+- **Delivered:** `QuranAction::Catalog` (`crates/cli/src/quran.rs`) +
+  `application::quran_cli::cmd_catalog` — reads a local `editions.json`,
+  optional `--revision` pin and `--report` JSON output. No database opened, no
+  text imported. Human summary is snapshot-deterministic; `--json` carries the
+  full entry array. Exit 2 on unreadable path/report destination, exit 3 on a
+  malformed catalog.
+- **Evidence:** `cargo test -p application --test quran_catalog` 3/3 green;
+  `cargo test -p cli --test quran` 3/3 suites green (incl. new
+  `catalog.trycmd` + `? 2` failure annotation + `editions-mini.json` fixture);
+  `cargo fmt --all -- --check`, workspace clippy `-D warnings`, and
+  `arch-check` clean. No `Cargo.toml` / allowlist changes (all deps pre-approved).
+- **Board mirror:** unplanned-by-board work (brief P3); no task row flipped.
+- **Exceptions:** none. Owner questions unchanged.
