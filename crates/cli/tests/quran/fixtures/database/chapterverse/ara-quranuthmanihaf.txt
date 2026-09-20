@@ -1,0 +1,12 @@
+1|1|Bismillah
+1|2|Praise
+{
+    "name": "ara-quranuthmanihaf",
+    "author": "Quran Uthmani Hafs",
+    "language": "Arabic",
+    "direction": "rtl",
+    "source": "https://qurancomplex.gov.sa/",
+    "comments": "Version 13",
+    "link": "https://cdn.example/ara-quranuthmanihaf.json",
+    "linkmin": "https://cdn.example/ara-quranuthmanihaf.min.json"
+}

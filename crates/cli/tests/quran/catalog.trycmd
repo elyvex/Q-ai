@@ -33,3 +33,18 @@ $ qai quran catalog tests/quran/fixtures/does-not-exist.json
 error: cannot read manifest `tests/quran/fixtures/does-not-exist.json`: [..]
 
 ```
+
+With `--database`, each catalog entry is matched to its mirrored text files
+and described (verses/lines, sha256); entries without files stay catalog-only.
+
+```console
+$ qai quran catalog tests/quran/fixtures/editions-mini.json --database tests/quran/fixtures/database
+catalog: tests/quran/fixtures/editions-mini.json
+entries: 2 (quran_text: 1, translation: 1, transliteration: 0, tafsir: 0, reference: 0, checksum: 0)
+named transmissions: 1
+  ara-quranuthmanihaf: hafs (inferred-from-upstream-name:uthmanihaf)
+revision: unpinned
+licenses: all unknown (redistribution not verified)
+texts (tests/quran/fixtures/database): 1/2 chapterverse, 1/2 linebyline, 0 with CR lines
+
+```
