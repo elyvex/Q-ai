@@ -708,22 +708,26 @@ async fn debug_reader_handler(
         Ok((_, views)) => views,
         Err(error) => return tool_error_response(error),
     };
-    // Debug typography (P1-T54): explicit RTL, an Arabic-capable font stack,
-    // and one marked block per ayah. Without a wired font the page uses a
-    // system stack; `router_with_debug_font` adds a locally served `@font-face`
-    // so no font is downloaded or bundled without a licensing decision. Text is
-    // HTML-escaped so a mangled dataset cannot break the page it exposes.
+    // Debug typography (P1-T54, OD-04): explicit RTL, an Arabic-capable
+    // system font stack, and one marked block per ayah. OD-04 decided
+    // system-installed fonts only — nothing is bundled or downloaded, so no
+    // font/licensing decision is needed for the Phase-1 debug reader. Amiri
+    // (Quran variant, SIL OFL 1.1) is the Phase-2 bundling candidate only.
+    // `router_with_debug_font` serves a caller-supplied woff2 in memory for
+    // tests; wiring it implies no licensing decision. Text is HTML-escaped so
+    // a mangled dataset cannot break the page it exposes.
     let font_css = match font {
         Some(_) => concat!(
             "@font-face{font-family:\"Qai Debug Reader\";",
             "src:url(\"/debug/assets/reader.woff2\") format(\"woff2\");",
             "font-display:swap}",
-            "body{font-family:\"Qai Debug Reader\",\"Amiri\",\"Noto Naskh Arabic\",",
-            "\"Scheherazade New\",\"Geeza Pro\",\"Traditional Arabic\",serif;",
+            "body{font-family:\"Qai Debug Reader\",\"KFGQPC Uthmanic Script HAFS\",",
+            "\"Amiri Quran\",\"Scheherazade New\",\"Noto Naskh Arabic\",",
+            "\"Traditional Arabic\",serif;",
         ),
         None => concat!(
-            "body{font-family:\"Amiri\",\"Noto Naskh Arabic\",\"Scheherazade New\",",
-            "\"Geeza Pro\",\"Traditional Arabic\",serif;",
+            "body{font-family:\"KFGQPC Uthmanic Script HAFS\",\"Amiri Quran\",",
+            "\"Scheherazade New\",\"Noto Naskh Arabic\",\"Traditional Arabic\",serif;",
         ),
     };
     let mut body = String::from(
@@ -776,7 +780,8 @@ pub struct DebugFont(Arc<[u8]>);
 
 /// Build the debug-reader router with a locally served font asset. The font
 /// bytes stay in memory; nothing is bundled into releases or downloaded at
-/// runtime, so wiring this in tests implies no font/licensing decision.
+/// runtime, so wiring this in tests implies no font/licensing decision
+/// (OD-04: Phase-1 ships the system stack only).
 pub fn router_with_debug_font(state: AppState, woff2: Vec<u8>) -> Router {
     router(state)
         .route("/debug/assets/reader.woff2", get(debug_font_handler))
