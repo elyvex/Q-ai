@@ -148,9 +148,27 @@ pub struct ImportOptions {
     /// (ADR-0114). `None` records the explicit skip; `Some` forces the
     /// exact byte-for-byte comparison and the run fails closed on any
     /// mismatch, missing ayah, or incompatible edition policy.
+    ///
+    /// Tier model (OD-03, ADR-0114): supplying `Some` here is **Tier-1**
+    /// verification — a pinned-artifact exact diff plus the
+    /// `reference_text_hash` digest check in [`compared()`]. **Tier-2** (an
+    /// independent second corpus from a separate editorial chain, signer ≠
+    /// OD-02 reviewer per A1) is pending owner selection (A2 shortlist); until
+    /// it lands, a green run closes QV-015 as `passed_tier1_only` with an
+    /// explicit exit-gate flag — never a silent pass.
     pub reference: Option<EditionSource>,
 }
 
+/// Tier-1 reference comparison: exact, order-independent, fail-closed
+/// (ADR-0114 §4, OD-03).
+///
+/// Compares every ayah of `source` against `reference` byte-for-byte. Any text
+/// difference, missing or duplicate ayah, empty corpus, or incompatible
+/// edition policy (script, qiraah, riwayah, numbering, basmala) is `Fatal`.
+/// With `None`, emits the single `Info` skip finding — the `passed_tier1_only`
+/// outcome — and never passes silently. Cross-reading differences are edition
+/// comparisons, not corruption signals: incompatible policies fail closed here
+/// so they cannot be mistaken for integrity results.
 pub fn compare_reference(
     source: &EditionSource,
     reference: Option<&EditionSource>,
