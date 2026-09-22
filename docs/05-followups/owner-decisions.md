@@ -288,26 +288,6 @@ Per OD-ID in this file: `[ ] decision recorded [ ] file updated
 
 ### Recorder notes — 2026-09-22 (verification, not owner text)
 
-1. **C1/C2 slugs stay `qai_edition_id` candidates only.** The
-   `full-vs-minimal` Tanzil distinction is `source_verification_required` —
-   `upstream-sources.md` does not currently verify Tanzil variants.
-2. **A2 (1) vs (2) overlap.** `upstream-sources.md` §4 chains KFGQPC Madinah
-   Mushaf as one provenance line; KFGQPC digital text vs Medina Mushaf digital
-   rendering are not demonstrated independent. Tier-2 independence needs a
-   separate editorial chain — (3) is the only clear independence candidate;
-   (1)/(2) need provenance separation evidence before counting as Tier-2.
-3. **A5 extends, not replaces.** `cargo xtask arch-check` (+ allowlist) is the
-   existing dependency gate; implement A5 by extending it, keeping one gate.
-4. **A7 path is new.** `crates/quran-core/tests/` currently holds only
-   `reference_grammar.rs`; the vectors directory + CI check need a DOC/ENG
-   task before A7 is enforceable.
-5. **A9 cannot auto-close owner-gated rows.** Per `decisions-needed.md`
-   header, only a human closes OD rows; per this file's top rule, no ADR flips
-   to `Accepted` because implementation proceeds. A9 is recorded as a
-   *proposed* standing rule for low-risk technicals only — it takes effect
-   only upon human ratification, and never for license/reviewer items
-   (OD-01/02/03/11/12) nor for the six 🔴 inputs, which are unchanged.
-
 ---
 
 ## Clarifications — 2026-09-22 (3rd entry: precedence + deltas)
