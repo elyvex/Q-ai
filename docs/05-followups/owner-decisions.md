@@ -193,3 +193,117 @@ and update the corresponding OD row — do not delete history.
 4. OD-09/OD-10: Sprint-1.1 kickoff calendar date for absolute deadlines.
 5. OD-11: QAC license verification / written permission before vendoring.
 6. OD-12: named linguist before any lossy profile ships.
+
+---
+
+## Addendum — 2026-09-22 (2nd series: governance + gaps)
+
+- **Recorded:** 2026-09-22
+- **Source:** owner self-review series (C1–C2 corrections, A0–A10 additions).
+- **Rule:** append-only. Nothing above is edited; items below amend by reference
+  (e.g. `OD-01-amend-1`). Status of the six 🔴 human inputs is unchanged.
+
+### A0 — Append-only log (applies retroactively)
+
+`owner-decisions.md` entries are never edited in place. Corrections are new
+dated entries referencing the OD-ID they amend (e.g. `OD-01-amend-1`).
+
+### C1 — OD-01-amend-1: Tanzil variant = full Uthmani text
+
+Use **full "Uthmani" text**, not "Uthmani Minimal", not "Simple/Imlaei".
+`qai_edition_id` candidate: `uthmani-full-hafs-tanzil-1.1`. Rationale: Minimal
+strips small orthographic letters needed to satisfy "exact text before
+interpretation". Variant identity, publisher/release, and license stay
+`pending_owner_verification` / `source_verification_required` until captured
+per A3. Note: this corrects the earlier `uthmani-hafs-tanzil-1.1` string, and —
+as with that string — it is a `qai_edition_id` candidate only, never an
+`upstream_edition_slug` (exact-preservation rule, ADR-0101).
+
+### C2 — OD-01-amend-2: ranked fallback chain for the primary candidate
+
+If the primary candidate's license capture fails or is unsuitable: (1) Tanzil
+full Uthmani, (2) KFGQPC digital Uthmani text, (3) quran.com / api.quran.com
+Uthmani source. All `pending_owner_verification`. The B-track import path is
+not blocked while any one of these is pending — only *bundling* is.
+
+### A1 — OD-02/OD-03 independence rule
+
+The OD-02 L3 reviewer and the OD-03 Tier-2 signer must be two different people.
+If only one qualified person is available, the Tier-2 result is stamped
+`single-reviewer-risk` in the exit-gate doc rather than counted as independent.
+
+### A2 — OD-03 tier-2 shortlist
+
+Ranked candidates: (1) KFGQPC digital Uthmani text, (2) Medina Mushaf digital
+rendering, (3) a second-vendor independently-typed corpus (e.g. quran.com
+backend). All license status `pending_owner_verification`.
+
+### A3 — license-capture standard (OD-01 / OD-04 / OD-11 / OD-12)
+
+Every bundled artifact's captured license file records: source URL, capture
+date, capturer, SPDX identifier if one exists, and a checksum of the raw
+license text.
+
+### A4 — OD-05 schedule buffer
+
+Add a **1-week contingency buffer** after Sprint 1.2b, before the Phase-1
+exit-gate walkthrough. Absorbs slippage from human-dependent items
+(OD-01/02/03) without moving the OD-09 date rule. Effect: 8.7-week baseline
+becomes ~9.7 weeks with buffer; OD-09 absolute dates computed from the
+buffered plan at Sprint-1.1 kickoff.
+
+### A5 — OD-14 (+ OD-06) enforcement
+
+The "server → storage/tools only" allowlist is checked by a **CI-gated
+architecture test** (dependency-graph assertion, e.g. via `cargo metadata`),
+not just documentation/code review.
+
+### A6 — OD-08 redaction step
+
+Before the walkthrough recording is archived: screen for secrets/tokens/
+personal file paths; log checksum of redacted vs. original.
+
+### A7 — OD-12 test-vector location/format
+
+Vectors live at
+`crates/quran-core/tests/vectors/normalization/<rule_id>-v<version>.json`
+as `{input_codepoints, expected_output_codepoints, note}`. CI fails if a rule
+ships without its vector file.
+
+### A8 — OD-09/OD-10 auto-escalation
+
+Any sign-off row or X-gate still open 3 working days past its due date becomes
+a 🔴 item in the next `status.md` update automatically.
+
+### A9 — default-effective clause (second-pass technicals: graph backend, OTLP)
+
+These take effect in 3 working days unless the owner objects in writing.
+Standing rule for all future orchestrator-decidable technicals. Recorded here
+as proposed governance; see recorder notes before treating as effective.
+
+### A10 — Definition-of-Done checklist per OD-ID
+
+Per OD-ID in this file: `[ ] decision recorded [ ] file updated
+[ ] blocks-cleared verified by a CI check/test referencing the OD-ID`.
+
+### Recorder notes — 2026-09-22 (verification, not owner text)
+
+1. **C1/C2 slugs stay `qai_edition_id` candidates only.** The
+   `full-vs-minimal` Tanzil distinction is `source_verification_required` —
+   `upstream-sources.md` does not currently verify Tanzil variants.
+2. **A2 (1) vs (2) overlap.** `upstream-sources.md` §4 chains KFGQPC Madinah
+   Mushaf as one provenance line; KFGQPC digital text vs Medina Mushaf digital
+   rendering are not demonstrated independent. Tier-2 independence needs a
+   separate editorial chain — (3) is the only clear independence candidate;
+   (1)/(2) need provenance separation evidence before counting as Tier-2.
+3. **A5 extends, not replaces.** `cargo xtask arch-check` (+ allowlist) is the
+   existing dependency gate; implement A5 by extending it, keeping one gate.
+4. **A7 path is new.** `crates/quran-core/tests/` currently holds only
+   `reference_grammar.rs`; the vectors directory + CI check need a DOC/ENG
+   task before A7 is enforceable.
+5. **A9 cannot auto-close owner-gated rows.** Per `decisions-needed.md`
+   header, only a human closes OD rows; per this file's top rule, no ADR flips
+   to `Accepted` because implementation proceeds. A9 is recorded as a
+   *proposed* standing rule for low-risk technicals only — it takes effect
+   only upon human ratification, and never for license/reviewer items
+   (OD-01/02/03/11/12) nor for the six 🔴 inputs, which are unchanged.
