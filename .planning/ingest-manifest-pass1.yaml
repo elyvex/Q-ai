@@ -1,0 +1,75 @@
+# Ingest manifest — pass 1 (foundation bootstrap, 36 docs)
+# Pass 2 will cover specs/*/spec.md in merge mode.
+docs:
+  - path: docs/01-requirements/requirements.md
+    type: PRD
+  - path: docs/02-architecture/decisions/ADR-0000-project-architecture.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0001-relational-store.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0002-migration-strategy.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0003-durable-job-system.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0004-config-precedence.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0005-secret-storage.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0006-hashing-canonical.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0007-manifest-format-signing.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0008-provenance-representation.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0009-audit-integrity.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0010-error-taxonomy.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0011-observability.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0012-workspace-boundaries.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0101-initial-quran-dataset.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0102-addressing-and-reference-grammar.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0103-verse-numbering-scheme.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0104-unicode-policy.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0105-canonical-tokenization.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0106-canonical-storage-layout.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0107-atomic-activation-rollback.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0108-corpus-hashing-scheme.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0109-edition-difference-algorithm.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0110-basmala-representation.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0111-citation-identity-and-deep-links.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0112-translation-alignment-and-attribution.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0113-canonical-lookup-caching.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0114-reference-corpus-comparison.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0201-full-text-engine.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0202-graph-store.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0203-quran-morphology-dataset.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0301-rag-strategy.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0701-vector-store.md
+    type: ADR
+  - path: docs/02-architecture/decisions/ADR-0702-cross-store-consistency.md
+    type: ADR
+  - path: docs/07-technical/quran-citation-spec.md
+    type: SPEC
+  - path: docs/architecture/hashing-spec.md
+    type: SPEC
