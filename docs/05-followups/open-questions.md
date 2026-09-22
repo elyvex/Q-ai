@@ -47,3 +47,25 @@
 - **Open:** Add span-field scrubbing for the OTLP exporter when
   `redact_secrets=true` (either a span processor or an OTLP-specific
   `FormatFields` hook). Record as a follow-up task for Phase 3 or later.
+
+## Orchestrator second pass — 2026-09-22 (recommendations, pending ratification)
+
+> Neither item closes on orchestrator word alone; both need a human/lead
+> ratification recorded here with date.
+
+### Q: Phase-4 graph backend — ratify SQLite-CTE default + conditional CozoDB spike?
+
+- **Recommended:** keep SQLite adjacency + bounded recursive CTEs / batched
+  frontier traversal as default (ADR-0202; zero new deps, transactional,
+  local-first). Authorize CozoDB spike (TASK-411) only if a Phase-3-exit
+  benchmark on a realistic word/root graph misses agreed latency targets;
+  park TASK-412 (sqlite-graph) meanwhile. Kuzu stays archived.
+- **Needs to close:** latency targets + benchmark dataset + ratifier + date.
+
+### Q: OTLP span scrubbing — ratify exporter-boundary design?
+
+- **Recommended:** telemetry off by default (opt-in only); scrubber at the
+  exporter boundary; attribute keys on explicit allowlist (deny-by-default);
+  file paths hashed; no Arabic text, user strings, or query payloads in span
+  attributes; scrub fixtures covered by unit tests.
+- **Needs to close:** ratifier + date + follow-up task ID (Phase 3+).
