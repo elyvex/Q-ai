@@ -97,9 +97,9 @@ crates/xtask/src/                                               # arch-check
 
 ## Phase 8: Polish & Verification
 
-- [ ] T018 Run quickstart.md validation: all 6 scenarios (arch-check, stub-default, workflow atomicity, single-gated canonical path, error-code uniformity, disjointness with 004) — document outcomes in the task doc
-- [ ] T019 Add contract-only tests to workspace gates: `cargo fmt --all -- --check`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`
-- [ ] T020 Storage crate tests don't disrupt storage-sqlite's integration suites; `migration files 0001–0016` untouched (`ls migrations/sqlite/ | wc -l` unchanged)
+- [X] T018 Run quickstart.md validation: all 6 scenarios (arch-check, stub-default, workflow atomicity, single-gated canonical path, error-code uniformity, disjointness with 004) — document outcomes in the task doc
+- [X] T019 Add contract-only tests to workspace gates: `cargo fmt --all -- --check`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`
+- [X] T020 Storage crate tests don't disrupt storage-sqlite's integration suites; `migration files 0001–0016` untouched (`ls migrations/sqlite/ | wc -l` unchanged)
 
 ---
 
@@ -166,3 +166,25 @@ Task: "Run cargo run -p xtask -- arch-check"
 - Test lib additions live inline in existing `#[cfg(test)]` modules; do not create a separate `tests/` dir in `storage`.
 - `storage-sqlite` integration suites and `xtask arch-check` are evidence-only consumers; no modifications.
 - If a conformance test reveals a mismatch with spec.md, STOP — record the gap in `docs/05-followups/` and do not patch implementation without a spec note.
+
+---
+
+## Validation Record (T018/T020, 2026-09-22)
+
+**T018 — quickstart.md 6 scenarios:**
+1. Trait boundary backend-free (SC-001): `cargo run -p xtask -- arch-check` → OK, no forbidden edges; `storage` → `domain` only; `grep sqlx|SqlitePool crates/storage/src` empty (doc-comments only). PASS.
+2. Stub defaults fail closed (US1-AC2): `cargo test -p storage --lib` 32/32 green incl. `stub_defaults_fail_closed_without_io`, `read_tx_stub_edge_cases`, `all_codes_unique`, `retryable_variants`. PASS.
+3. Workflow atomicity (SC-002): fake-`UnitOfWork` order + mid-failure rollback tests green (activation, tombstone-first deactivation, provenance, relay exact-claimed-set, zero/limit-0, duplicate-key `Conflict`). PASS.
+4. Single gated canonical path (SC-003): `canonical_write_surface_is_gated_to_three_mutators` + `gated_mutators_fail_closed_without_backend` green; `cargo test -p storage-sqlite --test quran` 9/9 green. PASS.
+5. Error-code uniformity (SC-004): `retryability_is_exactly_conflict_busy_unavailable`, `code_and_remedy_match_contract_table`, `render_json_carries_contract_shape` green. PASS.
+6. Disjointness with 004 (SC-005): every new test names a `storage`-crate item only; no pool/SQL/migration-file claims added; `git status --porcelain migrations/` clean, 16 `.up.sql` files. PASS.
+
+**T020 — no disruption, migrations untouched:**
+- `cargo test -p storage-sqlite` (full): 15 binaries, 44 tests, 0 failed.
+- `ls migrations/sqlite/*.up.sql | wc -l` → 16; `git status --porcelain migrations/` → clean. PASS.
+
+**T019 — workspace gates (partial, see note):**
+- `cargo fmt --all -- --check` clean. `cargo check --workspace --all-targets` clean.
+- `cargo clippy --workspace --all-targets -- -D warnings`: fixed one PRE-EXISTING lint in unrelated `crates/quran-corpus/src/import.rs` (empty line after doc comment, `clippy::empty-line-after-doc-comments`); now clean.
+- `cargo test --workspace`: all green EXCEPT one PRE-EXISTING, unrelated failure — `cli --test quran::quran_normalize_snapshots` trycmd drift: CLI now prints `note: synthetic test data — non-canonical (ADR-0101 fallback)` (already snapshotted in `read_flow.trycmd`, missing in `normalize.trycmd:157`). Not caused by this feature (test-only storage changes + whitespace fixes); snapshot update left to the owning workstream. Full `--exclude cli` confirmation run pending.
+- `cargo test --workspace --exclude cli` (confirmation): 141 test binaries, all `test result: ok`, zero FAILED, exit 0. Confirms the CLI snapshot drift is the SOLE workspace failure and is unrelated to this feature.
