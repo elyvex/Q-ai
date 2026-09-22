@@ -998,3 +998,336 @@ pub struct SearchCacheRow {
     /// Last-hit timestamp (RFC 3339, LRU order).
     pub last_hit_at: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn surah(edition: &str, number: i64) -> SurahRow {
+        SurahRow {
+            edition_id: edition.into(),
+            number,
+            name_arabic: format!("s{number}"),
+            name_transliteration: None,
+            name_translations_json: "{}".into(),
+            ayah_count: 0,
+            revelation_place: None,
+            revelation_order: None,
+            basmala: String::new(),
+            ruku_count: None,
+            metadata_provenance_id: None,
+        }
+    }
+
+    fn ayah(edition: &str, surah_n: i64, ayah_n: i64) -> AyahRow {
+        AyahRow {
+            edition_id: edition.into(),
+            surah: surah_n,
+            ayah: ayah_n,
+            text: format!("{surah_n}:{ayah_n}"),
+            text_hash: "h".into(),
+            char_count: 1,
+            token_count: 1,
+            global_ayah_index: surah_n * 1000 + ayah_n,
+            juz: None,
+            hizb: None,
+            rub: None,
+            manzil: None,
+            ruku: None,
+            page: None,
+            sajdah: None,
+            provenance_id: "p".into(),
+        }
+    }
+
+    fn token(edition: &str, surah_n: i64, ayah_n: i64, pos: i64) -> TokenRow {
+        TokenRow {
+            edition_id: edition.into(),
+            surah: surah_n,
+            ayah: ayah_n,
+            position: pos,
+            surface: format!("t{pos}"),
+            surface_hash: "h".into(),
+            char_start: pos,
+            char_end: pos + 1,
+            byte_start: pos,
+            byte_end: pos + 1,
+            is_pause_mark: false,
+            global_token_index: pos,
+        }
+    }
+
+    fn separator(edition: &str, surah_n: i64, ayah_n: i64, after: i64) -> SeparatorRow {
+        SeparatorRow {
+            edition_id: edition.into(),
+            surah: surah_n,
+            ayah: ayah_n,
+            after_position: after,
+            separator: " ".into(),
+        }
+    }
+
+    /// Minimal run-scoped staging fake: staging mirrors keyed by run id,
+    /// deterministic ordered reads, single gated activation path.
+    #[derive(Default)]
+    struct FakeQuran {
+        calls: Vec<String>,
+        stg_surahs: HashMap<String, Vec<SurahRow>>,
+        stg_ayahs: HashMap<String, Vec<AyahRow>>,
+        stg_tokens: HashMap<(String, String, i64, i64), Vec<TokenRow>>,
+        stg_seps: HashMap<(String, String, i64, i64), Vec<SeparatorRow>>,
+        validations: Vec<String>,
+        activated: Vec<(String, String)>,
+    }
+
+    #[async_trait]
+    impl QuranRepository for FakeQuran {
+        async fn insert_stg_surah(
+            &mut self,
+            run_id: &str,
+            row: SurahRow,
+        ) -> Result<(), StorageError> {
+            self.calls.push(format!("stage-surah:{run_id}:{}", row.number));
+            self.stg_surahs.entry(run_id.into()).or_default().push(row);
+            Ok(())
+        }
+        async fn insert_stg_ayah(
+            &mut self,
+            run_id: &str,
+            row: AyahRow,
+        ) -> Result<(), StorageError> {
+            self.calls.push(format!("stage-ayah:{run_id}:{}:{}", row.surah, row.ayah));
+            self.stg_ayahs.entry(run_id.into()).or_default().push(row);
+            Ok(())
+        }
+        async fn insert_stg_token(
+            &mut self,
+            run_id: &str,
+            row: TokenRow,
+        ) -> Result<(), StorageError> {
+            self.calls.push(format!("stage-token:{run_id}:{}", row.position));
+            self.stg_tokens
+                .entry((run_id.into(), row.edition_id.clone(), row.surah, row.ayah))
+                .or_default()
+                .push(row);
+            Ok(())
+        }
+        async fn insert_stg_separator(
+            &mut self,
+            run_id: &str,
+            row: SeparatorRow,
+        ) -> Result<(), StorageError> {
+            self.calls.push(format!("stage-sep:{run_id}:{}", row.after_position));
+            self.stg_seps
+                .entry((run_id.into(), row.edition_id.clone(), row.surah, row.ayah))
+                .or_default()
+                .push(row);
+            Ok(())
+        }
+        async fn list_stg_surahs(&self, run_id: &str) -> Result<Vec<SurahRow>, StorageError> {
+            let mut v = self.stg_surahs.get(run_id).cloned().unwrap_or_default();
+            v.sort_by_key(|r| r.number);
+            Ok(v)
+        }
+        async fn list_stg_ayahs(&self, run_id: &str) -> Result<Vec<AyahRow>, StorageError> {
+            let mut v = self.stg_ayahs.get(run_id).cloned().unwrap_or_default();
+            v.sort_by_key(|r| (r.surah, r.ayah));
+            Ok(v)
+        }
+        async fn list_stg_tokens(
+            &self,
+            run_id: &str,
+            edition_id: &str,
+            surah: i64,
+            ayah_n: i64,
+        ) -> Result<Vec<TokenRow>, StorageError> {
+            let mut v = self
+                .stg_tokens
+                .get(&(run_id.into(), edition_id.into(), surah, ayah_n))
+                .cloned()
+                .unwrap_or_default();
+            v.sort_by_key(|r| r.position);
+            Ok(v)
+        }
+        async fn list_stg_separators(
+            &self,
+            run_id: &str,
+            edition_id: &str,
+            surah: i64,
+            ayah_n: i64,
+        ) -> Result<Vec<SeparatorRow>, StorageError> {
+            let mut v = self
+                .stg_seps
+                .get(&(run_id.into(), edition_id.into(), surah, ayah_n))
+                .cloned()
+                .unwrap_or_default();
+            v.sort_by_key(|r| r.after_position);
+            Ok(v)
+        }
+        async fn count_stg_ayahs(&self, run_id: &str) -> Result<i64, StorageError> {
+            Ok(self.stg_ayahs.get(run_id).map(|v| v.len() as i64).unwrap_or(0))
+        }
+        async fn insert_validation_report(
+            &mut self,
+            row: ValidationReportRow,
+        ) -> Result<(), StorageError> {
+            self.calls.push(format!("validate:{}", row.id));
+            self.validations.push(row.id);
+            Ok(())
+        }
+        async fn activate_edition(
+            &mut self,
+            run_id: &str,
+            edition_id: &str,
+            _activated_by: &str,
+            _approval_id: &str,
+            _activated_at: &str,
+        ) -> Result<i64, StorageError> {
+            // Gated path requires staged content; missing run → NotFound,
+            // pointer and generation unchanged (caller observes NotFound).
+            let has = self.stg_ayahs.get(run_id).map(|v| !v.is_empty()).unwrap_or(false);
+            if !has {
+                return Err(StorageError::NotFound { urn: run_id.into() });
+            }
+            self.calls.push(format!("activate:{run_id}:{edition_id}"));
+            self.activated.push((run_id.into(), edition_id.into()));
+            Ok(1)
+        }
+    }
+
+    fn validation(id: &str) -> ValidationReportRow {
+        ValidationReportRow {
+            id: id.into(),
+            subject_urn: "urn:run".into(),
+            validator: "qv".into(),
+            validator_version: "1".into(),
+            outcome: "pass".into(),
+            fatal_count: 0,
+            error_count: 0,
+            warning_count: 0,
+            findings_json: "[]".into(),
+            created_at: "2026-01-01T00:00:00Z".into(),
+        }
+    }
+
+    // T011 (US2, FR-006): staged reads are deterministic and run-scoped.
+    #[tokio::test]
+    async fn staged_reads_are_deterministic_and_run_scoped() {
+        let mut q = FakeQuran::default();
+        // Insert out of order into run-A.
+        q.insert_stg_surah("run-a", surah("ed", 2)).await.unwrap();
+        q.insert_stg_surah("run-a", surah("ed", 1)).await.unwrap();
+        q.insert_stg_ayah("run-a", ayah("ed", 2, 1)).await.unwrap();
+        q.insert_stg_ayah("run-a", ayah("ed", 1, 2)).await.unwrap();
+        q.insert_stg_ayah("run-a", ayah("ed", 1, 1)).await.unwrap();
+        q.insert_stg_token("run-a", token("ed", 1, 1, 3)).await.unwrap();
+        q.insert_stg_token("run-a", token("ed", 1, 1, 1)).await.unwrap();
+        q.insert_stg_token("run-a", token("ed", 1, 1, 2)).await.unwrap();
+        q.insert_stg_separator("run-a", separator("ed", 1, 1, 2)).await.unwrap();
+        q.insert_stg_separator("run-a", separator("ed", 1, 1, 1)).await.unwrap();
+        // Run-B stays empty (run scoping).
+        q.insert_stg_surah("run-b", surah("ed", 9)).await.unwrap();
+
+        let surahs = q.list_stg_surahs("run-a").await.unwrap();
+        assert_eq!(surahs.iter().map(|r| r.number).collect::<Vec<_>>(), vec![1, 2]);
+        let ayahs = q.list_stg_ayahs("run-a").await.unwrap();
+        assert_eq!(
+            ayahs.iter().map(|r| (r.surah, r.ayah)).collect::<Vec<_>>(),
+            vec![(1, 1), (1, 2), (2, 1)]
+        );
+        let toks = q.list_stg_tokens("run-a", "ed", 1, 1).await.unwrap();
+        assert_eq!(toks.iter().map(|r| r.position).collect::<Vec<_>>(), vec![1, 2, 3]);
+        let seps = q.list_stg_separators("run-a", "ed", 1, 1).await.unwrap();
+        assert_eq!(seps.iter().map(|r| r.after_position).collect::<Vec<_>>(), vec![1, 2]);
+
+        // Run scoping: run-B sees only its own rows.
+        assert_eq!(q.list_stg_surahs("run-b").await.unwrap().len(), 1);
+        assert_eq!(q.list_stg_ayahs("run-b").await.unwrap().len(), 0);
+        assert_eq!(q.count_stg_ayahs("run-a").await.unwrap(), 3);
+        assert_eq!(q.count_stg_ayahs("run-b").await.unwrap(), 0);
+    }
+
+    // T011 caller order: stage → validate → activate.
+    #[tokio::test]
+    async fn caller_order_stage_validate_activate() {
+        let mut q = FakeQuran::default();
+        q.insert_stg_ayah("run-1", ayah("ed-1", 1, 1)).await.unwrap();
+        q.insert_validation_report(validation("v-1")).await.unwrap();
+        let generation = q
+            .activate_edition("run-1", "ed-1", "op", "appr-1", "2026-01-01T00:00:00Z")
+            .await
+            .unwrap();
+        assert_eq!(generation, 1);
+        let stage_pos = q.calls.iter().position(|c| c.starts_with("stage-ayah")).unwrap();
+        let validate_pos = q.calls.iter().position(|c| c.starts_with("validate:")).unwrap();
+        let activate_pos = q.calls.iter().position(|c| c.starts_with("activate:")).unwrap();
+        assert!(stage_pos < validate_pos && validate_pos < activate_pos);
+
+        // Activating a missing run fails closed with NotFound.
+        let err = q
+            .activate_edition("missing", "ed-x", "op", "appr", "2026-01-01T00:00:00Z")
+            .await
+            .unwrap_err();
+        assert!(matches!(err, StorageError::NotFound { .. }));
+        assert_eq!(err.code(), "QAI-DB-0002");
+    }
+
+    // T012 (US2, FR-005/SC-003): single gated canonical-write path.
+    // Audit pinned to this source file: the only canonical-write methods are
+    // `activate_edition`, `rollback_edition`, and human-gated
+    // `set_edition_status`. Staging (`insert_stg_*`), validation/difference
+    // reports, citations, translations, glosses, normalization catalog,
+    // Layer-D forms, index pointers/build runs, and search cache are separate
+    // attributed/derived datasets that never overwrite canonical Arabic.
+    #[test]
+    fn canonical_write_surface_is_gated_to_three_mutators() {
+        let src = include_str!("quran.rs");
+        // Restrict the audit to the contract surface (everything before the
+        // test module) so this test's own forbidden-name literals do not
+        // self-match via `include_str!`.
+        let trait_src = src.split("#[cfg(test)]").next().unwrap_or(src);
+        for allowed in ["activate_edition", "rollback_edition", "set_edition_status"] {
+            assert!(trait_src.contains(allowed), "gated mutator {allowed} must exist");
+        }
+        // No row-level canonical insert/update/delete may exist.
+        // NOTE: names carry a trailing `(` so derived helpers like
+        // `insert_ayah_forms` / `insert_token_forms` (Layer-D, allowed) do not
+        // false-positive on the `insert_ayah` / `insert_token` prefixes.
+        for forbidden in [
+            "fn insert_edition(",
+            "fn insert_surah(",
+            "fn insert_ayah(",
+            "fn insert_token(",
+            "fn insert_separator(",
+            "fn insert_division(",
+            "fn update_edition(",
+            "fn update_ayah(",
+            "fn delete_edition(",
+            "fn delete_ayah(",
+            "fn write_canonical(",
+            "fn insert_canonical(",
+        ] {
+            assert!(
+                !trait_src.contains(forbidden),
+                "forbidden canonical-write method {forbidden} must not exist"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn gated_mutators_fail_closed_without_backend() {
+        struct StubQuran;
+        #[async_trait]
+        impl QuranRepository for StubQuran {}
+        let mut q = StubQuran;
+        for err in [
+            q.activate_edition("r", "e", "op", "a", "t").await.unwrap_err(),
+            q.rollback_edition("s", "v", "op", "a", "t").await.unwrap_err(),
+            q.set_edition_status("e", "Active").await.unwrap_err(),
+        ] {
+            assert_eq!(err, StorageError::StorageUnavailable);
+            assert_eq!(err.code(), "QAI-DB-0009");
+        }
+    }
+}
