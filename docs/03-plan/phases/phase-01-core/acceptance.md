@@ -255,8 +255,10 @@ msrv         -> build with pinned MSRV
 
 ## 4. Coverage Gates
 
-Proposed floors (the plan does not state numeric coverage gates; these are derived from the
-Phase-0 policy to keep the standard consistent). Owner to ratify before Sprint 1.2.
+Ratified 2026-09-22 (OD-07, owner series) exactly as proposed below. Measured
+per-crate via `cargo llvm-cov` as a CI gate; floors may not be lowered without
+a new OD. Coverage is a tripwire, not proof — tests and property suites remain
+the proof.
 
 | Crates / modules | Line coverage | Status |
 |---|---|---|
