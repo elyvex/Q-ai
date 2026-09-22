@@ -111,6 +111,20 @@ impl StorageError {
 mod tests {
     use super::*;
 
+    fn all_errors() -> Vec<StorageError> {
+        vec![
+            StorageError::Conflict,
+            StorageError::NotFound { urn: "x".into() },
+            StorageError::ImmutableSourceVersion,
+            StorageError::ConstraintViolation { message: "x".into() },
+            StorageError::StorageBusy,
+            StorageError::MigrationRequired { at_schema: 1, required: 2 },
+            StorageError::MigrationChecksumMismatch { version: 1 },
+            StorageError::IdempotencyKeyReplay,
+            StorageError::StorageUnavailable,
+        ]
+    }
+
     #[test]
     fn all_codes_unique() {
         let codes = [
@@ -135,6 +149,76 @@ mod tests {
         assert!(StorageError::StorageUnavailable.is_retryable());
         assert!(!StorageError::NotFound { urn: "x".into() }.is_retryable());
         assert!(!StorageError::ImmutableSourceVersion.is_retryable());
+    }
+
+    // T017 (US5, FR-013/SC-004): retryability is exactly
+    // {Conflict, StorageBusy, StorageUnavailable} per contracts/error-codes.md.
+    #[test]
+    fn retryability_is_exactly_conflict_busy_unavailable() {
+        for err in all_errors() {
+            let expected = matches!(
+                err,
+                StorageError::Conflict
+                    | StorageError::StorageBusy
+                    | StorageError::StorageUnavailable
+            );
+            assert_eq!(err.is_retryable(), expected, "{:?} retryability", err);
+        }
+    }
+
+    // T017: code()-remedy consistency per contracts/error-codes.md.
+    #[test]
+    fn code_and_remedy_match_contract_table() {
+        let cases: Vec<(StorageError, &str)> = vec![
+            (StorageError::Conflict, "QAI-DB-0001"),
+            (StorageError::NotFound { urn: "x".into() }, "QAI-DB-0002"),
+            (StorageError::ImmutableSourceVersion, "QAI-DB-0003"),
+            (StorageError::ConstraintViolation { message: "x".into() }, "QAI-DB-0004"),
+            (StorageError::StorageBusy, "QAI-DB-0005"),
+            (StorageError::MigrationRequired { at_schema: 1, required: 2 }, "QAI-DB-0006"),
+            (StorageError::MigrationChecksumMismatch { version: 1 }, "QAI-DB-0007"),
+            (StorageError::IdempotencyKeyReplay, "QAI-DB-0008"),
+            (StorageError::StorageUnavailable, "QAI-DB-0009"),
+        ];
+        for (err, code) in &cases {
+            assert_eq!(err.code(), *code, "{err:?} code");
+            assert!(err.remedy().is_some(), "{err:?} must carry a human remedy");
+            assert!(!err.summary().is_empty(), "{err:?} summary must not be empty");
+            assert!(!err.cause_chain().is_empty(), "{err:?} why-chain must not be empty");
+        }
+        // next_command routing for migrate/verify/retry.
+        assert_eq!(
+            StorageError::MigrationRequired { at_schema: 1, required: 2 }.next_command().as_deref(),
+            Some("qai db migrate")
+        );
+        assert_eq!(
+            StorageError::MigrationChecksumMismatch { version: 1 }.next_command().as_deref(),
+            Some("qai db verify")
+        );
+        assert_eq!(
+            StorageError::StorageBusy.next_command().as_deref(),
+            Some("retry the operation")
+        );
+    }
+
+    // T017: render_json carries code/summary/why/location/remedy/next_command/retryable.
+    #[test]
+    fn render_json_carries_contract_shape() {
+        for err in all_errors() {
+            let v: serde_json::Value =
+                serde_json::from_str(&err.render_json()).expect("render_json must be valid JSON");
+            for field in
+                ["code", "summary", "why", "location", "remedy", "next_command", "retryable"]
+            {
+                assert!(v.get(field).is_some(), "{:?} JSON missing {field}", err);
+            }
+            assert_eq!(v["code"].as_str().unwrap(), err.code());
+            assert_eq!(v["summary"].as_str().unwrap(), err.summary());
+            assert!(v["why"].is_array());
+            assert_eq!(v["retryable"].as_bool().unwrap(), err.is_retryable());
+            // Human rendering carries the identical code.
+            assert!(err.render_human().contains(err.code()));
+        }
     }
 }
 
