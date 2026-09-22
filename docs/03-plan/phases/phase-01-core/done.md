@@ -986,6 +986,19 @@ silent scope leak into Phase 2.
 
 Carried into `docs/plans/handoff-p1-to-p2.md` by task P1-T60.
 
+#### Ratifications recorded 2026-09-22 (no row closed — owner series, engineering effect only)
+
+- **OWN-03 → decided (OD-05 + A4):** 131.0 ed / ~8.7 weeks accepted with the
+  1.2a/1.2b split, no fourth engineer, no scope cut, 24 ed sprint cap, +1-week
+  buffer (~9.7 weeks). Baseline in `tasks.md` §9.1 + `README.md` §9.1.
+- **OWN-04 → decided (OD-06):** `axum` 0.8.x + `tower-http` 0.6.x ratified in
+  `technology-stack.md` §4 (loopback only, no CORS, per-install bearer token).
+- **OWN-06 → accepted under enforcement (OD-14 + A5):** `server → storage/tools`
+  allowlist pinned by `xtask` test `server_allowlist_matches_od14_decision`;
+  `arch-check` green. Trait seams required; Phase-3 routing review scheduled.
+- **OD-07 floors** ratified in `acceptance.md` §4 (CI coverage gate at exit).
+- **P1-T54 → ☑** as the OD-04 system-stack debug reader (see §2 entry).
+
 ---
 
 ## 8. Phase Closure
