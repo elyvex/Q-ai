@@ -106,6 +106,11 @@ fn golden_ayah_texts_match_the_imported_fixture() {
 fn test_edition_min_parses_with_expected_shape() {
     let source: EditionSource = JsonAdapter.parse(MIN_MANIFEST).unwrap();
     assert_eq!(source.edition.slug, "test-edition-min");
+    // OD-01 B-track: the pipeline-exercise fixture is flagged synthetic and
+    // must stay that way — it is never canonical.
+    assert!(source.edition.synthetic, "test-edition-min must stay synthetic");
+    assert_eq!(source.edition.upstream_edition_slug, None);
+    assert_eq!(source.edition.verified_by, None);
     assert_eq!(source.surahs.len(), 5);
     assert_eq!(source.ayahs.len(), 14);
     assert_eq!(source.expected.surah_count, 5);
