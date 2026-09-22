@@ -475,8 +475,11 @@ async fn debug_reader_without_font_declares_local_only_stack() {
     assert_eq!(headers.get("content-type").unwrap(), "text/html; charset=utf-8");
     let text = String::from_utf8_lossy(&body).into_owned();
     assert!(text.contains("font-family"));
-    assert!(text.contains("\"Amiri\""));
+    // OD-04 system stack: locally installed fonts only, nothing bundled.
+    assert!(text.contains("\"Amiri Quran\""));
+    assert!(text.contains("KFGQPC Uthmanic Script HAFS"));
     assert!(!text.contains("@font-face"), "no @font-face unless a font is wired");
+    assert!(!text.contains("http"), "no remote font fetch from the debug reader");
     handle.abort();
 }
 
