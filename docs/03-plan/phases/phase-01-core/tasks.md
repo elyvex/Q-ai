@@ -231,7 +231,7 @@ suite is green; `doctor --quran --deep` passes on the fixture edition.
 
 | ID | Task | Deliv. | Depends | Est | Role | Status |
 |---|---|---|---|---|---|---|
-| P1-T54 | Debug reader page (RTL, web font, ayah markers) | D1.12 | T39 | 1.5 | BE | ◐ |
+| P1-T54 | Debug reader page (RTL, system font stack, ayah markers) | D1.12 | T39 | 1.5 | BE | ☑ |
 | P1-T55 | Editorial review pass: reviewer verifies sampled text against printed muṣḥaf; record `verified_by` | AC | T54 | 3.0 | EDIT | ☐ |
 | P1-T56 | Golden-set expansion to all §5.2 edge cases | D1.13 | T55 | 2.0 | QA | ☐ |
 | P1-T57 | Property-test suite (§5.4) | D1.13 | T32 | 2.0 | QA | ☑ |
@@ -265,6 +265,10 @@ suite is green; `doctor --quran --deep` passes on the fixture edition.
 > holds at ◐ pending the OD-04 font asset. `fixture_soak_…` 10k-lookup soak
 > re-passes (8.6s) — T58 holds at ◐ pending the licensed full-corpus run.
 >
+> **Closed 2026-09-22:** T54 → ☑ as the OD-04 system-stack debug reader (no
+> bundled font; `done.md` §2 entry). T26 Tier-1 rustdoc landed; Tier-2 stays ◐
+> on ADR-0114 corpus/sign-off. T56 stays ☐ on approved data + P1-T55 review.
+>
 > **T60 preparation (2026-09-17):** all 110 application tests passed with
 > `--test-threads=1`; workspace format, clippy, build, architecture, and migration
 > checks passed. This is preparation only: workspace-wide tests, coverage,
@@ -286,8 +290,8 @@ suite is green; `doctor --quran --deep` passes on the fixture edition.
 | 1.2 — Import & Validation | 17 | 42.0 ⚠️ | 16 | ◐ In Progress |
 | 1.3 — Reader, Translations, API | 11 | 21.5 | 11 | ☑ Done |
 | 1.4 — Tools, Citations, CLI, Doctor | 11 | 21.5 | 11 | ☑ Done |
-| 1.5 — Debug Reader, Hardening, Exit | 7 | 15.0 | 2 | ◐ In Progress |
-| **Total** | **60 + 5** | **131.0** | **50** | **77%** |
+| 1.5 — Debug Reader, Hardening, Exit | 7 | 15.0 | 3 | ◐ In Progress |
+| **Total** | **60 + 5** | **131.0** | **51** | **78%** |
 
 By role: **BE ≈ 81.0 ed** · **QA ≈ 23.0 ed** · **DOC ≈ 10.0 ed** · **DATA ≈ 9.0 ed** ·
 **EDIT ≈ 6.5 ed** · shared/all 1.5 ed.
