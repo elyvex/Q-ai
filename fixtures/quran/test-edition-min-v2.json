@@ -12,7 +12,8 @@
     "unicode_normalization": "nfc",
     "basmala_policy": "per_surah",
     "publisher": null,
-    "version": "0.2.0"
+    "version": "0.2.0",
+    "synthetic": true
   },
   "expected": {
     "surah_count": 5,
