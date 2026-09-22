@@ -24,7 +24,31 @@
         "unicode_normalization": { "type": "string", "enum": ["nfc", "nfd", "nfkc", "nfkd"] },
         "basmala_policy": { "type": "string", "enum": ["counted_as_first_ayah", "unnumbered_header", "absent", "per_surah"] },
         "publisher": { "type": ["string", "null"] },
-        "version": { "type": "string" }
+        "version": { "type": "string" },
+        "synthetic": { "type": "boolean" },
+        "upstream_edition_slug": { "type": ["string", "null"] },
+        "qai_edition_id": { "type": ["string", "null"] },
+        "license": {
+          "type": ["object", "null"],
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": { "type": "string", "enum": ["verified", "unknown", "restricted", "metadata_only"] },
+            "expression": { "type": ["string", "null"] },
+            "source_url": { "type": ["string", "null"] }
+          }
+        },
+        "verified_by": { "type": ["string", "null"] },
+        "source": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "repository": { "type": ["string", "null"] },
+            "revision": { "type": ["string", "null"] },
+            "path": { "type": ["string", "null"] },
+            "retrieved_at": { "type": ["string", "null"] }
+          }
+        }
       }
     },
     "expected": {
