@@ -148,6 +148,12 @@ pub trait UnitOfWork: Send {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::StorageError;
+    use crate::quran::QuranRepository;
+    use crate::repository::{
+        AuditRepository, JobRepository, OutboxRepository, ProvenanceRepository, SettingsRepository,
+        SourceRepository,
+    };
 
     #[test]
     fn db_backend_display() {
@@ -160,5 +166,105 @@ mod tests {
         let h = DbHealth::ok(DbBackend::SQLite, 1);
         assert!(h.healthy);
         assert_eq!(h.schema_version, 1);
+    }
+
+    // T004 (US1-AC2): stub defaults fail closed with QAI-DB-0009, never panic, no I/O.
+    struct StubSources;
+    struct StubProvenance;
+    struct StubAudit;
+    struct StubJobs;
+    struct StubSettings;
+    struct StubOutbox;
+    struct StubQuran;
+    struct StubReadTx;
+
+    #[async_trait::async_trait]
+    impl SourceRepository for StubSources {}
+    #[async_trait::async_trait]
+    impl ProvenanceRepository for StubProvenance {}
+    #[async_trait::async_trait]
+    impl AuditRepository for StubAudit {}
+    #[async_trait::async_trait]
+    impl JobRepository for StubJobs {}
+    #[async_trait::async_trait]
+    impl SettingsRepository for StubSettings {}
+    #[async_trait::async_trait]
+    impl OutboxRepository for StubOutbox {}
+    #[async_trait::async_trait]
+    impl QuranRepository for StubQuran {}
+
+    #[async_trait::async_trait]
+    impl ReadTx for StubReadTx {
+        fn schema_version(&self) -> u32 {
+            0
+        }
+        async fn query_one(&self, _sql: &str) -> Result<Option<String>, StorageError> {
+            // Missing table/row maps to Ok(None), never an error (edge case).
+            Ok(None)
+        }
+        // query_list uses the trait default (stub-unavailable).
+    }
+
+    fn assert_unavailable(err: StorageError) {
+        assert_eq!(err, StorageError::StorageUnavailable);
+        assert_eq!(err.code(), "QAI-DB-0009");
+    }
+
+    #[tokio::test]
+    async fn stub_defaults_fail_closed_without_io() {
+        // Every call below uses only trait defaults: no backend, no I/O, no panic.
+        let s = StubSources;
+        assert_unavailable(s.get("x").await.unwrap_err());
+        let mut s = StubSources;
+        assert_unavailable(s.transition_state("v", "Indexing", "Active").await.unwrap_err());
+
+        let p = StubProvenance;
+        assert_unavailable(p.list_by_subject("urn:x").await.unwrap_err());
+
+        let a = StubAudit;
+        assert_unavailable(a.verify_chain().await.unwrap_err());
+        assert_unavailable(a.latest_sequence().await.unwrap_err());
+
+        let mut j = StubJobs;
+        assert_unavailable(j.claim_next("owner", 30).await.unwrap_err());
+        assert_unavailable(j.reap_expired_leases().await.unwrap_err());
+
+        let st = StubSettings;
+        assert_unavailable(st.get("k").await.unwrap_err());
+
+        let mut o = StubOutbox;
+        assert_unavailable(o.allocate_generation("s", "r").await.unwrap_err());
+        assert_unavailable(o.list_pending_tombstones().await.unwrap_err());
+
+        let q = StubQuran;
+        assert_unavailable(q.get_active().await.unwrap_err());
+        let mut q = StubQuran;
+        assert_unavailable(
+            q.activate_edition("run", "ed", "op", "appr", "2026-01-01T00:00:00Z")
+                .await
+                .unwrap_err(),
+        );
+    }
+
+    #[tokio::test]
+    async fn read_tx_stub_edge_cases() {
+        let tx = StubReadTx;
+        // query_list unimplemented → stub StorageUnavailable (QAI-DB-0009).
+        assert_unavailable(tx.query_list("SELECT 1").await.unwrap_err());
+        // query_one missing row → Ok(None), not an error.
+        assert_eq!(tx.query_one("SELECT 1").await.unwrap(), None);
+        assert_eq!(tx.schema_version(), 0);
+    }
+
+    #[test]
+    fn repository_traits_are_send_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<StubSources>();
+        assert_send_sync::<StubProvenance>();
+        assert_send_sync::<StubAudit>();
+        assert_send_sync::<StubJobs>();
+        assert_send_sync::<StubSettings>();
+        assert_send_sync::<StubOutbox>();
+        assert_send_sync::<StubQuran>();
     }
 }
