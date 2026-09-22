@@ -1,7 +1,7 @@
 # Phase 1 — Completion Ledger
 
 **Phase:** P1 — Canonical Quran Core
-**Status:** 🟡 In Progress — 52 / 65 task rows ☑ · 19 / 21 acceptance criteria partial (automated-green, ritual pending) · 12 / 14 ADRs Accepted · 6 / 6 migrations applied
+**Status:** 🟡 In Progress — 53 / 65 task rows ☑ · 19 / 21 acceptance criteria partial (automated-green, ritual pending) · 12 / 14 ADRs Accepted · 6 / 6 migrations applied
 **Started:** 2026-09-14
 **Completed:** —
 
@@ -50,8 +50,8 @@ with what evidence.
 | 1.2 — Import & Validation | 17 | 16 | 42.0 | — | ◐ |
 | 1.3 — Reader, Translations, API | 11 | 11 | 21.5 | — | ☑ |
 | 1.4 — Tools, Citations, CLI, Doctor | 11 | 11 | 21.5 | — | ☑ |
-| 1.5 — Debug Reader, Hardening, Exit | 7 | 2 | 15.0 | — | ☐ |
-| **Total** | **65** | **52** | **131.0** | **—** | **80%** |
+| 1.5 — Debug Reader, Hardening, Exit | 7 | 3 | 15.0 | — | ☐ |
+| **Total** | **65** | **53** | **131.0** | **—** | **82%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -775,6 +775,21 @@ estimate — an under-recorded sprint is how the next phase inherits a wrong cap
 ### Sprint 1.4 — Tools, Citations, CLI, Doctor
 
 ### Sprint 1.5 — Debug Reader, Hardening, Exit
+
+### P1-T54 — System-stack debug reader (OD-04)
+- **Deliverable:** D1.12
+- **Completed:** 2026-09-22
+- **Owner:** agent (BE)
+- **PR / commit:** working tree
+- **Evidence:** `crates/server/src/api.rs` (OD-04 system stack:
+  `KFGQPC Uthmanic Script HAFS, Amiri Quran, Scheherazade New, Noto Naskh
+  Arabic, Traditional Arabic`; `@font-face` only when a font is wired);
+  `cargo test -p server --test api debug` 3/3 green (system-stack assertion +
+  local-only no-remote-fetch assertion + wired-font route + RTL/label/markers)
+- **DoD:** ✅ all items (no bundled font per OD-04; Amiri Quran is the Phase-2
+  candidate only, `pending_owner_verification` until vendored)
+- **Notes:** renamed "system-stack debug reader" per OD-04. AC-P1-18 stays ☐
+  pending the exit ritual walkthrough, not pending any font asset.
 
 ---
 
