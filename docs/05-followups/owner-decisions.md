@@ -326,3 +326,28 @@ Per OD-ID in this file: `[ ] decision recorded [ ] file updated
 - Schedule baseline is 8.7 weeks + A4 1-week buffer (~9.7 weeks); OD-09
   absolute dates are computed from the buffered plan at Sprint-1.1 kickoff.
 - The six 🔴 human inputs are unchanged.
+
+---
+
+## A10 — Definition-of-Done checklist per OD-ID — 2026-09-22
+
+> A10 (`All ODs`): `[ ] decision recorded [ ] file updated
+> [ ] blocks-cleared verified by a CI check/test referencing the OD-ID`.
+> Ledger below; checked items cite evidence. Unchecked items name the blocker.
+
+| OD-ID | Decision recorded | File updated | Blocks-cleared verified | Evidence / blocker |
+|---|---|---|---|---|
+| OD-01 (B-track) | [x] | [x] | [x] partial | `EditionMeta::{synthetic,upstream_edition_slug,qai_edition_id,license,verified_by,source}` + schema + `test-edition-min` `synthetic:true` + import notice; `quran-corpus --test fixtures` (synthetic-flag assertion), `cli --test quran` (notice snapshots), `xtask validate` on all fixtures. Bundling half stays 🔴 (license capture) |
+| OD-02 (method) | [x] | [ ] | [ ] | Method + sample + `verified_by` format in `owner-decisions.md`; reviewer name 🔴 blocks ADR-0101 recording |
+| OD-03 (Tier-1) | [x] | [x] | [x] partial | Tier-1 `compare_reference` + `reference_text_hash` digest + fail-closed: `quran-corpus --test fixtures` (3 tests) + `application --test quran_import` (reference flows); rustdoc tier model landed 2026-09-22. Tier-2 stays 🔴 (corpus pick) |
+| OD-04 | [x] | [x] | [x] | P1-T54 ☑ 2026-09-22: `server --test api debug` 3/3 |
+| OD-05/A4 | [x] | [x] | [ ] | Baseline in `tasks.md` §9.1 + `README.md` §9.1; verified at exit gate against actuals in `done.md` §1 |
+| OD-06 | [x] | [x] | [x] | Ratified in `technology-stack.md` §4; `server --test api` 9/9 envelope/ETag/route-coverage green |
+| OD-07 | [x] | [x] | [ ] | Floors ratified in `acceptance.md` §4; verified by `cargo llvm-cov` + coverage gate at exit |
+| OD-08/A6 | [x] | [x] | [ ] | Ritual + redaction step in `acceptance.md` §5; verified by the archived recording + checksums |
+| OD-09/A8 | [x] | [x] | [ ] | Date rule + auto-escalation in `done.md` §8; verified when all 21 rows close |
+| OD-10/A1 | [x] | [x] | [ ] | X02≠X03 verifier split in `done.md` §8; verified at sign-off (no self-attestation) |
+| OD-11 | [x] | [ ] | [ ] | QAC v0.4 gated candidate in `owner-decisions.md`; license verification 🔴 blocks ADR-0203 |
+| OD-12/A7 | [x] | [x] | [x] partial | Identity-profile-only + vector path/CI gate: `quran-core --test normalization_vectors` (shape) + `quran-normalization --test normalization_vectors` (N02 application, 24 vectors). Linguist + remaining 23 rule files 🔴/open |
+| OD-13 | [x] | [ ] | [ ] | `status.md` reconciliation ≤1 working day; owner/chief-architect action |
+| OD-14/A5 | [x] | [x] | [x] | Allowlist comment + `xtask` `server_allowlist_matches_od14_decision`; `arch-check` green |
