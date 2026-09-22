@@ -307,3 +307,42 @@ Per OD-ID in this file: `[ ] decision recorded [ ] file updated
    *proposed* standing rule for low-risk technicals only — it takes effect
    only upon human ratification, and never for license/reviewer items
    (OD-01/02/03/11/12) nor for the six 🔴 inputs, which are unchanged.
+
+---
+
+## Clarifications — 2026-09-22 (3rd entry: precedence + deltas)
+
+- **Recorded:** 2026-09-22
+- **Rule:** append-only; nothing above edited. Where this entry conflicts with
+  an earlier one, this entry governs (newest wins).
+
+### OD-03-signer-amend-1: A1 governs the OD-03 signer line
+
+- The first series set the OD-03 Tier-2 signer to the OD-02 reviewer. A1
+  (newer) requires the OD-02 L3 reviewer and the OD-03 Tier-2 signer to be two
+  different people, with `single-reviewer-risk` stamping as the fallback.
+- **Precedence: A1 wins.** OD-10 verifier mapping is updated accordingly:
+  P1-X02 → OD-02 reviewer; P1-X03 → the separate Tier-2 signer (never the same
+  person as X02 without the `single-reviewer-risk` stamp). No X-gate closes on
+  self-attestation (unchanged).
+
+### A9-status-clarify-1: owner-authored rule, bounded scope
+
+- A9 arrived in the owner self-review series (owner-authored), so unlike the
+  first orchestrator series it is a decided standing rule, not a proposal —
+  but strictly bounded: it covers orchestrator-decidable low-risk technicals
+  only (graph backend, OTLP scrubbing, and future equivalents).
+- It never applies to license/reviewer items (OD-01/02/03/11/12), OD-row
+  closure, ADR acceptance, or the six 🔴 inputs, which are unchanged.
+- **Second-pass technicals become effective 2026-09-25** (3 working days from
+  2026-09-22) unless the owner objects in writing before then. Until that
+  date they remain `pending ratification` in `open-questions.md`.
+
+### Reaffirmed
+
+- OD-01 slug strings (`uthmani-hafs-tanzil-1.1`, `uthmani-full-hafs-tanzil-1.1`)
+  remain `qai_edition_id` candidates only; Tanzil full-vs-minimal distinction
+  stays `source_verification_required`.
+- Schedule baseline is 8.7 weeks + A4 1-week buffer (~9.7 weeks); OD-09
+  absolute dates are computed from the buffered plan at Sprint-1.1 kickoff.
+- The six 🔴 human inputs are unchanged.
