@@ -1027,6 +1027,16 @@ Carried into `docs/plans/handoff-p1-to-p2.md` by task P1-T60.
 > (morphology, normalization + linguist) are needed at the start of Phase 2. A green Phase 1
 > with any of these unowned means Phase 2 starts stalled on a decision that was visible from
 > week 1. Recording this as a closure gate is the only reliable defence.
+>
+> **A1 (independence, 2026-09-22):** the P1-X02 verifier (OD-02 L3 reviewer) and
+> the P1-X03 verifier (OD-03 Tier-2 signer) must be two different people — no
+> X-gate closes on self-attestation, and two sign-offs by one person are not
+> two sign-offs. Single-qualified-person fallback: stamp `single-reviewer-risk`
+> in the exit-gate doc rather than counting Tier-2 as independent.
+>
+> **A8 (auto-escalation, 2026-09-22):** any sign-off row or X-gate still open 3
+> working days past its due date becomes a 🔴 item in the next `status.md`
+> update automatically, not by someone remembering to flag it.
 
 ## 2026-09-17 — P1-T58 partial implementation and P1-T60 gate preparation
 
