@@ -295,6 +295,11 @@ A **recorded walkthrough** in which a reviewer — not the implementer — perfo
 Recording is archived and linked from `done.md`. The gate is **not** closed by a green CI run
 alone — these are the criteria most likely to pass in CI while being wrong in practice.
 
+> **A6 (redaction before archiving, 2026-09-22):** before the recording is
+> archived, screen it for secrets/tokens/personal file paths; log the checksum
+> of the redacted vs. the original recording in the exit-gate doc. "Local data
+> stays local" applies to our own artifacts, including screen recordings.
+
 ---
 
 ## 6. Sign-Off
