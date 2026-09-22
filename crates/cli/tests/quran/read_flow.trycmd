@@ -17,6 +17,7 @@ migrations applied; schema version [..]
 ```console
 $ qai quran import ../../fixtures/quran/test-edition-min/manifest.json
 imported test-edition-min@0.1.0 to Staged
+note: synthetic test data — non-canonical (ADR-0101 fallback)
 
 ```
 
@@ -190,6 +191,7 @@ activation just moves the pointer.
 ```console
 $ qai quran import ../../fixtures/quran/test-edition-min-v2.json
 imported test-edition-min@0.2.0 to Staged
+note: synthetic test data — non-canonical (ADR-0101 fallback)
 
 ```
 
