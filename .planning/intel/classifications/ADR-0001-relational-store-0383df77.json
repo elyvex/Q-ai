@@ -1,0 +1,24 @@
+{
+  "source_path": "/Users/ali/dev/rust/Q-ai/docs/02-architecture/decisions/ADR-0001-relational-store.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "ADR-0001 — Relational Store: SQLite + sqlx, PostgreSQL-Portable SQL",
+  "summary": "Use SQLite with sqlx as default authoritative store with PostgreSQL-portable contracts.",
+  "scope": [
+    "SQLite",
+    "sqlx",
+    "PostgreSQL",
+    "relational store",
+    "canonical text"
+  ],
+  "cross_refs": [
+    "ADR-0201",
+    "ADR-0202",
+    "ADR-0701",
+    "ADR-0702"
+  ],
+  "locked": true,
+  "precedence": null,
+  "notes": ""
+}

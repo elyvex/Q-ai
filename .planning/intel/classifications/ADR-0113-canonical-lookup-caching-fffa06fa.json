@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/ali/dev/rust/Q-ai/docs/02-architecture/decisions/ADR-0113-canonical-lookup-caching.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "ADR-0113 — Canonical Lookup Caching & Invalidation (Draft)",
+  "summary": "In-process LRU cache for canonical lookups with generation-based wholesale invalidation to prevent stale text.",
+  "scope": ["canonical lookups", "LRU cache", "corpus_generation", "invalidation"],
+  "cross_refs": ["ADR-0107"],
+  "locked": true,
+  "precedence": null,
+  "notes": ""
+}

@@ -1,0 +1,19 @@
+{
+  "source_path": "/Users/ali/dev/rust/Q-ai/docs/02-architecture/decisions/ADR-0202-graph-store.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "ADR-0202 — Graph Store Abstraction: Relational Adjacency + Bounded CTE First",
+  "summary": "Defines backend-neutral GraphStore port using relational adjacency and bounded CTEs with SQLite as authority.",
+  "scope": [
+    "GraphStore",
+    "knowledge graph",
+    "relational adjacency",
+    "SQLite",
+    "Quran Graph"
+  ],
+  "cross_refs": [],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

@@ -1,0 +1,18 @@
+{
+  "source_path": "/Users/ali/dev/rust/Q-ai/docs/02-architecture/decisions/ADR-0009-audit-integrity.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "ADR-0009 — Audit Integrity: Hash Chain + Append-Only Triggers",
+  "summary": "Requires append-only audit_events table with triggers and SHA-256 hash chain for tamper-evident logging.",
+  "scope": [
+    "audit_events",
+    "hash chain",
+    "append-only triggers",
+    "audit log"
+  ],
+  "cross_refs": [],
+  "locked": true,
+  "precedence": null,
+  "notes": ""
+}

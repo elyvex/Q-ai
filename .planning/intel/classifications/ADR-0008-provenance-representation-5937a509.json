@@ -1,0 +1,12 @@
+{
+  "source_path": "/Users/ali/dev/rust/Q-ai/docs/02-architecture/decisions/ADR-0008-provenance-representation.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "ADR-0008 — Provenance Representation: Single Universal Record + Typed Attribution",
+  "summary": "Adopts single universal provenance_records table with typed attribution for all non-canonical assertions.",
+  "scope": ["provenance_records", "attribution", "layer enum", "DerivationVersions", "ApprovalToken"],
+  "cross_refs": ["ADR-0001", "ADR-0006", "ADR-0007", "ADR-0009", "ADR-0002", "0003_provenance.up.sql"],
+  "locked": true,
+  "precedence": null
+}

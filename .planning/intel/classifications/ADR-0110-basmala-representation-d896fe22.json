@@ -1,0 +1,21 @@
+{
+  "source_path": "/Users/ali/dev/rust/Q-ai/docs/02-architecture/decisions/ADR-0110-basmala-representation.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "ADR-0110 — Basmala Representation Policy",
+  "summary": "Edition-metadata-driven basmala policy with per-surah overrides and validation.",
+  "scope": [
+    "basmala",
+    "BasmalaPolicy",
+    "ayah numbering",
+    "edition metadata"
+  ],
+  "cross_refs": [
+    "ADR-0101",
+    "ADR-0103"
+  ],
+  "locked": true,
+  "precedence": null,
+  "notes": ""
+}

@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/ali/dev/rust/Q-ai/docs/02-architecture/decisions/ADR-0006-hashing-canonical.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "ADR-0006 — Hashing & Canonical Serialization: SHA-256, Canonical JSON, NFC Policy",
+  "summary": "Adopts SHA-256 with canonical JSON and NFC normalization for deterministic content hashing.",
+  "scope": ["content hashing", "SHA-256", "canonical JSON", "Unicode NFC", "ContentHash"],
+  "cross_refs": [],
+  "locked": true,
+  "precedence": null,
+  "notes": ""
+}

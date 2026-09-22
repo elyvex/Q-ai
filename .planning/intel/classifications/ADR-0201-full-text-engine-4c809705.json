@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/ali/dev/rust/Q-ai/docs/02-architecture/decisions/ADR-0201-full-text-engine.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "ADR-0201 — Full-Text Engine: Tantivy + Custom Arabic Tokenizer",
+  "summary": "Chooses Tantivy with custom Arabic tokenizer for offline lexical search behind FullTextIndex abstraction.",
+  "scope": ["Tantivy", "FullTextIndex", "Arabic tokenization", "normalization", "Quran search"],
+  "cross_refs": ["ADR-0001", "ADR-0203", "ADR-0204", "ADR-0206", "ADR-0702"],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

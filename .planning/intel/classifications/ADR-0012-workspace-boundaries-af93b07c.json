@@ -1,0 +1,19 @@
+{
+  "source_path": "/Users/ali/dev/rust/Q-ai/docs/02-architecture/decisions/ADR-0012-workspace-boundaries.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "ADR-0012 — Workspace/Crate Boundaries & Dependency Enforcement",
+  "summary": "Enforces Cargo workspace crate dependency boundaries via custom xtask arch-check CI gate.",
+  "scope": [
+    "Cargo workspace",
+    "crate boundaries",
+    "dependency allowlist",
+    "xtask arch-check",
+    "layer graph"
+  ],
+  "cross_refs": [],
+  "locked": true,
+  "precedence": null,
+  "notes": ""
+}

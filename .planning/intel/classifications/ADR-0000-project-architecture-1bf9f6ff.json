@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/ali/dev/rust/Q-ai/docs/02-architecture/decisions/ADR-0000-project-architecture.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "ADR-0000 — Project Architecture",
+  "summary": "Adopts layered Cargo workspace, local-first single binary enforcing epistemic integrity via types.",
+  "scope": ["Cargo workspace", "domain layer", "storage abstraction", "SQLite", "provenance", "audit", "qai binary"],
+  "cross_refs": [],
+  "locked": true,
+  "precedence": null,
+  "notes": ""
+}

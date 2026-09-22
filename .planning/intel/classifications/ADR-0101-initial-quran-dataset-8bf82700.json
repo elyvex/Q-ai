@@ -1,0 +1,24 @@
+{
+  "source_path": "/Users/ali/dev/rust/Q-ai/docs/02-architecture/decisions/ADR-0101-initial-quran-dataset.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "ADR-0101 — Quran Edition Model: Primary Default, Multiple Readings, and Licensing",
+  "summary": "Draft decision defining multi-edition Quran model with Uthmani Hafs default and pending dataset selection.",
+  "scope": [
+    "Quran edition model",
+    "Uthmani script",
+    "Hafs an Asim",
+    "qiraat",
+    "translations",
+    "licensing",
+    "upstream sources"
+  ],
+  "cross_refs": [
+    "docs/02-architecture/upstream-sources.md",
+    "docs/05-followups/owner-decisions.md"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

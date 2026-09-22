@@ -1,0 +1,12 @@
+{
+  "source_path": "/Users/ali/dev/rust/Q-ai/docs/02-architecture/decisions/ADR-0011-observability.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "ADR-0011 — Observability Stack: Tracing + Metrics + Optional OTLP (Telemetry Opt-In)",
+  "summary": "Adopts tracing plus metrics with opt-in OTLP export and privacy denylist for observability.",
+  "scope": ["observability", "tracing", "metrics", "OTLP", "telemetry"],
+  "cross_refs": ["ADR-0001", "ADR-0003"],
+  "locked": true,
+  "precedence": null
+}

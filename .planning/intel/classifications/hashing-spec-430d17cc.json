@@ -1,0 +1,21 @@
+{
+  "source_path": "/Users/ali/dev/rust/Q-ai/docs/architecture/hashing-spec.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Hashing Spec: SHA-256 Algorithm Tag Format `sha256:<hex>`, Canonical JSON Bytes Definition",
+  "summary": "Defines sha256:<hex> content hash format and canonical JSON bytes rules for deterministic hashing.",
+  "scope": [
+    "ContentHash",
+    "SHA-256",
+    "canonical JSON bytes",
+    "provenance_records",
+    "source_versions",
+    "audit event chain",
+    "manifest signing"
+  ],
+  "cross_refs": [],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

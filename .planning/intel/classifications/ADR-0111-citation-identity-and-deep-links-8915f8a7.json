@@ -1,0 +1,19 @@
+{
+  "source_path": "/Users/ali/dev/rust/Q-ai/docs/02-architecture/decisions/ADR-0111-citation-identity-and-deep-links.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "ADR-0111 — Citation Identity and Deep-Link Format",
+  "summary": "Defines canonical Quran citation identity, deep-link format, URN storage, and quotation verification verdicts.",
+  "scope": [
+    "citation identity",
+    "deep links",
+    "citation URN",
+    "QuranQuotation",
+    "verify_quotation"
+  ],
+  "cross_refs": [],
+  "locked": true,
+  "precedence": null,
+  "notes": ""
+}

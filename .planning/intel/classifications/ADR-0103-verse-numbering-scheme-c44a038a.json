@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/ali/dev/rust/Q-ai/docs/02-architecture/decisions/ADR-0103-verse-numbering-scheme.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "ADR-0103 — Verse-Numbering Scheme Handling & Alternate Numbering",
+  "summary": "Each edition declares its own verse-numbering scheme with edition-scoped ayah keys.",
+  "scope": ["verse-numbering scheme", "editions", "ayah numbers", "canonical keys", "cross-edition alignment"],
+  "cross_refs": [],
+  "locked": true,
+  "precedence": null,
+  "notes": ""
+}

@@ -1,0 +1,17 @@
+{
+  "source_path": "/Users/ali/dev/rust/Q-ai/docs/02-architecture/decisions/ADR-0102-addressing-and-reference-grammar.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "ADR-0102 — Quran Addressing Scheme & Reference Grammar",
+  "summary": "Freezes Quran reference grammar with hand-written parser in quran-core::reference for deterministic citations.",
+  "scope": [
+    "Quran reference grammar",
+    "addressing scheme",
+    "quran-core::reference",
+    "canonical form"
+  ],
+  "cross_refs": [],
+  "locked": true,
+  "precedence": null
+}

@@ -1,0 +1,18 @@
+{
+  "source_path": "/Users/ali/dev/rust/Q-ai/docs/02-architecture/decisions/ADR-0002-migration-strategy.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "ADR-0002 — Migration Strategy: Append-Only Checksummed SQL, Forward-Only Canonical",
+  "summary": "Custom append-only checksummed migration runner with forward-only canonical policy.",
+  "scope": [
+    "migration runner",
+    "storage-sqlite",
+    "SQLite",
+    "PostgreSQL",
+    "canonical tables"
+  ],
+  "cross_refs": [],
+  "locked": true,
+  "precedence": null
+}

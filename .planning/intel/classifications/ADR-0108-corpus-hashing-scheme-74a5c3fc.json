@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/ali/dev/rust/Q-ai/docs/02-architecture/decisions/ADR-0108-corpus-hashing-scheme.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "ADR-0108 — Corpus Hashing Scheme",
+  "summary": "Freezes SHA-256 length-prefixed domain-separated hashing scheme for Quran corpus reproducibility and quotation verification.",
+  "scope": ["corpus hashing", "SHA-256", "text_hash", "structure_hash", "token_order_hash", "quran_corpus::hashing", "doctor", "verify_quotation"],
+  "cross_refs": [],
+  "locked": true,
+  "precedence": null,
+  "notes": ""
+}

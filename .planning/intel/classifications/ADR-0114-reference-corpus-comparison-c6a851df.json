@@ -1,0 +1,12 @@
+{
+  "source_path": "/Users/ali/dev/rust/Q-ai/docs/02-architecture/decisions/ADR-0114-reference-corpus-comparison.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "ADR-0114 — Typed Corpus Comparison: Integrity vs. Edition/Readings Differences",
+  "summary": "Defines typed corpus comparison distinguishing integrity checks from edition and readings differences.",
+  "scope": ["corpus comparison", "integrity comparison", "edition differences", "reference corpus", "QV-015"],
+  "cross_refs": ["docs/02-architecture/upstream-sources.md"],
+  "locked": false,
+  "precedence": null
+}
