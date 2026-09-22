@@ -155,6 +155,7 @@ after; canonical text untouched).
 ```console
 $ qai quran import ../../fixtures/quran/test-edition-min/manifest.json
 imported test-edition-min@0.1.0 to Staged
+note: synthetic test data — non-canonical (ADR-0101 fallback)
 
 ```
 
