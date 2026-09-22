@@ -16,3 +16,8 @@
 **/*.sqlite3
 **/*.pem
 **/*.key
+.git/
+**/*.log*
+**/coverage/
+Dockerfile*
+.dockerignore
