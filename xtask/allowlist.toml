@@ -36,11 +36,11 @@ workspace = { allow = ["domain", "storage", "provenance"] }
 workspace = { allow = ["application", "config", "observability", "server"] }
 
 [server]
-# `server` is the HTTP interface layer. It is allowed `storage` + `tools` only
-# because `ReaderBackend` implements the API backend on top of the reader's
-# database handle and propagates `tools::ToolError`. This is a known layering
-# smell: prefer reaching these through `application` re-exports. Recorded as a
-# Phase-1 follow-up (see docs/plans/handoff-p1-to-p2.md §5).
+# `server` is the HTTP interface layer. OD-14 accepts `server -> storage` +
+# `tools` direct calls under this allowlist (A5: enforced by `arch-check` in
+# CI, not just review); trait seams are required at every such call site so
+# the Phase-3 routing evaluation (candidate ADR-0300) stays a wiring change,
+# not a refactor. Changing this allow set requires a new OD entry.
 workspace = { allow = ["application", "config", "observability", "tool-registry", "tools", "storage", "citations", "quran-core"] }
 
 [observability]
