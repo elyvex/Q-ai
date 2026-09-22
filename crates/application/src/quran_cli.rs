@@ -573,10 +573,19 @@ pub async fn cmd_import(
         created_at: at,
     };
     match super::quran::run_import_job(&db, input).await {
-        Ok(_) => CommandOutput::ok(
-            format!("imported {}@{} to Staged\n", doc.edition.slug, doc.edition.version),
-            serde_json::json!({"slug": doc.edition.slug, "version": doc.edition.version.to_string()}),
-        ),
+        Ok(_) => {
+            // OD-01 B-track: synthetic pipeline-exercise data is never
+            // canonical — label it on the human surface every time.
+            let mut human =
+                format!("imported {}@{} to Staged\n", doc.edition.slug, doc.edition.version);
+            if doc.edition.synthetic {
+                human.push_str("note: synthetic test data — non-canonical (ADR-0101 fallback)\n");
+            }
+            CommandOutput::ok(
+                human,
+                serde_json::json!({"slug": doc.edition.slug, "version": doc.edition.version.to_string()}),
+            )
+        }
         Err(err) => CommandOutput::err(exit::INTERNAL, err.to_string()),
     }
 }
