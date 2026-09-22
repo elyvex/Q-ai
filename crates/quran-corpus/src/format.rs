@@ -68,6 +68,66 @@ pub struct EditionMeta {
     pub publisher: Option<String>,
     /// Edition version.
     pub version: SemVer,
+    /// True for synthetic pipeline-exercise editions (ADR-0101 fallback,
+    /// OD-01 B-track). Synthetic editions are never canonical and every
+    /// surface that shows one must label it non-canonical.
+    #[serde(default)]
+    pub synthetic: bool,
+    /// Exact upstream identifier, preserved verbatim — never renamed or
+    /// invented (ADR-0101 identifier mapping, OD-01).
+    #[serde(default)]
+    pub upstream_edition_slug: Option<String>,
+    /// Q-ai-internal stable id mapped from the upstream slug
+    /// (`upstream_edition_slug -> qai_edition_id`).
+    #[serde(default)]
+    pub qai_edition_id: Option<String>,
+    /// Per-edition license record. A repository being open source never
+    /// implies its contained text is redistributable (OD-01, A3).
+    #[serde(default)]
+    pub license: Option<EditionLicense>,
+    /// Editorial sign-off; `pending_owner_verification` until OD-02 names a
+    /// reviewer (recorded in the edition's `verified_by` field).
+    #[serde(default)]
+    pub verified_by: Option<String>,
+    /// Source provenance chain head: where the bytes came from (ODV-03).
+    #[serde(default)]
+    pub source: Option<EditionProvenance>,
+}
+
+/// Per-edition license record (A3 capture standard applies when bundled).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditionLicense {
+    /// `verified` | `unknown` | `restricted` | `metadata_only`.
+    /// Defaults to `unknown`: redistribution is never assumed.
+    #[serde(default = "unknown_license_status")]
+    pub status: String,
+    /// SPDX identifier or source wording, if known.
+    #[serde(default)]
+    pub expression: Option<String>,
+    /// License text URL, if known.
+    #[serde(default)]
+    pub source_url: Option<String>,
+}
+
+fn unknown_license_status() -> String {
+    "unknown".to_string()
+}
+
+/// Source provenance chain head (ODV-03: publisher/release/retrieval pin).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditionProvenance {
+    /// Upstream repository, e.g. `fawazahmed0/quran-api`.
+    #[serde(default)]
+    pub repository: Option<String>,
+    /// Pinned revision (commit hash / tag).
+    #[serde(default)]
+    pub revision: Option<String>,
+    /// Path within the repository.
+    #[serde(default)]
+    pub path: Option<String>,
+    /// Retrieval timestamp (UTC RFC3339).
+    #[serde(default)]
+    pub retrieved_at: Option<String>,
 }
 
 /// Declared counts and the optional reference corpus for comparison (QV-015).
@@ -207,6 +267,12 @@ pub(crate) mod tests {
                 basmala_policy: BasmalaPolicy::PerSurah,
                 publisher: None,
                 version: SemVer::new(0, 1, 0),
+                synthetic: true,
+                upstream_edition_slug: None,
+                qai_edition_id: None,
+                license: None,
+                verified_by: None,
+                source: None,
             },
             expected: ExpectedCounts {
                 surah_count: 1,
