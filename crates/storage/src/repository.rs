@@ -538,6 +538,7 @@ pub struct TombstoneRow {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn source_row_roundtrip() {
@@ -549,5 +550,281 @@ mod tests {
             created_at: "2026-01-01T00:00:00Z".into(),
         };
         assert_eq!(row.id, "test");
+    }
+
+    // ─── T014 (US4, FR-012): job lease semantics ───
+
+    fn job(id: &str, state: &str, available_at: &str) -> JobRecord {
+        JobRecord {
+            id: id.into(),
+            kind: "k".into(),
+            payload_json: "{}".into(),
+            idempotency_key: None,
+            state: state.into(),
+            priority: 0,
+            attempts: 0,
+            max_attempts: 3,
+            available_at: available_at.into(),
+            lease_owner: None,
+            lease_expires_at: None,
+            checkpoint_json: None,
+            cancel_requested: false,
+            created_by: "p".into(),
+        }
+    }
+
+    const FAKE_NOW: &str = "2026-06-01T00:00:00Z";
+    const DUE: &str = "2026-01-01T00:00:00Z";
+    const FUTURE: &str = "2100-01-01T00:00:00Z";
+    const EXPIRED: &str = "2000-01-01T00:00:00Z";
+
+    #[derive(Default)]
+    struct FakeJobs {
+        jobs: Vec<JobRecord>,
+    }
+
+    #[async_trait]
+    impl JobRepository for FakeJobs {
+        async fn claim_next(
+            &mut self,
+            owner: &str,
+            _lease_seconds: u64,
+        ) -> Result<Option<JobRecord>, StorageError> {
+            // Queued/Interrupted/Checkpointed-due only, highest priority first.
+            // Mirrors storage-sqlite: available_at <= now, ORDER BY priority
+            // DESC, available_at ASC.
+            let mut candidates: Vec<usize> = self
+                .jobs
+                .iter()
+                .enumerate()
+                .filter(|(_, j)| {
+                    matches!(j.state.as_str(), "Queued" | "Interrupted" | "Checkpointed")
+                        && j.available_at.as_str() <= FAKE_NOW
+                })
+                .map(|(i, _)| i)
+                .collect();
+            candidates.sort_by(|&a, &b| {
+                self.jobs[b]
+                    .priority
+                    .cmp(&self.jobs[a].priority)
+                    .then(self.jobs[a].available_at.cmp(&self.jobs[b].available_at))
+            });
+            let Some(&idx) = candidates.first() else {
+                return Ok(None);
+            };
+            let j = &mut self.jobs[idx];
+            j.state = "Running".into();
+            j.lease_owner = Some(owner.into());
+            j.lease_expires_at = Some(FUTURE.into());
+            j.attempts += 1;
+            Ok(Some(j.clone()))
+        }
+
+        async fn heartbeat(
+            &mut self,
+            job_id: &str,
+            owner: &str,
+            _lease_seconds: u64,
+        ) -> Result<bool, StorageError> {
+            for j in self.jobs.iter_mut() {
+                if j.id == job_id {
+                    // Owner-held Running leases only (mirrors SQL WHERE
+                    // lease_owner = ? AND state = 'Running').
+                    if j.state == "Running" && j.lease_owner.as_deref() == Some(owner) {
+                        j.lease_expires_at = Some(FUTURE.into());
+                        return Ok(true);
+                    }
+                    return Ok(false);
+                }
+            }
+            Ok(false)
+        }
+
+        async fn reap_expired_leases(&mut self) -> Result<Vec<String>, StorageError> {
+            let mut ids = Vec::new();
+            for j in self.jobs.iter_mut() {
+                let expired = j.state == "Running"
+                    && j.lease_expires_at.as_deref().is_some_and(|e| e < FAKE_NOW);
+                if expired {
+                    ids.push(j.id.clone());
+                    j.state = "Interrupted".into();
+                    j.lease_owner = None;
+                    j.lease_expires_at = None;
+                }
+            }
+            Ok(ids)
+        }
+    }
+
+    #[tokio::test]
+    async fn job_claim_next_only_returns_eligible_due_jobs() {
+        let mut f = FakeJobs {
+            jobs: vec![
+                job("q-due", "Queued", DUE),
+                job("run", "Running", DUE),
+                job("done", "Succeeded", DUE),
+                {
+                    let mut j = job("q-future", "Queued", FUTURE);
+                    j.priority = 100;
+                    j
+                },
+            ],
+        };
+        // Highest-priority BUT future-dated job must not be claimed.
+        let claimed = f.claim_next("w-1", 30).await.unwrap().unwrap();
+        assert_eq!(claimed.id, "q-due");
+        assert_eq!(claimed.lease_owner.as_deref(), Some("w-1"));
+        // q-due is now Running; nothing else due → None.
+        assert!(f.claim_next("w-2", 30).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn job_heartbeat_rejects_non_holder() {
+        let mut f = FakeJobs { jobs: vec![job("j", "Queued", DUE)] };
+        let claimed = f.claim_next("owner-a", 30).await.unwrap().unwrap();
+        assert_eq!(claimed.id, "j");
+        assert!(f.heartbeat("j", "owner-a", 30).await.unwrap());
+        assert!(!f.heartbeat("j", "owner-b", 30).await.unwrap());
+        assert!(!f.heartbeat("missing", "owner-a", 30).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn job_reap_returns_exactly_expired_ids() {
+        let mut f = FakeJobs { jobs: vec![] };
+        let mut e1 = job("expired-1", "Running", DUE);
+        e1.lease_owner = Some("w".into());
+        e1.lease_expires_at = Some(EXPIRED.into());
+        let mut e2 = e1.clone();
+        e2.id = "expired-2".into();
+        let mut fresh = job("fresh", "Running", DUE);
+        fresh.lease_owner = Some("w".into());
+        fresh.lease_expires_at = Some(FUTURE.into());
+        let queued = job("queued", "Queued", DUE);
+        f.jobs = vec![e1, e2, fresh, queued];
+        let mut ids = f.reap_expired_leases().await.unwrap();
+        ids.sort();
+        assert_eq!(ids, vec!["expired-1".to_string(), "expired-2".to_string()]);
+        // Unexpired Running lease untouched; queued untouched.
+        let fresh_row = f.jobs.iter().find(|j| j.id == "fresh").unwrap();
+        assert_eq!(fresh_row.state, "Running");
+        assert!(f.jobs.iter().find(|j| j.id == "queued").unwrap().state == "Queued");
+    }
+
+    // ─── T015 (US4): audit verify_chain ───
+
+    fn audit_event(seq: u64, prev: &str, hash: &str) -> AuditEvent {
+        AuditEvent {
+            id: format!("e{seq}"),
+            sequence: seq,
+            occurred_at: "2026-01-01T00:00:00Z".into(),
+            actor_kind: "system".into(),
+            actor_id: None,
+            action: "a".into(),
+            subject_urn: "urn:x".into(),
+            outcome: "ok".into(),
+            reason: None,
+            before_json: None,
+            after_json: None,
+            request_id: None,
+            prev_chain_hash: prev.into(),
+            chain_hash: hash.into(),
+        }
+    }
+
+    struct FakeAudit {
+        events: Vec<AuditEvent>,
+    }
+
+    #[async_trait]
+    impl AuditRepository for FakeAudit {
+        async fn verify_chain(&self) -> Result<ChainVerificationResult, StorageError> {
+            // Mirrors storage-sqlite verify_chain: contiguous from 1, prev
+            // hash chaining; gaps list exact offending sequences.
+            let mut events = self.events.clone();
+            events.sort_by_key(|e| e.sequence);
+            let mut gaps = Vec::new();
+            let mut valid = true;
+            let mut expected: u64 = 1;
+            let mut prev_hash = "00".repeat(32);
+            for ev in &events {
+                if ev.sequence != expected {
+                    gaps.push(ev.sequence);
+                    valid = false;
+                }
+                if ev.prev_chain_hash != prev_hash {
+                    valid = false;
+                }
+                prev_hash = ev.chain_hash.clone();
+                expected = ev.sequence + 1;
+            }
+            Ok(ChainVerificationResult {
+                valid,
+                expected_next_sequence: expected,
+                expected_next_hash: prev_hash,
+                gaps,
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn audit_verify_chain_reports_valid_and_gaps() {
+        let genesis = "00".repeat(32);
+        let good = FakeAudit {
+            events: vec![
+                audit_event(1, &genesis, "h1"),
+                audit_event(2, "h1", "h2"),
+                audit_event(3, "h2", "h3"),
+            ],
+        };
+        let r = good.verify_chain().await.unwrap();
+        assert!(r.valid);
+        assert!(r.gaps.is_empty());
+        assert_eq!(r.expected_next_sequence, 4);
+        assert_eq!(r.expected_next_hash, "h3");
+
+        // Tampered: sequence 2 removed → gap reports exact sequence 3.
+        let tampered =
+            FakeAudit { events: vec![audit_event(1, &genesis, "h1"), audit_event(3, "h1", "h3")] };
+        let r = tampered.verify_chain().await.unwrap();
+        assert!(!r.valid);
+        assert_eq!(r.gaps, vec![3]);
+    }
+
+    // ─── T016 (US4 edge case): guarded transition_state ───
+
+    struct FakeSources {
+        states: HashMap<String, String>,
+    }
+
+    #[async_trait]
+    impl SourceRepository for FakeSources {
+        async fn transition_state(
+            &mut self,
+            id: &str,
+            from: &str,
+            to: &str,
+        ) -> Result<(), StorageError> {
+            match self.states.get(id) {
+                Some(cur) if cur == from => {
+                    self.states.insert(id.into(), to.into());
+                    Ok(())
+                }
+                Some(_) => Err(StorageError::Conflict),
+                None => Err(StorageError::NotFound { urn: id.into() }),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn source_transition_rejects_unexpected_from() {
+        let mut f =
+            FakeSources { states: HashMap::from([("v1".to_string(), "Active".to_string())]) };
+        // Correct from-state applies.
+        f.transition_state("v1", "Active", "Deprecated").await.unwrap();
+        assert_eq!(f.states["v1"], "Deprecated");
+        // Unexpected from-state rejected, never silently applied.
+        let err = f.transition_state("v1", "Active", "Deprecated").await.unwrap_err();
+        assert!(matches!(err, StorageError::Conflict | StorageError::ConstraintViolation { .. }));
+        assert_eq!(f.states["v1"], "Deprecated");
     }
 }
