@@ -69,3 +69,8 @@
   file paths hashed; no Arabic text, user strings, or query payloads in span
   attributes; scrub fixtures covered by unit tests.
 - **Needs to close:** ratifier + date + follow-up task ID (Phase 3+).
+
+> Status 2026-09-22: both technicals pending ratification; per owner-authored
+> A9 they become effective 2026-09-25 unless the owner objects in writing.
+> Tier-2 corpus note: per A1, Tier-2 signer ≠ OD-02 L3 reviewer
+> (`single-reviewer-risk` stamp is the fallback).
