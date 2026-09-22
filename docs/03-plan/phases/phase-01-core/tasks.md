@@ -326,6 +326,13 @@ and, at a realistic 15 ed/week, that is **~8.7 weeks**. **Owner decision require
 The retrofit-impossible deliverables — D1.1 (`quran-core`), D1.4 (validator), D1.5
 (migrations + triggers), D1.6 (`QuranReader`), D1.13 (integrity suite) — must not absorb a cut.
 
+> **Ratified 2026-09-22 (OD-05 + A4, owner series):** accept **131.0 ed / ~8.7 weeks**
+> with the **1.2a/1.2b split**, no fourth engineer in Phase-1, no scope cut, sprint
+> cap 24 ed, plus a **1-week contingency buffer** after Sprint 1.2b before the
+> exit-gate walkthrough (**~9.7 weeks** with buffer). D1.1/D1.4/D1.5/D1.6/D1.13
+> protected. OD-09 absolute dates are computed from the buffered plan at the
+> Sprint-1.1 kickoff. Rows below are unchanged — the baseline is now honest, not compressed.
+
 ### 9.2 Sprint 1.2 is overloaded
 
 42.0 ed in one sprint against a ~15 ed/week team is ~3×. Recommended split (already reflected
