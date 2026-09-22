@@ -12,7 +12,7 @@
 
 | Dimension | State |
 |---|---|
-| Task rows (excluding 3 sequencing notes) | **50 ☑ / 3 ◐ / 12 ☐** of 65 |
+| Task rows (excluding 3 sequencing notes) | **51 ☑ / 2 ◐ / 12 ☐** of 65 |
 | Acceptance criteria | **19 ◐ / 2 ☐** of 21 (none marked fully verified — rituals pending) |
 | ADRs | **12 Accepted**, 2 Draft (0101, 0114) |
 | Phase-1 migrations | **6 / 6** (`0007`–`0012`); workspace now at 16 (Phase-2 added `0013`–`0016`) |
@@ -20,8 +20,8 @@
 | Gate | `clippy -D warnings` clean · `cargo test --workspace` 135 suites ok · `arch-check` OK · `migrate-check` OK · `fmt` clean for Phase-1 files |
 
 Remaining task IDs: `P1-X01..X05`, `P1-T01`, `P1-T02`, `P1-T03`, `P1-T26◐`,
-`P1-T54`, `P1-T55`,
-`P1-T56`, `P1-T58`, `P1-T60` (and `P1-T04◐`).
+`P1-T55`, `P1-T56`, `P1-T58`, `P1-T60` (and `P1-T04◐`). `P1-T54` closed
+2026-09-22 as the OD-04 system-stack debug reader (no bundled font).
 
 ## 1. Implemented (by surface)
 
@@ -112,7 +112,7 @@ AC-P1-09 joined on 2026-09-15 via the activation-rejection state test.
 ### 3.2 Engineering work still open
 | Task | What remains |
 |---|---|
-| `P1-T54` | Debug reader has RTL + label + CSS Arabic font stack + per-ayah markers + HTML escaping (tested); still ☐ pending a bundled-`@font-face` font/licensing choice, which needs an owner decision |
+| `P1-T54` | ☑ 2026-09-22: system-stack debug reader per OD-04 (RTL + label + CSS Arabic stack + per-ayah markers + HTML escaping, tested incl. no-remote-fetch; no bundled `@font-face`) |
 | `P1-T56` | Golden-set expansion to §5.2 edge cases — **blocked on a real dataset** (ADR-0101); must not be filled with fabricated scripture |
 | `P1-T58` | Partial: deterministic 10k-lookup synthetic-fixture soak implemented and passing (2026-09-17), including exact text, token offsets, and post-soak deep checks; standard licensed edition run still blocked |
 | `P1-T60` | Exit-gate review + handoff sign-off |
