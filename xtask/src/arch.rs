@@ -294,4 +294,39 @@ mod tests {
         let bad = violations(&meta_forbidden, &allowlist);
         assert!(bad.iter().any(|v| v.starts_with("quran-core -> storage")), "got: {bad:?}");
     }
+
+    #[test]
+    fn server_allowlist_matches_od14_decision() {
+        // A5: the OD-14 `server -> storage/tools` allowlist is pinned by this
+        // CI-gated test, not just documentation. Changing the checked-in
+        // allow set requires a new OD entry; the `arch-check` gate then
+        // enforces the new set against `cargo metadata`.
+        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let allowlist = parse_allowlist(&manifest_dir.join("allowlist.toml"))
+            .expect("checked-in allowlist.toml must parse");
+        let mut got: Vec<&str> = allowlist.allowed_workspace_deps("server").into_iter().collect();
+        got.sort_unstable();
+        let mut expected = vec![
+            "application",
+            "citations",
+            "config",
+            "observability",
+            "quran-core",
+            "storage",
+            "tool-registry",
+            "tools",
+        ];
+        expected.sort_unstable();
+        assert_eq!(got, expected, "server allow set changed without a new OD entry");
+        // And the gate itself covers `server`: an unlisted edge is flagged.
+        let meta = meta(
+            vec!["#server@0.0.0", "#cli@0.0.0"],
+            vec![
+                package("#server@0.0.0", "server", vec![("cli", None)]),
+                package("#cli@0.0.0", "cli", vec![]),
+            ],
+        );
+        let bad = violations(&meta, &allowlist);
+        assert!(bad.iter().any(|v| v.starts_with("server -> cli")), "got: {bad:?}");
+    }
 }
