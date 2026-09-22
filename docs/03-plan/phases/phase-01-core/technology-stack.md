@@ -48,7 +48,7 @@ local registry cache.
 | 14 | **Canonical lookup cache** | `lru` (Mutex-guarded) | `lru` 0.12–0.18 ✅ | 🟡 | ✅ Yes (task P1-T35) | ADR-0113 | `moka` 🌐, `quick_cache`, `dashmap` |
 | 15 | **Async runtime** | `tokio` multi-thread | `tokio` 1 | 🔒 | ❌ No — Phase 0 standard | — | `async-std`, `smol` |
 | 16 | **Job execution** | Phase-0 DB-backed job system | hand-rolled (`jobs`) | 🔒 | ❌ No | ADR-0003 | Redis/BullMQ, `apalis`, external broker |
-| 17 | **HTTP server for Quran read API v1** | **`axum` + `tower-http`** | `axum` 0.8.9 ✅, `tower-http` 0.6/0.7 (in lock) | 🟡 | ✅ **Yes — see §4; biggest open choice** | — | current hand-rolled `tokio::net` server; `hyper` directly; `actix-web`; `poem` |
+| 17 | **HTTP server for Quran read API v1** | **`axum` + `tower-http`** | `axum` 0.8.9 ✅, `tower-http` 0.6/0.7 (in lock) | ✅ ratified (OD-06, 2026-09-22) | ❌ Ratified — workspace-pinned + lockfile; loopback only; no CORS layer; per-install bearer token; timeouts/body-limits via tower middleware | — | current hand-rolled `tokio::net` server; `hyper` directly; `actix-web`; `poem` |
 | 18 | **CLI framework** | `clap` derive | `clap` 4 | 🔒 | ❌ No — Phase 0 standard | ADR-0010 | `argh`, `pico-args` |
 | 19 | **Error types / diagnostics** | `thiserror` + Phase-0 `Diagnostic` trait | `thiserror` 2, `anyhow` 1 | 🔒 | ❌ No | ADR-0010 | `snafu`, `miette` |
 | 20 | **Observability** | `tracing`, `metrics`; OTLP opt-in | `tracing` 0.1, `tracing-subscriber` 0.3, `metrics` 0.24 | 🔒 (OTLP ⏸) | ❌ Core no; OTLP deferred | ADR-0011 | `log`, `prometheus`, `opentelemetry` (⏸) |
@@ -118,6 +118,11 @@ is not yet in the workspace.
   should be a short ADR (or an addition to the Phase-0 ADR-0011 observability/API stack) before
   P1-T39 starts, because it also fixes how `tower` middleware (timeouts, limits, compression) is
   applied.
+- **Ratified 2026-09-22 (OD-06, owner series):** `axum` 0.8.x + `tower-http` 0.6.x,
+  workspace-pinned + lockfile; bind `127.0.0.1` only; no CORS layer; per-install
+  random bearer token on every route (deny-by-default even on localhost);
+  timeouts/body-limits via tower middleware. AC-P1-14 wording unblocked; health
+  endpoints unchanged.
 
 ---
 
