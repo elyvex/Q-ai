@@ -304,6 +304,12 @@ Pick one before Sprint 1.1 starts:
   (P1-T59, 3.0 ed); or
 - **(c)** Add a fourth engineer for Sprints 1.1–1.4 (the heavy validation/reader/tool work).
 
+> **Ratified 2026-09-22 (OD-05 + A4, owner series): option (a)** — 131.0 ed /
+> ~8.7 weeks with the 1.2a/1.2b split, no fourth engineer in Phase-1, no scope
+> cut, sprint cap 24 ed, plus a 1-week contingency buffer after Sprint 1.2b
+> (~9.7 weeks with buffer). D1.1/D1.4/D1.5/D1.6/D1.13 protected. Absolute dates
+> stamped at the Sprint-1.1 kickoff.
+
 Do **not** resolve this by silently compressing estimates. **D1.1 (`quran-core`), D1.4
 (validator), D1.5 (migrations + triggers), D1.6 (`QuranReader`), and D1.13 (integrity suite)
 are retrofit-impossible** and must not absorb the cut: once a canonical row can be written
