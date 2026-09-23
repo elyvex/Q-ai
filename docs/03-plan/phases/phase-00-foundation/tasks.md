@@ -351,7 +351,7 @@ exit-gate ritual (AC-03, 05, 06, 08, 11, 14, 16, live on a clean machine) is arc
 | 0.2 — Config, Secrets, Storage | 10 | 19.0 | 9 | ◐ (T16 open) |
 | 0.3 — Provenance, Audit, Sources, Outbox | 20 | 33.5 ⚠️ | 20 | ☑ Done |
 | 0.4 — Jobs, Security, Observability | 13 | 22.0 | 13 | ☑ Done (T40 with exception) |
-| 0.5 — CLI, Doctor, Docs | 14 | 24.5 | 12 | ◐ (T55, T56 deferred) |
+| 0.5 — CLI, Doctor, Docs | 14 | 24.5 | 12 | ◐ (T56 runtime deferred; T55 verified complete 2026-09-18) |
 | **Total** | **67 + 3** | **113.5** | **65 + 0** | **65/67 tasks** |
 
 By role: BE ≈ 76.0 ed · SEC ≈ 15.5 ed · INF ≈ 8.0 ed · DOC ≈ 12.5 ed · shared 1.5 ed.
