@@ -1153,7 +1153,10 @@ pub trait QuranRepository: Send + Sync {
     }
 
     /// List a batch's staging rows.
-    async fn list_staging_rows(&self, _batch_id: &str) -> Result<Vec<StagedMorphRow>, StorageError> {
+    async fn list_staging_rows(
+        &self,
+        _batch_id: &str,
+    ) -> Result<Vec<StagedMorphRow>, StorageError> {
         Err(StorageError::StorageUnavailable)
     }
 
@@ -1181,7 +1184,10 @@ pub trait QuranRepository: Send + Sync {
     }
 
     /// List a batch's findings.
-    async fn list_findings(&self, _batch_id: &str) -> Result<Vec<MorphologyFindingRow>, StorageError> {
+    async fn list_findings(
+        &self,
+        _batch_id: &str,
+    ) -> Result<Vec<MorphologyFindingRow>, StorageError> {
         Err(StorageError::StorageUnavailable)
     }
 
@@ -1268,7 +1274,10 @@ pub trait QuranRepository: Send + Sync {
     }
 
     /// List review items by status.
-    async fn list_review_items(&self, _status: &str) -> Result<Vec<MorphReviewItemRow>, StorageError> {
+    async fn list_review_items(
+        &self,
+        _status: &str,
+    ) -> Result<Vec<MorphReviewItemRow>, StorageError> {
         Err(StorageError::StorageUnavailable)
     }
 
