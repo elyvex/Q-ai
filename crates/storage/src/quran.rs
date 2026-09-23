@@ -9,7 +9,11 @@
 //! canonical insert. The only canonical-write path is [`QuranRepository::activate_edition`]
 //! (staging → canonical move plus the pointer flip in one transaction) and
 //! [`QuranRepository::rollback_edition`], both of which record the approving
-//! identity. Raw SQL is still blocked by the insert-only triggers.
+//! identity, plus the human-gated maintenance mutators
+//! [`QuranRepository::set_edition_status`] and
+//! [`QuranRepository::set_edition_verification`] (status / `verified_*`
+//! metadata only — trigger-guarded identity, hashes, and ayah text are
+//! unreachable through them). Raw SQL is still blocked by the insert-only triggers.
 
 use async_trait::async_trait;
 
@@ -299,6 +303,50 @@ pub struct IndexBuildRunRow {
     pub finished_at: Option<String>,
 }
 
+/// Derived token-form column for exact-SQL counting (P2-T95).
+///
+/// Maps 1:1 to `quran_token_forms` columns; the mapping is a Rust-side
+/// allowlist so counting queries can never interpolate caller SQL.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FormColumn {
+    /// `simple` (`L2.marks`).
+    Simple,
+    /// `bare` (`L3.diacritics`).
+    Bare,
+    /// `hamza_folded` (`L4.hamza`).
+    HamzaFolded,
+    /// `folded` (`L5.codepoints`).
+    Folded,
+    /// `affix_stripped` (`L7.affix`, heuristic).
+    AffixStripped,
+}
+
+impl FormColumn {
+    /// Physical column name (allowlisted; never caller-supplied).
+    #[must_use]
+    pub const fn column_name(self) -> &'static str {
+        match self {
+            Self::Simple => "simple",
+            Self::Bare => "bare",
+            Self::HamzaFolded => "hamza_folded",
+            Self::Folded => "folded",
+            Self::AffixStripped => "affix_stripped",
+        }
+    }
+
+    /// Profile whose pipeline produces this column's values.
+    #[must_use]
+    pub const fn profile_name(self) -> &'static str {
+        match self {
+            Self::Simple => "L2.marks",
+            Self::Bare => "L3.diacritics",
+            Self::HamzaFolded => "L4.hamza",
+            Self::Folded => "L5.codepoints",
+            Self::AffixStripped => "L7.affix",
+        }
+    }
+}
+
 /// One derived token-form row (migration `0014`, Layer D).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokenFormRow {
@@ -471,6 +519,24 @@ pub trait QuranRepository: Send + Sync {
     /// Set a canonical edition's lifecycle status (human-gated maintenance;
     /// identity and hashes stay trigger-guarded).
     async fn set_edition_status(&mut self, _id: &str, _status: &str) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Stamp editorial verification (`verified_by` / `verified_at` /
+    /// `verification_method`) on a canonical edition (P1-T55; OD-02).
+    ///
+    /// Human-gated maintenance like [`QuranRepository::set_edition_status`]:
+    /// only these three columns are updated, so the edition-identity trigger
+    /// (`slug`, `version`, hashes) cannot fire and canonical text is untouched.
+    /// The reviewer identity itself is an owner act this method records, never
+    /// invents — empty reviewer names fail closed.
+    async fn set_edition_verification(
+        &mut self,
+        _id: &str,
+        _verified_by: &str,
+        _verified_at: &str,
+        _verification_method: &str,
+    ) -> Result<(), StorageError> {
         Err(StorageError::StorageUnavailable)
     }
 
@@ -861,6 +927,45 @@ pub trait QuranRepository: Send + Sync {
         Err(StorageError::StorageUnavailable)
     }
 
+    /// Count token-form rows matching an exact derived value (counting
+    /// tools, P2-T95: exact SQL aggregation, never FTS frequencies).
+    async fn count_tokens_matching_form(
+        &self,
+        _edition_id: &str,
+        _column: FormColumn,
+        _value: &str,
+    ) -> Result<i64, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Per-surah counts for an exact derived value (distribution, P2-T96).
+    async fn count_tokens_matching_form_by_surah(
+        &self,
+        _edition_id: &str,
+        _column: FormColumn,
+        _value: &str,
+    ) -> Result<Vec<(i64, i64)>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Distinct derived values with exact counts (hapax/mining, P2-T101).
+    async fn list_distinct_forms(
+        &self,
+        _edition_id: &str,
+        _column: FormColumn,
+    ) -> Result<Vec<(String, i64)>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// All token-form rows for one edition in canonical order (windows and
+    /// collocation statistics, P2-T97/T98; forms are short derived strings).
+    async fn list_all_token_forms(
+        &self,
+        _edition_id: &str,
+    ) -> Result<Vec<TokenFormRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
     /// Fetch one derived ayah-form row.
     async fn get_ayah_form(
         &self,
@@ -935,6 +1040,15 @@ pub trait QuranRepository: Send + Sync {
 
     /// Highest build generation for an index id (0 when never built).
     async fn max_build_generation(&self, _index_id: &str) -> Result<i64, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Delete one build-run row (retention GC only, P2-T35).
+    ///
+    /// The generation directory must already be removed from disk; this only
+    /// drops the tracking row. Never called for the active generation — the
+    /// GC guards that before reaching storage.
+    async fn delete_build_run(&mut self, _id: &str) -> Result<(), StorageError> {
         Err(StorageError::StorageUnavailable)
     }
 
@@ -1275,8 +1389,11 @@ mod tests {
 
     // T012 (US2, FR-005/SC-003): single gated canonical-write path.
     // Audit pinned to this source file: the only canonical-write methods are
-    // `activate_edition`, `rollback_edition`, and human-gated
-    // `set_edition_status`. Staging (`insert_stg_*`), validation/difference
+    // `activate_edition`, `rollback_edition`, human-gated `set_edition_status`,
+    // and human-gated `set_edition_verification` (P1-T55: stamps only the
+    // `verified_*` metadata columns, which sit outside the trigger-guarded
+    // identity/hash columns, so canonical text can never change through it).
+    // Staging (`insert_stg_*`), validation/difference
     // reports, citations, translations, glosses, normalization catalog,
     // Layer-D forms, index pointers/build runs, and search cache are separate
     // attributed/derived datasets that never overwrite canonical Arabic.
@@ -1287,7 +1404,12 @@ mod tests {
         // test module) so this test's own forbidden-name literals do not
         // self-match via `include_str!`.
         let trait_src = src.split("#[cfg(test)]").next().unwrap_or(src);
-        for allowed in ["activate_edition", "rollback_edition", "set_edition_status"] {
+        for allowed in [
+            "activate_edition",
+            "rollback_edition",
+            "set_edition_status",
+            "set_edition_verification",
+        ] {
             assert!(trait_src.contains(allowed), "gated mutator {allowed} must exist");
         }
         // No row-level canonical insert/update/delete may exist.
@@ -1325,6 +1447,7 @@ mod tests {
             q.activate_edition("r", "e", "op", "a", "t").await.unwrap_err(),
             q.rollback_edition("s", "v", "op", "a", "t").await.unwrap_err(),
             q.set_edition_status("e", "Active").await.unwrap_err(),
+            q.set_edition_verification("e", "reviewer", "t", "method").await.unwrap_err(),
         ] {
             assert_eq!(err, StorageError::StorageUnavailable);
             assert_eq!(err.code(), "QAI-DB-0009");
