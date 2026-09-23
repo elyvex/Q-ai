@@ -70,7 +70,6 @@ fn main() {
     let registry = ProfileRegistry::new();
     let v = quran_normalization::SemVer::new(1, 0, 0);
     let inputs = build_inputs();
-    let per_profile = 2000_usize / PROFILES.len();
     let mut rows: Vec<String> = Vec::with_capacity(2001);
     let header = serde_json::json!({
         "header": true,
