@@ -17,6 +17,7 @@ pub mod model;
 pub mod regex;
 pub mod skeleton;
 pub mod tokenizer;
+pub mod trigram;
 
 pub use domain::SemVer;
 pub use error::{Diagnostic, DiagnosticCode, IndexError, codes};
@@ -31,3 +32,4 @@ pub use model::{
 pub use regex::{DFA_SIZE_LIMIT, MAX_PATTERN_LEN, NFA_SIZE_LIMIT, compile_dfa, first_match};
 pub use skeleton::{BuiltSkeleton, ayah_skeleton, skeletons_for_surah};
 pub use tokenizer::{ArTokenizer, INDEXED_FIELDS, TokenizerFamily, profile_for_field};
+pub use trigram::{SkelAddr, TRIGRAM_FILE, recall, trigram_path, trigrams_of};
