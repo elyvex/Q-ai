@@ -17,8 +17,8 @@ use application::quran::activate_edition;
 use application::quran_forms::{RebuildParams, rebuild_forms};
 use application::quran_index::{IndexBuildParams, QURAN_AYAH_INDEX_ID, rebuild_index};
 use application::quran_search::{
-    ExactField, MatchMode, NormalizedProfile, PhraseMode, RateLimiter, SearchParams,
-    search_exact, search_normalized, search_phrase, search_regex,
+    ExactField, MatchMode, NormalizedProfile, PhraseMode, RateLimiter, SearchParams, search_exact,
+    search_normalized, search_phrase, search_regex,
 };
 use domain::{PrincipalId, Timestamp};
 use quran_corpus::import::{ImportInput, ImportOptions, ImportOutcome, ImportProgress, run_import};
@@ -27,7 +27,8 @@ use quran_normalization::{ProfileId, SemVer};
 use storage_sqlite::SqliteDatabase;
 use tempfile::tempdir;
 
-const FIXTURE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/quran/search/queries.jsonl");
+const FIXTURE: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/quran/search/queries.jsonl");
 const BASE_MANIFEST: &str = include_str!("../../../fixtures/quran/test-edition-min/manifest.json");
 const PRINCIPAL: &str = "00000000-0000-0000-0000-000000000001";
 const CREATED_AT: &str = "2026-09-14T00:00:00Z";
@@ -272,7 +273,12 @@ async fn all_400_search_goldens_pass() {
             assert_eq!(total, row.expected_total, "golden {i} {} {:?}: total", row.tool, row.input);
         }
         for banned in &row.must_not_contain {
-            assert!(!got.contains(banned), "golden {i} {} {:?}: must_not_contain {banned} hit", row.tool, row.input);
+            assert!(
+                !got.contains(banned),
+                "golden {i} {} {:?}: must_not_contain {banned} hit",
+                row.tool,
+                row.input
+            );
         }
     }
     assert_eq!(counts["search_exact"], 200);
