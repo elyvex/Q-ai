@@ -122,7 +122,7 @@ impl storage::error::Diagnostic for CountingError {
 }
 
 /// Project a token-form row onto a countable column.
-fn form_value<'a>(form: &'a storage::quran::TokenFormRow, column: FormColumn) -> &'a str {
+fn form_value(form: &storage::quran::TokenFormRow, column: FormColumn) -> &str {
     match column {
         FormColumn::Simple => &form.simple,
         FormColumn::Bare => &form.bare,
@@ -133,10 +133,10 @@ fn form_value<'a>(form: &'a storage::quran::TokenFormRow, column: FormColumn) ->
 }
 
 /// Fixed disclaimer for interval analysis (verbatim, snapshot-tested).
-pub const INTERVAL_DISCLAIMER: &str = "Intervals describe ayah positions only; no chronological or interpretive claim is made.";
+pub const INTERVAL_DISCLAIMER: &str =
+    "Intervals describe ayah positions only; no chronological or interpretive claim is made.";
 /// Fixed disclaimer for missing-expected-form reports (verbatim).
-pub const MISSING_FORM_DISCLAIMER: &str =
-    "Absence under these counting rules is not evidence of absence under other rules; see the CountingRules block.";
+pub const MISSING_FORM_DISCLAIMER: &str = "Absence under these counting rules is not evidence of absence under other rules; see the CountingRules block.";
 /// Mandatory no-interpretation note on numeric reports.
 pub const NO_INTERPRETATION_NOTE: &str =
     "Numeric output only; no interpretive commentary is provided.";
@@ -174,7 +174,10 @@ fn normalize_target(profile: &str, target: &str) -> Result<String, CountingError
     let registry = crate::quran_normalize::builtin_registry();
     let id = quran_normalization::ProfileId::parse(profile)
         .map_err(|_| CountingError::UnknownProfile(profile.to_string()))?;
-    let version = registry.latest(id).map_err(|_| CountingError::UnknownProfile(profile.to_string()))?.version;
+    let version = registry
+        .latest(id)
+        .map_err(|_| CountingError::UnknownProfile(profile.to_string()))?
+        .version;
     let pipe = quran_normalization::NormalizationPipeline::for_profile(&registry, id, version)
         .map_err(|_| CountingError::UnknownProfile(profile.to_string()))?;
     Ok(pipe.apply(target).0.text().to_string())
@@ -184,8 +187,10 @@ fn rules_for(profile: &str, window: Option<String>) -> Result<CountingRules, Cou
     let registry = crate::quran_normalize::builtin_registry();
     let id = quran_normalization::ProfileId::parse(profile)
         .map_err(|_| CountingError::UnknownProfile(profile.to_string()))?;
-    let version =
-        registry.latest(id).map_err(|_| CountingError::UnknownProfile(profile.to_string()))?.version;
+    let version = registry
+        .latest(id)
+        .map_err(|_| CountingError::UnknownProfile(profile.to_string()))?
+        .version;
     Ok(CountingRules {
         profile: profile.to_string(),
         profile_version: version.to_string(),
@@ -494,7 +499,11 @@ pub async fn cooccurrence(
     }
     let mut hits: Vec<CooccurrenceHit> = counts
         .into_iter()
-        .map(|(form, (count, spans_ayah_boundary))| CooccurrenceHit { form, count, spans_ayah_boundary })
+        .map(|(form, (count, spans_ayah_boundary))| CooccurrenceHit {
+            form,
+            count,
+            spans_ayah_boundary,
+        })
         .collect();
     hits.sort_by(|a, b| b.count.cmp(&a.count).then(a.form.cmp(&b.form)));
     hits.truncate(limit.max(1));
@@ -565,7 +574,10 @@ pub async fn collocation(
         let llr = 2.0
             * (log_term(o11, expected)
                 + log_term(o12, (o12 + o22).max(1e-9) * candidate_count / total.max(1e-9))
-                + log_term(o21, (o21 + o22).max(1e-9) * (total - candidate_count) / total.max(1e-9))
+                + log_term(
+                    o21,
+                    (o21 + o22).max(1e-9) * (total - candidate_count) / total.max(1e-9),
+                )
                 + log_term(
                     o22,
                     (o12 + o22).max(1e-9) * (total - candidate_count) / total.max(1e-9),
@@ -587,11 +599,7 @@ pub async fn collocation(
 }
 
 fn log_term(observed: f64, expected: f64) -> f64 {
-    if observed <= 0.0 || expected <= 0.0 {
-        0.0
-    } else {
-        observed * (observed / expected).ln()
-    }
+    if observed <= 0.0 || expected <= 0.0 { 0.0 } else { observed * (observed / expected).ln() }
 }
 
 /// Near-duplicate passage pair (P2-T102): MinHash candidate + exact verify.
@@ -634,9 +642,8 @@ pub async fn near_duplicate_passages(
     threshold: f64,
     limit: usize,
 ) -> Result<(CountingRules, Vec<NearDuplicateHit>), CountingError> {
-    let rules = rules_for("L6.skeleton", None).map_err(|_| {
-        CountingError::ProfileNotCountable("L6.skeleton".to_string())
-    })?;
+    let rules = rules_for("L6.skeleton", None)
+        .map_err(|_| CountingError::ProfileNotCountable("L6.skeleton".to_string()))?;
     let _ = &rules;
     // L6 counting has no token column; operate on stored skeletons directly
     // (ayah-level rows only) with rules naming the skeleton derivation.
@@ -756,21 +763,18 @@ mod tests {
     fn disclaimers_verbatim() {
         assert!(INTERVAL_DISCLAIMER.contains("no chronological"));
         assert!(MISSING_FORM_DISCLAIMER.contains("not evidence of absence"));
-        assert_eq!(NO_INTERPRETATION_NOTE, "Numeric output only; no interpretive commentary is provided.");
+        assert_eq!(
+            NO_INTERPRETATION_NOTE,
+            "Numeric output only; no interpretive commentary is provided."
+        );
     }
 
     #[test]
     fn countable_columns_match_plan() {
         assert_eq!(countable_column("L3.diacritics").unwrap(), FormColumn::Bare);
         assert_eq!(countable_column("L5.codepoints").unwrap(), FormColumn::Folded);
-        assert!(matches!(
-            countable_column("L0.exact"),
-            Err(CountingError::ProfileNotCountable(_))
-        ));
-        assert!(matches!(
-            countable_column("L9.nope"),
-            Err(CountingError::UnknownProfile(_))
-        ));
+        assert!(matches!(countable_column("L0.exact"), Err(CountingError::ProfileNotCountable(_))));
+        assert!(matches!(countable_column("L9.nope"), Err(CountingError::UnknownProfile(_))));
     }
 
     #[test]
