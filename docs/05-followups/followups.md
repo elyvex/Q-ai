@@ -60,7 +60,10 @@ Status key: 🔴 open · 🟢 done (with date + where recorded).
 - **Scope:** redaction session only. No code changes expected.
 
 ## FU-TEST-01 — DEBUG leftovers in `crates/testkit/tests/secret_leak.rs`
-- **Status:** 🔴 open
+- **Status:** 🟢 done 2026-09-24 — the three `println!("DEBUG …")` lines are
+  gone (only a `// DEBUG:` comment remained; rewritten as a plain comment),
+  file ends with a trailing newline, `cargo fmt --check` clean,
+  `cargo test -p testkit --test secret_leak` 9/9 green.
 - **Found:** 2026-09-16 (working-tree review)
 - **Context:** The uncommitted working tree contains three
   `println!("DEBUG …")` lines in
