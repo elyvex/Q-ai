@@ -153,6 +153,8 @@ pub struct AppState {
     pub tools: Arc<ToolRegistry>,
     /// Reader backend for listings and structure endpoints.
     pub api: Arc<dyn QuranApiBackend>,
+    /// Read-only search backend (P2-T51).
+    pub search: Arc<dyn application::quran_search_api::SearchBackend>,
 }
 
 fn empty_meta() -> Meta {
@@ -691,6 +693,473 @@ async fn normalization_profiles_handler() -> Response {
     json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, false)
 }
 
+/// Search endpoints over the five lexical tools (M3, P2-T51).
+///
+/// Every endpoint serves the same read-only services the CLI uses
+/// (`application::quran_search_api::SearchBackend`), wrapped in the stable
+/// envelope. `Accept: text/event-stream` switches the representation to SSE:
+/// one `hit` event per match plus a terminal `totals` event carrying the
+/// exact total and the reproducibility block (§10 streaming).
+/// Structured metadata filters shared by every search endpoint.
+#[derive(Debug, Deserialize, Default)]
+struct SearchFiltersBody {
+    /// Restrict to surahs.
+    surah: Option<Vec<u16>>,
+    /// Juz filter (`2` or `1-5`).
+    juz: Option<String>,
+    /// Restrict to pages.
+    page: Option<Vec<u32>>,
+    /// Revelation-place filter (`makki`|`madani`).
+    revelation_place: Option<String>,
+    /// Global ayah-index filter (`10-99`).
+    global_range: Option<String>,
+}
+
+/// Paging/explain envelope shared by every search endpoint.
+#[derive(Debug, Deserialize, Default)]
+struct SearchPagingBody {
+    /// Edition `slug@version` (defaults to the indexed edition).
+    edition: Option<String>,
+    /// Token match mode (`whole_token`|`substring`|`ayah_prefix`).
+    match_mode: Option<String>,
+    /// Result cap (ceiling 1000).
+    limit: Option<u32>,
+    /// Result offset.
+    offset: Option<u32>,
+    /// Relevance order with per-hit BM25 breakdowns.
+    explain: Option<bool>,
+    /// Wrap hit spans in `<b>` display markers.
+    highlight: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ExactSearchBody {
+    /// Query text.
+    text: String,
+    /// Exact-search field (`text_exact`|`text_ws`).
+    field: Option<String>,
+    /// Metadata filters.
+    filters: Option<SearchFiltersBody>,
+    /// Paging/explain options.
+    #[serde(flatten)]
+    paging: SearchPagingBody,
+}
+
+#[derive(Debug, Deserialize)]
+struct NormalizedSearchBody {
+    /// Query text.
+    text: String,
+    /// Registry profile (`L3.diacritics`, optionally `@version`-pinned).
+    profile: Option<String>,
+    /// Explicit rule list (`N01,N03`); never with `profile`.
+    rules: Option<String>,
+    /// Metadata filters.
+    filters: Option<SearchFiltersBody>,
+    /// Paging/explain options.
+    #[serde(flatten)]
+    paging: SearchPagingBody,
+}
+
+#[derive(Debug, Deserialize)]
+struct PhraseSearchBody {
+    /// Query text.
+    text: String,
+    /// Registry profile or adhoc rules (see normalized search).
+    profile: Option<String>,
+    /// Explicit rule list; never with `profile`.
+    rules: Option<String>,
+    /// Phrase mode (`ordered_exact`|`ordered_near`|`unordered_near`).
+    phrase_mode: Option<String>,
+    /// Max intervening tokens for `*_near` modes.
+    slop: Option<u32>,
+    /// Metadata filters.
+    filters: Option<SearchFiltersBody>,
+    /// Paging/explain options.
+    #[serde(flatten)]
+    paging: SearchPagingBody,
+}
+
+#[derive(Debug, Deserialize)]
+struct ConcatenatedSearchBody {
+    /// Spaceless query text.
+    text: String,
+    /// Allow 3-ayah window matches.
+    allow_cross_ayah: Option<bool>,
+    /// Max ayahs per window match.
+    max_ayah_span: Option<u32>,
+    /// Metadata filters.
+    filters: Option<SearchFiltersBody>,
+    /// Paging/explain options.
+    #[serde(flatten)]
+    paging: SearchPagingBody,
+}
+
+#[derive(Debug, Deserialize)]
+struct RegexSearchBody {
+    /// DFA-safe pattern.
+    pattern: String,
+    /// Indexed normalized field (default `text_bare`).
+    field: Option<String>,
+    /// Wall-clock budget in ms (default 3000, ceiling 10000).
+    timeout_ms: Option<u64>,
+    /// Metadata filters.
+    filters: Option<SearchFiltersBody>,
+    /// Paging/explain options.
+    #[serde(flatten)]
+    paging: SearchPagingBody,
+}
+
+fn search_error_status(error: &application::quran_search::SearchError) -> StatusCode {
+    use application::quran_search::SearchError as E;
+    use storage::error::Diagnostic as _;
+    // 404 first: missing index/edition is a state problem, not a bad query.
+    if matches!(error, E::EditionNotIndexed { .. } | E::NoServingIndex { .. }) {
+        return StatusCode::NOT_FOUND;
+    }
+    // Guard rejections travel as codes so `server` never names the
+    // `quran-search` error enum (no new workspace edge, `arch-check`).
+    match error.code().to_string().as_str() {
+        "QAI-IDX-0002" | "QAI-NORM-0001" | "QAI-NORM-0002" => StatusCode::BAD_REQUEST,
+        "QAI-IDX-0007" => StatusCode::TOO_MANY_REQUESTS,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+fn search_error_response(error: application::quran_search::SearchError) -> Response {
+    use storage::error::Diagnostic as _;
+    json_response(
+        search_error_status(&error),
+        &ErrorBody {
+            error: ErrorDetail {
+                code: error.code().to_string(),
+                summary: error.summary(),
+                location: error.location(),
+                why: error.cause_chain(),
+                remedy: error.remedy(),
+                next_command: error.next_command(),
+            },
+        },
+        None,
+        false,
+    )
+}
+
+/// Split `quran:slug@version:surah:ayah` into its edition parts.
+fn edition_of(reference: &str) -> (String, String) {
+    let body = reference.strip_prefix("quran:").unwrap_or(reference);
+    let mut parts = body.split(':');
+    match (parts.next(), parts.next()) {
+        (Some(edition), Some(_)) => match edition.split_once('@') {
+            Some((slug, version)) => (slug.to_string(), version.to_string()),
+            None => (edition.to_string(), String::new()),
+        },
+        _ => (String::new(), String::new()),
+    }
+}
+
+fn meta_from_search(
+    tool: &str,
+    output: &application::quran_search::SearchOutput,
+    started: Instant,
+) -> Meta {
+    let hits = serde_json::to_value(&output.hits).unwrap_or_default();
+    let first = hits.as_array().and_then(|hits| hits.first());
+    let canonical_reference =
+        first.and_then(|hit| hit.get("reference")).and_then(|v| v.as_str()).unwrap_or_default();
+    let (slug, version) = edition_of(canonical_reference);
+    Meta {
+        edition: EditionMeta {
+            slug,
+            version,
+            text_hash: String::new(),
+            script: String::new(),
+            riwayah: None,
+            numbering_scheme: String::new(),
+        },
+        corpus_generation: output.generation as u64,
+        canonical_reference: canonical_reference.to_string(),
+        deep_link: first
+            .and_then(|hit| hit.get("deep_link"))
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
+        reproducibility: serde_json::json!({
+            "tool": tool,
+            "rule_set": output.rule_set,
+            "generation": output.generation,
+        }),
+        warnings: output
+            .warnings
+            .iter()
+            .map(|warning| format!("{}: {}", warning.code, warning.message))
+            .collect(),
+    }
+}
+
+fn wants_sse(headers: &HeaderMap) -> bool {
+    headers.get("accept").and_then(|value| value.to_str().ok()).is_some_and(|value| {
+        value.split(',').any(|part| part.trim().starts_with("text/event-stream"))
+    })
+}
+
+/// SSE representation: one `hit` event per match, then a terminal `totals`
+/// event with the exact total and the reproducibility block.
+///
+/// v1 buffers the tool output before emitting (the services verify before
+/// they emit, so hits are complete when streamed); true incremental emission
+/// is a follow-up once the services expose a streaming cursor.
+fn sse_response(
+    tool: &str,
+    output: &application::quran_search::SearchOutput,
+    meta: &Meta,
+) -> Response {
+    let mut body = String::new();
+    for hit in &output.hits {
+        let data = serde_json::to_string(hit).unwrap_or_default();
+        body.push_str(&format!("event: hit\ndata: {data}\n\n"));
+    }
+    let totals = serde_json::json!({
+        "total_matches": output.total_matches,
+        "truncated": output.truncated,
+        "rule_set": output.rule_set,
+        "generation": output.generation,
+        "reproducibility": meta.reproducibility,
+        "warnings": meta.warnings,
+    });
+    body.push_str(&format!("event: totals\ndata: {totals}\n\n"));
+    let _ = tool;
+    (
+        StatusCode::OK,
+        [
+            ("content-type", "text/event-stream"),
+            ("cache-control", "no-cache"),
+            ("x-content-type-options", "nosniff"),
+        ],
+        body,
+    )
+        .into_response()
+}
+
+fn search_response(
+    headers: &HeaderMap,
+    tool: &str,
+    output: application::quran_search::SearchOutput,
+    started: Instant,
+) -> Response {
+    let meta = meta_from_search(tool, &output, started);
+    if wants_sse(headers) {
+        return sse_response(tool, &output, &meta);
+    }
+    json_response(
+        StatusCode::OK,
+        &Envelope { api_version: API_VERSION, data: output, meta },
+        None,
+        true,
+    )
+}
+
+fn search_service_filters(
+    filters: Option<SearchFiltersBody>,
+) -> Result<Vec<application::quran_search_api::SearchFilter>, application::quran_search::SearchError>
+{
+    use application::quran_search_api::build_filters;
+    match filters {
+        Some(SearchFiltersBody { surah, juz, page, revelation_place, global_range }) => {
+            build_filters(
+                surah,
+                juz.as_deref(),
+                page,
+                revelation_place.as_deref(),
+                global_range.as_deref(),
+            )
+        }
+        None => build_filters(None, None, None, None, None),
+    }
+}
+
+fn search_service_params(
+    text: String,
+    paging: SearchPagingBody,
+    filters: Vec<application::quran_search_api::SearchFilter>,
+) -> Result<application::quran_search::SearchParams, application::quran_search::SearchError> {
+    use application::quran_search_api::{parse_match_mode, search_params};
+    Ok(search_params(
+        text,
+        paging.edition,
+        parse_match_mode(paging.match_mode.as_deref())?,
+        filters,
+        paging.limit,
+        paging.offset,
+        paging.explain,
+        paging.highlight,
+    ))
+}
+
+async fn search_exact_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<ExactSearchBody>,
+) -> Response {
+    use application::quran_search_api::{ExactArgs, parse_exact_field};
+    let started = Instant::now();
+    if body.text.trim().is_empty() {
+        return search_error_response(application::quran_search_api::reject(
+            "provide query text".to_string(),
+        ));
+    }
+    let params = match search_service_filters(body.filters)
+        .and_then(|filters| search_service_params(body.text, body.paging, filters))
+    {
+        Ok(params) => params,
+        Err(error) => return search_error_response(error),
+    };
+    let field = match parse_exact_field(body.field.as_deref()) {
+        Ok(field) => field,
+        Err(error) => return search_error_response(error),
+    };
+    match state.search.search_exact(ExactArgs { params, field }).await {
+        Ok(output) => search_response(&headers, "quran.search_exact", output, started),
+        Err(error) => search_error_response(error),
+    }
+}
+
+async fn search_normalized_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<NormalizedSearchBody>,
+) -> Response {
+    use application::quran_search_api::{NormalizedArgs, parse_normalized_profile};
+    let started = Instant::now();
+    if body.text.trim().is_empty() {
+        return search_error_response(application::quran_search_api::reject(
+            "provide query text".to_string(),
+        ));
+    }
+    let params = match search_service_filters(body.filters)
+        .and_then(|filters| search_service_params(body.text, body.paging, filters))
+    {
+        Ok(params) => params,
+        Err(error) => return search_error_response(error),
+    };
+    let profile = match parse_normalized_profile(body.profile.as_deref(), body.rules.as_deref()) {
+        Ok(profile) => profile,
+        Err(error) => return search_error_response(error),
+    };
+    match state.search.search_normalized(NormalizedArgs { params, profile }).await {
+        Ok(output) => search_response(&headers, "quran.search_normalized", output, started),
+        Err(error) => search_error_response(error),
+    }
+}
+
+async fn search_phrase_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<PhraseSearchBody>,
+) -> Response {
+    use application::quran_search_api::{PhraseArgs, parse_normalized_profile, parse_phrase_mode};
+    let started = Instant::now();
+    if body.text.trim().is_empty() {
+        return search_error_response(application::quran_search_api::reject(
+            "provide query text".to_string(),
+        ));
+    }
+    let params = match search_service_filters(body.filters)
+        .and_then(|filters| search_service_params(body.text, body.paging, filters))
+    {
+        Ok(params) => params,
+        Err(error) => return search_error_response(error),
+    };
+    let profile = match parse_normalized_profile(body.profile.as_deref(), body.rules.as_deref()) {
+        Ok(profile) => profile,
+        Err(error) => return search_error_response(error),
+    };
+    let mode = match parse_phrase_mode(body.phrase_mode.as_deref()) {
+        Ok(mode) => mode,
+        Err(error) => return search_error_response(error),
+    };
+    match state
+        .search
+        .search_phrase(PhraseArgs { params, profile, mode, slop: body.slop.unwrap_or(0) })
+        .await
+    {
+        Ok(output) => search_response(&headers, "quran.search_phrase", output, started),
+        Err(error) => search_error_response(error),
+    }
+}
+
+async fn search_concatenated_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<ConcatenatedSearchBody>,
+) -> Response {
+    use application::quran_search_api::ConcatenatedArgs;
+    let started = Instant::now();
+    if body.text.trim().is_empty() {
+        return search_error_response(application::quran_search_api::reject(
+            "provide query text".to_string(),
+        ));
+    }
+    let params = match search_service_filters(body.filters)
+        .and_then(|filters| search_service_params(body.text, body.paging, filters))
+    {
+        Ok(params) => params,
+        Err(error) => return search_error_response(error),
+    };
+    match state
+        .search
+        .search_concatenated(ConcatenatedArgs {
+            params,
+            allow_cross_ayah: body.allow_cross_ayah.unwrap_or(false),
+            max_ayah_span: body.max_ayah_span.unwrap_or(3).max(1),
+        })
+        .await
+    {
+        Ok(output) => search_response(&headers, "quran.search_concatenated", output, started),
+        Err(error) => search_error_response(error),
+    }
+}
+
+async fn search_regex_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<RegexSearchBody>,
+) -> Response {
+    use application::quran_search_api::RegexArgs;
+    let started = Instant::now();
+    if body.pattern.trim().is_empty() {
+        return search_error_response(application::quran_search_api::reject(
+            "provide a regex pattern".to_string(),
+        ));
+    }
+    let principal = headers
+        .get("x-principal")
+        .and_then(|value| value.to_str().ok())
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("api-anonymous")
+        .to_string();
+    let params = match search_service_filters(body.filters).and_then(|filters| {
+        search_service_params(format!("regex:{}", body.pattern), body.paging, filters)
+    }) {
+        Ok(params) => params,
+        Err(error) => return search_error_response(error),
+    };
+    match state
+        .search
+        .search_regex(RegexArgs {
+            params,
+            field: body.field.unwrap_or_else(|| "text_bare".to_string()),
+            pattern: body.pattern,
+            principal,
+            timeout_ms: body.timeout_ms.unwrap_or(3000).clamp(1, 10_000),
+        })
+        .await
+    {
+        Ok(output) => search_response(&headers, "quran.search_regex", output, started),
+        Err(error) => search_error_response(error),
+    }
+}
+
 async fn debug_reader_handler(
     State(state): State<AppState>,
     Path((edition, surah)): Path<(String, u16)>,
@@ -835,6 +1304,11 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/quran/citations/{id}", get(citation_handler))
         .route("/api/v1/quran/normalization/preview", post(normalization_preview_handler))
         .route("/api/v1/quran/normalization/profiles", get(normalization_profiles_handler))
+        .route("/api/v1/quran/search/exact", post(search_exact_handler))
+        .route("/api/v1/quran/search/normalized", post(search_normalized_handler))
+        .route("/api/v1/quran/search/phrase", post(search_phrase_handler))
+        .route("/api/v1/quran/search/concatenated", post(search_concatenated_handler))
+        .route("/api/v1/quran/search/regex", post(search_regex_handler))
         .route("/debug/read/{edition}/{surah}", get(debug_reader_handler))
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .layer(tower_http::limit::RequestBodyLimitLayer::new(1024 * 1024))
