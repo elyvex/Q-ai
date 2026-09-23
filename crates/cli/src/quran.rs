@@ -177,6 +177,88 @@ pub enum QuranAction {
         #[arg(long)]
         show_rule: Option<String>,
     },
+    /// Search the canonical corpus (exact, normalized, phrase, concatenated, regex).
+    Search {
+        /// Search options (boxed: the full flag set dwarfs other variants).
+        #[command(flatten)]
+        args: Box<QuranSearchArgs>,
+    },
+}
+
+/// `qai quran search` flags (P2-T52): all five lexical tools plus filters.
+#[derive(clap::Args, Debug, Clone)]
+pub struct QuranSearchArgs {
+    /// Query text (or regex pattern with `--regex`).
+    pub text: String,
+    /// `quran.search_exact`: no linguistic expansion beyond the field profile.
+    #[arg(long, default_value_t = false)]
+    pub exact: bool,
+    /// `quran.search_phrase`: ordered/near/unordered phrase search.
+    #[arg(long, default_value_t = false)]
+    pub phrase: bool,
+    /// `quran.search_concatenated`: space-insensitive skeleton search.
+    #[arg(long, default_value_t = false)]
+    pub concatenated: bool,
+    /// `quran.search_regex`: DFA-bounded regex over an indexed field.
+    #[arg(long, default_value_t = false)]
+    pub regex: bool,
+    /// Edition `slug@version` (defaults to the indexed edition).
+    #[arg(long)]
+    pub edition: Option<String>,
+    /// Exact-search field (`text_exact`|`text_ws`); regex field with `--regex`.
+    #[arg(long)]
+    pub field: Option<String>,
+    /// Token match mode (`whole_token`|`substring`|`ayah_prefix`).
+    #[arg(long, default_value = "whole_token")]
+    pub match_mode: String,
+    /// Registry profile (`L3.diacritics`, optionally `@version`-pinned).
+    #[arg(long)]
+    pub profile: Option<String>,
+    /// Explicit rule list (`N01,N03`); never with `--profile`.
+    #[arg(long)]
+    pub rules: Option<String>,
+    /// Phrase mode (`ordered_exact`|`ordered_near`|`unordered_near`).
+    #[arg(long, default_value = "ordered_exact")]
+    pub phrase_mode: String,
+    /// Max intervening tokens for `*_near` phrase modes.
+    #[arg(long, default_value_t = 0)]
+    pub slop: u32,
+    /// Allow 3-ayah window matches (concatenated only).
+    #[arg(long, default_value_t = false)]
+    pub cross_ayah: bool,
+    /// Max ayahs per window match (concatenated only).
+    #[arg(long, default_value_t = 3)]
+    pub max_ayah_span: u32,
+    /// Surah filter (`1,2,3`).
+    #[arg(long)]
+    pub surah: Option<String>,
+    /// Juz filter (`2` or `1-5`).
+    #[arg(long)]
+    pub juz: Option<String>,
+    /// Page filter (`3,4`).
+    #[arg(long)]
+    pub page: Option<String>,
+    /// Revelation-place filter (`makki`|`madani`).
+    #[arg(long)]
+    pub revelation_place: Option<String>,
+    /// Global ayah-index filter (`10-99`).
+    #[arg(long)]
+    pub global_range: Option<String>,
+    /// Result cap (ceiling 1000).
+    #[arg(long, default_value_t = 20)]
+    pub limit: u32,
+    /// Result offset.
+    #[arg(long, default_value_t = 0)]
+    pub offset: u32,
+    /// Relevance order with per-hit BM25 breakdowns.
+    #[arg(long, default_value_t = false)]
+    pub explain: bool,
+    /// Wrap hit spans in `<b>` display markers.
+    #[arg(long, default_value_t = false)]
+    pub highlight: bool,
+    /// Regex wall-clock budget in ms (regex only, ceiling 10000).
+    #[arg(long, default_value_t = 3000)]
+    pub timeout_ms: u64,
 }
 
 /// Edition subcommands.
@@ -381,6 +463,81 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
                 application::quran_cli::cmd_index_verify(db_path, index.as_deref()).await
             }
         },
+        QuranAction::Search { args } => {
+            let QuranSearchArgs {
+                text,
+                exact,
+                phrase,
+                concatenated,
+                regex,
+                edition,
+                field,
+                match_mode,
+                profile,
+                rules,
+                phrase_mode,
+                slop,
+                cross_ayah,
+                max_ayah_span,
+                surah,
+                juz,
+                page,
+                revelation_place,
+                global_range,
+                limit,
+                offset,
+                explain,
+                highlight,
+                timeout_ms,
+            } = *args;
+            let tools =
+                [exact, phrase, concatenated, regex].iter().filter(|&&selected| selected).count();
+            if tools > 1 {
+                use crate::exit_code;
+                eprintln!("error: use only one of --exact, --phrase, --concatenated, --regex");
+                return exit_code::USAGE;
+            }
+            let mode = if regex {
+                application::quran_cli::SearchCliMode::Regex
+            } else if phrase {
+                application::quran_cli::SearchCliMode::Phrase
+            } else if concatenated {
+                application::quran_cli::SearchCliMode::Concatenated
+            } else if exact {
+                application::quran_cli::SearchCliMode::Exact
+            } else if phrase_mode != "ordered_exact" || slop != 0 {
+                application::quran_cli::SearchCliMode::Phrase
+            } else {
+                application::quran_cli::SearchCliMode::Normalized
+            };
+            application::quran_cli::cmd_search(
+                db_path,
+                &application::quran_cli::SearchCliOptions {
+                    text,
+                    mode,
+                    edition,
+                    field,
+                    match_mode,
+                    profile,
+                    rules,
+                    phrase_mode,
+                    slop,
+                    allow_cross_ayah: cross_ayah,
+                    max_ayah_span,
+                    surah,
+                    juz,
+                    page,
+                    revelation_place,
+                    global_range,
+                    limit,
+                    offset,
+                    explain,
+                    highlight,
+                    timeout_ms,
+                },
+            )
+            .await
+        }
         QuranAction::Normalize { text, profile, rules, explain, list_profiles, show_rule } => {
             if list_profiles {
                 application::quran_cli::cmd_normalize_list_profiles(db_path).await
