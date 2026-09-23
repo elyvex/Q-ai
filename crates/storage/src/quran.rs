@@ -1090,6 +1090,198 @@ pub trait QuranRepository: Send + Sync {
     async fn cache_delete_stale(&mut self, _keep_generation: i64) -> Result<u64, StorageError> {
         Err(StorageError::StorageUnavailable)
     }
+
+    // ─── Phase 2 — morphology lexicon + staging (migrations 0017/0018) ──
+
+    /// Register a dataset (import path; state starts `staged`).
+    async fn upsert_dataset(&mut self, _row: QuranDatasetRow) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Fetch a dataset by slug@version.
+    async fn get_dataset(
+        &self,
+        _slug: &str,
+        _version: &str,
+    ) -> Result<Option<QuranDatasetRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// List all datasets (newest first).
+    async fn list_datasets(&self) -> Result<Vec<QuranDatasetRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// The active dataset, if any (activation flips exactly one row).
+    async fn active_dataset(&self) -> Result<Option<QuranDatasetRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Set a dataset's state (activation path only, approval-gated above).
+    async fn set_dataset_state(&mut self, _id: &str, _state: &str) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Open a staging batch (import path).
+    async fn insert_staging_batch(&mut self, _row: StagingBatchRow) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Advance a staging batch's state/checkpoint (cancel-safe resume).
+    async fn update_staging_batch(
+        &mut self,
+        _id: &str,
+        _state: &str,
+        _checkpoint: &str,
+        _finished_at: Option<&str>,
+    ) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Fetch a staging batch.
+    async fn get_staging_batch(&self, _id: &str) -> Result<Option<StagingBatchRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Replace a batch's staging rows (idempotent rewrite for resume).
+    async fn replace_staging_rows(
+        &mut self,
+        _batch_id: &str,
+        _rows: Vec<StagedMorphRow>,
+    ) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// List a batch's staging rows.
+    async fn list_staging_rows(&self, _batch_id: &str) -> Result<Vec<StagedMorphRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Replace a batch's alignment rows (idempotent rewrite for resume).
+    async fn replace_alignment_rows(
+        &mut self,
+        _batch_id: &str,
+        _rows: Vec<AlignmentRow>,
+    ) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// List a batch's alignment rows.
+    async fn list_alignment(&self, _batch_id: &str) -> Result<Vec<AlignmentRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Replace a batch's validation findings (idempotent rewrite).
+    async fn replace_findings(
+        &mut self,
+        _batch_id: &str,
+        _rows: Vec<MorphologyFindingRow>,
+    ) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// List a batch's findings.
+    async fn list_findings(&self, _batch_id: &str) -> Result<Vec<MorphologyFindingRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Promote staged roots into the lexicon (activation path, one tx).
+    async fn insert_roots(&mut self, _rows: Vec<LexiconRootRow>) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Promote staged lemmas into the lexicon (activation path, one tx).
+    async fn insert_lemmas(&mut self, _rows: Vec<LexiconLemmaRow>) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Promote staged analyses into the lexicon (activation path, one tx).
+    async fn insert_analyses(&mut self, _rows: Vec<TokenAnalysisRow>) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Promote staged morphemes into the lexicon (activation path, one tx).
+    async fn insert_morphemes(&mut self, _rows: Vec<MorphemeRow>) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// All analyses for one token across datasets (multi-analysis reads).
+    async fn analyses_for_token(
+        &self,
+        _dataset_id: Option<&str>,
+        _edition_id: &str,
+        _surah: i64,
+        _ayah: i64,
+        _position: i64,
+    ) -> Result<Vec<TokenAnalysisRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Analyses by normalized root within a dataset (root search).
+    async fn analyses_for_root(
+        &self,
+        _dataset_id: &str,
+        _root_normalized: &str,
+    ) -> Result<Vec<TokenAnalysisRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Analyses by lemma within a dataset (lemma search).
+    async fn analyses_for_lemma(
+        &self,
+        _dataset_id: &str,
+        _lemma: &str,
+    ) -> Result<Vec<TokenAnalysisRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Roots of a dataset in lemma order (browse).
+    async fn list_roots(&self, _dataset_id: &str) -> Result<Vec<LexiconRootRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Lemmas of a dataset in lemma order (browse).
+    async fn list_lemmas(&self, _dataset_id: &str) -> Result<Vec<LexiconLemmaRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Record family relations (builders + review promotions).
+    async fn insert_family_relations(
+        &mut self,
+        _rows: Vec<FamilyRelationRow>,
+    ) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Relations touching one member (either side).
+    async fn family_relations_for(
+        &self,
+        _kind: &str,
+        _id: &str,
+    ) -> Result<Vec<FamilyRelationRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Enqueue a review item (suggestion flow).
+    async fn insert_review_item(&mut self, _row: MorphReviewItemRow) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// List review items by status.
+    async fn list_review_items(&self, _status: &str) -> Result<Vec<MorphReviewItemRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Decide a review item (approval-gated above; reviewer recorded).
+    async fn decide_review_item(
+        &mut self,
+        _id: &str,
+        _reviewer: &str,
+        _decision: &str,
+        _decided_at: &str,
+    ) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
 }
 
 /// One cached search response (migration `0016`, derived data).
@@ -1111,6 +1303,294 @@ pub struct SearchCacheRow {
     pub created_at: String,
     /// Last-hit timestamp (RFC 3339, LRU order).
     pub last_hit_at: String,
+}
+
+// ─── Phase 2 — morphology lexicon + staging rows (migrations 0017/0018) ──
+
+/// One morphology dataset (migration `0017`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QuranDatasetRow {
+    /// Row id (`slug@version` content key).
+    pub id: String,
+    /// Dataset slug.
+    pub slug: String,
+    /// Dataset version.
+    pub version: String,
+    /// Human title.
+    pub title: String,
+    /// License status + JSON (redistribution gate).
+    pub license_status: String,
+    /// License detail JSON.
+    pub license_json: String,
+    /// Required attribution string.
+    pub attribution: String,
+    /// Root convention identifier.
+    pub root_convention: String,
+    /// Tagset version.
+    pub tagset_version: String,
+    /// `staged` | `active` | `superseded`.
+    pub state: String,
+    /// Insert timestamp (RFC 3339).
+    pub created_at: String,
+}
+
+/// One import staging batch (migration `0018`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StagingBatchRow {
+    /// Batch id.
+    pub id: String,
+    /// Dataset slug/version under import.
+    pub dataset_slug: String,
+    /// Dataset version under import.
+    pub dataset_version: String,
+    /// Adapter name (`json` | `csv`).
+    pub adapter: String,
+    /// Source manifest hash.
+    pub source_manifest_hash: String,
+    /// Batch state (12-checkpoint lifecycle).
+    pub state: String,
+    /// Resume checkpoint name.
+    pub checkpoint: String,
+    /// Start timestamp (RFC 3339).
+    pub created_at: String,
+    /// Finish timestamp (RFC 3339, if finished).
+    pub finished_at: Option<String>,
+}
+
+/// One staged token analysis (migration `0018`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StagedMorphRow {
+    /// Row id.
+    pub id: String,
+    /// Owning batch.
+    pub batch_id: String,
+    /// `surah:ayah:position` reference.
+    pub reference: String,
+    /// Surah number.
+    pub surah: i64,
+    /// Ayah number.
+    pub ayah: i64,
+    /// Token position.
+    pub token_position: i64,
+    /// Intermediate-format analysis JSON.
+    pub payload_json: String,
+    /// Native tags JSON.
+    pub native_tags_json: String,
+    /// Insert timestamp (RFC 3339).
+    pub created_at: String,
+}
+
+/// One alignment decision (migration `0018`; never modifies tokens).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlignmentRow {
+    /// Row id.
+    pub id: String,
+    /// Owning batch.
+    pub batch_id: String,
+    /// `surah:ayah:position:surface` direct key.
+    pub direct_key: String,
+    /// Canonical edition id aligned to.
+    pub edition_id: String,
+    /// Surah number.
+    pub surah: i64,
+    /// Ayah number.
+    pub ayah: i64,
+    /// Token position.
+    pub token_position: i64,
+    /// `direct_key` | `table_mapped` | `unmatched`.
+    pub alignment_kind: String,
+    /// Alignment-table entry hash (auditable mapping).
+    pub alignment_hash: String,
+    /// Insert timestamp (RFC 3339).
+    pub created_at: String,
+}
+
+/// One MV validation finding (migration `0018`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MorphologyFindingRow {
+    /// Row id.
+    pub id: String,
+    /// Owning batch.
+    pub batch_id: String,
+    /// MV rule id (`MV-001`…`MV-018`).
+    pub rule_id: String,
+    /// `fatal` | `error` | `warn`.
+    pub severity: String,
+    /// `surah:ayah:position` reference (empty for batch-level).
+    pub reference: String,
+    /// Human detail.
+    pub detail: String,
+    /// Insert timestamp (RFC 3339).
+    pub created_at: String,
+}
+
+/// Shared Layer B/D provenance columns for lexicon rows.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LexiconProvenance {
+    /// `B` (dataset-attested) or `D` (computational).
+    pub layer: String,
+    /// Algorithm name (D only).
+    pub algorithm: Option<String>,
+    /// Algorithm version (D only).
+    pub algorithm_version: Option<String>,
+    /// Confidence in [0,1] (D only).
+    pub confidence: Option<f64>,
+    /// Reviewer id (human_verified only).
+    pub reviewer: Option<String>,
+    /// `imported` | `human_verified`.
+    pub status: String,
+}
+
+/// One lexicon root (migration `0017`; dataset identity preserved).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LexiconRootRow {
+    /// Row id.
+    pub id: String,
+    /// Owning dataset.
+    pub dataset_id: String,
+    /// Native root spelling.
+    pub root: String,
+    /// Normalized root (convention-pinned).
+    pub root_normalized: String,
+    /// Provenance.
+    pub provenance: LexiconProvenance,
+    /// Corpus generation at import.
+    pub corpus_generation: i64,
+    /// Insert timestamp (RFC 3339).
+    pub created_at: String,
+}
+
+/// One lexicon lemma (migration `0017`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LexiconLemmaRow {
+    /// Row id.
+    pub id: String,
+    /// Owning dataset.
+    pub dataset_id: String,
+    /// Lemma surface.
+    pub lemma: String,
+    /// Owning root row id (nullable).
+    pub root_id: Option<String>,
+    /// Unified POS tag.
+    pub pos_unified: String,
+    /// Verbatim native POS tag.
+    pub pos_native: String,
+    /// Provenance.
+    pub provenance: LexiconProvenance,
+    /// Corpus generation at import.
+    pub corpus_generation: i64,
+    /// Insert timestamp (RFC 3339).
+    pub created_at: String,
+}
+
+/// One token analysis (migration `0017`; no winner column by design).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TokenAnalysisRow {
+    /// Row id.
+    pub id: String,
+    /// Owning dataset.
+    pub dataset_id: String,
+    /// Aligned canonical edition.
+    pub edition_id: String,
+    /// Surah number.
+    pub surah: i64,
+    /// Ayah number.
+    pub ayah: i64,
+    /// Token position.
+    pub token_position: i64,
+    /// Nth analysis of this token (multi-analysis coexistence).
+    pub analysis_index: i64,
+    /// Canonical surface.
+    pub surface: String,
+    /// Lemma row id (nullable).
+    pub lemma_id: Option<String>,
+    /// Root row id (nullable).
+    pub root_id: Option<String>,
+    /// Stem surface.
+    pub stem: String,
+    /// Unified POS tag.
+    pub pos_unified: String,
+    /// Verbatim native POS tag.
+    pub pos_native: String,
+    /// Feature JSON.
+    pub features_json: String,
+    /// Morpheme segment JSON.
+    pub segments_json: String,
+    /// Provenance.
+    pub provenance: LexiconProvenance,
+    /// Corpus generation at import.
+    pub corpus_generation: i64,
+    /// Insert timestamp (RFC 3339).
+    pub created_at: String,
+}
+
+/// One morpheme (migration `0017`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MorphemeRow {
+    /// Row id.
+    pub id: String,
+    /// Owning analysis.
+    pub analysis_id: String,
+    /// `prefix` | `stem` | `suffix`.
+    pub kind: String,
+    /// Morpheme surface.
+    pub surface: String,
+    /// Feature JSON.
+    pub features_json: String,
+    /// Insert timestamp (RFC 3339).
+    pub created_at: String,
+}
+
+/// One word-family relation (migration `0017`; explanation mandatory).
+#[derive(Debug, Clone, PartialEq)]
+pub struct FamilyRelationRow {
+    /// Row id.
+    pub id: String,
+    /// Relation taxonomy value.
+    pub relation: String,
+    /// Source member kind (`root` | `lemma` | `token`).
+    pub from_kind: String,
+    /// Source member id.
+    pub from_id: String,
+    /// Target member kind.
+    pub to_kind: String,
+    /// Target member id.
+    pub to_id: String,
+    /// Mandatory human-readable explanation.
+    pub explanation: String,
+    /// Owning dataset (nullable for computational suggestions).
+    pub dataset_id: Option<String>,
+    /// Provenance.
+    pub provenance: LexiconProvenance,
+    /// `proposed` | `scholar_verified`.
+    pub status: String,
+    /// Evidence JSON.
+    pub evidence_json: String,
+    /// Corpus generation.
+    pub corpus_generation: i64,
+    /// Insert timestamp (RFC 3339).
+    pub created_at: String,
+}
+
+/// One morphology review-queue item (migration `0017`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MorphReviewItemRow {
+    /// Row id.
+    pub id: String,
+    /// `root_unification` | `family_relation` | `analysis_correction`.
+    pub kind: String,
+    /// Subject JSON.
+    pub subject_json: String,
+    /// Evidence JSON.
+    pub evidence_json: String,
+    /// `pending` | `approved` | `rejected`.
+    pub status: String,
+    /// Reviewer id (decided items).
+    pub reviewer: Option<String>,
+    /// Decision timestamp (RFC 3339, decided items).
+    pub decided_at: Option<String>,
+    /// Insert timestamp (RFC 3339).
+    pub created_at: String,
 }
 
 #[cfg(test)]
