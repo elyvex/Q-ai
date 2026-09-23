@@ -4,6 +4,19 @@ All notable changes to Q-ai are documented here.
 
 ## [Unreleased]
 
+### Fixed — Telemetry redaction + job scheduling precision (2026-09-24)
+
+- OTLP export now scrubs span attributes at the exporter boundary: the new
+  `observability::otlp::ScrubbingProcessor` strips content-denylisted fields
+  (`query_text`, `prompt_text`, `document_content`, `research_question`,
+  `model_response`, …) and secret-named fields (`api_key`, `token`,
+  `credential`, …) from spans and their events before the batch exporter sees
+  them. Closes the Phase-3+ deferral in `docs/05-followups/open-questions.md`.
+- `jobs::InMemoryJobQueue` no longer truncates sub-second delays when computing
+  `available_at` / `lease_expires_at` (whole seconds + sub-second nanos).
+- Added `storage-sqlite` regression proving a rescheduled job is not claimable
+  before its `available_at` and claims normally afterwards.
+
 ### Changed — Normalization engine verified and closed out (P2-T13–T18/T20/T22)
 
 - Review pass completed for the `quran-normalization` foundation: 89/89 tests green,
