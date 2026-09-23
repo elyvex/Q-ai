@@ -1,7 +1,7 @@
 # Phase 3 (dir: phase-04) — Completion Ledger — Quran Knowledge Graph
 
 **Phase:** PRD Phase 3 — Quran Graph (directory numbering unchanged — see `README.md`)
-**Status:** Planned — 0 / 30 tasks (28 required + 2 optional spikes) · 0 / 28 acceptance criteria
+**Status:** In progress — 0 / 30 ☑ (6 ◐ code-landed-partial, 3 ⊘ M5 blocked) · 0 / 28 acceptance criteria
 **Started:** —
 **Completed:** —
 
@@ -46,15 +46,15 @@ and with what evidence.
 |---|---|---|---|---|---|
 | X — External decisions (swimlane, not tasks) | 5 items | 0 | — | — | ☐ |
 | M0 — Contracts & gates | 2 | 0 | 3.5 | — | ☐ |
-| M1 — Foundations | 5 | 0 | 13.5 | — | ☐ |
-| M2 — Structural projection | 2 | 0 | 6.0 | — | ☐ |
-| M3 — Bounded traversal | 4 | 0 | 10.5 | — | ☐ |
+| M1 — Foundations | 5 | 0 ☑ / 1 ◐ (TASK-401) | 13.5 | — | ◐ code ahead of board |
+| M2 — Structural projection | 2 | 0 ☑ / 1 ◐ (TASK-404) | 6.0 | — | ◐ |
+| M3 — Bounded traversal | 4 | 0 ☑ / 3 ◐ (TASK-403/409/420) | 10.5 | — | ◐ |
 | M4 — Annotations/concepts | 4 | 0 | 11.5 | — | ☐ |
 | M5 — Linguistic/root family | 3 | 0 | 7.5 | — | ⊘ blocked |
-| M6 — Interfaces/export/viz | 5 | 0 | 12.0 | — | ☐ |
+| M6 — Interfaces/export/viz | 5 | 0 ☑ / 1 ◐ (TASK-427) | 12.0 | — | ◐ |
 | M7 — Operations/exit | 3 | 0 | 6.5 | — | ☐ |
 | Spikes (optional) | 2 | 0 | 3.5 | — | ☐ |
-| **Total** | **30 (28 required + 2 optional)** | **0** | **71.0 required + 3.5 optional = 74.5** | **—** | **0%** |
+| **Total** | **30 (28 required + 2 optional)** | **0 ☑ / 6 ◐** | **71.0 required + 3.5 optional = 74.5** | **—** | **0% ☑; 6 partial** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -71,7 +71,42 @@ spike. Under-recorded actuals are how the next phase inherits a wrong capacity m
 
 ## 2. Completed Tasks
 
-_None completed yet._
+_None completed yet (0 ☑). Partial work landed without task closure is tracked
+in `tasks.md` (◐ rows) and summarised here:_
+
+- **TASK-401 ◐** — `crates/quran-graph/src/store.rs` (240 lines) `GraphStore`
+  port: node resolution, neighbors, bounded paths/subgraphs/patterns,
+  build-staging/inspect/capabilities, `AuthzScope`, `EdgeFilter`, `Direction`,
+  cancellation helper. Reference backend `src/mem.rs` (574 lines).
+  No-query-language guard: `tests/no_query_language.rs` (2 tests).
+- **TASK-403 ◐** — `src/traverse.rs` (441 lines): bounded subgraph, reachability,
+  min-hop, up-to-K paths with expansion counters, deterministic ordering,
+  cancellation, typed incomplete results. Tests: `tests/traversal.rs` (5, incl.
+  cyclic + high-degree star termination).
+- **TASK-404 ◐** — `src/structural.rs` (333 lines): edition/surah/ayah/token/
+  division nodes, `CONTAINS`/`NEXT` with explicit surah-boundary behavior,
+  stable IDs, input-version provenance, no canonical text embedded
+  (`structural::tests::no_canonical_text_embedded`). Golden fixture:
+  `fixtures/quran/graph/mini-structural.json` via
+  `tests/structural.rs::mini_corpus_golden_node_and_edge_sets`.
+  Durable resumable build lifecycle / fenced publication / annotation
+  preservation: **not implemented** (TASK-415/416/417/419).
+- **TASK-409 ◐** — `tests/conformance.rs` (6 tests): neighbors/paths/subgraph/
+  pattern, budget exhaustion ≠ empty, authz-filtered intermediates, build
+  inspect + capabilities. Draft harness: only `MemGraphStore` has passed it.
+- **TASK-420 ◐** — `src/pattern.rs` (307 lines): typed allowlisted predicates,
+  parameterized values, `PATTERN_SIZE_BUDGET`, unsupported-operation rejection.
+- **TASK-427 ◐** — `src/export.rs` (179 lines): Graph JSON export with
+  identities/attribution/versions plus `ExportNotice` truncation, tombstone and
+  authz filtering. GraphML + application-level export service: not implemented.
+
+Gates run 2026-09-24 for the above: `cargo test -p quran-graph` 34/34 green,
+`cargo clippy -p quran-graph --all-targets -- -D warnings` clean,
+`cargo fmt --check -p quran-graph` clean, `cargo xtask arch-check` OK,
+`cargo xtask migrate-check` OK (19 migrations, incl. `0019_quran_graph`).
+Commits: `5a32a15` (crate), `d4ed983`/`093d225`/`496903c`/`b8baad0` (tests),
+`27d796d` (refactor), `8380acd` (golden fixture). None is pushed (`main` is
+81 commits ahead of `origin/main` as of this entry).
 
 ---
 
@@ -79,8 +114,9 @@ _None completed yet._
 
 | Task | Reason | Unblocks when | Owner |
 |---|---|---|---|
-| TASK-405/406/407 (M5) | Phase-2 morphology datasets, alignment, and analysis policy not implemented (`crates/quran-morphology` placeholder; P2 sprints 2.4–2.5 at 0 tasks) | ADR-0203-licensed dataset + Phase-2 sprints 2.4–2.5 land | _unassigned_ (P4-X04) |
-| TASK-411/412 (spikes) | Optional accelerators; phase exit does not depend on them | M3 conformance suite exists | _unassigned_ |
+| TASK-405/406/407 (M5) | **Correction 2026-09-24:** the code is no longer a placeholder — `crates/quran-morphology` has 2,534 lines (adapters JSON/CSV, align, compare, dataset, family, policy, tagset, validate) with 52/52 tests green, plus ADRs 0209–0215 recorded. What is still missing is the *evidence* gate: no ADR-0203-licensed production dataset, no Phase-2 Sprint 2.4–2.5 tasks (P2 board: T57–T65 all ☐), no linguist-reviewed goldens. Mechanics may be exercised on synthetic fixtures only; no task closes. | ADR-0203-licensed dataset + P2 Sprints 2.4–2.5 + linguist sign-off | _unassigned_ (P4-X04) |
+| TASK-411/412 (spikes) | Optional accelerators; phase exit does not depend on them | M3 conformance suite stable after a real adapter ships | _unassigned_ |
+| TASK-401/403/404/409/420/427 → ☑ | Implemented only as the pure `quran-graph` crate over `MemGraphStore`; no SQLite adapter, application wiring, CLI/HTTP/tools, doctor, or lifecycle | SQLite adapter + application services + `done.md` evidence per task | _unassigned_ |
 
 ---
 
