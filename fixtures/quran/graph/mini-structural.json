@@ -1,0 +1,17 @@
+{
+  "edition_id": "test-min",
+  "input_version": "v1",
+  "surahs": [{ "number": 1 }, { "number": 2 }],
+  "ayahs": [
+    { "surah": 1, "ayah": 1, "text": "mini one one" },
+    { "surah": 1, "ayah": 2, "text": "mini one two" },
+    { "surah": 2, "ayah": 1, "text": "mini two one" }
+  ],
+  "tokens": [
+    { "surah": 1, "ayah": 1, "position": 1, "surface": "w1" },
+    { "surah": 1, "ayah": 1, "position": 2, "surface": "w2" },
+    { "surah": 1, "ayah": 2, "position": 1, "surface": "w3" },
+    { "surah": 2, "ayah": 1, "position": 1, "surface": "w4" }
+  ],
+  "divisions": [{ "id": "juz-1", "kind": "juz" }]
+}
