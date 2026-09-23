@@ -1,0 +1,7 @@
+# synthetic_test_only=true — synthetic CSV sample for the flat-shape adapter.
+# Real Arabic word FORMS are used (roots ك-ت-ب, ع-ل-م, ق-و-ل) but every row is
+# synthetic test data: NEVER dataset ground truth or scholarly data.
+chapter,verse,word_n,ana_n,token,lemma_cite,root_cite,stem_cite,msd,upos,prov,method,method_v,score,state,reviewer,segmented,morphs,synthetic_test_only
+1,2,1,0,يَعْلَمُ,عَلِمَ,علم,يعلم,V_impf_3ms,Verb,B,,,,imported,,false,,true
+1,2,2,0,قَوْلًا,قَوْل,قول,قول,N_acc,Noun,B,,,,imported,,false,,true
+1,2,3,0,الْكِتَابُ,كِتَاب,كتب,كتاب,N_def_nom,Noun,B,,,,imported,,true,prefix:ال|stem:كِتَاب|suffix:ُ,true

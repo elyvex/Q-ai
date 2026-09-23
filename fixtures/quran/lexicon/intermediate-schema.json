@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://q-ai.local/schemas/quran/lexicon/intermediate-morphology-0.1.json",
+  "title": "Q-ai intermediate morphology document",
+  "description": "Adapter hand-off shape for morphology import (D2.6). Synthetic test fixtures MUST set synthetic_test_only=true; that flag is never dataset ground truth or scholarly data. Field mapping onto migration 0017 columns is documented in crates/quran-morphology/src/dataset.rs.",
+  "type": "object",
+  "required": ["dataset", "analyses"],
+  "additionalProperties": false,
+  "properties": {
+    "dataset": {
+      "type": "object",
+      "required": ["slug", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "slug": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "edition_id": { "type": "string" },
+    "synthetic_test_only": { "type": "boolean" },
+    "analyses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["surah", "ayah", "token_position"],
+        "additionalProperties": false,
+        "properties": {
+          "surah": { "type": "integer", "minimum": 1, "maximum": 114 },
+          "ayah": { "type": "integer", "minimum": 1 },
+          "token_position": { "type": "integer", "minimum": 1 },
+          "analysis_index": { "type": "integer", "minimum": 0 },
+          "surface": { "type": "string" },
+          "lemma": { "type": "string" },
+          "root": { "type": "string" },
+          "stem": { "type": "string" },
+          "pos_unified": { "type": "string" },
+          "pos_native": { "type": "string" },
+          "features_json": { "type": "object" },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["kind", "surface"],
+              "additionalProperties": false,
+              "properties": {
+                "kind": { "type": "string", "enum": ["prefix", "stem", "suffix"] },
+                "surface": { "type": "string", "minLength": 1 },
+                "features": {}
+              }
+            }
+          },
+          "provenance_layer": { "type": "string", "enum": ["B", "D"] },
+          "algorithm": { "type": "string" },
+          "algorithm_version": { "type": "string" },
+          "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+          "reviewer": { "type": "string" },
+          "status": { "type": "string", "enum": ["imported", "human_verified"] }
+        }
+      }
+    }
+  }
+}
