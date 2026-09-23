@@ -8,7 +8,8 @@ Status key: 🔴 open · 🟢 done (with date + where recorded).
 ---
 
 ## FU-DOC-01 — `docs/03-plan/current-plan.md` is empty (0 bytes)
-- **Status:** 🔴 open
+- **Status:** 🟢 done 2026-09-24 (active-phase pointer written; Phase 2 active,
+  Phase-4 code-ahead-of-board + P0-T56 ◐ + owner-gate pointers recorded)
 - **Found:** 2026-09-16 (repo discovery sweep)
 - **Context:** `AGENTS.md` > "Before starting work" step 3 and `README.md`
   both instruct agents to read `docs/03-plan/current-plan.md` for the
