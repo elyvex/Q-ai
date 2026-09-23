@@ -728,13 +728,13 @@ pub async fn activate_morphology(
     // `active` was read above in this same unit of work; supersede it unless
     // this activation re-activates the same dataset id.
     let previous = active.as_ref().map(|d| format!("{}@{}", d.slug, d.version));
-    if let Some(current) = active {
-        if current.id != dataset_id {
-            uow.quran()
-                .set_dataset_state(&current.id, "superseded")
-                .await
-                .map_err(MorphologyJobError::storage)?;
-        }
+    if let Some(current) = active
+        && current.id != dataset_id
+    {
+        uow.quran()
+            .set_dataset_state(&current.id, "superseded")
+            .await
+            .map_err(MorphologyJobError::storage)?;
     }
     uow.quran()
         .upsert_dataset(QuranDatasetRow {
