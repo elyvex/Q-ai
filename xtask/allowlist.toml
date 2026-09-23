@@ -88,3 +88,14 @@ workspace = { allow = ["domain"] }
 # Same prohibition: no llm/embeddings/retrieval/vector store (AC-P2-36).
 [quran-search]
 workspace = { allow = ["quran-normalization", "quran-core", "domain", "storage"] }
+
+# quran-morphology: lexicon types, intermediate format, adapters, alignment,
+# MV validation, analysis policy, compare, family relations (D2.6–D2.8).
+# Pure logic + serde types; no llm/embeddings/retrieval/vector store (AC-P2-36).
+[quran-morphology]
+workspace = { allow = ["domain", "quran-core"] }
+
+# quran-graph: GraphStore port, traversal, structural projection (D4.1–D4.2).
+# No backend query-language leaks; no llm/embeddings/retrieval/vector store.
+[quran-graph]
+workspace = { allow = ["domain", "quran-core"] }
