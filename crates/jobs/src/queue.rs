@@ -74,7 +74,9 @@ fn now_rfc3339() -> String {
 }
 
 fn plus(d: Duration) -> String {
-    let at = time::OffsetDateTime::now_utc() + time::Duration::seconds(d.as_secs() as i64);
+    let at = time::OffsetDateTime::now_utc()
+        + time::Duration::seconds(d.as_secs() as i64)
+        + time::Duration::nanoseconds(d.subsec_nanos() as i64);
     at.format(&time::format_description::well_known::Rfc3339).unwrap_or_default()
 }
 
@@ -270,6 +272,33 @@ mod tests {
         assert!(!rfc3339_le("2026-01-01T00:00:01Z", "2026-01-01T00:00:00.999999Z"));
         assert!(!rfc3339_le("not-a-time", "2026-01-01T00:00:00Z"));
         assert!(!rfc3339_le("2026-01-01T00:00:00Z", "not-a-time"));
+    }
+
+    #[test]
+    fn plus_preserves_subsecond_delays() {
+        // `plus` must not truncate sub-second precision: a 500 ms delay must
+        // land ~0.5 s in the future, not at the current second.
+        let before = time::OffsetDateTime::now_utc();
+        let stamped = plus(Duration::from_millis(500));
+        let at =
+            time::OffsetDateTime::parse(&stamped, &time::format_description::well_known::Rfc3339)
+                .expect("plus must emit parseable RFC3339");
+        let delta = (at - before).as_seconds_f64();
+        assert!(
+            (0.4..1.5).contains(&delta),
+            "500 ms delay produced {delta:.3}s offset ({stamped})"
+        );
+
+        // Whole-second delays keep working.
+        let stamped = plus(Duration::from_secs(60));
+        let at =
+            time::OffsetDateTime::parse(&stamped, &time::format_description::well_known::Rfc3339)
+                .expect("plus must emit parseable RFC3339");
+        let delta = (at - before).as_seconds_f64();
+        assert!(
+            (59.0..61.5).contains(&delta),
+            "60 s delay produced {delta:.3}s offset ({stamped})"
+        );
     }
 
     #[tokio::test]
