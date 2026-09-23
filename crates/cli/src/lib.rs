@@ -321,7 +321,15 @@ pub fn dispatch(cli: Cli) -> i32 {
                             application::quran_tools::ReaderToolBackend::registry(reader.clone()),
                         );
                         let api = std::sync::Arc::new(server::api::ReaderBackend::new(reader));
-                        server::api::serve(&bind, server::api::AppState { tools, api })
+                        let search = std::sync::Arc::new(
+                            application::quran_search_api::SearchApiService::open(&db_path)
+                                .await
+                                .map_err(|e| {
+                                eprintln!("cannot open search backend: {e}");
+                                exit_code::INTERNAL
+                            })?,
+                        );
+                        server::api::serve(&bind, server::api::AppState { tools, api, search })
                             .await
                             .map_err(|e| {
                                 eprintln!("serve failed: {e}");
