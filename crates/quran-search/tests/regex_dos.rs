@@ -38,7 +38,11 @@ const CATALOG: &[(&str, &str, bool)] = &[
     ("(a*)*$", "star-of-star", true),
     ("(a|b|ab)*$", "prefix-overlap alternation star", true),
     ("a{100}b{100}", "large bounded repetitions", true),
-    ("(ا|ب|ت|ث|ج|ح|خ|د|ذ|ر|ز|س|ش|ص|ض|ط|ظ|ع|غ|ف|ق|ك|ل|م|ن|ه|و|ي)+$", "28-branch Arabic alternation", true),
+    (
+        "(ا|ب|ت|ث|ج|ح|خ|د|ذ|ر|ز|س|ش|ص|ض|ط|ظ|ع|غ|ف|ق|ك|ل|م|ن|ه|و|ي)+$",
+        "28-branch Arabic alternation",
+        true,
+    ),
     ("^(ا|ب)*$", "anchored Arabic star group", true),
     ("ال(رحمن|رحيم|حمد|له)*", "Arabic prefix alternation star", true),
     ("[ا-ي]{1,64}", "wide char-class bounded repeat", true),
@@ -50,11 +54,7 @@ const CATALOG: &[(&str, &str, bool)] = &[
 ];
 
 fn pattern_at(index: usize) -> String {
-    if index == 13 {
-        "x".repeat(600)
-    } else {
-        CATALOG[index].0.to_string()
-    }
+    if index == 13 { "x".repeat(600) } else { CATALOG[index].0.to_string() }
 }
 
 #[test]
@@ -67,7 +67,8 @@ fn fifteen_pathological_patterns_bounded_or_rejected() {
         let compiled = compile_dfa(&text);
         let elapsed = started.elapsed();
         if *must_compile {
-            let dfa = compiled.unwrap_or_else(|e| panic!("pattern {index} ({reason}) wrongly rejected: {e}"));
+            let dfa = compiled
+                .unwrap_or_else(|e| panic!("pattern {index} ({reason}) wrongly rejected: {e}"));
             // Bounded execution against the hostile haystack.
             let searched = Instant::now();
             let _ = first_match(&dfa, &hay);
@@ -77,10 +78,7 @@ fn fifteen_pathological_patterns_bounded_or_rejected() {
                 "pattern {index} ({reason}) exceeded the 3 s budget: compile={elapsed:?} search={search_elapsed:?}"
             );
         } else {
-            assert!(
-                compiled.is_err(),
-                "pattern {index} ({reason}): {pattern:?} must be rejected"
-            );
+            assert!(compiled.is_err(), "pattern {index} ({reason}): {pattern:?} must be rejected");
         }
     }
 }
