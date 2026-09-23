@@ -9,6 +9,8 @@
 - Rechecked 2026-09-18: daemon socket still absent; T56 stays partial. Unrelated
   Phase-0 CLI work (FU-10/DEV-02) completed the same session without touching
   container files.
+- Rechecked 2026-09-23: daemon socket still absent (`docker info` fails); T56
+  stays ◐. No container files touched.
 
 ## Jobs scheduling — P0-T39/T40, 2026-09-17
 
