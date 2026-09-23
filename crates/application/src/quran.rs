@@ -176,6 +176,9 @@ pub enum ActivationError {
         /// Edition version.
         version: String,
     },
+    /// The reviewer name is empty (P1-T55 records, never invents).
+    #[error("verified_by must name the reviewer")]
+    EmptyReviewer,
     /// Storage failure.
     #[error("storage failed: {0}")]
     Storage(String),
@@ -198,6 +201,7 @@ impl storage::error::Diagnostic for ActivationError {
             Self::ApprovalSubjectMismatch { .. } => 302,
             Self::NotStaged { .. } => 303,
             Self::AlreadyActive { .. } => 313,
+            Self::EmptyReviewer => 306,
             Self::Storage(_) => 304,
             Self::Audit(_) => 305,
         };
@@ -218,6 +222,7 @@ impl storage::error::Diagnostic for ActivationError {
                 }
                 Self::NotStaged { .. } => "Import the edition to Staged first.",
                 Self::AlreadyActive { .. } => "That edition version is already active.",
+                Self::EmptyReviewer => "Pass --reviewer with the reviewer's name (OD-02).",
                 Self::Storage(_) => "Check the database and retry.",
                 Self::Audit(_) => "Check the audit chain and retry.",
             }
@@ -335,6 +340,90 @@ pub async fn activate_edition(
     .await?;
     uow.commit().await.map_err(ActivationError::storage)?;
     Ok(generation)
+}
+
+/// Editorial verification claim recorded on an edition (P1-T55; OD-02).
+///
+/// Both fields are operator-supplied and recorded verbatim — never invented.
+/// Empty values fail closed (`EmptyReviewer`, `QAI-QUR-0306`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EditionVerification<'a> {
+    /// Reviewer name, recorded in `verified_by`.
+    pub reviewer: &'a str,
+    /// Comparison method, recorded in `verification_method`.
+    pub method: &'a str,
+}
+
+/// Record editorial verification (`verified_by`) on an edition (P1-T55; OD-02).
+///
+/// Approval-gated like activation/deprecation: requires a granted human
+/// approval covering the exact edition URN, stamps `verified_by` /
+/// `verified_at` / `verification_method` on the edition row, and records a
+/// hash-chained `SourceApproved` audit event — in one transaction. Canonical
+/// text is untouched (only the `verified_*` metadata columns are written).
+///
+/// The reviewer identity itself is an owner act this function records, never
+/// invents: empty reviewer names or methods fail closed, and
+/// missing/denied/mismatched approvals are rejected exactly like activation.
+pub async fn record_edition_verification(
+    db: &dyn storage::Database,
+    slug: &str,
+    version: &str,
+    verification: &EditionVerification<'_>,
+    invoked_by: &PrincipalId,
+    approval_id: &str,
+    at: &Timestamp,
+) -> Result<(), ActivationError> {
+    if verification.reviewer.trim().is_empty() || verification.method.trim().is_empty() {
+        return Err(ActivationError::EmptyReviewer);
+    }
+    let expected_subject = edition_urn(slug, version);
+    let mut uow = db.write().await.map_err(ActivationError::storage)?;
+    check_approval(&mut *uow, approval_id, &expected_subject).await?;
+    let edition = uow
+        .quran()
+        .get_edition_by_slug_version(slug, version)
+        .await
+        .map_err(ActivationError::storage)?
+        .ok_or_else(|| ActivationError::NotStaged {
+            slug: slug.to_string(),
+            version: version.to_string(),
+        })?;
+    uow.quran()
+        .set_edition_verification(
+            &edition.id,
+            verification.reviewer,
+            &at.to_string(),
+            verification.method,
+        )
+        .await
+        .map_err(ActivationError::storage)?;
+    append_audit_event(
+        &mut *uow,
+        AuditEvent {
+            id: AuditEventId::new(),
+            sequence: 0,
+            occurred_at: Timestamp::now(),
+            actor: Actor::Principal { principal_id: *invoked_by },
+            action: AuditAction::SourceApproved,
+            subject: SubjectRef(expected_subject),
+            outcome: AuditOutcome::Allowed,
+            reason: None,
+            before: None,
+            after: Some(serde_json::json!({
+                "edition_id": edition.id,
+                "verified_by": verification.reviewer,
+                "verification_method": verification.method,
+            })),
+            request_id: None,
+            prev_chain_hash: audit_chain_genesis(),
+            chain_hash: audit_chain_genesis(),
+        },
+    )
+    .await
+    .map_err(|err| ActivationError::Audit(err.to_string()))?;
+    uow.commit().await.map_err(ActivationError::storage)?;
+    Ok(())
 }
 
 /// Roll back to a prior edition version under a granted human approval.
