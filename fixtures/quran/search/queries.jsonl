@@ -1,0 +1,401 @@
+{"header": true, "version": 1, "generated_by": "scripts/gen_search_goldens.py", "generated_at": "2026-09-23", "corpus": "fixtures/quran/test-edition-min", "reviewed_by": "pending-linguist", "reviewed_at": null, "note": "Mechanics oracle on synthetic text (independent Python string matching); mushaf goldens await a licensed corpus (P2-X01)."}
+{"tool": "search_exact", "input": "أوَيت", "expected_references": ["1:1", "4:1"], "expected_total": 2, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "تَساكُن", "expected_references": ["1:1"], "expected_total": 1, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "كن", "expected_references": ["1:1", "1:3", "2:1", "2:2", "3:2", "3:4", "5:1", "5:2"], "expected_total": 8, "must_not_contain": ["1:2", "3:1"]}
+{"tool": "search_exact", "input": "لهُم", "expected_references": ["1:1", "2:1"], "expected_total": 2, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "ثُشأوَ", "expected_references": ["1:1", "3:3"], "expected_total": 2, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "شُأويَت", "expected_references": ["1:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "يت", "expected_references": ["1:1", "1:2", "3:3", "4:1", "4:2", "5:1", "5:2", "5:3"], "expected_total": 8, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_exact", "input": "اكَن", "expected_references": ["1:2", "4:2"], "expected_total": 2, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "بَلهمُ", "expected_references": ["1:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "مثشُأو", "expected_references": ["1:2", "3:4"], "expected_total": 2, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "أوُ", "expected_references": ["1:2", "2:2", "3:4", "5:2"], "expected_total": 4, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "ثش", "expected_references": ["1:2", "1:3", "3:4", "4:1", "4:2", "5:1", "5:3"], "expected_total": 7, "must_not_contain": ["1:1", "2:1"]}
+{"tool": "search_exact", "input": "ويُت", "expected_references": ["1:3"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "سُاكنَ", "expected_references": ["1:3"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "نَبلهُم", "expected_references": ["2:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "هم", "expected_references": ["1:2", "2:1", "3:3", "4:2", "5:1"], "expected_total": 5, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "شأُو", "expected_references": ["2:1", "5:1"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "يُتساَ", "expected_references": ["2:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "اكنَبل", "expected_references": ["2:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "بلَ", "expected_references": ["2:1", "3:1"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "لهَم", "expected_references": ["2:2", "3:4", "5:2"], "expected_total": 3, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثَشأوُ", "expected_references": ["2:2", "5:2"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أو", "expected_references": ["1:1", "1:2", "2:2", "3:1", "3:3", "3:4", "4:1", "5:2"], "expected_total": 8, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_exact", "input": "تسُا", "expected_references": ["3:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كُنبلَ", "expected_references": ["3:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "شأَو", "expected_references": ["3:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "يَتساُ", "expected_references": ["3:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "اكنُبل", "expected_references": ["3:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "بلُ", "expected_references": ["3:2", "4:2"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ويتَسا", "expected_references": ["3:3"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ساَ", "expected_references": ["2:1", "3:3", "5:1"], "expected_total": 3, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "نَبل", "expected_references": ["2:1", "3:3"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "همثُش", "expected_references": ["3:3"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "تُسا", "expected_references": ["3:4"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كنبَل", "expected_references": ["3:4"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "لهَمثشُ", "expected_references": ["3:4"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثَش", "expected_references": ["2:2", "3:4", "5:2"], "expected_total": 3, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "نبُل", "expected_references": ["4:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "هُمثشَ", "expected_references": ["4:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "شأوَيت", "expected_references": ["4:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "يتَ", "expected_references": ["3:3", "4:1", "5:1"], "expected_total": 3, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كَنبلُ", "expected_references": ["4:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "لهمُثش", "expected_references": ["4:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثشُ", "expected_references": ["1:2", "3:4", "4:2"], "expected_total": 3, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "وُيت", "expected_references": ["4:2", "5:2"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ساكَن", "expected_references": ["4:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أُويتَ", "expected_references": ["5:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "تساَكن", "expected_references": ["5:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كنَ", "expected_references": ["1:3", "2:1", "5:1"], "expected_total": 3, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "لَهم", "expected_references": ["5:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثشأُو", "expected_references": ["5:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "شأوُيت", "expected_references": ["5:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "يتُ", "expected_references": ["5:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "اُكن", "expected_references": ["5:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "بلهَم", "expected_references": ["5:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "مثَشأوُ", "expected_references": ["5:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أَو", "expected_references": ["3:2", "5:2"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثشَ", "expected_references": ["4:1", "5:3"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "وَيت", "expected_references": ["1:1", "4:1", "5:3"], "expected_total": 3, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "ساكُن", "expected_references": ["1:1", "5:3"], "expected_total": 2, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "أوَيت X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "شُأويَت X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "ثش X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "2:1"]}
+{"tool": "search_exact", "input": "نَبلهُم X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كن X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "3:1"]}
+{"tool": "search_exact", "input": "أو X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_exact", "input": "شأَو X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثُشأوَ X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "مثشُأو X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "نبُل X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كَنبلُ X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أُويتَ X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "شأوُيت X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثشَ X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أوَيت X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "شُأويَت X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "ثش X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "2:1"]}
+{"tool": "search_exact", "input": "نَبلهُم X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كن X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "3:1"]}
+{"tool": "search_exact", "input": "أو X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_exact", "input": "شأَو X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثُشأوَ X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "مثشُأو X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "نبُل X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كَنبلُ X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أُويتَ X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "شأوُيت X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثشَ X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أوَيت X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "شُأويَت X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "ثش X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "2:1"]}
+{"tool": "search_exact", "input": "نَبلهُم X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كن X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "3:1"]}
+{"tool": "search_exact", "input": "أو X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_exact", "input": "شأَو X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثُشأوَ X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "مثشُأو X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "نبُل X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كَنبلُ X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أُويتَ X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "شأوُيت X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثشَ X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أوَيت X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "شُأويَت X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "ثش X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "2:1"]}
+{"tool": "search_exact", "input": "نَبلهُم X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كن X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "3:1"]}
+{"tool": "search_exact", "input": "أو X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_exact", "input": "شأَو X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثُشأوَ X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "مثشُأو X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "نبُل X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كَنبلُ X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أُويتَ X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "شأوُيت X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثشَ X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أوَيت X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "شُأويَت X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "ثش X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "2:1"]}
+{"tool": "search_exact", "input": "نَبلهُم X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كن X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "3:1"]}
+{"tool": "search_exact", "input": "أو X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_exact", "input": "شأَو X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثُشأوَ X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "مثشُأو X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "نبُل X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كَنبلُ X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أُويتَ X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "شأوُيت X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثشَ X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أوَيت X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "شُأويَت X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "ثش X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "2:1"]}
+{"tool": "search_exact", "input": "نَبلهُم X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كن X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "3:1"]}
+{"tool": "search_exact", "input": "أو X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_exact", "input": "شأَو X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثُشأوَ X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "مثشُأو X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "نبُل X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كَنبلُ X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أُويتَ X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "شأوُيت X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثشَ X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أوَيت X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "شُأويَت X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "ثش X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "2:1"]}
+{"tool": "search_exact", "input": "نَبلهُم X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كن X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "3:1"]}
+{"tool": "search_exact", "input": "أو X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_exact", "input": "شأَو X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثُشأوَ X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "مثشُأو X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "نبُل X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كَنبلُ X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أُويتَ X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "شأوُيت X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثشَ X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أوَيت X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "شُأويَت X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "ثش X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "2:1"]}
+{"tool": "search_exact", "input": "نَبلهُم X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كن X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "3:1"]}
+{"tool": "search_exact", "input": "أو X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_exact", "input": "شأَو X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثُشأوَ X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "مثشُأو X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "نبُل X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كَنبلُ X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أُويتَ X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "شأوُيت X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثشَ X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أوَيت X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "شُأويَت X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "ثش X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "2:1"]}
+{"tool": "search_exact", "input": "نَبلهُم X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كن X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "3:1"]}
+{"tool": "search_exact", "input": "أو X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_exact", "input": "شأَو X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثُشأوَ X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "مثشُأو X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "نبُل X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كَنبلُ X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أُويتَ X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "شأوُيت X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثشَ X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أوَيت X X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "شُأويَت X X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "ثش X X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "2:1"]}
+{"tool": "search_exact", "input": "نَبلهُم X X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كن X X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "3:1"]}
+{"tool": "search_exact", "input": "أو X X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_exact", "input": "شأَو X X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثُشأوَ X X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_exact", "input": "مثشُأو X X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_exact", "input": "نبُل X X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "كَنبلُ X X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "أُويتَ X X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "شأوُيت X X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_exact", "input": "ثشَ X X X X X X X X X X", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "أويت", "expected_references": ["1:1", "1:2", "4:1", "5:1", "5:2"], "expected_total": 5, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "تساكن", "expected_references": ["1:1", "5:1"], "expected_total": 2, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "كن", "expected_references": ["1:1", "1:2", "1:3", "2:1", "2:2", "3:1", "3:2", "3:4", "4:2", "5:1", "5:2", "5:3"], "expected_total": 12, "must_not_contain": ["3:3", "4:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "لهم", "expected_references": ["1:1", "1:2", "2:1", "2:2", "3:4", "4:2", "5:1", "5:2"], "expected_total": 8, "must_not_contain": ["1:3", "3:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ثشأو", "expected_references": ["1:1", "1:2", "2:2", "3:3", "3:4", "5:1", "5:2"], "expected_total": 7, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "شأويت", "expected_references": ["1:2", "4:1", "5:2"], "expected_total": 3, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "يت", "expected_references": ["1:1", "1:2", "1:3", "2:1", "3:2", "3:3", "4:1", "4:2", "5:1", "5:2", "5:3"], "expected_total": 11, "must_not_contain": ["2:2", "3:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "اكن", "expected_references": ["1:1", "1:2", "1:3", "2:1", "3:2", "4:2", "5:1", "5:2", "5:3"], "expected_total": 9, "must_not_contain": ["2:2", "3:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "بلهم", "expected_references": ["1:2", "2:1", "5:2"], "expected_total": 3, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "مثشأو", "expected_references": ["1:2", "3:4", "5:2"], "expected_total": 3, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "أو", "expected_references": ["1:1", "1:2", "2:1", "2:2", "3:1", "3:2", "3:3", "3:4", "4:1", "5:1", "5:2"], "expected_total": 11, "must_not_contain": ["1:3", "4:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ثش", "expected_references": ["1:1", "1:2", "1:3", "2:2", "3:3", "3:4", "4:1", "4:2", "5:1", "5:2", "5:3"], "expected_total": 11, "must_not_contain": ["2:1", "3:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ويت", "expected_references": ["1:1", "1:2", "1:3", "3:3", "4:1", "4:2", "5:1", "5:2", "5:3"], "expected_total": 9, "must_not_contain": ["2:1", "2:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ساكن", "expected_references": ["1:1", "1:3", "4:2", "5:1", "5:3"], "expected_total": 5, "must_not_contain": ["1:2", "2:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "نبلهم", "expected_references": ["2:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "هم", "expected_references": ["1:1", "1:2", "2:1", "2:2", "3:3", "3:4", "4:1", "4:2", "5:1", "5:2"], "expected_total": 10, "must_not_contain": ["1:3", "3:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "شأو", "expected_references": ["1:1", "1:2", "2:1", "2:2", "3:2", "3:3", "3:4", "4:1", "5:1", "5:2"], "expected_total": 10, "must_not_contain": ["1:3", "3:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "يتسا", "expected_references": ["2:1", "3:2", "3:3"], "expected_total": 3, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "اكنبل", "expected_references": ["2:1", "3:2"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "بل", "expected_references": ["1:2", "2:1", "3:1", "3:2", "3:3", "3:4", "4:1", "4:2", "5:2"], "expected_total": 9, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "كن", "expected_references": ["1:1", "1:2", "1:3", "2:1", "2:2", "3:1", "3:2", "3:4", "4:2", "5:1", "5:2", "5:3"], "expected_total": 12, "must_not_contain": ["3:3", "4:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "لهم", "expected_references": ["1:1", "1:2", "2:1", "2:2", "3:4", "4:2", "5:1", "5:2"], "expected_total": 8, "must_not_contain": ["1:3", "3:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ثشأو", "expected_references": ["1:1", "1:2", "2:2", "3:3", "3:4", "5:1", "5:2"], "expected_total": 7, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "أو", "expected_references": ["1:1", "1:2", "2:1", "2:2", "3:1", "3:2", "3:3", "3:4", "4:1", "5:1", "5:2"], "expected_total": 11, "must_not_contain": ["1:3", "4:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "تسا", "expected_references": ["1:1", "2:1", "3:1", "3:2", "3:3", "3:4", "5:1"], "expected_total": 7, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "كنبل", "expected_references": ["2:1", "3:1", "3:2", "3:4", "4:2"], "expected_total": 5, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "شأو", "expected_references": ["1:1", "1:2", "2:1", "2:2", "3:2", "3:3", "3:4", "4:1", "5:1", "5:2"], "expected_total": 10, "must_not_contain": ["1:3", "3:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "يتسا", "expected_references": ["2:1", "3:2", "3:3"], "expected_total": 3, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "اكنبل", "expected_references": ["2:1", "3:2"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "بل", "expected_references": ["1:2", "2:1", "3:1", "3:2", "3:3", "3:4", "4:1", "4:2", "5:2"], "expected_total": 9, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ثشأو", "expected_references": ["1:1", "1:2", "2:2", "3:3", "3:4", "5:1", "5:2"], "expected_total": 7, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ويتسا", "expected_references": ["3:3"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "سا", "expected_references": ["1:1", "1:3", "2:1", "3:1", "3:2", "3:3", "3:4", "4:2", "5:1", "5:3"], "expected_total": 10, "must_not_contain": ["1:2", "2:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "نبل", "expected_references": ["2:1", "3:1", "3:2", "3:3", "3:4", "4:1", "4:2"], "expected_total": 7, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "همثش", "expected_references": ["3:3", "3:4", "4:1", "4:2"], "expected_total": 4, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "مثشأو", "expected_references": ["1:2", "3:4", "5:2"], "expected_total": 3, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "أو", "expected_references": ["1:1", "1:2", "2:1", "2:2", "3:1", "3:2", "3:3", "3:4", "4:1", "5:1", "5:2"], "expected_total": 11, "must_not_contain": ["1:3", "4:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "تسا", "expected_references": ["1:1", "2:1", "3:1", "3:2", "3:3", "3:4", "5:1"], "expected_total": 7, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "كنبل", "expected_references": ["2:1", "3:1", "3:2", "3:4", "4:2"], "expected_total": 5, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "لهمثش", "expected_references": ["3:4", "4:2"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ثش", "expected_references": ["1:1", "1:2", "1:3", "2:2", "3:3", "3:4", "4:1", "4:2", "5:1", "5:2", "5:3"], "expected_total": 11, "must_not_contain": ["2:1", "3:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "نبل", "expected_references": ["2:1", "3:1", "3:2", "3:3", "3:4", "4:1", "4:2"], "expected_total": 7, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "همثش", "expected_references": ["3:3", "3:4", "4:1", "4:2"], "expected_total": 4, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "شأويت", "expected_references": ["1:2", "4:1", "5:2"], "expected_total": 3, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "يت", "expected_references": ["1:1", "1:2", "1:3", "2:1", "3:2", "3:3", "4:1", "4:2", "5:1", "5:2", "5:3"], "expected_total": 11, "must_not_contain": ["2:2", "3:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "كنبل", "expected_references": ["2:1", "3:1", "3:2", "3:4", "4:2"], "expected_total": 5, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "لهمثش", "expected_references": ["3:4", "4:2"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ثش", "expected_references": ["1:1", "1:2", "1:3", "2:2", "3:3", "3:4", "4:1", "4:2", "5:1", "5:2", "5:3"], "expected_total": 11, "must_not_contain": ["2:1", "3:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ويت", "expected_references": ["1:1", "1:2", "1:3", "3:3", "4:1", "4:2", "5:1", "5:2", "5:3"], "expected_total": 9, "must_not_contain": ["2:1", "2:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ساكن", "expected_references": ["1:1", "1:3", "4:2", "5:1", "5:3"], "expected_total": 5, "must_not_contain": ["1:2", "2:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "أويت", "expected_references": ["1:1", "1:2", "4:1", "5:1", "5:2"], "expected_total": 5, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "تساكن", "expected_references": ["1:1", "5:1"], "expected_total": 2, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "كن", "expected_references": ["1:1", "1:2", "1:3", "2:1", "2:2", "3:1", "3:2", "3:4", "4:2", "5:1", "5:2", "5:3"], "expected_total": 12, "must_not_contain": ["3:3", "4:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "لهم", "expected_references": ["1:1", "1:2", "2:1", "2:2", "3:4", "4:2", "5:1", "5:2"], "expected_total": 8, "must_not_contain": ["1:3", "3:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ثشأو", "expected_references": ["1:1", "1:2", "2:2", "3:3", "3:4", "5:1", "5:2"], "expected_total": 7, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "شأويت", "expected_references": ["1:2", "4:1", "5:2"], "expected_total": 3, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "يت", "expected_references": ["1:1", "1:2", "1:3", "2:1", "3:2", "3:3", "4:1", "4:2", "5:1", "5:2", "5:3"], "expected_total": 11, "must_not_contain": ["2:2", "3:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "اكن", "expected_references": ["1:1", "1:2", "1:3", "2:1", "3:2", "4:2", "5:1", "5:2", "5:3"], "expected_total": 9, "must_not_contain": ["2:2", "3:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "بلهم", "expected_references": ["1:2", "2:1", "5:2"], "expected_total": 3, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "مثشأو", "expected_references": ["1:2", "3:4", "5:2"], "expected_total": 3, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "أو", "expected_references": ["1:1", "1:2", "2:1", "2:2", "3:1", "3:2", "3:3", "3:4", "4:1", "5:1", "5:2"], "expected_total": 11, "must_not_contain": ["1:3", "4:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ثش", "expected_references": ["1:1", "1:2", "1:3", "2:2", "3:3", "3:4", "4:1", "4:2", "5:1", "5:2", "5:3"], "expected_total": 11, "must_not_contain": ["2:1", "3:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ويت", "expected_references": ["1:1", "1:2", "1:3", "3:3", "4:1", "4:2", "5:1", "5:2", "5:3"], "expected_total": 9, "must_not_contain": ["2:1", "2:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ساكن", "expected_references": ["1:1", "1:3", "4:2", "5:1", "5:3"], "expected_total": 5, "must_not_contain": ["1:2", "2:1"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "أويت تساكن", "expected_references": ["1:1", "5:1"], "expected_total": 2, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "شأويت يت", "expected_references": ["1:2", "4:1", "5:2"], "expected_total": 3, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ثش ويت", "expected_references": ["1:3", "4:2", "5:3"], "expected_total": 3, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "نبلهم هم", "expected_references": ["2:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "كن لهم", "expected_references": ["1:1", "2:2", "5:1"], "expected_total": 3, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "أو تسا", "expected_references": ["3:1", "3:4"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "شأو يتسا", "expected_references": ["2:1", "3:2"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ثشأو ويتسا", "expected_references": ["3:3"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "مثشأو أو", "expected_references": ["1:2", "3:4", "5:2"], "expected_total": 3, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "نبل همثش", "expected_references": ["3:3", "4:1"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "كنبل لهمثش", "expected_references": ["3:4", "4:2"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "أويت تساكن", "expected_references": ["1:1", "5:1"], "expected_total": 2, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "شأويت يت", "expected_references": ["1:2", "4:1", "5:2"], "expected_total": 3, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ثش ويت", "expected_references": ["1:3", "4:2", "5:3"], "expected_total": 3, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "أويت تساكن", "expected_references": ["1:1", "5:1"], "expected_total": 2, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "شأويت يت", "expected_references": ["1:2", "4:1", "5:2"], "expected_total": 3, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ثش ويت", "expected_references": ["1:3", "4:2", "5:3"], "expected_total": 3, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "نبلهم هم", "expected_references": ["2:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "كن لهم", "expected_references": ["1:1", "2:2", "5:1"], "expected_total": 3, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "أو تسا", "expected_references": ["3:1", "3:4"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "شأو يتسا", "expected_references": ["2:1", "3:2"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ثشأو ويتسا", "expected_references": ["3:3"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "مثشأو أو", "expected_references": ["1:2", "3:4", "5:2"], "expected_total": 3, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "نبل همثش", "expected_references": ["3:3", "4:1"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "كنبل لهمثش", "expected_references": ["3:4", "4:2"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "أويت تساكن", "expected_references": ["1:1", "5:1"], "expected_total": 2, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "شأويت يت", "expected_references": ["1:2", "4:1", "5:2"], "expected_total": 3, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ثش ويت", "expected_references": ["1:3", "4:2", "5:3"], "expected_total": 3, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "أويت تساكن", "expected_references": ["1:1", "5:1"], "expected_total": 2, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "شأويت يت", "expected_references": ["1:2", "4:1", "5:2"], "expected_total": 3, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ثش ويت", "expected_references": ["1:3", "4:2", "5:3"], "expected_total": 3, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "نبلهم هم", "expected_references": ["2:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "كن لهم", "expected_references": ["1:1", "2:2", "5:1"], "expected_total": 3, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "أو تسا", "expected_references": ["3:1", "3:4"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "شأو يتسا", "expected_references": ["2:1", "3:2"], "expected_total": 2, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_normalized", "profile": "L3.diacritics", "input": "ثشأو ويتسا", "expected_references": ["3:3"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "أوَيت تَساكُن", "expected_references": ["1:1"], "expected_total": 1, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_phrase", "input": "تَساكُن كن", "expected_references": ["1:1"], "expected_total": 1, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_phrase", "input": "كن لهُم", "expected_references": ["1:1"], "expected_total": 1, "must_not_contain": ["1:2", "3:1"]}
+{"tool": "search_phrase", "input": "لهُم ثُشأوَ", "expected_references": ["1:1"], "expected_total": 1, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_phrase", "input": "شُأويَت يت", "expected_references": ["1:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_phrase", "input": "يت اكَن", "expected_references": ["1:2"], "expected_total": 1, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_phrase", "input": "اكَن بَلهمُ", "expected_references": ["1:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_phrase", "input": "بَلهمُ مثشُأو", "expected_references": ["1:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_phrase", "input": "مثشُأو أوُ", "expected_references": ["1:2", "3:4"], "expected_total": 2, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_phrase", "input": "ثش ويُت", "expected_references": ["1:3"], "expected_total": 1, "must_not_contain": ["1:1", "2:1"]}
+{"tool": "search_phrase", "input": "ويُت سُاكنَ", "expected_references": ["1:3"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "نَبلهُم هم", "expected_references": ["2:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "هم شأُو", "expected_references": ["2:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_phrase", "input": "شأُو يُتساَ", "expected_references": ["2:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "يُتساَ اكنَبل", "expected_references": ["2:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "اكنَبل بلَ", "expected_references": ["2:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "كن لهَم", "expected_references": ["2:2"], "expected_total": 1, "must_not_contain": ["1:2", "3:1"]}
+{"tool": "search_phrase", "input": "لهَم ثَشأوُ", "expected_references": ["2:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "أو تسُا", "expected_references": ["3:1"], "expected_total": 1, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_phrase", "input": "تسُا كُنبلَ", "expected_references": ["3:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "شأَو يَتساُ", "expected_references": ["3:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "يَتساُ اكنُبل", "expected_references": ["3:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "اكنُبل بلُ", "expected_references": ["3:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "ثُشأوَ ويتَسا", "expected_references": ["3:3"], "expected_total": 1, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_phrase", "input": "ويتَسا ساَ", "expected_references": ["3:3"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "ساَ نَبل", "expected_references": ["3:3"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "نَبل همثُش", "expected_references": ["3:3"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "مثشُأو أوُ", "expected_references": ["1:2", "3:4"], "expected_total": 2, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_phrase", "input": "أوُ تُسا", "expected_references": ["3:4"], "expected_total": 1, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_phrase", "input": "تُسا كنبَل", "expected_references": ["3:4"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "كنبَل لهَمثشُ", "expected_references": ["3:4"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "لهَمثشُ ثَش", "expected_references": ["3:4"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "نبُل هُمثشَ", "expected_references": ["4:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "هُمثشَ شأوَيت", "expected_references": ["4:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "شأوَيت يتَ", "expected_references": ["4:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "كَنبلُ لهمُثش", "expected_references": ["4:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "لهمُثش ثشُ", "expected_references": ["4:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "ثشُ وُيت", "expected_references": ["4:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_phrase", "input": "وُيت ساكَن", "expected_references": ["4:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "أُويتَ تساَكن", "expected_references": ["5:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "تساَكن كنَ", "expected_references": ["5:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "كنَ لَهم", "expected_references": ["5:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "لَهم ثشأُو", "expected_references": ["5:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "شأوُيت يتُ", "expected_references": ["5:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "يتُ اُكن", "expected_references": ["5:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "اُكن بلهَم", "expected_references": ["5:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "بلهَم مثَشأوُ", "expected_references": ["5:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "مثَشأوُ أَو", "expected_references": ["5:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "ثشَ وَيت", "expected_references": ["5:3"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "وَيت ساكُن", "expected_references": ["5:3"], "expected_total": 1, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_phrase", "input": "أوَيت تَساكُن كن", "expected_references": ["1:1"], "expected_total": 1, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_phrase", "input": "تَساكُن كن لهُم", "expected_references": ["1:1"], "expected_total": 1, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_phrase", "input": "كن لهُم ثُشأوَ", "expected_references": ["1:1"], "expected_total": 1, "must_not_contain": ["1:2", "3:1"]}
+{"tool": "search_phrase", "input": "شُأويَت يت اكَن", "expected_references": ["1:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_phrase", "input": "يت اكَن بَلهمُ", "expected_references": ["1:2"], "expected_total": 1, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_phrase", "input": "اكَن بَلهمُ مثشُأو", "expected_references": ["1:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_phrase", "input": "بَلهمُ مثشُأو أوُ", "expected_references": ["1:2"], "expected_total": 1, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_phrase", "input": "ثش ويُت سُاكنَ", "expected_references": ["1:3"], "expected_total": 1, "must_not_contain": ["1:1", "2:1"]}
+{"tool": "search_phrase", "input": "نَبلهُم هم شأُو", "expected_references": ["2:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_phrase", "input": "هم شأُو يُتساَ", "expected_references": ["2:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_regex", "input": "^أو", "expected_references": ["1:1", "3:1"], "expected_total": 2, "must_not_contain": ["1:3", "2:1"]}
+{"tool": "search_regex", "input": "^أوي", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_regex", "input": "^أويت", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^اك", "expected_references": [], "expected_total": 0, "must_not_contain": ["2:2", "3:1"]}
+{"tool": "search_regex", "input": "^اكن", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^اكنب", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^بل", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^بله", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^بلهم", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^تس", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^تسا", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^تساك", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^ثش", "expected_references": ["1:3", "5:3"], "expected_total": 2, "must_not_contain": ["1:1", "2:1"]}
+{"tool": "search_regex", "input": "^ثشأ", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^ثشأو", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^سا", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_regex", "input": "^ساك", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_regex", "input": "^ساكن", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^شأ", "expected_references": ["3:2", "5:2"], "expected_total": 2, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_regex", "input": "^شأو", "expected_references": ["5:2"], "expected_total": 1, "must_not_contain": ["1:2", "1:3"]}
+{"tool": "search_regex", "input": "^شأوي", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^كن", "expected_references": ["2:2"], "expected_total": 1, "must_not_contain": ["1:2", "3:1"]}
+{"tool": "search_regex", "input": "^كنب", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^كنبل", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^له", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:3", "3:1"]}
+{"tool": "search_regex", "input": "^لهم", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_regex", "input": "^لهمث", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^مث", "expected_references": ["3:4"], "expected_total": 1, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_regex", "input": "^مثش", "expected_references": ["3:4"], "expected_total": 1, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_regex", "input": "^مثشأ", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^نب", "expected_references": ["4:1"], "expected_total": 1, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^نبل", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^نبله", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^هم", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:3"]}
+{"tool": "search_regex", "input": "^همث", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^همثش", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^وي", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "2:1"]}
+{"tool": "search_regex", "input": "^ويت", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^ويتس", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:1", "1:2"]}
+{"tool": "search_regex", "input": "^يت", "expected_references": [], "expected_total": 0, "must_not_contain": ["1:3", "2:1"]}
