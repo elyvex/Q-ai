@@ -2,6 +2,43 @@
 
 > Completed tasks across all phases. Newest first.
 
+## Cross-phase — Phase-4 board reconciliation + Phase-0 residual fixes, 2026-09-24
+
+- **Phase-4 graph (code ahead of paperwork).** `crates/quran-graph` (2,883 lines)
+  and `crates/quran-morphology` (2,534 lines) had landed while the Phase-4 board
+  still read 0/30. Verified and reconciled honestly: TASK-401/403/404/409/420/427
+  moved ☐ → ◐ (pure crate over `MemGraphStore`; SQLite adapter, application wiring,
+  CLI/HTTP/tools, doctor and durable lifecycle still absent), M5 (TASK-405/406/407)
+  stays ⊘ — the blocker is now correctly described as the *missing licensed dataset
+  + Phase-2 Sprints 2.4–2.5 + linguist goldens*, not a placeholder crate. No task
+  marked ☑; AC-P4-* all remain unverified.
+- **P0-T39/T40 scheduling follow-up closed on the code side.** `plus` keeps
+  sub-second precision (`d.as_secs()` + `d.subsec_nanos()`); regression
+  `queue::tests::plus_preserves_subsecond_delays`. SQLite scheduling validated by
+  `recovery_jobs::rescheduled_job_is_not_claimable_until_due`. Real-time
+  lease-recovery behaviour and the intermittent parallel `retries_then_succeeds`
+  flake remain under watch.
+- **OTLP span-field scrubbing implemented** (deferred since P0-T16): new
+  `observability::otlp::ScrubbingProcessor` strips denylisted + secret-named span
+  attributes at the exporter boundary; `telemetry::is_scrubbed_span_field` is the
+  single policy predicate. Tests green with `--features otlp`.
+- **Docs hygiene.** Filled the 0-byte navigation files (`current-plan.md`,
+  `master-plan.md`, `roadmap.md`, `milestones.md`, `phase-status.md`, `progress.md`,
+  `milestone-status.md`, `docs/03-plan/backlog/*`, `unresolved-issues.md`), gave
+  the server placeholder files explicit "not an accepted phase" content, and
+  created `docs/04-tasks/{active,completed}/README.md` as an index over the phase
+  boards. Closed FU-DOC-01, FU-SPEC-01 (stale — only T024 gate sweep remains), and
+  FU-TEST-01 (DEBUG leftovers already gone; only a comment was rewritten).
+- **P0-T56 remains ◐.** Docker daemon socket still absent (`docker info` fails
+  2026-09-24) — container runtime verification and the clean-machine exit-gate
+  ritual stay open; recorded in `docs/05-followups/open-questions.md`.
+- Gates this session: `cargo test -p quran-graph` 34/34, `cargo test -p
+  quran-morphology` 52/52, `cargo test -p jobs --lib` 22/22, `cargo test -p
+  storage-sqlite --test recovery_jobs` 4/4, `cargo test -p observability
+  --features otlp` 14/14, `cargo test -p testkit --test secret_leak` 9/9; clippy
+  `-D warnings` clean on all touched crates; fmt clean; `cargo xtask arch-check`
+  OK; `cargo xtask migrate-check` OK (19 migrations).
+
 ## Phase 2 — P2-T13–T18/T20/T22 normalization engine close-out, 2026-09-24
 
 - Review-pass flip of the M1a/M1b foundation (implementation landed in earlier sessions;
