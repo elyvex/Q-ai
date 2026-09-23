@@ -90,6 +90,7 @@ fn map_activation_error(error: super::quran::ActivationError) -> (i32, String) {
         E::ApprovalMissing { .. }
         | E::ApprovalNotGranted { .. }
         | E::ApprovalSubjectMismatch { .. } => (exit::POLICY, error.to_string()),
+        E::EmptyReviewer => (exit::USAGE, error.to_string()),
         E::NotStaged { .. } | E::AlreadyActive { .. } => (exit::CONFLICT, error.to_string()),
         E::Storage(_) | E::Audit(_) => (exit::INTERNAL, error.to_string()),
     }
@@ -405,6 +406,85 @@ pub async fn cmd_edition_show(
     CommandOutput::ok(human, serde_json::to_value(&edition).unwrap_or_default())
 }
 
+/// `quran edition verify`: record editorial verification under approval.
+///
+/// The reviewer name and method are operator-supplied (OD-02); this command
+/// records them, never invents them. Empty values fail closed with usage.
+pub async fn cmd_edition_verify(
+    db_path: &str,
+    edition: &str,
+    reviewer: &str,
+    method: &str,
+) -> CommandOutput {
+    let (slug, version) = match edition.split_once('@') {
+        Some((slug, version)) if !slug.is_empty() && !version.is_empty() => (slug, version),
+        _ => {
+            return CommandOutput::err(
+                exit::USAGE,
+                format!("edition must be `slug@version`, got `{edition}`"),
+            );
+        }
+    };
+    if reviewer.trim().is_empty() || method.trim().is_empty() {
+        return CommandOutput::err(
+            exit::USAGE,
+            "reviewer and method must both be non-empty (OD-02)".to_string(),
+        );
+    }
+    let (db, at, approval_id) = match approval_flow(db_path).await {
+        Ok(flow) => flow,
+        Err(output) => return output,
+    };
+    let subject = format!("quran-edition:{slug}@{version}");
+    // Operator-recorded under a human approval (single-user interim, like
+    // activation): the reviewer name lands in `verified_by` and the audit
+    // payload, never in a principal FK column. The exit ritual (P1-T60) must
+    // confirm the reviewer is real, qualified, and not the implementer.
+    if let Err(err) = super::quran::record_approval(
+        &*db,
+        &approval_id,
+        &subject,
+        LOCAL_PRINCIPAL,
+        LOCAL_PRINCIPAL,
+        "{}",
+        &at,
+    )
+    .await
+    {
+        return CommandOutput::err(exit::INTERNAL, err.to_string());
+    }
+    let principal: domain::PrincipalId = match LOCAL_PRINCIPAL.parse() {
+        Ok(principal) => principal,
+        Err(_) => return CommandOutput::err(exit::INTERNAL, "bad local principal".to_string()),
+    };
+    let at_ts = match at.parse::<domain::Timestamp>() {
+        Ok(at) => at,
+        Err(_) => return CommandOutput::err(exit::INTERNAL, "bad timestamp".to_string()),
+    };
+    match super::quran::record_edition_verification(
+        &*db,
+        slug,
+        version,
+        &super::quran::EditionVerification { reviewer, method },
+        &principal,
+        &approval_id,
+        &at_ts,
+    )
+    .await
+    {
+        Ok(()) => CommandOutput::ok(
+            format!("verified {slug}@{version} by {reviewer} ({method})\n"),
+            serde_json::json!({
+                "slug": slug, "version": version,
+                "verified_by": reviewer, "verification_method": method,
+            }),
+        ),
+        Err(err) => {
+            let (exit, message) = map_activation_error(err);
+            CommandOutput::err(exit, message)
+        }
+    }
+}
 /// `quran edition active`.
 pub async fn cmd_edition_active(db_path: &str) -> CommandOutput {
     use crate::quran_reader::QuranReader;
@@ -1715,13 +1795,16 @@ pub async fn cmd_index_rebuild(
     match super::quran_index::rebuild_index(&db, &params, &AtomicBool::new(false), |_| {}).await {
         Ok(report) => {
             let human = format!(
-                "index {} generation {} active: {} docs (corpus generation {})\nmanifest: {}\nprevious generation: {}",
+                "index {} generation {} active: {} docs (corpus generation {})\nmanifest: {}\nprevious generation: {}\ntrigrams: {} postings over {} skeletons ({} verified)",
                 report.index_id,
                 report.generation,
                 report.doc_count,
                 report.corpus_generation,
                 report.manifest_hash,
-                report.previous_generation.map_or("none".to_string(), |g| g.to_string())
+                report.previous_generation.map_or("none".to_string(), |g| g.to_string()),
+                report.trigram_postings,
+                report.trigram_skeletons,
+                report.trigram_verified,
             );
             let json = serde_json::json!({
                 "index_id": report.index_id,
@@ -1730,6 +1813,9 @@ pub async fn cmd_index_rebuild(
                 "doc_count": report.doc_count,
                 "manifest_hash": report.manifest_hash,
                 "previous_generation": report.previous_generation,
+                "trigram_skeletons": report.trigram_skeletons,
+                "trigram_postings": report.trigram_postings,
+                "trigram_verified": report.trigram_verified,
                 "mv018": {
                     "unchanged": report.mv018.unchanged,
                     "expected_hash": report.mv018.expected_hash,
@@ -1821,6 +1907,51 @@ pub async fn cmd_index_verify(db_path: &str, index: Option<&str>) -> CommandOutp
         "findings": report.findings,
     });
     CommandOutput { exit: if report.ok { exit::OK } else { exit::VALIDATION }, human, json }
+}
+
+/// Enforce index-generation retention: `qai quran index gc` (P2-T35).
+pub async fn cmd_index_gc(db_path: &str, index: Option<&str>, keep: usize) -> CommandOutput {
+    use super::quran_index::{GcParams, QURAN_AYAH_INDEX_ID, gc_index};
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let params = GcParams {
+        index_id: index.unwrap_or(QURAN_AYAH_INDEX_ID).to_string(),
+        keep,
+        invoked_by: LOCAL_PRINCIPAL.to_string(),
+        data_dir: super::quran_index::index_root_for_db(db_path),
+    };
+    match gc_index(&db, &params, &std::sync::atomic::AtomicBool::new(false)).await {
+        Ok(report) => {
+            let human = format!(
+                "index {} gc: active generation {}, kept {:?}, removed {} generation(s)",
+                report.index_id,
+                report.active_generation.map_or("none".to_string(), |g| g.to_string()),
+                report.kept,
+                report.removed.len(),
+            );
+            let json = serde_json::json!({
+                "index_id": report.index_id,
+                "active_generation": report.active_generation,
+                "kept": report.kept,
+                "removed": report.removed.iter().map(|r| serde_json::json!({
+                    "generation": r.generation,
+                    "run_id_deleted": r.run_id_deleted,
+                    "docs_removed": r.docs_removed,
+                })).collect::<Vec<_>>(),
+            });
+            CommandOutput::ok(human, json)
+        }
+        Err(error) => {
+            use super::quran_index::IndexBuildError;
+            let exit = match &error {
+                IndexBuildError::Cancelled => exit::CANCELLED,
+                _ => exit::INTERNAL,
+            };
+            CommandOutput::err(exit, error.to_string())
+        }
+    }
 }
 
 /// Search mode requested on the CLI (one flag family per tool).
