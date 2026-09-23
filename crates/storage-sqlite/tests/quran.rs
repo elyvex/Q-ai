@@ -14,6 +14,7 @@
 use sqlx::Row;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use storage::Database;
+use storage::error::StorageError;
 use storage::quran::{
     AyahRow, CitationRow, DifferenceReportRow, ImportRunRow, QuranEditionRow, SeparatorRow,
     SurahRow, TokenRow, TranslationEditionRow, TranslationPassageRow, ValidationReportRow,
@@ -280,6 +281,51 @@ async fn canonical_tables_declare_the_trigger_set() {
     ] {
         assert!(names.iter().any(|n| n == expected), "missing trigger {expected}");
     }
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn edition_verification_stamp_is_metadata_only_and_fail_closed() {
+    let (_dir, db, path) = migrated_db().await;
+    stage_run(&db, "run-1", "ed-1", "test", "0.1.0").await;
+    let mut uow = db.write().await.unwrap();
+    uow.quran().activate_edition("run-1", "ed-1", "principal", "appr-1", &now()).await.unwrap();
+    // Empty reviewer / method fail closed without touching the row.
+    for (reviewer, method) in [("", "m"), ("r", ""), ("  ", "m")] {
+        let err = uow
+            .quran()
+            .set_edition_verification("ed-1", reviewer, &now(), method)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, StorageError::ConstraintViolation { .. }), "got: {err:?}");
+    }
+    uow.quran()
+        .set_edition_verification("ed-1", "Test Reviewer", &now(), "sample-vs-musḥaf L1")
+        .await
+        .unwrap();
+    let edition = uow.quran().get_edition("ed-1").await.unwrap().unwrap();
+    assert_eq!(edition.verified_by.as_deref(), Some("Test Reviewer"));
+    assert_eq!(edition.verification_method.as_deref(), Some("sample-vs-musḥaf L1"));
+    assert!(edition.verified_at.is_some());
+    assert_eq!(edition.status, "Active");
+    uow.commit().await.unwrap();
+
+    // The `verified_*` columns are writable metadata; identity/hash columns
+    // stay trigger-guarded (QAI-QUR-0002).
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(SqliteConnectOptions::new().filename(&path).foreign_keys(true))
+        .await
+        .unwrap();
+    sqlx::query("UPDATE quran_editions SET verified_by = 'R2' WHERE id = 'ed-1'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let err = sqlx::query("UPDATE quran_editions SET text_hash = 'x' WHERE id = 'ed-1'")
+        .execute(&pool)
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("QAI-QUR-0002"), "got: {err}");
     pool.close().await;
 }
 
