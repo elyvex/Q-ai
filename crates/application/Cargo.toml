@@ -18,6 +18,8 @@ observability = { path = "../observability" }
 quran-core = { path = "../quran-core" }
 quran-corpus = { path = "../quran-corpus" }
 quran-search = { path = "../quran-search" }
+quran-morphology = { path = "../quran-morphology" }
+quran-graph = { path = "../quran-graph" }
 tools = { path = "../tools" }
 tool-registry = { path = "../tool-registry" }
 citations = { path = "../citations" }
