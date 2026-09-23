@@ -171,8 +171,81 @@ impl QuranApiBackend for FakeApi {
     }
 }
 
+struct FakeSearch;
+
+fn empty_search_output(rule_set: &str) -> application::quran_search::SearchOutput {
+    application::quran_search::SearchOutput {
+        hits: Vec::new(),
+        total_matches: 0,
+        truncated: false,
+        rule_set: rule_set.to_string(),
+        generation: 1,
+        warnings: Vec::new(),
+        regex_report: None,
+    }
+}
+
+#[async_trait::async_trait]
+impl application::quran_search_api::SearchBackend for FakeSearch {
+    async fn search_exact(
+        &self,
+        _args: application::quran_search_api::ExactArgs,
+    ) -> Result<application::quran_search::SearchOutput, application::quran_search::SearchError>
+    {
+        Ok(empty_search_output("L0.exact@1.0.0"))
+    }
+
+    async fn search_normalized(
+        &self,
+        _args: application::quran_search_api::NormalizedArgs,
+    ) -> Result<application::quran_search::SearchOutput, application::quran_search::SearchError>
+    {
+        Ok(empty_search_output("L3.diacritics@1.0.0"))
+    }
+
+    async fn search_phrase(
+        &self,
+        _args: application::quran_search_api::PhraseArgs,
+    ) -> Result<application::quran_search::SearchOutput, application::quran_search::SearchError>
+    {
+        Ok(empty_search_output("L3.diacritics@1.0.0"))
+    }
+
+    async fn search_concatenated(
+        &self,
+        _args: application::quran_search_api::ConcatenatedArgs,
+    ) -> Result<application::quran_search::SearchOutput, application::quran_search::SearchError>
+    {
+        Ok(empty_search_output("L6.skeleton@1.0.0"))
+    }
+
+    async fn search_regex(
+        &self,
+        args: application::quran_search_api::RegexArgs,
+    ) -> Result<application::quran_search::SearchOutput, application::quran_search::SearchError>
+    {
+        if args.pattern == ".*x" {
+            return Err(application::quran_search_api::reject(
+                "leading `.*` is rejected; anchor the pattern",
+            ));
+        }
+        let mut output = empty_search_output("L3.diacritics@1.0.0");
+        output.regex_report = Some(application::quran_search::RegexReport {
+            pattern: args.pattern.clone(),
+            field: args.field.clone(),
+            terms_matched: Vec::new(),
+            terms_examined: 0,
+        });
+        Ok(output)
+    }
+}
+
 fn test_state() -> AppState {
-    AppState { tools: Arc::new(ToolRegistry::new(Arc::new(FakeBackend))), api: Arc::new(FakeApi) }
+    AppState {
+        tools: Arc::new(ToolRegistry::new(Arc::new(FakeBackend))),
+        api: Arc::new(FakeApi),
+        search: Arc::new(FakeSearch),
+    }
 }
 
 async fn serve_once() -> (String, tokio::task::JoinHandle<()>) {
@@ -249,6 +322,11 @@ async fn openapi_spec_covers_every_route() {
         "/api/v1/quran/citations/{id}",
         "/api/v1/quran/normalization/preview",
         "/api/v1/quran/normalization/profiles",
+        "/api/v1/quran/search/exact",
+        "/api/v1/quran/search/normalized",
+        "/api/v1/quran/search/phrase",
+        "/api/v1/quran/search/concatenated",
+        "/api/v1/quran/search/regex",
         "/debug/read/{edition}/{surah}",
     ] {
         assert!(paths.contains_key(path), "spec missing {path}");
@@ -517,14 +595,23 @@ async fn debug_reader_is_labelled_rtl_without_persistence() {
     handle.abort();
 }
 
-async fn post_json(addr: &str, path: &str, body: &serde_json::Value) -> (StatusCode, Vec<u8>) {
+async fn post_raw(
+    addr: &str,
+    path: &str,
+    body: &serde_json::Value,
+    extra_headers: &[(&str, &str)],
+) -> (StatusCode, HeaderMap, Vec<u8>) {
     let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let payload = serde_json::to_string(body).unwrap();
-    let request = format!(
-        "POST {path} HTTP/1.1\r\nhost: x\r\nconnection: close\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n{payload}",
+    let mut request = format!(
+        "POST {path} HTTP/1.1\r\nhost: x\r\nconnection: close\r\ncontent-type: application/json\r\ncontent-length: {}\r\n",
         payload.len()
     );
+    for (name, value) in extra_headers {
+        request.push_str(&format!("{name}: {value}\r\n"));
+    }
+    request.push_str(&format!("\r\n{payload}"));
     stream.write_all(request.as_bytes()).await.unwrap();
     let mut bytes = Vec::new();
     stream.read_to_end(&mut bytes).await.unwrap();
@@ -532,7 +619,23 @@ async fn post_json(addr: &str, path: &str, body: &serde_json::Value) -> (StatusC
     let (head, body) = text.split_once("\r\n\r\n").unwrap_or((&text, ""));
     let status_line = head.lines().next().unwrap_or("");
     let status: u16 = status_line.split_whitespace().nth(1).unwrap_or("0").parse().unwrap_or(0);
-    (StatusCode::from_u16(status).unwrap(), body.as_bytes().to_vec())
+    let mut headers = HeaderMap::new();
+    for line in head.lines().skip(1) {
+        if let Some((name, value)) = line.split_once(':')
+            && let (Ok(name), Ok(value)) = (
+                name.trim().parse::<axum::http::HeaderName>(),
+                value.trim().parse::<axum::http::HeaderValue>(),
+            )
+        {
+            headers.insert(name, value);
+        }
+    }
+    (StatusCode::from_u16(status).unwrap(), headers, body.as_bytes().to_vec())
+}
+
+async fn post_json(addr: &str, path: &str, body: &serde_json::Value) -> (StatusCode, Vec<u8>) {
+    let (status, _, body) = post_raw(addr, path, body, &[]).await;
+    (status, body)
 }
 
 #[tokio::test]
@@ -609,5 +712,122 @@ async fn normalization_profiles_lists_ladder() {
     let profiles = value["data"]["profiles"].as_array().unwrap();
     assert_eq!(profiles.len(), 9);
     assert_eq!(profiles[3]["id"], "L3.diacritics");
+    handle.abort();
+}
+
+#[tokio::test]
+async fn search_exact_returns_envelope_with_reproducibility() {
+    let (addr, handle) = serve_once().await;
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/search/exact",
+        &serde_json::json!({"text": "بسم", "limit": 5}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let value = body_json(&body);
+    assert_envelope(&value);
+    assert_eq!(value["data"]["total_matches"], 0);
+    assert_eq!(value["data"]["truncated"], false);
+    assert_eq!(value["data"]["rule_set"], "L0.exact@1.0.0");
+    assert_eq!(value["meta"]["reproducibility"]["tool"], "quran.search_exact");
+    assert_eq!(value["meta"]["reproducibility"]["rule_set"], "L0.exact@1.0.0");
+    assert_eq!(value["meta"]["reproducibility"]["generation"], 1);
+    handle.abort();
+}
+
+#[tokio::test]
+async fn search_endpoints_reject_bad_values_with_coded_errors() {
+    let (addr, handle) = serve_once().await;
+    // Unknown match mode is a 400 with the IDX namespace.
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/search/normalized",
+        &serde_json::json!({"text": "x", "match_mode": "nope"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body_json(&body)["error"]["code"], "QAI-IDX-0002");
+
+    // Profile and rules together are rejected, never silently preferred.
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/search/normalized",
+        &serde_json::json!({"text": "x", "profile": "L3.diacritics", "rules": "N01"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body_json(&body)["error"]["code"], "QAI-IDX-0002");
+
+    // Empty query text is a 400, never a match-everything.
+    let (status, _) =
+        post_json(&addr, "/api/v1/quran/search/phrase", &serde_json::json!({"text": "  "})).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // Unknown phrase mode is a 400.
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/search/phrase",
+        &serde_json::json!({"text": "x", "phrase_mode": "diagonal"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body_json(&body)["error"]["code"], "QAI-IDX-0002");
+    handle.abort();
+}
+
+#[tokio::test]
+async fn search_regex_reports_provenance_and_guards() {
+    let (addr, handle) = serve_once().await;
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/search/regex",
+        &serde_json::json!({"pattern": "^ا?ل?رحم", "field": "text_bare"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let value = body_json(&body);
+    assert_envelope(&value);
+    assert_eq!(value["data"]["regex_report"]["pattern"], "^ا?ل?رحم");
+    assert_eq!(value["data"]["regex_report"]["field"], "text_bare");
+    assert_eq!(value["meta"]["reproducibility"]["tool"], "quran.search_regex");
+
+    // Guard rejection is a coded 400, not a silent empty result.
+    let (status, body) =
+        post_json(&addr, "/api/v1/quran/search/regex", &serde_json::json!({"pattern": ".*x"}))
+            .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body_json(&body)["error"]["code"], "QAI-IDX-0002");
+    handle.abort();
+}
+
+#[tokio::test]
+async fn search_sse_streams_hits_then_terminal_totals() {
+    let (addr, handle) = serve_once().await;
+    let (status, headers, body) = post_raw(
+        &addr,
+        "/api/v1/quran/search/concatenated",
+        &serde_json::json!({"text": "بسمالله"}),
+        &[("accept", "text/event-stream")],
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(headers.get("content-type").unwrap(), "text/event-stream");
+    let text = String::from_utf8_lossy(&body).into_owned();
+    assert!(text.contains("event: totals"), "terminal totals event missing: {text}");
+    let totals = text.split("event: totals\ndata: ").nth(1).expect("totals event carries data");
+    let totals: serde_json::Value = serde_json::from_str(totals.trim()).unwrap();
+    assert_eq!(totals["total_matches"], 0);
+    assert_eq!(totals["rule_set"], "L6.skeleton@1.0.0");
+
+    // Without the SSE accept header the same endpoint serves JSON.
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/search/concatenated",
+        &serde_json::json!({"text": "بسمالله"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_envelope(&body_json(&body));
     handle.abort();
 }
