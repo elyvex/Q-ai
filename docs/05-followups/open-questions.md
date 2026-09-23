@@ -16,8 +16,22 @@
 
 - `cargo test -p jobs` intermittently returned Idle rather than Succeeded in `worker::tests::retries_then_succeeds` after zero-delay rescheduling. Isolated and serial runs pass.
 - Timestamp ordering corrected in `InMemoryJobQueue`: claim and lease reaping compare parsed instants, not variable-precision RFC3339 strings. Fixed-time regression tests pass; 25 consecutive parallel jobs-suite runs passed (21 tests each).
-- Still open: `plus` discards subsecond delays; production SQLite scheduling and wall-clock behavior need separate validation. This fix does not address those paths.
-- Restored failure-path idempotency and jitter-cap tests pass. Lease-recovery retry policy still needs separate validation.
+- **Update 2026-09-24:**
+  - `plus` subsecond truncation **fixed** in `crates/jobs/src/queue.rs`: `plus`
+    now adds whole seconds + subsecond nanos instead of `d.as_secs()` only.
+    Regression: `queue::tests::plus_preserves_subsecond_delays`
+    (`cargo test -p jobs --lib` 22/22 green).
+  - SQLite scheduling **validated**: new
+    `storage-sqlite/tests/recovery_jobs.rs::rescheduled_job_is_not_claimable_until_due`
+    proves `reschedule(job, 3600s)` blocks `claim_next` until `available_at`
+    passes, then claims normally (4/4 green). Note the SQLite `reschedule`
+    API is seconds-granular by design (`delay_seconds: u64`), so the subsecond
+    issue never applied there; all writer timestamps come from one formatter,
+    keeping lexical `available_at <= now` comparison chronological.
+- Still open: wall-clock lease-recovery retry policy validation under real
+  time (backdate simulation only proves ordering, not timing). Intermittent
+  parallel `retries_then_succeeds` flake stays under watch.
+- Restored failure-path idempotency and jitter-cap tests pass.
 
 ## Graph backends
 
