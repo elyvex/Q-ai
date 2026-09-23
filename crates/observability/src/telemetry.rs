@@ -23,6 +23,17 @@ pub fn is_forbidden_field(name: &str) -> bool {
         || lower.contains("model_response")
 }
 
+/// Whether an OTLP span attribute key must be scrubbed before export.
+///
+/// Union of the telemetry content denylist ([`is_forbidden_field`]) and the
+/// secret-name rule (`domain::redaction::is_secret_key`). Applied at the
+/// exporter boundary by the OTLP scrubbing processor (see `otlp.rs`) so span
+/// fields — which bypass the stderr `RedactingWriter` — cannot carry secret
+/// or content-bearing values to the backend.
+pub fn is_scrubbed_span_field(name: &str) -> bool {
+    is_forbidden_field(name) || domain::redaction::is_secret_key(name)
+}
+
 /// Recursively strip denylisted keys from a telemetry payload.
 ///
 /// Returns the number of keys removed.
@@ -82,6 +93,30 @@ mod tests {
         assert_eq!(payload["duration_ms"], 12);
         for field in FORBIDDEN_FIELDS {
             assert!(payload.get(field).is_none(), "{field} must be removed");
+        }
+    }
+
+    #[test]
+    fn scrubbed_span_fields_cover_denylist_and_secret_names() {
+        // Content denylist (AC-P0-18).
+        for name in [
+            "query_text",
+            "prompt_text",
+            "document_content",
+            "research_question",
+            "model_response",
+            "query",
+            "Prompt",
+        ] {
+            assert!(is_scrubbed_span_field(name), "{name} must be scrubbed");
+        }
+        // Secret-name rule (Rule A): values under these keys must not reach OTLP.
+        for name in ["api_key", "password", "secret", "token", "credential", "api-key"] {
+            assert!(is_scrubbed_span_field(name), "{name} must be scrubbed");
+        }
+        // Operational fields pass through.
+        for name in ["job_id", "duration_ms", "service.name", "http.status_code"] {
+            assert!(!is_scrubbed_span_field(name), "{name} must survive scrubbing");
         }
     }
 
