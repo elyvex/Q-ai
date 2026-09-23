@@ -74,18 +74,24 @@ with a recorded fallback), ADR-0206 is `Reserved`, and both golden sets exist wi
 
 | ID | Task | Deliv. | Depends | Est | Role | Status |
 |---|---|---|---|---|---|---|
-| P2-T13 | `quran-normalization` crate skeleton, `RuleId`, `NormalizationRule` trait | D2.1 | P1 done | 1.5 | BE | ☐ |
-| P2-T14 | `SpanMap`: segments, compose, to_canonical, to_derived | D2.1 | T13 | 3.5 | BE | ☐ |
-| P2-T15 | `SpanMap` property tests (5 properties × all ayahs × all profiles) | D2.13 | T14 | 3.0 | QA | ☐ |
-| P2-T16 | Implement deterministic rules N01–N17 | D2.1 | T14 | 5.0 | BE | ☐ |
-| P2-T17 | Implement heuristic rules N18–N22 with `RuleKind::Heuristic` tagging | D2.1 | T16 | 2.5 | BE | ☐ |
-| P2-T18 | `NormalizationPipeline` + profile registry + immutability enforcement | D2.1 | T16 | 2.5 | BE | ☐ |
+| P2-T13 | `quran-normalization` crate skeleton, `RuleId`, `NormalizationRule` trait | D2.1 | P1 done | 1.5 | BE | ☑ |
+| P2-T14 | `SpanMap`: segments, compose, to_canonical, to_derived | D2.1 | T13 | 3.5 | BE | ☑ |
+| P2-T15 | `SpanMap` property tests (5 properties × all ayahs × all profiles) | D2.13 | T14 | 3.0 | QA | ☑ |
+| P2-T16 | Implement deterministic rules N01–N17 | D2.1 | T14 | 5.0 | BE | ☑ |
+| P2-T17 | Implement heuristic rules N18–N22 with `RuleKind::Heuristic` tagging | D2.1 | T16 | 2.5 | BE | ☑ |
+| P2-T18 | `NormalizationPipeline` + profile registry + immutability enforcement | D2.1 | T16 | 2.5 | BE | ☑ |
 | P2-T19 | Migration `0020_quran_normalization` + profile/rule seeding | D2.10 | T18 | 1.5 | BE | ☑ |
-| P2-T20 | `NormalizationTrace` type + no-default-constructor guard | D2.1 | T18 | 1.0 | BE | ☐ |
-| P2-T21 | Golden-set test harness; all 2,000 pairs green | D2.13 | T11,T18 | 2.5 | QA | ☐ |
-| P2-T22 | Idempotency + associativity + fuzz (no panic on any Unicode input) | D2.13 | T18 | 2.0 | QA | ☐ |
+| P2-T20 | `NormalizationTrace` type + no-default-constructor guard | D2.1 | T18 | 1.0 | BE | ☑ |
+| P2-T21 | Golden-set test harness; all 2,000 pairs green | D2.13 | T11,T18 | 2.5 | QA | ◐ |
+| P2-T22 | Idempotency + associativity + fuzz (no panic on any Unicode input) | D2.13 | T18 | 2.0 | QA | ☑ |
 | P2-T23 | `qai quran normalize --explain` + `--list-profiles` + `--show-rule` | D2.12 | T18 | 2.0 | BE | ☑ |
 | P2-T24 | `POST /normalization/preview` + `GET /normalization/profiles` | D2.11 | T23 | 1.5 | BE | ☑ |
+
+> **2026-09-24 status:** T13–T18/T20/T22 flipped ☑ (review pass: 89/89 crate tests green,
+> clippy/fmt clean; entries in `done.md` §2). **T21 is ◐, not ☑:** the harness runs all
+> 2,000 pairs green (`golden_harness.rs` 3/3) but the fixture header reads
+> `reviewed_by: pending-linguist` — sign-off is P2-T11 scope (blocked on P2-X02 linguist).
+> Flipping T21 before the linguist signs would overstate the golden set.
 
 > **T14 is the highest-risk pure-logic item in the phase.** `to_canonical(to_derived(r)) ⊇ r`,
 > grapheme-boundary safety, composition associativity, L0 identity, and re-normalization
@@ -306,13 +312,13 @@ approval.
 |---|---|---|---|---|---|
 | X — External-lead-time decisions | 5 | — | 0 | ☐ Not Started |
 | 2.0 — Dataset & Linguistic Decisions | 12 | 30.5 | 0 | ☐ Not Started |
-| 2.1 — Normalization Engine | 12 | 28.5 | 3 | ◐ In Progress |
+| 2.1 — Normalization Engine | 12 | 28.5 | 11 | ◐ In Progress |
 | 2.2 — Derived Forms & FTS Foundation | 15 | 33.5 | 10 | ◐ In Progress |
 | 2.3 — Search Tools | 17 | 42.0 ⚠️ | 13 | ◐ In Progress |
 | 2.4 — Morphology Import & Lexicons | 18 | 45.0 ⚠️ | 0 | ☐ Not Started |
 | 2.5 — Morphology & Family Tools | 19 | 47.5 ⚠️ | 0 | ☐ Not Started |
 | 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 51.0 ⚠️ | 0 | ☐ Not Started |
-| **Total** | **114 + 5** | **278.0** | **26** | **23%** |
+| **Total** | **114 + 5** | **278.0** | **34** | **30%** |
 
 By role: **BE ≈ 141.0 ed** · **SRCH ≈ 40.0 ed** · **QA ≈ 40.5 ed** · **DATA ≈ 17.0 ed** ·
 **DOC ≈ 13.0 ed** · **LING ≈ 10.5 ed** · **LING+BE ≈ 3.5 ed** · **LING+QA ≈ 10.5 ed** ·
