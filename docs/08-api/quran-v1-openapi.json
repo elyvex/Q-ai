@@ -9,13 +9,21 @@
     "/healthz": {
       "get": {
         "operationId": "health",
-        "responses": {"200": {"description": "ok (text/plain)"}}
+        "responses": {
+          "200": {
+            "description": "ok (text/plain)"
+          }
+        }
       }
     },
     "/readyz": {
       "get": {
         "operationId": "ready",
-        "responses": {"200": {"description": "ready (text/plain)"}}
+        "responses": {
+          "200": {
+            "description": "ready (text/plain)"
+          }
+        }
       }
     },
     "/api/v1/meta": {
@@ -24,7 +32,13 @@
         "responses": {
           "200": {
             "description": "server name and build version in the API envelope; no configuration or corpus data",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
           }
         }
       }
@@ -33,13 +47,31 @@
       "get": {
         "operationId": "listEditions",
         "parameters": [
-          {"name": "status", "in": "query", "schema": {"type": "string"}},
-          {"name": "language", "in": "query", "schema": {"type": "string"}}
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
             "description": "envelope of edition descriptors",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
           }
         }
       }
@@ -47,15 +79,36 @@
     "/api/v1/quran/editions/{slug}": {
       "get": {
         "operationId": "getEdition",
-        "parameters": [{"name": "slug", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "envelope of one edition",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
           },
           "404": {
             "description": "diagnostic body",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
           }
         }
       }
@@ -63,11 +116,25 @@
     "/api/v1/quran/surahs": {
       "get": {
         "operationId": "listSurahs",
-        "parameters": [{"name": "edition", "in": "query", "schema": {"type": "string"}}],
+        "parameters": [
+          {
+            "name": "edition",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "envelope of surah descriptors",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
           }
         }
       }
@@ -76,17 +143,42 @@
       "get": {
         "operationId": "getSurah",
         "parameters": [
-          {"name": "number", "in": "path", "required": true, "schema": {"type": "integer"}},
-          {"name": "edition", "in": "query", "schema": {"type": "string"}}
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "edition",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
             "description": "envelope of surah + ayah texts",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
           },
           "404": {
             "description": "diagnostic body",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
           }
         }
       }
@@ -95,29 +187,90 @@
       "get": {
         "operationId": "getAyah",
         "parameters": [
-          {"name": "reference", "in": "path", "required": true, "schema": {"type": "string"}},
-          {"name": "edition", "in": "query", "schema": {"type": "string"}},
-          {"name": "translations", "in": "query", "schema": {"type": "string"}},
-          {"name": "glosses", "in": "query", "schema": {"type": "boolean"}},
-          {"name": "tokens", "in": "query", "schema": {"type": "boolean"}}
+          {
+            "name": "reference",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "edition",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "translations",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "glosses",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "tokens",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
         ],
         "responses": {
           "200": {
             "description": "envelope of ayah views; ETag from (text_hash, corpus_generation)",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
             "headers": {
-              "ETag": {"description": "sha256 over (text_hash, corpus_generation)", "schema": {"type": "string"}},
-              "Content-Language": {"description": "response language (ar for Arabic)", "schema": {"type": "string"}}
+              "ETag": {
+                "description": "sha256 over (text_hash, corpus_generation)",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Language": {
+                "description": "response language (ar for Arabic)",
+                "schema": {
+                  "type": "string"
+                }
+              }
             }
           },
-          "304": {"description": "not modified (If-None-Match)"},
+          "304": {
+            "description": "not modified (If-None-Match)"
+          },
           "400": {
             "description": "diagnostic body",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
           },
           "404": {
             "description": "diagnostic body",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
           }
         }
       }
@@ -126,24 +279,80 @@
       "get": {
         "operationId": "getContext",
         "parameters": [
-          {"name": "reference", "in": "path", "required": true, "schema": {"type": "string"}},
-          {"name": "before", "in": "query", "schema": {"type": "integer"}},
-          {"name": "after", "in": "query", "schema": {"type": "integer"}},
-          {"name": "boundary", "in": "query", "schema": {"type": "string", "enum": ["surah", "juz", "ruku", "page", "none"]}},
-          {"name": "max_ayahs", "in": "query", "schema": {"type": "integer"}}
+          {
+            "name": "reference",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "boundary",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "surah",
+                "juz",
+                "ruku",
+                "page",
+                "none"
+              ]
+            }
+          },
+          {
+            "name": "max_ayahs",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
         ],
         "responses": {
           "200": {
             "description": "envelope of context view",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
           },
           "400": {
             "description": "diagnostic body",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
           },
           "404": {
             "description": "diagnostic body",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
           }
         }
       }
@@ -152,18 +361,50 @@
       "get": {
         "operationId": "getDivision",
         "parameters": [
-          {"name": "kind", "in": "path", "required": true, "schema": {"type": "string"}},
-          {"name": "number", "in": "path", "required": true, "schema": {"type": "integer"}},
-          {"name": "edition", "in": "query", "schema": {"type": "string"}}
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "edition",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
             "description": "envelope of ayah references+texts",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
           },
           "404": {
             "description": "diagnostic body",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
           }
         }
       }
@@ -172,17 +413,42 @@
       "get": {
         "operationId": "getTokens",
         "parameters": [
-          {"name": "reference", "in": "path", "required": true, "schema": {"type": "string"}},
-          {"name": "edition", "in": "query", "schema": {"type": "string"}}
+          {
+            "name": "reference",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "edition",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
             "description": "envelope of token rows",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
           },
           "404": {
             "description": "diagnostic body",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
           }
         }
       }
@@ -190,19 +456,46 @@
     "/api/v1/quran/resolve": {
       "get": {
         "operationId": "resolveReference",
-        "parameters": [{"name": "ref", "in": "query", "required": true, "schema": {"type": "string"}}],
+        "parameters": [
+          {
+            "name": "ref",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "envelope of canonical reference",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
           },
           "400": {
             "description": "diagnostic body",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
           },
           "404": {
             "description": "diagnostic body",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
           }
         }
       }
@@ -210,15 +503,36 @@
     "/api/v1/quran/citations/{id}": {
       "get": {
         "operationId": "resolveCitation",
-        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "envelope of resolved citation",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
           },
           "404": {
             "description": "diagnostic body",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
           }
         }
       }
@@ -227,15 +541,50 @@
       "post": {
         "operationId": "previewNormalization",
         "description": "Normalize text through a profile (default latest L3.diacritics) or an explicit rule list; returns derived text with its NormalizationTrace. Same pipeline as the CLI (AC-P2-39).",
-        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["text"], "properties": {"text": {"type": "string"}, "profile": {"type": "string"}, "rules": {"type": "string"}}}}}},
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "text"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "profile": {
+                    "type": "string"
+                  },
+                  "rules": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "envelope of preview with trace",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
           },
           "400": {
             "description": "diagnostic body",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Diagnostic"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
           }
         }
       }
@@ -247,7 +596,13 @@
         "responses": {
           "200": {
             "description": "envelope of profile catalog",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
           }
         }
       }
@@ -257,10 +612,646 @@
         "operationId": "debugRead",
         "description": "Labelled debug view (not the product UI): RTL HTML, no persistence.",
         "parameters": [
-          {"name": "edition", "in": "path", "required": true, "schema": {"type": "string"}},
-          {"name": "surah", "in": "path", "required": true, "schema": {"type": "integer"}}
+          {
+            "name": "edition",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "surah",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
         ],
-        "responses": {"200": {"description": "HTML"}}
+        "responses": {
+          "200": {
+            "description": "HTML"
+          }
+        }
+      }
+    },
+    "/api/v1/quran/search/exact": {
+      "post": {
+        "operationId": "searchExact",
+        "description": "Exact search with no linguistic expansion (L0/L1). Zero-result Persian queries carry a hint warning, never a silent fold. Accept: text/event-stream streams one `hit` event per match plus a terminal `totals` event.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "text"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "field": {
+                    "type": "string"
+                  },
+                  "filters": {
+                    "type": "object",
+                    "description": "AND-combined metadata filters",
+                    "properties": {
+                      "surah": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      "juz": {
+                        "type": "string",
+                        "description": "`2` or `1-5`"
+                      },
+                      "page": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      "revelation_place": {
+                        "type": "string",
+                        "enum": [
+                          "makki",
+                          "madani"
+                        ]
+                      },
+                      "global_range": {
+                        "type": "string",
+                        "description": "`10-99`"
+                      }
+                    }
+                  },
+                  "edition": {
+                    "type": "string"
+                  },
+                  "match_mode": {
+                    "type": "string"
+                  },
+                  "limit": {
+                    "type": "integer"
+                  },
+                  "offset": {
+                    "type": "integer"
+                  },
+                  "explain": {
+                    "type": "boolean"
+                  },
+                  "highlight": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "envelope of SearchOutput",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "diagnostic body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "diagnostic body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "diagnostic body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quran/search/normalized": {
+      "post": {
+        "operationId": "searchNormalized",
+        "description": "Normalized search by registry profile (default L3.diacritics) or adhoc rules; traces and quotations on every hit. Accept: text/event-stream streams one `hit` event per match plus a terminal `totals` event.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "text"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "profile": {
+                    "type": "string"
+                  },
+                  "rules": {
+                    "type": "string"
+                  },
+                  "filters": {
+                    "type": "object",
+                    "description": "AND-combined metadata filters",
+                    "properties": {
+                      "surah": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      "juz": {
+                        "type": "string",
+                        "description": "`2` or `1-5`"
+                      },
+                      "page": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      "revelation_place": {
+                        "type": "string",
+                        "enum": [
+                          "makki",
+                          "madani"
+                        ]
+                      },
+                      "global_range": {
+                        "type": "string",
+                        "description": "`10-99`"
+                      }
+                    }
+                  },
+                  "edition": {
+                    "type": "string"
+                  },
+                  "match_mode": {
+                    "type": "string"
+                  },
+                  "limit": {
+                    "type": "integer"
+                  },
+                  "offset": {
+                    "type": "integer"
+                  },
+                  "explain": {
+                    "type": "boolean"
+                  },
+                  "highlight": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "envelope of SearchOutput",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "diagnostic body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "diagnostic body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "diagnostic body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quran/search/phrase": {
+      "post": {
+        "operationId": "searchPhrase",
+        "description": "Phrase search (ordered_exact/ordered_near/unordered_near) with slop; spans always satisfy the mode. Accept: text/event-stream streams one `hit` event per match plus a terminal `totals` event.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "text"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "profile": {
+                    "type": "string"
+                  },
+                  "rules": {
+                    "type": "string"
+                  },
+                  "phrase_mode": {
+                    "type": "string"
+                  },
+                  "slop": {
+                    "type": "integer"
+                  },
+                  "filters": {
+                    "type": "object",
+                    "description": "AND-combined metadata filters",
+                    "properties": {
+                      "surah": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      "juz": {
+                        "type": "string",
+                        "description": "`2` or `1-5`"
+                      },
+                      "page": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      "revelation_place": {
+                        "type": "string",
+                        "enum": [
+                          "makki",
+                          "madani"
+                        ]
+                      },
+                      "global_range": {
+                        "type": "string",
+                        "description": "`10-99`"
+                      }
+                    }
+                  },
+                  "edition": {
+                    "type": "string"
+                  },
+                  "match_mode": {
+                    "type": "string"
+                  },
+                  "limit": {
+                    "type": "integer"
+                  },
+                  "offset": {
+                    "type": "integer"
+                  },
+                  "explain": {
+                    "type": "boolean"
+                  },
+                  "highlight": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "envelope of SearchOutput",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "diagnostic body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "diagnostic body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "diagnostic body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quran/search/concatenated": {
+      "post": {
+        "operationId": "searchConcatenated",
+        "description": "Space-insensitive skeleton search; every hit carries segmentation and spans_* flags. Accept: text/event-stream streams one `hit` event per match plus a terminal `totals` event.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "text"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "allow_cross_ayah": {
+                    "type": "boolean"
+                  },
+                  "max_ayah_span": {
+                    "type": "integer"
+                  },
+                  "filters": {
+                    "type": "object",
+                    "description": "AND-combined metadata filters",
+                    "properties": {
+                      "surah": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      "juz": {
+                        "type": "string",
+                        "description": "`2` or `1-5`"
+                      },
+                      "page": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      "revelation_place": {
+                        "type": "string",
+                        "enum": [
+                          "makki",
+                          "madani"
+                        ]
+                      },
+                      "global_range": {
+                        "type": "string",
+                        "description": "`10-99`"
+                      }
+                    }
+                  },
+                  "edition": {
+                    "type": "string"
+                  },
+                  "match_mode": {
+                    "type": "string"
+                  },
+                  "limit": {
+                    "type": "integer"
+                  },
+                  "offset": {
+                    "type": "integer"
+                  },
+                  "explain": {
+                    "type": "boolean"
+                  },
+                  "highlight": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "envelope of SearchOutput",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "diagnostic body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "diagnostic body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "diagnostic body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quran/search/regex": {
+      "post": {
+        "operationId": "searchRegex",
+        "description": "DFA-bounded regex over indexed fields with rate limits (10/min/principal); terms examined always reported. Accept: text/event-stream streams one `hit` event per match plus a terminal `totals` event.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "pattern"
+                ],
+                "properties": {
+                  "pattern": {
+                    "type": "string"
+                  },
+                  "field": {
+                    "type": "string"
+                  },
+                  "timeout_ms": {
+                    "type": "integer"
+                  },
+                  "filters": {
+                    "type": "object",
+                    "description": "AND-combined metadata filters",
+                    "properties": {
+                      "surah": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      "juz": {
+                        "type": "string",
+                        "description": "`2` or `1-5`"
+                      },
+                      "page": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      "revelation_place": {
+                        "type": "string",
+                        "enum": [
+                          "makki",
+                          "madani"
+                        ]
+                      },
+                      "global_range": {
+                        "type": "string",
+                        "description": "`10-99`"
+                      }
+                    }
+                  },
+                  "edition": {
+                    "type": "string"
+                  },
+                  "match_mode": {
+                    "type": "string"
+                  },
+                  "limit": {
+                    "type": "integer"
+                  },
+                  "offset": {
+                    "type": "integer"
+                  },
+                  "explain": {
+                    "type": "boolean"
+                  },
+                  "highlight": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "envelope of SearchOutput",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "diagnostic body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "diagnostic body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "diagnostic body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -269,55 +1260,149 @@
       "EditionMeta": {
         "type": "object",
         "description": "Edition descriptor carried in every envelope (AC-P1-14).",
-        "required": ["slug", "version", "text_hash", "script", "riwayah", "numbering_scheme"],
+        "required": [
+          "slug",
+          "version",
+          "text_hash",
+          "script",
+          "riwayah",
+          "numbering_scheme"
+        ],
         "properties": {
-          "slug": {"type": "string"},
-          "version": {"type": "string"},
-          "text_hash": {"type": "string", "description": "hex sha256 of the canonical text"},
-          "script": {"type": "string"},
-          "riwayah": {"type": ["string", "null"]},
-          "numbering_scheme": {"type": "string"}
+          "slug": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "text_hash": {
+            "type": "string",
+            "description": "hex sha256 of the canonical text"
+          },
+          "script": {
+            "type": "string"
+          },
+          "riwayah": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "numbering_scheme": {
+            "type": "string"
+          }
         }
       },
       "Meta": {
         "type": "object",
         "description": "Envelope metadata (AC-P1-14).",
-        "required": ["edition", "corpus_generation", "canonical_reference", "deep_link", "execution_time_ms", "reproducibility", "warnings"],
+        "required": [
+          "edition",
+          "corpus_generation",
+          "canonical_reference",
+          "deep_link",
+          "execution_time_ms",
+          "reproducibility",
+          "warnings"
+        ],
         "properties": {
-          "edition": {"$ref": "#/components/schemas/EditionMeta"},
-          "corpus_generation": {"type": "integer"},
-          "canonical_reference": {"type": "string"},
-          "deep_link": {"type": "string"},
-          "execution_time_ms": {"type": "number"},
-          "reproducibility": {"type": ["object", "null"], "description": "checksum record (checksum key always present when computed)"},
-          "warnings": {"type": "array", "items": {"type": "string"}}
+          "edition": {
+            "$ref": "#/components/schemas/EditionMeta"
+          },
+          "corpus_generation": {
+            "type": "integer"
+          },
+          "canonical_reference": {
+            "type": "string"
+          },
+          "deep_link": {
+            "type": "string"
+          },
+          "execution_time_ms": {
+            "type": "number"
+          },
+          "reproducibility": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "checksum record (checksum key always present when computed)"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "Envelope": {
         "type": "object",
         "description": "Stable response envelope: api_version + data + meta.",
-        "required": ["api_version", "data", "meta"],
+        "required": [
+          "api_version",
+          "data",
+          "meta"
+        ],
         "properties": {
-          "api_version": {"type": "string", "const": "v1"},
-          "data": {"description": "endpoint payload (array, object, or value; see the operation description)"},
-          "meta": {"$ref": "#/components/schemas/Meta"}
+          "api_version": {
+            "type": "string",
+            "const": "v1"
+          },
+          "data": {
+            "description": "endpoint payload (array, object, or value; see the operation description)"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
         }
       },
       "Diagnostic": {
         "type": "object",
         "description": "Phase-0 Diagnostic error body (AC-P1-14).",
-        "required": ["error"],
+        "required": [
+          "error"
+        ],
         "properties": {
           "error": {
             "type": "object",
-            "required": ["code", "summary", "why"],
+            "required": [
+              "code",
+              "summary",
+              "why"
+            ],
             "properties": {
-              "code": {"type": "string", "description": "namespaced code, e.g. QAI-QUR-0307"},
-              "summary": {"type": "string"},
-              "location": {"type": ["string", "null"]},
-              "why": {"type": "array", "items": {"type": "string"}},
-              "remedy": {"type": ["string", "null"]},
-              "next_command": {"type": ["string", "null"]}
+              "code": {
+                "type": "string",
+                "description": "namespaced code, e.g. QAI-QUR-0307"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "location": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "why": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "remedy": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "next_command": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
             }
           }
         }
