@@ -1822,3 +1822,292 @@ pub async fn cmd_index_verify(db_path: &str, index: Option<&str>) -> CommandOutp
     });
     CommandOutput { exit: if report.ok { exit::OK } else { exit::VALIDATION }, human, json }
 }
+
+/// Search mode requested on the CLI (one flag family per tool).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SearchCliMode {
+    /// `quran.search_exact` (default unless another tool flag is given).
+    Exact,
+    /// `quran.search_normalized` (explicit `--profile`/`--rules` also selects this).
+    Normalized,
+    /// `quran.search_phrase` (`--phrase`).
+    Phrase,
+    /// `quran.search_concatenated` (`--concatenated`).
+    Concatenated,
+    /// `quran.search_regex` (`--regex`).
+    Regex,
+}
+
+/// All `quran search` options in one struct (CLI parsing lives in `cli`).
+#[derive(Debug, Clone)]
+pub struct SearchCliOptions {
+    /// Query text (or regex pattern with `--regex`).
+    pub text: String,
+    /// Tool selector.
+    pub mode: SearchCliMode,
+    /// Edition `slug@version` (defaults to the indexed edition).
+    pub edition: Option<String>,
+    /// Exact-search field (`text_exact`|`text_ws`); regex field with `--regex`.
+    pub field: Option<String>,
+    /// Token match mode (`whole_token`|`substring`|`ayah_prefix`).
+    pub match_mode: String,
+    /// Registry profile (`L3.diacritics`, optionally `@version`-pinned).
+    pub profile: Option<String>,
+    /// Explicit rule list (`N01,N03`); never with `profile`.
+    pub rules: Option<String>,
+    /// Phrase mode (`ordered_exact`|`ordered_near`|`unordered_near`).
+    pub phrase_mode: String,
+    /// Max intervening tokens for `*_near` phrase modes.
+    pub slop: u32,
+    /// Allow 3-ayah window matches (concatenated only).
+    pub allow_cross_ayah: bool,
+    /// Max ayahs per window match (concatenated only, `>= 1`).
+    pub max_ayah_span: u32,
+    /// Surah filter (`1,2,3`).
+    pub surah: Option<String>,
+    /// Juz filter (`2` or `1-5`).
+    pub juz: Option<String>,
+    /// Page filter (`3,4`).
+    pub page: Option<String>,
+    /// Revelation-place filter (`makki`|`madani`).
+    pub revelation_place: Option<String>,
+    /// Global ayah-index filter (`10-99`).
+    pub global_range: Option<String>,
+    /// Result cap (ceiling 1000).
+    pub limit: u32,
+    /// Result offset.
+    pub offset: u32,
+    /// Relevance order with per-hit BM25 breakdowns.
+    pub explain: bool,
+    /// Wrap hit spans in `<b>` display markers.
+    pub highlight: bool,
+    /// Regex wall-clock budget in ms (regex only, ceiling 10000).
+    pub timeout_ms: u64,
+}
+
+fn map_search_error(error: super::quran_search::SearchError) -> (i32, String) {
+    use super::quran_search::SearchError as E;
+    let message = error.to_string();
+    let exit = match &error {
+        E::Normalization(inner) => {
+            use quran_normalization::error::NormalizationError as NE;
+            match inner {
+                NE::UnknownRule { .. } | NE::UnknownProfile { .. } => exit::USAGE,
+                _ => exit::INTERNAL,
+            }
+        }
+        E::Index(inner) => {
+            use quran_search::IndexError as IE;
+            match inner {
+                IE::QueryRejected { .. } => exit::USAGE,
+                IE::RateLimited { .. } => exit::POLICY,
+                _ => exit::INTERNAL,
+            }
+        }
+        E::EditionNotIndexed { .. } | E::NoServingIndex { .. } => exit::NOT_FOUND,
+        E::RateLimited(_) => exit::POLICY,
+        E::Storage(_) => exit::INTERNAL,
+    };
+    (exit, message)
+}
+
+fn parse_id_list(raw: &str, what: &str) -> Result<Vec<u16>, CommandOutput> {
+    raw.split(',')
+        .map(|part| {
+            part.trim().parse::<u16>().map_err(|_| {
+                CommandOutput::err(exit::USAGE, format!("bad {what} list `{raw}`; use `1,2,3`"))
+            })
+        })
+        .collect()
+}
+
+fn parse_u32_list(raw: &str, what: &str) -> Result<Vec<u32>, CommandOutput> {
+    raw.split(',')
+        .map(|part| {
+            part.trim().parse::<u32>().map_err(|_| {
+                CommandOutput::err(exit::USAGE, format!("bad {what} list `{raw}`; use `3,4`"))
+            })
+        })
+        .collect()
+}
+
+fn parse_search_filters(
+    opts: &SearchCliOptions,
+) -> Result<Vec<quran_search::Filter>, CommandOutput> {
+    let surah = opts.surah.as_deref().map(|raw| parse_id_list(raw, "surah")).transpose()?;
+    let page = opts.page.as_deref().map(|raw| parse_u32_list(raw, "page")).transpose()?;
+    super::quran_search_api::build_filters(
+        surah,
+        opts.juz.as_deref(),
+        page,
+        opts.revelation_place.as_deref(),
+        opts.global_range.as_deref(),
+    )
+    .map_err(|err| CommandOutput::err(exit::USAGE, err.to_string()))
+}
+
+fn parse_search_match_mode(raw: &str) -> Result<super::quran_search::MatchMode, CommandOutput> {
+    super::quran_search_api::parse_match_mode(Some(raw))
+        .map_err(|err| CommandOutput::err(exit::USAGE, err.to_string()))
+}
+
+fn parse_normalized_profile(
+    profile: Option<&str>,
+    rules: Option<&str>,
+) -> Result<super::quran_search::NormalizedProfile, CommandOutput> {
+    super::quran_search_api::parse_normalized_profile(profile, rules)
+        .map_err(|err| CommandOutput::err(exit::USAGE, err.to_string()))
+}
+
+/// `quran search` — all five lexical tools behind one command (P2-T52).
+///
+/// Human output is one block per hit (`reference — text`, spans and traces
+/// with `--explain`); `--json` carries the full [`super::quran_search::SearchOutput`].
+pub async fn cmd_search(db_path: &str, opts: &SearchCliOptions) -> CommandOutput {
+    use super::quran_search::{ExactField, PhraseMode, SearchParams};
+    use super::quran_search_api::{
+        ConcatenatedArgs, ExactArgs, NormalizedArgs, PhraseArgs, RegexArgs,
+    };
+
+    if opts.text.trim().is_empty() {
+        return CommandOutput::err(exit::USAGE, "provide query text".to_string());
+    }
+    let service = match super::quran_search_api::SearchApiService::open(db_path).await {
+        Ok(service) => service,
+        Err(message) => return CommandOutput::err(exit::INTERNAL, message),
+    };
+    let filters = match parse_search_filters(opts) {
+        Ok(filters) => filters,
+        Err(output) => return output,
+    };
+    let limit = opts.limit.clamp(1, 1000);
+    let base = SearchParams {
+        text: opts.text.clone(),
+        edition: opts.edition.clone(),
+        mode: match parse_search_match_mode(&opts.match_mode) {
+            Ok(mode) => mode,
+            Err(output) => return output,
+        },
+        filters,
+        limit,
+        offset: opts.offset,
+        explain: opts.explain,
+        highlight: opts.highlight,
+    };
+    let output = match opts.mode {
+        SearchCliMode::Exact => {
+            let field = match opts.field.as_deref().unwrap_or("text_exact") {
+                "text_exact" => ExactField::TextExact,
+                "text_ws" => ExactField::TextWs,
+                other => {
+                    return CommandOutput::err(
+                        exit::USAGE,
+                        format!("unknown exact field `{other}`; use `text_exact` or `text_ws`"),
+                    );
+                }
+            };
+            use super::quran_search_api::SearchBackend as _;
+            service.search_exact(ExactArgs { params: base, field }).await
+        }
+        SearchCliMode::Normalized => {
+            let profile =
+                match parse_normalized_profile(opts.profile.as_deref(), opts.rules.as_deref()) {
+                    Ok(profile) => profile,
+                    Err(output) => return output,
+                };
+            use super::quran_search_api::SearchBackend as _;
+            service.search_normalized(NormalizedArgs { params: base, profile }).await
+        }
+        SearchCliMode::Phrase => {
+            let mode = match opts.phrase_mode.as_str() {
+                "ordered_exact" => PhraseMode::OrderedExact,
+                "ordered_near" => PhraseMode::OrderedNear,
+                "unordered_near" => PhraseMode::UnorderedNear,
+                other => {
+                    return CommandOutput::err(
+                        exit::USAGE,
+                        format!(
+                            "unknown phrase mode `{other}`; use `ordered_exact`, `ordered_near`, or `unordered_near`"
+                        ),
+                    );
+                }
+            };
+            let profile =
+                match parse_normalized_profile(opts.profile.as_deref(), opts.rules.as_deref()) {
+                    Ok(profile) => profile,
+                    Err(output) => return output,
+                };
+            use super::quran_search_api::SearchBackend as _;
+            service.search_phrase(PhraseArgs { params: base, profile, mode, slop: opts.slop }).await
+        }
+        SearchCliMode::Concatenated => {
+            use super::quran_search_api::SearchBackend as _;
+            service
+                .search_concatenated(ConcatenatedArgs {
+                    params: base,
+                    allow_cross_ayah: opts.allow_cross_ayah,
+                    max_ayah_span: opts.max_ayah_span.max(1),
+                })
+                .await
+        }
+        SearchCliMode::Regex => {
+            let field = opts.field.clone().unwrap_or_else(|| "text_bare".to_string());
+            use super::quran_search_api::SearchBackend as _;
+            service
+                .search_regex(RegexArgs {
+                    params: base,
+                    field,
+                    pattern: opts.text.clone(),
+                    principal: "cli".to_string(),
+                    timeout_ms: opts.timeout_ms.clamp(1, 10_000),
+                })
+                .await
+        }
+    };
+    let output = match output {
+        Ok(output) => output,
+        Err(err) => {
+            let (exit, message) = map_search_error(err);
+            return CommandOutput::err(exit, message);
+        }
+    };
+    let mut human = format!(
+        "{} matches (total {}, {})\nrule set: {} · generation {}\n",
+        output.hits.len(),
+        output.total_matches,
+        if output.truncated { "truncated" } else { "complete" },
+        output.rule_set,
+        output.generation
+    );
+    for hit in &output.hits {
+        let value = serde_json::to_value(hit).unwrap_or_default();
+        let reference = value.get("reference").and_then(|v| v.as_str()).unwrap_or("?");
+        let text = value
+            .get("quotation")
+            .and_then(|v| v.get("arabic_text"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("?");
+        human.push_str(&format!("{reference} — {text}\n"));
+        if opts.explain {
+            let rules = value
+                .get("explanation")
+                .and_then(|v| v.get("rules_applied"))
+                .and_then(|v| v.as_array())
+                .map(|rules| {
+                    rules
+                        .iter()
+                        .filter_map(|r| r.get("rule").and_then(|v| v.as_str()))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                })
+                .unwrap_or_default();
+            let score =
+                value.get("score").map(|v| v.to_string()).unwrap_or_else(|| "—".to_string());
+            human.push_str(&format!("  rules: {rules} · score: {score}\n"));
+        }
+    }
+    for warning in &output.warnings {
+        human.push_str(&format!("warning [{}]: {}\n", warning.code, warning.message));
+    }
+    CommandOutput::ok(human, serde_json::to_value(&output).unwrap_or_default())
+}
