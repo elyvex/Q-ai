@@ -2,6 +2,22 @@
 
 > Completed tasks across all phases. Newest first.
 
+## Phase 2 — P2-T51/T52 search API + CLI surfaces, 2026-09-23
+
+- `POST /api/v1/quran/search/{exact,normalized,phrase,concatenated,regex}` serve the
+  read-only M3 services in the stable envelope (Diagnostic bodies, `Content-Language: ar`);
+  `Accept: text/event-stream` streams `hit` events plus a terminal `totals` event with the
+  exact total and reproducibility block. Regex rate-limiting is per `x-principal`.
+- `qai quran search <text>` covers all five tools with profile/rules, phrase, cross-ayah,
+  filter, paging, `--explain`, `--highlight`, and `--json` support; tool flags are exclusive.
+- Evidence: server api suite 17/17 (4 new), CLI quran suite 4/4 (new `search.trycmd`,
+  13 blocks), application `search_tools` 14/14 + `search_cache` 6/6 unchanged;
+  workspace fmt/clippy `-D warnings`, arch-check, migrate-check green. Full-workspace
+  `cargo test` exceeds the 15-minute command timeout (pre-existing suite size; targeted
+  crates all green).
+- Remaining: T53–T56 (goldens, DoS suite, latency gates, ADRs), entire M4–M7,
+  morphology/root endpoints (no datasets yet), true incremental SSE streaming.
+
 ## Phase 0 — FU-10/DEV-02 catalog CLI dispatch, 2026-09-18
 
 - Real read-only dispatch for `source list/show`, `job list/show`, `audit list`,
