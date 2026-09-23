@@ -485,6 +485,10 @@ async fn advance(
     let state = if fatal == 0 { "staged" } else { "failed" };
     set_checkpoint(db, &batch_id, state, IMPORT_CHECKPOINTS[11], Some(&now())).await?;
     checkpoint_cb(IMPORT_CHECKPOINTS[11]);
+    // A cancel arriving at the last checkpoint is still honoured: staging may
+    // be complete, but no activation may follow a cancelled run (the caller
+    // treats the batch as cancelled and re-runs idempotently).
+    cancel_check(cancel)?;
 
     let mut finding_counts: BTreeMap<String, usize> = BTreeMap::new();
     for finding in &findings {
