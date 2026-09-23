@@ -212,6 +212,8 @@ struct Serving {
     edition_slug: String,
     edition_version: String,
     generation: i64,
+    /// Build generation serving (`gen-<N>` on disk; trigram postings live here).
+    build_generation: u64,
     stale: Option<Warning>,
     surahs: HashMap<i64, storage::quran::SurahRow>,
     script: String,
@@ -303,6 +305,7 @@ async fn open_serving(
         edition_slug: edition.slug.clone(),
         edition_version: edition.version.clone(),
         generation: manifest.corpus_generation as i64,
+        build_generation: pointer.generation as u64,
         stale,
         surahs,
         script: edition.script.clone(),
@@ -1371,15 +1374,11 @@ async fn uow_text(
     })
 }
 
-/// Character trigrams of a skeleton query (candidate recall, T36 will index
-/// these; until then the same trigrams drive `LIKE` probes over the stored
-/// skeleton strings).
+/// Character trigrams of a skeleton query (candidate recall).
+/// Single implementation behind [`quran_search::trigrams_of`]; the posting
+/// index (T36) and the pre-T36 scan fallback share these exact probes.
 fn query_trigrams(skeleton: &str) -> Vec<String> {
-    let chars: Vec<char> = skeleton.chars().collect();
-    if chars.len() < 3 {
-        return Vec::new();
-    }
-    chars.windows(3).map(|window| window.iter().collect()).collect()
+    quran_search::trigrams_of(skeleton)
 }
 
 /// Geometry of a verified concatenated match, in normalized-input space.
@@ -1516,44 +1515,70 @@ pub async fn search_concatenated(
         });
     }
 
-    // Candidate generation: every trigram must occur (short queries probe
-    // the whole skeleton directly). Ayah-level rows always; window rows only
-    // when cross-ayah search is enabled and within the span budget. Windows
-    // never cross a surah boundary (migration CHECK + builder guarantee).
-    let mut uow = db.write().await.map_err(SearchError::storage)?;
+    // Candidate generation: posting index first (T36), Rust scan fallback.
+    // The posting file lives in the serving generation directory; pre-T36
+    // generations and sub-3-char queries fall back to probing every stored
+    // skeleton (same recall, slower). Ayah-level rows always; window rows
+    // only when cross-ayah search is enabled and within the span budget.
+    // Windows never cross a surah boundary (migration CHECK + builder guarantee).
     // (surah, start, end): end == start for ayah-level rows.
     let mut recalled: Vec<(u16, u32, u32)> = Vec::new();
-    // All ayahs with skeletons: probe in Rust (one ordered read; the T36
-    // trigram posting index will replace this scan).
-    let surahs =
-        uow.quran().list_surahs(&serving.edition_id).await.map_err(SearchError::storage)?;
-    uow.rollback().await.map_err(SearchError::storage)?;
-    for surah in &surahs {
-        let mut uow = db.write().await.map_err(SearchError::storage)?;
-        let skeletons = uow
-            .quran()
-            .list_skeletons(&serving.edition_id, surah.number)
-            .await
-            .map_err(SearchError::storage)?;
-        uow.rollback().await.map_err(SearchError::storage)?;
-        let trigrams = query_trigrams(&query_skeleton);
-        for row in &skeletons {
-            let is_window = row.ayah_start != row.ayah_end;
+    let trigrams = query_trigrams(&query_skeleton);
+    let posting_path = quran_search::trigram_path(index_root, serving.build_generation);
+    let posted = quran_search::recall(&posting_path, &trigrams).await.map_err(|err| {
+        SearchError::Index(IndexError::BuildFailed {
+            stage: "recall".to_string(),
+            detail: format!("trigram postings unreadable: {err}"),
+        })
+    })?;
+    if let Some(posted) = posted {
+        for addr in posted {
+            let is_window = addr.ayah_start != addr.ayah_end;
             if is_window {
                 if !allow_cross_ayah {
                     continue;
                 }
-                if row.ayah_end - row.ayah_start + 1 > i64::from(max_ayah_span) {
+                if addr.ayah_end - addr.ayah_start + 1 > i64::from(max_ayah_span) {
                     continue;
                 }
             }
-            let hits_trigrams = if trigrams.is_empty() {
-                row.skeleton.contains(&query_skeleton)
-            } else {
-                trigrams.iter().all(|trigram| row.skeleton.contains(trigram))
-            };
-            if hits_trigrams {
-                recalled.push((surah.number as u16, row.ayah_start as u32, row.ayah_end as u32));
+            recalled.push((addr.surah as u16, addr.ayah_start as u32, addr.ayah_end as u32));
+        }
+    } else {
+        let mut uow = db.write().await.map_err(SearchError::storage)?;
+        let surahs =
+            uow.quran().list_surahs(&serving.edition_id).await.map_err(SearchError::storage)?;
+        uow.rollback().await.map_err(SearchError::storage)?;
+        for surah in &surahs {
+            let mut uow = db.write().await.map_err(SearchError::storage)?;
+            let skeletons = uow
+                .quran()
+                .list_skeletons(&serving.edition_id, surah.number)
+                .await
+                .map_err(SearchError::storage)?;
+            uow.rollback().await.map_err(SearchError::storage)?;
+            for row in &skeletons {
+                let is_window = row.ayah_start != row.ayah_end;
+                if is_window {
+                    if !allow_cross_ayah {
+                        continue;
+                    }
+                    if row.ayah_end - row.ayah_start + 1 > i64::from(max_ayah_span) {
+                        continue;
+                    }
+                }
+                let hits_trigrams = if trigrams.is_empty() {
+                    row.skeleton.contains(&query_skeleton)
+                } else {
+                    trigrams.iter().all(|trigram| row.skeleton.contains(trigram))
+                };
+                if hits_trigrams {
+                    recalled.push((
+                        surah.number as u16,
+                        row.ayah_start as u32,
+                        row.ayah_end as u32,
+                    ));
+                }
             }
         }
     }
