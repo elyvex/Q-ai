@@ -1,0 +1,139 @@
+# Phase 2 CLI acceptance — search surfaces (M3, P2-T51/T52).
+#
+# `QAI_DATA_DIR` points the real `qai` binary at a fresh temp database (set by
+# the harness). Every search below runs against `test-edition-min` with its
+# forms rebuilt and `quran.ayah.v1` generation 1 active, so hits, rule sets,
+# and spans are deterministic for this synthetic edition.
+
+```console
+$ qai db migrate
+migrations applied; schema version [..]
+
+```
+
+```console
+$ qai quran import ../../fixtures/quran/test-edition-min/manifest.json
+imported test-edition-min@0.1.0 to Staged
+note: synthetic test data — non-canonical (ADR-0101 fallback)
+
+```
+
+```console
+$ qai quran activate test-edition-min@0.1.0 --yes
+activated test-edition-min@0.1.0 (generation 1)
+
+```
+
+```console
+$ qai quran forms rebuild test-edition-min@0.1.0
+rebuilt forms for quran-edition:test-edition-min@0.1.0: 14 ayahs, 64 tokens, 18 skeletons (generation 1)
+MV-018 canonical-unchanged: pass (sha256:235795cb218c2df44496265b4ba5c3377d48944cb28cc4ff64c6104770932704)
+provenance: prov-forms-test-edition-min-0.1.0-g1-75e0e98f12bf
+
+```
+
+```console
+$ qai quran index rebuild
+index quran.ayah.v1 generation 1 active: 14 docs (corpus generation 1)
+manifest: sha256:9d1c3cfec9084d2471310ae8319fa06ec2a216decdf66dfe4eee6127dd056c2c
+previous generation: none
+
+```
+
+Exact search uses no linguistic expansion: the whole token `ثش` matches 1:3.
+
+```console
+$ qai quran search 'ثش' --exact
+1 matches (total 3, complete)
+rule set: L0.exact@1.0.0 · generation 1
+quran:test-edition-min@0.1.0:1:3 — ثش ويُت سُاكنَ
+
+```
+
+Normalized search (the default) bridges diacritics through L3.
+
+```console
+$ qai quran search 'تساكن'
+2 matches (total 2, complete)
+rule set: L3.diacritics@1.0.0 · generation 1
+quran:test-edition-min@0.1.0:1:1 — أوَيت تَساكُن كن لهُم ثُشأوَ
+quran:test-edition-min@0.1.0:5:1 — أُويتَ تساَكن كنَ لَهم ثشأُو
+
+```
+
+Phrase search verifies order and gaps; every span satisfies the mode.
+
+```console
+$ qai quran search 'كن لهم' --phrase
+3 matches (total 3, complete)
+rule set: L3.diacritics@1.0.0 · generation 1
+quran:test-edition-min@0.1.0:1:1 — أوَيت تَساكُن كن لهُم ثُشأوَ
+quran:test-edition-min@0.1.0:2:2 — كن لهَم ثَشأوُ
+quran:test-edition-min@0.1.0:5:1 — أُويتَ تساَكن كنَ لَهم ثشأُو
+
+```
+
+Concatenated search matches across token boundaries via the L6 skeleton.
+
+```console
+$ qai quran search 'كنلهم' --concatenated
+3 matches (total 3, complete)
+rule set: L6.skeleton@1.0.0 · generation 1
+quran:test-edition-min@0.1.0:1:1 — أوَيت تَساكُن كن لهُم ثُشأوَ
+quran:test-edition-min@0.1.0:2:2 — كن لهَم ثَشأوُ
+quran:test-edition-min@0.1.0:5:1 — أُويتَ تساَكن كنَ لَهم ثشأُو
+
+```
+
+Regex search is DFA-bounded; the field allowlist rejects raw scans.
+
+```console
+$ qai quran search --regex '^ثش' --field text_bare
+3 matches (total 8, complete)
+rule set: L3.diacritics@1.0.0 · generation 1
+quran:test-edition-min@0.1.0:1:3 — ثش ويُت سُاكنَ
+quran:test-edition-min@0.1.0:3:3 — ثُشأوَ ويتَسا ساَ نَبل همثُش
+quran:test-edition-min@0.1.0:5:3 — ثشَ وَيت ساكُن
+
+```
+
+Surah filters narrow every tool identically.
+
+```console
+$ qai quran search 'كن لهم' --phrase --surah 2
+1 matches (total 1, complete)
+rule set: L3.diacritics@1.0.0 · generation 1
+quran:test-edition-min@0.1.0:2:2 — كن لهَم ثَشأوُ
+
+```
+
+`--explain` serves relevance order with rule lists and BM25 breakdowns.
+
+```console
+$ qai quran search 'تساكن' --explain
+2 matches (total 2, complete)
+rule set: L3.diacritics@1.0.0 · generation 1
+quran:test-edition-min@0.1.0:1:1 — أوَيت تَساكُن كن لهُم ثُشأوَ
+  rules: N01,N11,N16,N04,N14,N03,N05,N02 · score: -1.5029562711715698
+quran:test-edition-min@0.1.0:5:1 — أُويتَ تساَكن كنَ لَهم ثشأُو
+  rules: N01,N11,N16,N04,N14,N03,N05,N02 · score: -1.5492463111877441
+
+```
+
+Tool flags are exclusive: at most one tool per invocation.
+
+```console
+$ qai quran search 'x' --exact --phrase
+? 2
+error: use only one of --exact, --phrase, --concatenated, --regex
+
+```
+
+Unknown match modes fail closed with a usage error.
+
+```console
+$ qai quran search 'x' --match-mode nope
+? 2
+error: query rejected: unknown match mode `nope`; use `whole_token`, `substring`, or `ayah_prefix`
+
+```

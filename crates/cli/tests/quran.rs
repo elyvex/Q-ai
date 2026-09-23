@@ -31,6 +31,12 @@ fn quran_normalize_snapshots() {
     run_cases("tests/quran/normalize.trycmd");
 }
 
+/// Phase 2 search surfaces (P2-T51/T52).
+#[test]
+fn quran_search_snapshots() {
+    run_cases("tests/quran/search.trycmd");
+}
+
 /// Upstream catalog ingestion (metadata-only, no database).
 #[test]
 fn quran_catalog_snapshots() {
