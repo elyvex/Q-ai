@@ -121,7 +121,8 @@ fn sentinel_key_value_pairs_scrubbed_from_free_text() {
     assert!(json.contains("***REDACTED***"));
     assert!(json.contains("auth.rs:42"));
 
-    // DEBUG: test nested secret redaction
+    // Nested-secret redaction through the JSON helper (same boundary the
+    // CLI render paths use).
     let mut payload = serde_json::json!({
         "storage": { "sqlite": { "path": "/tmp/qai.db" } },
         "logging": { "level": "info" },
