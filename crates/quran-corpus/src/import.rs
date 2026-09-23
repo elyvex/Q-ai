@@ -985,6 +985,9 @@ impl<'a> Driver<'a> {
                 format!("quran-edition:{reference_id}@{version}"),
                 serde_json::json!({
                     "method": "exact-ayah-bytes-v1",
+                    "comparison_kind": "reference",
+                    "classification_vocabulary": crate::differ::CLASSIFICATION_VOCABULARY,
+                    "normalization_applied": [],
                     "reference_corpus_id": reference_id,
                     "reference_version": version,
                     "reference_text_hash": hash,
