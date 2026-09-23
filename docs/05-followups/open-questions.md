@@ -11,6 +11,10 @@
   container files.
 - Rechecked 2026-09-23: daemon socket still absent (`docker info` fails); T56
   stays ◐. No container files touched.
+- Rechecked 2026-09-24: daemon socket still absent (`docker info` fails with
+  "connect: no such file or directory" on
+  `unix:///Users/ali/.docker/run/docker.sock`); T56 stays ◐. Compose config
+  validation is the only evidence available without a daemon.
 
 ## Jobs scheduling — P0-T39/T40, 2026-09-17
 
