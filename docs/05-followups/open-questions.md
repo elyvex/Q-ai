@@ -60,9 +60,20 @@
   unscrubbed.
 - **Mitigations in place:** Telemetry is off by default; the content-field
   denylist (`is_forbidden_field`) gates export payloads (AC-P0-18).
-- **Open:** Add span-field scrubbing for the OTLP exporter when
-  `redact_secrets=true` (either a span processor or an OTLP-specific
-  `FormatFields` hook). Record as a follow-up task for Phase 3 or later.
+- **Update 2026-09-24 — implemented:** exporter-boundary scrubbing landed.
+  `telemetry::is_scrubbed_span_field` unions the content denylist with
+  `domain::redaction::is_secret_key` (Rule A); `otlp::ScrubbingProcessor`
+  strips matching attribute keys from spans and their events in `on_end`
+  before delegating to the batch exporter, and `build_provider` wires it in.
+  Tests: `scrubbed_span_fields_cover_denylist_and_secret_names`,
+  `scrub_span_attributes_drops_denylisted_and_secret_keys`,
+  `processor_strips_scrubbed_attributes_before_delegation`
+  (`cargo test -p observability --features otlp` 14/14 green; clippy
+  `-D warnings` clean). Attribute keys are dropped, not marker-replaced —
+  OTLP has no redaction-marker convention and a dropped key cannot leak.
+- **Remaining:** owner ratification of the drop-vs-marker choice (record in
+  `decisions-needed.md` if contested); live-endpoint smoke stays manual
+  (the `builds_a_provider_for_a_valid_endpoint` test is `#[ignore]`).
 
 ## Orchestrator second pass — 2026-09-22 (recommendations, pending ratification)
 
