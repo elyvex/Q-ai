@@ -48,7 +48,7 @@ with what evidence.
 | 2.0 — Dataset & Linguistic Decisions | 12 | 0 | 30.5 | — | ☐ |
 | 2.1 — Normalization Engine | 12 | 3 | 28.5 | — | ☐ |
 | 2.2 — Derived Forms & FTS Foundation | 15 | 10 | 33.5 | — | ☐ |
-| 2.3 — Search Tools | 17 | 11 | 42.0 | — | ☐ |
+| 2.3 — Search Tools | 17 | 13 | 42.0 | — | ☐ |
 | 2.4 — Morphology Import & Lexicons | 18 | 0 | 45.0 | — | ☐ |
 | 2.5 — Morphology & Family Tools | 19 | 0 | 47.5 | — | ☐ |
 | 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 0 | 51.0 | — | ☐ |
