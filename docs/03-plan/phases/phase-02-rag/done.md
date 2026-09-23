@@ -191,6 +191,22 @@ _None completed yet._
 - **DoD:** ✅ all items / every rule declares `is_idempotent` and honors it on fuzz input; second application total everywhere
 - **Notes:** none.
 
+### Review Boundary — Not Flipped (2026-09-24)
+
+Engineering work exists for the items below, but they are **deliberately not recorded as
+complete** because an external or human decision is still required.
+
+| Scope | State | What is still required to flip |
+|---|---|---|
+| P2-T21 normalization golden harness | ◐ | Harness is green over all 2,000 pairs, but `fixtures/quran/normalization/pairs.jsonl` reads `reviewed_by: pending-linguist`. P2-T11 linguist sign-off (P2-X02) must replace that header before T21/AC-P2-03 can be ☑. |
+| P2-T39 / P2-T56 ADR bundles | ☐ | ADR-0201, 0207, 0208, 0212, 0213, 0214 exist with §48 fields but remain `Proposed`. Owner acceptance (not authorship) is the only missing step. |
+| Sprint 2.0 + Swimlane X (T01–T12, X01–X05) | ☐ | Dataset licensing, linguist engagement, and the root/tagset/counting decisions are owner- or linguist-led. Engineering fallbacks (test lexicon, code-pinned mapping tables, unsigned golden seeds) are in place; the decisions themselves are not agent-satisfiable. |
+
+**Concurrent-work boundary:** the in-progress morphology workstream
+(`migrations/sqlite/0017_quran_lexicon.up.sql`, the `storage`/`storage-sqlite` repository
+changes, and untracked `crates/application/src/quran_morphology.rs`) was left untouched by
+this close-out. It is separate work, not evidence for any task flipped above.
+
 ### Sprint 2.2 — Derived Forms & FTS Foundation
 
 ### P2-T25 — Migration `0014_quran_forms`
