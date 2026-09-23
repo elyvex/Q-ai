@@ -11,6 +11,19 @@ exit requirement.
 > evidence entry is appended to `done.md` in the same commit. Gates (fmt, clippy
 > `-D warnings`, tests, arch-check, migrate-check) run per task, not per milestone.
 
+> **Code-provenance note (2026-09-24):** `crates/quran-graph` (2,883 lines) and
+> `crates/quran-morphology` (2,534 lines) landed in-tree across 81 unpushed
+> local commits while this board still read 0/30 — code is ahead of its
+> paperwork. Verified this date: `cargo test -p quran-graph` 34/34 green
+> (lib 20 + conformance 6 + no-query-language 2 + structural 1 + traversal 5),
+> `cargo test -p quran-morphology` 52/52 green, clippy `-D warnings` clean,
+> `cargo fmt --check` clean, `cargo xtask arch-check` OK, `cargo xtask
+> migrate-check` OK (19 migrations, incl. graph + morphology + lexicon tables).
+> Four tasks move ☐ → ◐ below on that evidence; **none is ☑** (M0 decisions
+> unmade, SQLite adapter / application wiring / CLI / HTTP / doctor absent,
+> DoD + `done.md` evidence entries pending with the owning session).
+> M5 stays ⊘ (no licensed morphology dataset; Phase-2 Sprints 2.4–2.5 at 0 tasks).
+
 ---
 
 ## 1. Swimlane X — external decisions (start immediately, run in parallel)
