@@ -1,7 +1,7 @@
 # Phase 2 — Completion Ledger
 
 **Phase:** P2 — Quran Search, Arabic Normalization, Morphology & Word Families
-**Status:** 🟡 In Progress — 26 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 4 / 6 migrations
+**Status:** 🟡 In Progress — 34 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 4 / 6 migrations
 **Started:** 2026-09-14
 **Completed:** —
 
@@ -46,13 +46,13 @@ with what evidence.
 |---|---|---|---|---|---|
 | X — External-lead-time decisions | 5 | 0 | — | — | ☐ |
 | 2.0 — Dataset & Linguistic Decisions | 12 | 0 | 30.5 | — | ☐ |
-| 2.1 — Normalization Engine | 12 | 3 | 28.5 | — | ☐ |
+| 2.1 — Normalization Engine | 12 | 11 | 28.5 | — | ◐ |
 | 2.2 — Derived Forms & FTS Foundation | 15 | 10 | 33.5 | — | ☐ |
 | 2.3 — Search Tools | 17 | 13 | 42.0 | — | ☐ |
 | 2.4 — Morphology Import & Lexicons | 18 | 0 | 45.0 | — | ☐ |
 | 2.5 — Morphology & Family Tools | 19 | 0 | 47.5 | — | ☐ |
 | 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 0 | 51.0 | — | ☐ |
-| **Total** | **114 + 5** | **26** | **278.0** | **—** | **23%** |
+| **Total** | **114 + 5** | **34** | **278.0** | **—** | **30%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -117,6 +117,78 @@ _None completed yet._
 - **PR / commit:** working tree; landed via owner commits (see `git log -- crates/server/src/api.rs`)
 - **Evidence:** `crates/server/tests/api.rs::normalization_preview_matches_cli_pipeline` (incl. AC-P2-39 byte-identical trace vs the CLI pipeline path), `::normalization_profiles_lists_ladder`; OpenAPI entries in `docs/08-api/quran-v1-openapi.json` (coverage test extended)
 - **DoD:** ✅ all items / envelope + `QAI-NORM-*` error bodies; no new workspace edges (server renders via `application::quran_normalize` re-exports)
+- **Notes:** none.
+
+### P2-T13 — `quran-normalization` crate skeleton, `RuleId`, `NormalizationRule` trait
+- **Deliverable:** D2.1
+- **Completed:** 2026-09-24
+- **Owner:** agent (BE)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/quran-normalization/src/rule.rs crates/quran-normalization/src/lib.rs`)
+- **Evidence:** `crates/quran-normalization/src/rule.rs` (`RuleId` N01–N24 append-only with `as_str`/`parse`/`name`, `RuleKind`, `NormalizationRule` trait, `NormalizedText` carrying its `SpanMap`); `cargo test -p quran-normalization` 89/89 green incl. `rule::tests` 4/4 (`catalog_has_24_stable_ids`, unknown-rule code, heuristic/reserved flags, identity map); `cargo clippy -p quran-normalization --all-targets -- -D warnings` clean; `cargo fmt --check` clean
+- **DoD:** ✅ all items / pure logic (no I/O, no async, `domain`-only deps); typed `QAI-NORM-*` errors with remedy + next command; `arch-check` unaffected (allowlist already covers the crate)
+- **Notes:** review-pass flip of M1a/M1b work: implementation landed in earlier sessions, tasks stayed ☐ pending this verification. Reserved N23/N24 parse but have no implementation (`by_id` returns `None` → `UnknownRule`); ADR-0206 stays Reserved.
+
+### P2-T14 — `SpanMap`: segments, compose, to_canonical, to_derived
+- **Deliverable:** D2.1
+- **Completed:** 2026-09-24
+- **Owner:** agent (BE)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/quran-normalization/src/span.rs`)
+- **Evidence:** `crates/quran-normalization/src/span.rs` (total derived→canonical function, tight-hull `to_canonical`, `to_derived` with `None` on fully-deleted regions, debug-asserted `compose`, grouped `segments` with provenance); `span::tests` 8 unit + 2 proptest green (identity fixed-point, deletion hull, clamping/inexact, empty, dangling-image rejection, chained deletions, multibyte `byte_range_in`, segment provenance)
+- **DoD:** ✅ all items / offsets are char indices with `byte_range_in` deriving byte ranges on demand (nothing stores redundant offsets); grapheme-boundary safety asserted via re-normalization containment (P5) rather than a new dependency
+- **Notes:** representation is the interim total-function form; ADR-0208 stays Proposed (owner acceptance pending, P2-T39). Tight-hull semantics (containment, not equality) per plan §3.4 property-5 wording.
+
+### P2-T15 — `SpanMap` property tests (5 properties × all ayahs × all profiles)
+- **Deliverable:** D2.13
+- **Completed:** 2026-09-24
+- **Owner:** agent (QA)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/quran-normalization/tests/spanmap_properties.rs`)
+- **Evidence:** `crates/quran-normalization/tests/spanmap_properties.rs` 7/7 green: P1 round-trip containment, P2 in-bounds + exactness contract, P3 pipeline-split associativity, P4 L0 identity, P5 re-normalization containment (deterministic L0–L6; L7 excluded by design — single-pass leading-edge heuristics diverge under hull slicing, documented in-file; L7 verifies via full-ayah `scan_match`), plus pipeline Unicode fuzz and random-map associativity proptests; 18-case synthetic corpus exercising every rule family
+- **DoD:** ✅ all items / every indexed profile (L0–L7; L8 shares the L5 rule list and is covered via L5); full-mushaf sweep reuses these assertions once a licensed corpus lands (P2-X01)
+- **Notes:** this session repaired 2 clippy lints in this file (`single_range_in_vec_init`, `needless_borrows_for_generic_args`) — test-only, no assertion changed; re-ran 7/7 green after the fix.
+
+### P2-T16 — Implement deterministic rules N01–N17
+- **Deliverable:** D2.1
+- **Completed:** 2026-09-24
+- **Owner:** agent (BE)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/quran-normalization/src/rules/n01.rs`)
+- **Evidence:** `crates/quran-normalization/src/rules/n01.rs`…`n17.rs` (each with a `mapping_table` unit test pinning the code-point table); `crates/quran-normalization/tests/deterministic_rules.rs` 7/7 (N01–N17 registry coverage, basmala→bare/skeleton seeds, totality + idempotency + span round-trip on fuzz Unicode); `tests/normalization_vectors.rs` 2/2 (per-rule vector files incl. N02 exact match); N16 cross-checked against reference NFC (starter-tracked offsets)
+- **DoD:** ✅ all items / every rule pure + total over Unicode, emits its own `SpanMap`, declares `is_idempotent`; N06 standalone-hamza deletion (∅ default), N12 explicit v1 punctuation set, N15 limited to Forms-B lam-alef ligatures — all documented in-module pending ADR-0204 linguist review
+- **Notes:** ⚠️ exception: linguist review of the catalog (rule correctness + loss statements) is P2-T05 scope and remains open (P2-X02); the mapping tables are pinned as code so review has a fixed target.
+
+### P2-T17 — Implement heuristic rules N18–N22 with `RuleKind::Heuristic` tagging
+- **Deliverable:** D2.1
+- **Completed:** 2026-09-24
+- **Owner:** agent (BE)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/quran-normalization/src/rules/n18.rs`)
+- **Evidence:** `crates/quran-normalization/src/rules/n18.rs`…`n22.rs` (fixpoint edge-strip with ≥2-char letter guards, N22 run-collapse); `heuristic_rules()` registry; `kind_is_heuristic` unit tests 5/5; `rule::tests::heuristic_and_reserved_flags_match_plan`; L7 end-to-end basmala-word pipeline test with heuristic flag asserted; `trace::tests::heuristic_flag_derives_from_kinds`
+- **DoD:** ✅ all items / `RuleKind::Heuristic` is part of the type (not docs): traces derive `contains_heuristic_rules` from kinds, L7 profile is flagged, CLI/API render the mandatory label downstream (T23/T24/T51/T52 already ☑ on this basis)
+- **Notes:** single-pass order documented (`والكتابه`→`الكتاب`: N18 runs before N19 exposes the article).
+
+### P2-T18 — `NormalizationPipeline` + profile registry + immutability enforcement
+- **Deliverable:** D2.1
+- **Completed:** 2026-09-24
+- **Owner:** agent (BE)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/quran-normalization/src/pipeline.rs crates/quran-normalization/src/profile.rs`)
+- **Evidence:** `pipeline.rs` (profile + `adhoc:<sha12>` builds; text+trace returned together, never separately; `apply_detailed` per-rule steps for `--explain`); `profile.rs` (v1 L0–L8 ladders exactly per plan §3.3, `register` rejects same-key different-rules with `ProfileImmutable` QAI-NORM-0003, unknown versions never fall back); `profile::tests` 5/5 + `pipeline::tests` 4/4 + `tests/normalization_pipeline.rs` 6/6 (identity, determinism, distinct labels, trace-required, L7 E2E, heuristic flags); seeding guard `seed_matches_code` (T19) locks DB/code agreement
+- **DoD:** ✅ all items / profile ladder frozen append-only: a rule-list change requires a new version + rebuild + drift report; query and index paths share the one pipeline (R6 by construction, parity suite T32 ☑)
+- **Notes:** L8 shares the L5 rule list (fuzziness is query-time Levenshtein, not a rule); ADR-0205 stays Proposed pending owner acceptance.
+
+### P2-T20 — `NormalizationTrace` type + no-default-constructor guard
+- **Deliverable:** D2.1
+- **Completed:** 2026-09-24
+- **Owner:** agent (BE)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/quran-normalization/src/trace.rs`)
+- **Evidence:** `trace.rs` (`NormalizationTrace::new` rejects blank profile labels with `EmptyProfile`; heuristic flag derived from rule kinds; JSON round-trip); `trace::tests` 3/3; `normalization_pipeline::trace_is_required_for_results`; pipeline returns text+trace together (no trace-less path exists); `SearchHit::new` requires a trace (T40 ☑ builds the compile-time guard on top)
+- **DoD:** ✅ all items / I9 at the type level: no constructor for an unlabeled result, mirroring Phase 1 `QuranQuotation`
+- **Notes:** none.
+
+### P2-T22 — Idempotency + associativity + fuzz (no panic on any Unicode input)
+- **Deliverable:** D2.13
+- **Completed:** 2026-09-24
+- **Owner:** agent (QA)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/quran-normalization/tests/deterministic_rules.rs crates/quran-normalization/tests/spanmap_properties.rs`)
+- **Evidence:** `no_panic_on_arbitrary_unicode` + `idempotent_on_arbitrary_unicode` + `span_round_trip_on_arbitrary_unicode` (every rule incl. heuristics, 256 proptest cases each) + `pipeline_total_over_arbitrary_unicode` (every indexed profile, text/map agreement + total second pass) + `composition_is_associative` / `spanmap_compose_associative_random`; full crate suite 89/89 green 2026-09-24
+- **DoD:** ✅ all items / every rule declares `is_idempotent` and honors it on fuzz input; second application total everywhere
 - **Notes:** none.
 
 ### Sprint 2.2 — Derived Forms & FTS Foundation
