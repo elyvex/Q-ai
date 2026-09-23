@@ -1,4 +1,4 @@
-# Phase 1 — Implementation Status (snapshot 2026-09-15; T58 update 2026-09-17)
+# Phase 1 — Implementation Status (snapshot 2026-09-15; T58 update 2026-09-17; status refresh 2026-09-23)
 
 > **Purpose:** one page that answers *what is implemented, what remains, and what
 > follows*. The authoritative, append-only ledgers are `done.md` (completion
@@ -12,16 +12,17 @@
 
 | Dimension | State |
 |---|---|
-| Task rows (excluding 3 sequencing notes) | **51 ☑ / 2 ◐ / 12 ☐** of 65 |
-| Acceptance criteria | **19 ◐ / 2 ☐** of 21 (none marked fully verified — rituals pending) |
+| Task rows (excluding 3 sequencing notes) | **53 ☑ / 2 ◐ / 10 ☐** of 65 |
+| Acceptance criteria | **20 ◐ / 1 ☐** of 21 (none marked fully verified — rituals pending) |
 | ADRs | **12 Accepted**, 2 Draft (0101, 0114) |
 | Phase-1 migrations | **6 / 6** (`0007`–`0012`); workspace now at 16 (Phase-2 added `0013`–`0016`) |
 | D1.14 documents | **5 / 5** published |
 | Gate | `clippy -D warnings` clean · `cargo test --workspace` 135 suites ok · `arch-check` OK · `migrate-check` OK · `fmt` clean for Phase-1 files |
 
-Remaining task IDs: `P1-X01..X05`, `P1-T01`, `P1-T02`, `P1-T03`, `P1-T26◐`,
-`P1-T55`, `P1-T56`, `P1-T58`, `P1-T60` (and `P1-T04◐`). `P1-T54` closed
-2026-09-22 as the OD-04 system-stack debug reader (no bundled font).
+Remaining task IDs: `P1-X01..X05`, `P1-T02`, `P1-T03`, `P1-T26◐`,
+`P1-T55`, `P1-T56`, `P1-T58◐`, `P1-T60`. Closed since the 2026-09-17 snapshot:
+`P1-T01` (dataset survey), `P1-T04` (ADRs), `P1-T54` (system-stack debug reader
+per OD-04, 2026-09-22).
 
 ## 1. Implemented (by surface)
 
@@ -96,15 +97,16 @@ Remaining task IDs: `P1-X01..X05`, `P1-T01`, `P1-T02`, `P1-T03`, `P1-T26◐`,
 AC-P1-02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 19, 20, 21.
 AC-P1-09 joined on 2026-09-15 via the activation-rejection state test.
 
-**Not started (2):** AC-P1-01 (dataset/license sign-off), AC-P1-18
-(debug-reader web font).
+**Not started (1):** AC-P1-01 (dataset/license sign-off). AC-P1-18 is ◐
+since 2026-09-23 (debug-reader tests 3/3 green; OD-04 resolved the "web font"
+phrase as a local-only system stack; ritual pending).
 
 ## 3. Remaining work
 
 ### 3.1 Blocked on owner/editorial decisions (cannot be done by an agent)
 | Task | Blocked on |
 |---|---|
-| `P1-X01`, `P1-T01`, `P1-T02`, `P1-T04` (ADR-0101) | Licensed dataset + named editorial reviewer |
+| `P1-X01`, `P1-T02` (ADR-0101) | Licensed dataset + named editorial reviewer (`P1-T01` survey and `P1-T04` ADRs done; selection/licence still owner-side) |
 | `P1-X02`, `P1-T55` | Named reviewer signs sampled text (`verified_by`) |
 | `P1-X03`, `P1-T03`, `P1-T26` (ADR-0114) | Reference corpus + comparison procedure + sign-off (QV-015 currently a recorded skip) |
 | `P1-X04` (morphology data), `P1-X05` (normalization linguist) | Phase-2 upstream decisions |
@@ -118,12 +120,13 @@ AC-P1-09 joined on 2026-09-15 via the activation-rejection state test.
 | `P1-T60` | Exit-gate review + handoff sign-off |
 
 ### 3.3 Board/ritual debt
-- `acceptance.md`: AC-P1-02/03/05/06/07/10/11 are ◐ with evidence recorded;
+- `acceptance.md`: AC-P1-02/03/05/06/07/10/11 are ◐ with evidence recorded
+  (AC-P1-18 joined them 2026-09-23);
   remaining ritual steps belong to the exit ritual (P1-T60), not board debt.
-- `done.md` §4: ADR table still shows 0111/0112 as Draft (header: 10 Accepted);
-  reality is 12 Accepted with 0101/0114 Draft pending owners — needs sync.
-- `tasks.md`: T39/T40 reconciled (☑); T54 correctly ☐ pending the font-asset
-  owner decision.
+- `done.md` §4: ADR table verified in sync 2026-09-23 (12 Accepted, 0101/0114
+  Draft pending owners) — the earlier "needs sync" note is retired.
+- `tasks.md`: T39/T40 reconciled (☑); T54 closed ☑ per OD-04 (the earlier
+  "correctly ☐" note is superseded by the 2026-09-22 OD-04 decision).
 
 ## 4. Follow-ups & deviations
 
