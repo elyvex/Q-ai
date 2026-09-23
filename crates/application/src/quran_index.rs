@@ -65,6 +65,12 @@ pub struct IndexBuildReport {
     pub manifest_hash: String,
     /// Previously serving generation, if any.
     pub previous_generation: Option<u64>,
+    /// Skeletons indexed into trigram postings (T36).
+    pub trigram_skeletons: u64,
+    /// Trigram posting rows written (T36).
+    pub trigram_postings: u64,
+    /// Posting-level self-recall checks passed during the build (T36).
+    pub trigram_verified: u64,
     /// MV-018 post-build check (always `unchanged` on success).
     pub mv018: crate::quran_forms::CanonicalCheck,
 }
@@ -281,6 +287,7 @@ pub async fn rebuild_index(
         morphology_dataset_versions: BTreeMap::new(),
         built_at: started_at.clone(),
         doc_count: 0,
+        trigram_postings: 0,
         content_hash: String::new(),
     };
     let index_root = params.data_dir.clone();
@@ -402,6 +409,69 @@ pub async fn rebuild_index(
     }
     checkpoint("built");
 
+    // 5b. Trigram posting index (P2-T36): every stored skeleton contributes
+    // its character-trigram set to `<root>/gen-<N>/trigram.db`. Derived from
+    // the same stored skeletons the pre-T36 scan probed, so recall is
+    // unchanged; verification still decides. Cancel-safe: staging is wiped
+    // on the next build and the pointer never names this generation yet.
+    let trigram_built = {
+        let mut posting_rows: Vec<(quran_search::SkelAddr, String)> = Vec::new();
+        for surah in &surahs {
+            if cancel.load(Ordering::SeqCst) {
+                fail_run(db, &run_id, "cancelled by operator").await;
+                return Err(IndexBuildError::Cancelled);
+            }
+            let mut uow = db.write().await.map_err(IndexBuildError::storage)?;
+            let skeletons = uow
+                .quran()
+                .list_skeletons(&edition_id, surah.number)
+                .await
+                .map_err(IndexBuildError::storage)?;
+            uow.rollback().await.map_err(IndexBuildError::storage)?;
+            posting_rows.extend(skeletons.into_iter().map(|row| {
+                (
+                    quran_search::SkelAddr {
+                        surah: row.surah,
+                        ayah_start: row.ayah_start,
+                        ayah_end: row.ayah_end,
+                    },
+                    row.skeleton,
+                )
+            }));
+        }
+        let trigram_file = quran_search::trigram_path(&index_root, generation);
+        let (skel_count, posting_count) = quran_search::trigram::build_postings(
+            &trigram_file,
+            &posting_rows,
+        )
+        .await
+        .map_err(|detail| {
+            IndexBuildError::Index(IndexError::BuildFailed { stage: "trigram".to_string(), detail })
+        })?;
+        // Posting-level verify: deterministic sample (every row under 2000,
+        // every 16th above) must resolve back to itself — no false negatives.
+        let sample: Vec<(quran_search::SkelAddr, String)> = if posting_rows.len() <= 2000 {
+            posting_rows.clone()
+        } else {
+            posting_rows
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| i % 16 == 0)
+                .map(|(_, row)| row.clone())
+                .collect()
+        };
+        let checked = quran_search::trigram::verify_postings(&trigram_file, &sample)
+            .await
+            .map_err(|detail| {
+                IndexBuildError::Index(IndexError::BuildFailed {
+                    stage: "trigram-verify".to_string(),
+                    detail,
+                })
+            })?;
+        (skel_count, posting_count, checked)
+    };
+    checkpoint("trigram");
+
     // 6. Commit, reopen with the counted manifest, verify.
     let stamp = staged.commit().await.map_err(IndexBuildError::Index)?;
     // Identity-bound (not row-surrogate-bound): re-imports of the same
@@ -422,6 +492,7 @@ pub async fn rebuild_index(
     let manifest_hash = format!("sha256:{manifest_hash}");
     let manifest = IndexManifest {
         doc_count: stamp.doc_count,
+        trigram_postings: trigram_built.1,
         content_hash: manifest_hash.clone(),
         ..manifest
     };
@@ -439,6 +510,13 @@ pub async fn rebuild_index(
         }));
     }
     checkpoint("verified");
+
+    // A cancelled build must never flip the pointer, even when every stage
+    // already succeeded (P2-T37 crash matrix).
+    if cancel.load(Ordering::SeqCst) {
+        fail_run(db, &run_id, "cancelled by operator").await;
+        return Err(IndexBuildError::Cancelled);
+    }
 
     // 7. MV-018 post-check, then the atomic flip (pointer + run states).
     let mv018 =
@@ -527,6 +605,9 @@ pub async fn rebuild_index(
         doc_count: stamp.doc_count,
         manifest_hash,
         previous_generation,
+        trigram_skeletons: trigram_built.0,
+        trigram_postings: trigram_built.1,
+        trigram_verified: trigram_built.2,
         mv018: crate::quran_forms::CanonicalCheck {
             edition_urn: mv018.edition_urn,
             expected_hash: mv018.expected_hash,
@@ -542,6 +623,147 @@ fn family_from(
     ladder: SemVer,
 ) -> Result<quran_search::TokenizerFamily, IndexBuildError> {
     quran_search::TokenizerFamily::new(registry, ladder).map_err(IndexBuildError::Index)
+}
+
+/// Parameters for index retention GC (P2-T35).
+#[derive(Debug, Clone)]
+pub struct GcParams {
+    /// Index id (defaults to [`QURAN_AYAH_INDEX_ID`]).
+    pub index_id: String,
+    /// Generations to retain on disk, newest-first including the active one.
+    /// Clamped to `>= 1`; the active generation is never removed even when
+    /// `keep` would exclude it. Default `2` = single-step rollback.
+    pub keep: usize,
+    /// Operator principal id (recorded in the report; GC writes no catalog rows).
+    pub invoked_by: String,
+    /// Index root directory (`<root>/gen-<N>/` lives here).
+    pub data_dir: PathBuf,
+}
+
+/// One removed generation.
+#[derive(Debug, Clone)]
+pub struct GcRemoved {
+    /// Build generation removed from disk.
+    pub generation: u64,
+    /// Run-row id deleted (`None` for failed runs, whose history row is kept).
+    pub run_id_deleted: Option<String>,
+    /// Documents counted before removal.
+    pub docs_removed: u64,
+}
+
+/// Report for one retention-GC pass.
+#[derive(Debug, Clone)]
+pub struct GcReport {
+    /// Index identity.
+    pub index_id: String,
+    /// Serving generation (always protected).
+    pub active_generation: Option<u64>,
+    /// Generations retained on disk, newest-first.
+    pub kept: Vec<u64>,
+    /// Generations removed.
+    pub removed: Vec<GcRemoved>,
+}
+
+/// Enforce index-generation retention (P2-T35).
+///
+/// Policy: the active generation is never touched. The newest `keep - 1`
+/// superseded generations are retained for rollback; older superseded
+/// generations lose their directory (`index.db` + `trigram.db`) and their
+/// run row. Failed runs lose orphaned staging directories but keep their
+/// history rows. Non-terminal runs (`staged`, `verifying`) are left alone —
+/// they may belong to a live build; run GC when no build is in flight.
+///
+/// Crash-safe: directory removal precedes row deletion, and
+/// [`Fts5Index::remove_generation`] reports `0` for missing directories, so
+/// a crash between the two retries cleanly. Cancel-safe: cancellation stops
+/// further removals; already-removed generations stay removed (their rows
+/// are deleted in the same pass).
+pub async fn gc_index(
+    db: &SqliteDatabase,
+    params: &GcParams,
+    cancel: &AtomicBool,
+) -> Result<GcReport, IndexBuildError> {
+    let keep = params.keep.max(1);
+    let (pointer, runs) = {
+        let mut uow = db.write().await.map_err(IndexBuildError::storage)?;
+        let pointer = uow
+            .quran()
+            .get_index_pointer(&params.index_id)
+            .await
+            .map_err(IndexBuildError::storage)?;
+        let runs = uow
+            .quran()
+            .list_build_runs(&params.index_id)
+            .await
+            .map_err(IndexBuildError::storage)?;
+        uow.rollback().await.map_err(IndexBuildError::storage)?;
+        (pointer, runs)
+    };
+    let active_generation = pointer.as_ref().map(|p| p.generation as u64);
+
+    // Newest-first protection window over terminal servable generations.
+    let mut servable: Vec<u64> = runs
+        .iter()
+        .filter(|r| r.state == "active" || r.state == "superseded")
+        .map(|r| r.generation as u64)
+        .collect();
+    servable.sort_unstable();
+    servable.dedup();
+    let protected: std::collections::BTreeSet<u64> =
+        servable.iter().rev().take(keep).copied().chain(active_generation).collect();
+
+    let mut kept: Vec<u64> = protected.iter().copied().collect();
+    kept.sort_unstable_by(|a, b| b.cmp(a));
+    let mut removed: Vec<GcRemoved> = Vec::new();
+    let mut rows_to_delete: Vec<String> = Vec::new();
+
+    for run in &runs {
+        if cancel.load(Ordering::SeqCst) {
+            return Err(IndexBuildError::Cancelled);
+        }
+        let generation = run.generation as u64;
+        match run.state.as_str() {
+            "active" => {}
+            "superseded" if protected.contains(&generation) => {}
+            "superseded" => {
+                let docs = Fts5Index::remove_generation(&params.data_dir, generation)
+                    .await
+                    .map_err(IndexBuildError::Index)?;
+                rows_to_delete.push(run.id.clone());
+                removed.push(GcRemoved {
+                    generation,
+                    run_id_deleted: Some(run.id.clone()),
+                    docs_removed: docs,
+                });
+            }
+            "failed" => {
+                // Free orphaned staging output; the row stays as history.
+                let docs = Fts5Index::remove_generation(&params.data_dir, generation)
+                    .await
+                    .map_err(IndexBuildError::Index)?;
+                if docs > 0 {
+                    removed.push(GcRemoved {
+                        generation,
+                        run_id_deleted: None,
+                        docs_removed: docs,
+                    });
+                }
+            }
+            // Non-terminal runs may belong to a live build: never touch.
+            _ => {}
+        }
+    }
+
+    if !rows_to_delete.is_empty() {
+        let mut uow = db.write().await.map_err(IndexBuildError::storage)?;
+        for id in &rows_to_delete {
+            uow.quran().delete_build_run(id).await.map_err(IndexBuildError::storage)?;
+        }
+        uow.commit().await.map_err(IndexBuildError::storage)?;
+    }
+
+    removed.sort_by_key(|r| r.generation);
+    Ok(GcReport { index_id: params.index_id.clone(), active_generation, kept, removed })
 }
 
 /// Best-effort run-state update (failures here must not mask the real error).
