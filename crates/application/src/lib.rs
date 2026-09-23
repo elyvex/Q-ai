@@ -10,6 +10,7 @@ pub mod db;
 pub mod job_queue;
 pub mod quran;
 pub mod quran_cli;
+pub mod quran_counting;
 pub mod quran_doctor;
 pub mod quran_forms;
 pub mod quran_index;
