@@ -2,6 +2,22 @@
 
 > Completed tasks across all phases. Newest first.
 
+## Phase 2 — P2-T13–T18/T20/T22 normalization engine close-out, 2026-09-24
+
+- Review-pass flip of the M1a/M1b foundation (implementation landed in earlier sessions;
+  tasks stayed ☐ pending verification): `RuleId` N01–N24 + trait (T13), `SpanMap`
+  (T14), 5-property suite (T15), deterministic rules N01–N17 (T16), heuristic N18–N22
+  with `RuleKind` tagging (T17), pipeline + append-only L0–L8 registry (T18),
+  `NormalizationTrace` empty-label guard (T20), idempotency/associativity/fuzz (T22).
+- Evidence: `cargo test -p quran-normalization` 89/89 (64 lib + 7 deterministic +
+  3 golden + 6 pipeline + 2 vectors + 7 spanmap); `clippy --all-targets -D warnings`
+  clean (repaired 3 lints in test/example code, no assertions changed; re-ran green);
+  `fmt --check` clean. Fixture `pairs.jsonl` holds header + 2,000 pairs.
+- Remaining in Sprint 2.1: T21 stays ◐ — harness runs all 2,000 pairs green but the
+  fixture is `reviewed_by: pending-linguist` (P2-T11/P2-X02). T39/T56 blocked on owner
+  ADR acceptance (0201/0208/0213, 0207/0212/0214 all Proposed). Board now 34/114 (30%).
+  Working tree also carries an unrelated in-progress morphology workstream (untouched).
+
 ## Phase 2 — P2-T51/T52 search API + CLI surfaces, 2026-09-23
 
 - `POST /api/v1/quran/search/{exact,normalized,phrase,concatenated,regex}` serve the
