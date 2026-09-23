@@ -4,6 +4,13 @@ All notable changes to Q-ai are documented here.
 
 ## [Unreleased]
 
+### Added — Quran search API + CLI (P2-T51/T52)
+
+- `POST /api/v1/quran/search/exact|normalized|phrase|concatenated|regex` (envelope +
+  Diagnostic errors; `Accept: text/event-stream` streams hits plus terminal totals).
+- `qai quran search <text>` with tool, profile/rules, phrase, cross-ayah, filter,
+  paging, `--explain`, `--highlight`, and `--json` flags.
+
 ### Added — Multi-edition / multi-riwayah Quran architecture (owner direction 2026-09-18)
 
 - **quran-core** (new module `catalog`): `Qiraah`, `Riwayah`,
