@@ -279,6 +279,18 @@ pub enum EditionAction {
     },
     /// Print the active edition pointer.
     Active,
+    /// Record editorial verification (`verified_by`) under a human approval
+    /// (P1-T55; the reviewer identity itself is an owner act, OD-02).
+    Verify {
+        /// `slug@version`.
+        edition: String,
+        /// Reviewer name (recorded in `verified_by`; never invented).
+        #[arg(long)]
+        reviewer: String,
+        /// Comparison method (recorded in `verification_method`).
+        #[arg(long)]
+        method: String,
+    },
 }
 
 /// Translation subcommands.
@@ -337,6 +349,15 @@ pub enum IndexAction {
         #[arg(long)]
         index: Option<String>,
     },
+    /// Enforce generation retention (default: keep active + previous).
+    Gc {
+        /// Index id (default `quran.ayah.v1`).
+        #[arg(long)]
+        index: Option<String>,
+        /// Generations to retain, newest-first including active (default 2).
+        #[arg(long, default_value_t = 2)]
+        keep: usize,
+    },
 }
 
 /// Dispatch a Quran command. `db_path` selects the SQLite file.
@@ -382,6 +403,17 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
                     .await
             }
             EditionAction::Active => application::quran_cli::cmd_edition_active(db_path).await,
+            EditionAction::Verify { edition, reviewer, method } => {
+                confirm(
+                    "verify",
+                    &edition,
+                    yes,
+                    application::quran_cli::cmd_edition_verify(
+                        db_path, &edition, &reviewer, &method,
+                    ),
+                )
+                .await
+            }
         },
         QuranAction::Import { manifest, adapter, dry_run } => {
             application::quran_cli::cmd_import(db_path, &manifest, &adapter, dry_run).await
@@ -461,6 +493,9 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
             }
             IndexAction::Verify { index } => {
                 application::quran_cli::cmd_index_verify(db_path, index.as_deref()).await
+            }
+            IndexAction::Gc { index, keep } => {
+                application::quran_cli::cmd_index_gc(db_path, index.as_deref(), keep).await
             }
         },
         QuranAction::Search { args } => {
