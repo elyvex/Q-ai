@@ -211,7 +211,7 @@ fn property5_renormalization_containment_all_profiles() {
             }
             // Whole match + a middle third: slicing canonical at the mapped
             // span and re-normalizing must contain the derived substring.
-            let mut probes = vec![0..n];
+            let mut probes: Vec<std::ops::Range<u32>> = std::iter::once(0..n).collect();
             if n >= 3 {
                 probes.push(n / 3..2 * n / 3);
             }
@@ -241,7 +241,7 @@ fn property5_renormalization_containment_all_profiles() {
                     .collect();
                 let (renorm, _) = pipe.apply(&hull);
                 assert!(
-                    renorm.text().contains(&want),
+                    renorm.text().contains(want),
                     "P5 failed profile={id} case={name} probe={probe:?} want={want:?} renorm={:?}",
                     renorm.text()
                 );
