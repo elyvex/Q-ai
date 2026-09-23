@@ -7,7 +7,9 @@
 
 use std::sync::atomic::AtomicBool;
 
-use application::quran::{activate_edition, record_approval, record_edition_verification};
+use application::quran::{
+    EditionVerification, activate_edition, record_approval, record_edition_verification,
+};
 use domain::{PrincipalId, Timestamp};
 use quran_corpus::import::{ImportInput, ImportOptions, ImportOutcome, ImportProgress, run_import};
 use storage::Database as _;
@@ -153,8 +155,7 @@ async fn verification_stamp_records_reviewer_method_and_time() {
         &db,
         SLUG,
         VERSION,
-        REVIEWER,
-        METHOD,
+        &EditionVerification { reviewer: REVIEWER, method: METHOD },
         &principal(),
         "appr-v",
         &timestamp(),
@@ -177,12 +178,12 @@ async fn verification_stamp_records_reviewer_method_and_time() {
 async fn verification_rejects_empty_reviewer_and_method() {
     let (_dir, db, _edition_id) = active_db().await;
     for (reviewer, method) in [("", METHOD), (REVIEWER, ""), ("   ", METHOD)] {
+        let verification = EditionVerification { reviewer, method };
         let err = record_edition_verification(
             &db,
             SLUG,
             VERSION,
-            reviewer,
-            method,
+            &verification,
             &principal(),
             "appr-1",
             &timestamp(),
@@ -198,13 +199,13 @@ async fn verification_rejects_empty_reviewer_and_method() {
 #[tokio::test]
 async fn verification_requires_a_granted_approval_for_the_exact_urn() {
     let (_dir, db, _edition_id) = active_db().await;
+    let verification = EditionVerification { reviewer: REVIEWER, method: METHOD };
     // Missing approval.
     let err = record_edition_verification(
         &db,
         SLUG,
         VERSION,
-        REVIEWER,
-        METHOD,
+        &verification,
         &principal(),
         "no-such-approval",
         &timestamp(),
@@ -217,8 +218,7 @@ async fn verification_requires_a_granted_approval_for_the_exact_urn() {
         &db,
         SLUG,
         VERSION,
-        REVIEWER,
-        METHOD,
+        &verification,
         &principal(),
         "appr-denied",
         &timestamp(),
@@ -231,8 +231,7 @@ async fn verification_requires_a_granted_approval_for_the_exact_urn() {
         &db,
         SLUG,
         VERSION,
-        REVIEWER,
-        METHOD,
+        &verification,
         &principal(),
         "appr-other",
         &timestamp(),
@@ -256,8 +255,7 @@ async fn verification_requires_a_granted_approval_for_the_exact_urn() {
         &db,
         "ghost",
         "0.0.1",
-        REVIEWER,
-        METHOD,
+        &verification,
         &principal(),
         "appr-ghost",
         &timestamp(),
