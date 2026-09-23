@@ -4,6 +4,13 @@ All notable changes to Q-ai are documented here.
 
 ## [Unreleased]
 
+### Changed — Normalization engine verified and closed out (P2-T13–T18/T20/T22)
+
+- Review pass completed for the `quran-normalization` foundation: 89/89 tests green,
+  clippy `-D warnings` and fmt clean. Board 34/114 (30%).
+- P2-T21 remains in progress: the 2,000-pair harness is green, but the golden set
+  still carries `reviewed_by: pending-linguist` pending linguist sign-off.
+
 ### Added — Quran search API + CLI (P2-T51/T52)
 
 - `POST /api/v1/quran/search/exact|normalized|phrase|concatenated|regex` (envelope +
