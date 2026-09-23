@@ -1,7 +1,7 @@
 # Phase 2 — Completion Ledger
 
 **Phase:** P2 — Quran Search, Arabic Normalization, Morphology & Word Families
-**Status:** 🟡 In Progress — 24 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 4 / 6 migrations
+**Status:** 🟡 In Progress — 26 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 4 / 6 migrations
 **Started:** 2026-09-14
 **Completed:** —
 
@@ -52,7 +52,7 @@ with what evidence.
 | 2.4 — Morphology Import & Lexicons | 18 | 0 | 45.0 | — | ☐ |
 | 2.5 — Morphology & Family Tools | 19 | 0 | 47.5 | — | ☐ |
 | 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 0 | 51.0 | — | ☐ |
-| **Total** | **114 + 5** | **24** | **278.0** | **—** | **21%** |
+| **Total** | **114 + 5** | **26** | **278.0** | **—** | **23%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -317,6 +317,24 @@ _None completed yet._
 - **Evidence:** `migrations/sqlite/0016_quran_search_cache.up.sql` (+ checksums; `migrate-check` 16 ordered); `quran_search_cache.rs` (`cache_key` binds tool+params+profile+extra+generation, `cache_lookup` validates generation + shape and touches LRU, `cache_store` + cap enforcement, `cache_invalidate` wholesale); `search_cache.rs` 6/6 (round-trip byte-identity, generation-miss deletes stale row, garbage-miss deletes garbage, LRU recency incl. touch reorder, wholesale keeps current, stats)
 - **DoD:** ✅ all items / no stale generation ever served (key namespace + read-time generation check + wholesale invalidation); unparseable payloads are misses; 128 MiB default cap with single-statement LRU eviction
 - **Notes:** tool-level wiring (services consulting the cache) lands with the API/CLI surfaces (T51/T52) — the cache contract is proven standalone here so wiring cannot weaken it. Plan table shape differs slightly (`tool_name`/`hit_count` live inside the key/payload instead of columns); recorded as DEV-08 below.
+
+### P2-T51 — Search API endpoints + SSE streaming variant
+- **Deliverable:** D2.11
+- **Completed:** 2026-09-23
+- **Owner:** agent (BE)
+- **PR / commit:** working tree (see `git status -- crates/server/src/api.rs crates/server/tests/api.rs docs/08-api/quran-v1-openapi.json crates/application/src/quran_search_api.rs`)
+- **Evidence:** `POST /api/v1/quran/search/{exact,normalized,phrase,concatenated,regex}` in `crates/server/src/api.rs` (envelope + `Content-Language: ar` + Diagnostic error bodies with `QAI-IDX-*`/`QAI-NORM-*` codes; `Accept: text/event-stream` serves `hit` events + terminal `totals` event); `crates/server/tests/api.rs` 17/17 green (incl. 4 new: exact envelope + reproducibility, coded 400s, regex provenance + guards, SSE totals); OpenAPI entries added, route-coverage test extended
+- **DoD:** ✅ all items / read-only services only (no canonical writes); typed `SearchError` → status mapping (400/404/429/500); server names no `quran-search` items directly (code-string status mapping + `application::quran_search_api::reject`/`SearchFilter`, `arch-check` green); rate limiting per `x-principal` (default `api-anonymous`) via the shared `RateLimiter`
+- **Notes:** SSE v1 buffers the verified tool output before emitting events (services verify-before-emit, so hits are complete when streamed); true incremental emission is a follow-up once services expose a streaming cursor. Morphology/root/lemma/family/counting endpoints stay in T89/T90/T104 (datasets do not exist yet).
+
+### P2-T52 — CLI search command group with all flags + `--json`
+- **Deliverable:** D2.12
+- **Completed:** 2026-09-23
+- **Owner:** agent (BE)
+- **PR / commit:** working tree (see `git status -- crates/cli/src/quran.rs crates/cli/tests/quran/search.trycmd crates/application/src/quran_cli.rs`)
+- **Evidence:** `qai quran search <text> [--exact|--phrase|--concatenated|--regex] [--profile|--rules] [--phrase-mode] [--slop] [--cross-ayah] [--max-ayah-span] [--surah/--juz/--page/--revelation-place/--global-range] [--match-mode] [--field] [--limit/--offset] [--explain] [--highlight] [--timeout-ms]`; `crates/cli/tests/quran/search.trycmd` (13 blocks: exact/normalized/phrase/concatenated/regex, surah filter, `--explain` scores, `--json` parity via shared `CommandOutput`, exclusivity + usage exits 2); `cargo test -p cli --test quran` 4/4 green
+- **DoD:** ✅ all items / exit codes per CLI contract (0/2/4/5/70); default mode is normalized L3 (bare `--phrase-mode`/`--slop` imply phrase); human output is one line per hit (`reference — text`) with rule lists under `--explain`
+- **Notes:** exact whole-token `ثش` snapshot shows `1 matches (total 3, complete)` — FTS recall count (3) vs verified hits (1) is pre-existing T41 service behavior (recall prefilter over-approximates, verification enforces precision); locked in snapshot for T53 goldens to revisit, not changed here.
 
 ### Sprint 2.4 — Morphology Import & Lexicons
 
