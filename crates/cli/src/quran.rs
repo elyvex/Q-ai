@@ -183,6 +183,21 @@ pub enum QuranAction {
         #[command(flatten)]
         args: Box<QuranSearchArgs>,
     },
+    /// Exact counting & discovery tools (read-only; rule-relative).
+    Count {
+        #[command(subcommand)]
+        action: CountAction,
+    },
+    /// Morphology datasets: import (staging) and activate (approval-gated).
+    Morphology {
+        #[command(subcommand)]
+        action: MorphologyAction,
+    },
+    /// Knowledge-graph operations (read-only inspection + build).
+    Graph {
+        #[command(subcommand)]
+        action: GraphAction,
+    },
 }
 
 /// `qai quran search` flags (P2-T52): all five lexical tools plus filters.
@@ -357,6 +372,246 @@ pub enum IndexAction {
         /// Generations to retain, newest-first including active (default 2).
         #[arg(long, default_value_t = 2)]
         keep: usize,
+    },
+}
+
+/// Exact counting & discovery subcommands (P2-T94…T103).
+#[derive(Subcommand)]
+pub enum CountAction {
+    /// Exact frequency of a target under a profile (rules block included).
+    Frequency {
+        /// Target text to count.
+        target: String,
+        /// Counting profile (`L3.diacritics` default; L2/L4/L5/L7).
+        #[arg(long, default_value = "L3.diacritics")]
+        profile: String,
+    },
+    /// Frequency partitioned by surah with partition provenance.
+    Distribution {
+        /// Target text.
+        target: String,
+        /// Counting profile.
+        #[arg(long, default_value = "L3.diacritics")]
+        profile: String,
+    },
+    /// Per-surah first/last occurrence + interval (disclaimer included).
+    Occurrences {
+        /// Target text.
+        target: String,
+        /// Counting profile.
+        #[arg(long, default_value = "L3.diacritics")]
+        profile: String,
+    },
+    /// Hapax legomena under a profile (rule-relative, profile stated).
+    Hapax {
+        /// Counting profile.
+        #[arg(long, default_value = "L3.diacritics")]
+        profile: String,
+        /// Result cap.
+        #[arg(long, default_value_t = 100)]
+        limit: usize,
+    },
+    /// Co-occurrence within a token window (cross-ayah flags included).
+    Cooccurrence {
+        /// Target text.
+        target: String,
+        /// Counting profile.
+        #[arg(long, default_value = "L3.diacritics")]
+        profile: String,
+        /// Window radius in tokens.
+        #[arg(long, default_value_t = 3)]
+        window: usize,
+        /// Result cap.
+        #[arg(long, default_value_t = 25)]
+        limit: usize,
+    },
+    /// Association measures (PMI/LLR/t-score) with a min-count floor.
+    Collocation {
+        /// Target text.
+        target: String,
+        /// Counting profile.
+        #[arg(long, default_value = "L3.diacritics")]
+        profile: String,
+        /// Window radius in tokens.
+        #[arg(long, default_value_t = 3)]
+        window: usize,
+        /// Result cap.
+        #[arg(long, default_value_t = 25)]
+        limit: usize,
+    },
+    /// Numeric report (checksum + no-interpretation note).
+    NumericReport {
+        /// Target text.
+        target: String,
+        /// Counting profile.
+        #[arg(long, default_value = "L3.diacritics")]
+        profile: String,
+    },
+    /// Prove a zero count under stated rules (disclaimer included).
+    MissingForm {
+        /// Target text expected to be absent.
+        target: String,
+        /// Counting profile.
+        #[arg(long, default_value = "L3.diacritics")]
+        profile: String,
+    },
+    /// Near-duplicate passages (MinHash candidates + exact verify).
+    NearDuplicates {
+        /// Jaccard threshold in [0,1].
+        #[arg(long, default_value_t = 0.8)]
+        threshold: f64,
+        /// Result cap.
+        #[arg(long, default_value_t = 25)]
+        limit: usize,
+    },
+}
+
+/// Morphology dataset subcommands (import/activate separation).
+#[derive(Subcommand)]
+pub enum MorphologyAction {
+    /// Import an intermediate document into staging (never activates).
+    Import {
+        /// Path to the intermediate JSON/CSV document.
+        #[arg(long)]
+        file: String,
+        /// Dataset slug.
+        #[arg(long)]
+        dataset: String,
+        /// Dataset version.
+        #[arg(long)]
+        version: String,
+        /// Adapter (`json`|`csv`).
+        #[arg(long, default_value = "json")]
+        adapter: String,
+        /// Edition `slug@version` to align against (must be active).
+        #[arg(long)]
+        edition: String,
+        /// Attribution string recorded on the dataset.
+        #[arg(long, default_value = "")]
+        attribution: String,
+        /// Resume/replace a specific batch id.
+        #[arg(long)]
+        batch: Option<String>,
+    },
+    /// Activate a staged batch (approval-gated; cannot run in the importer).
+    Activate {
+        /// Staged batch id.
+        #[arg(long)]
+        batch: String,
+        /// Granted approval id covering the dataset URN.
+        #[arg(long)]
+        approval: String,
+    },
+    /// List registered datasets and their states.
+    Datasets,
+    /// Show all analyses of one token with attribution.
+    Token {
+        /// Edition `slug@version`.
+        #[arg(long)]
+        edition: String,
+        /// Surah number.
+        #[arg(long)]
+        surah: i64,
+        /// Ayah number.
+        #[arg(long)]
+        ayah: i64,
+        /// 1-based token position.
+        #[arg(long, default_value_t = 1)]
+        position: i64,
+    },
+    /// Compare competing analyses of one token (verdicts, no winner).
+    Compare {
+        /// Edition `slug@version`.
+        #[arg(long)]
+        edition: String,
+        /// Surah number.
+        #[arg(long)]
+        surah: i64,
+        /// Ayah number.
+        #[arg(long)]
+        ayah: i64,
+        /// 1-based token position.
+        #[arg(long, default_value_t = 1)]
+        position: i64,
+    },
+    /// Root search (grouped occurrences with dataset attribution).
+    Root {
+        /// Normalized root spelling.
+        root: String,
+    },
+    /// Lemma search (grouped occurrences).
+    Lemma {
+        /// Lemma spelling.
+        lemma: String,
+    },
+    /// Affix search: dataset backend when active, else the labeled L7 path.
+    Affix {
+        /// Affix text.
+        affix: String,
+        /// Profile (`L7.affix` selects the heuristic backend).
+        #[arg(long, default_value = "L7.affix")]
+        profile: String,
+    },
+}
+
+/// Knowledge-graph subcommands (build/inspect/root-family/export).
+#[derive(Subcommand)]
+pub enum GraphAction {
+    /// Build the structural projection from the active edition (in-memory).
+    Build {
+        /// Write the built projection as JSON to this path (optional).
+        #[arg(long)]
+        out: Option<String>,
+    },
+    /// Inspect the projection manifest and node/edge counts from a file.
+    Inspect {
+        /// Projection JSON written by `graph build --out`.
+        #[arg(long)]
+        file: String,
+    },
+    /// Bounded neighbors of a node (budgeted, explicit truncation).
+    Neighbors {
+        /// Projection JSON file.
+        #[arg(long)]
+        file: String,
+        /// Stable node id (e.g. `ayah:1:1`).
+        #[arg(long)]
+        node: String,
+        /// Max hops from the node.
+        #[arg(long, default_value_t = 1)]
+        hops: usize,
+    },
+    /// Bounded path search between two nodes (budgeted).
+    Path {
+        /// Projection JSON file.
+        #[arg(long)]
+        file: String,
+        /// Source stable id.
+        #[arg(long)]
+        from: String,
+        /// Target stable id.
+        #[arg(long)]
+        to: String,
+        /// Max hops.
+        #[arg(long, default_value_t = 4)]
+        hops: usize,
+    },
+    /// Root-family ranked ayahs (lexicon-gated; needs an active dataset).
+    RootFamily {
+        /// Normalized root spelling.
+        root: String,
+        /// Result cap.
+        #[arg(long, default_value_t = 25)]
+        limit: usize,
+    },
+    /// Export the projection as Graph JSON (identities, versions, truncation).
+    Export {
+        /// Projection JSON file.
+        #[arg(long)]
+        file: String,
+        /// Output path (defaults to stdout).
+        #[arg(long)]
+        out: Option<String>,
     },
 }
 
