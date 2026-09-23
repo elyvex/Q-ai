@@ -70,6 +70,37 @@ impl Fts5Index {
         root.join(format!("gen-{generation}"))
     }
 
+    /// Remove one generation directory (`index.db` + `trigram.db`), counting
+    /// its documents first. Missing directories report `0` (idempotent, so a
+    /// crash between directory removal and run-row deletion retries cleanly).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IndexError::BuildFailed`] at stage `delete` when the
+    /// directory cannot be counted or removed.
+    pub async fn remove_generation(root: &Path, generation: u64) -> Result<u64, IndexError> {
+        let dir = Self::gen_dir(root, generation);
+        if !dir.exists() {
+            return Ok(0);
+        }
+        // Count inside the target generation before removing it.
+        let path = Self::db_path(root, generation);
+        let pool = Self::connect(&path, false).await?;
+        let removed: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ayah_fts")
+            .fetch_one(&pool)
+            .await
+            .map_err(|err| IndexError::BuildFailed {
+                stage: "delete".to_string(),
+                detail: err.to_string(),
+            })?;
+        pool.close().await;
+        std::fs::remove_dir_all(&dir).map_err(|err| IndexError::BuildFailed {
+            stage: "delete".to_string(),
+            detail: err.to_string(),
+        })?;
+        Ok(removed.max(0) as u64)
+    }
+
     /// Database file inside a generation directory.
     fn db_path(root: &Path, generation: u64) -> PathBuf {
         Self::gen_dir(root, generation).join("index.db")
@@ -689,26 +720,7 @@ impl FullTextIndex for Fts5Index {
     }
 
     async fn delete_by_generation(&self, generation: u64) -> Result<u64, IndexError> {
-        let dir = Self::gen_dir(&self.root, generation);
-        if !dir.exists() {
-            return Ok(0);
-        }
-        // Count inside the target generation before removing it.
-        let path = Self::db_path(&self.root, generation);
-        let pool = Self::connect(&path, false).await?;
-        let removed: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ayah_fts")
-            .fetch_one(&pool)
-            .await
-            .map_err(|err| IndexError::BuildFailed {
-                stage: "delete".to_string(),
-                detail: err.to_string(),
-            })?;
-        pool.close().await;
-        std::fs::remove_dir_all(&dir).map_err(|err| IndexError::BuildFailed {
-            stage: "delete".to_string(),
-            detail: err.to_string(),
-        })?;
-        Ok(removed.max(0) as u64)
+        Self::remove_generation(&self.root, generation).await
     }
 
     async fn stats(&self) -> Result<FtsStats, IndexError> {
