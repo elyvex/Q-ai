@@ -138,7 +138,8 @@ async fn aligned_document(db: &SqliteDatabase) -> String {
     let ayahs = uow.quran().list_ayahs_range(&active.edition_id, 1, i64::MAX).await.unwrap();
     let mut rows = Vec::new();
     for ayah in &ayahs {
-        let tokens = uow.quran().get_tokens(&active.edition_id, ayah.surah, ayah.ayah).await.unwrap();
+        let tokens =
+            uow.quran().get_tokens(&active.edition_id, ayah.surah, ayah.ayah).await.unwrap();
         for token in &tokens {
             // Two competing analyses of every token (multi-analysis reads).
             for analysis_no in [0u32, 1u32] {
@@ -382,7 +383,9 @@ async fn compare_and_unavailable_tools() {
     let verdicts = morphology_compare(&db, "test-edition-min", "0.1.0", 1, 1, 1).await.unwrap();
     assert!(!verdicts.is_empty(), "two analyses must produce verdicts");
     let json = serde_json::to_string(&verdicts).unwrap();
-    assert!(!json.contains("resolution") && !json.contains("winner") && !json.contains("synthesis"));
+    assert!(
+        !json.contains("resolution") && !json.contains("winner") && !json.contains("synthesis")
+    );
 
     // L7 affix backend answers with its mandatory label (no dataset needed
     // for the heuristic path — here a dataset IS active, so empty scan).
@@ -399,17 +402,12 @@ async fn crash_matrix_cancel_at_each_checkpoint() {
         let doc = aligned_document(&db).await;
         let cancel = AtomicBool::new(false);
         let seen = std::sync::Mutex::new(false);
-        let err = run_morphology_import(
-            &db,
-            &import_params(doc, "batch-kill"),
-            &cancel,
-            |stage| {
-                if stage == checkpoint {
-                    *seen.lock().unwrap() = true;
-                    cancel.store(true, std::sync::atomic::Ordering::SeqCst);
-                }
-            },
-        )
+        let err = run_morphology_import(&db, &import_params(doc, "batch-kill"), &cancel, |stage| {
+            if stage == checkpoint {
+                *seen.lock().unwrap() = true;
+                cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+        })
         .await
         .unwrap_err();
         assert!(*seen.lock().unwrap(), "checkpoint {checkpoint} must be reached");
