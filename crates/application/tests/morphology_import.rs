@@ -251,13 +251,18 @@ async fn adversarial_documents_reject_with_mv_ids() {
     let doc = serde_json::json!([{
         "sura_no": 999, "aya_no": 1, "tok_idx": 1, "analysis_no": 0,
         "surface_form": "x", "lemma_str": "x", "root_str": "y",
+        "tag_native": "N", "tag_unified": "noun",
         "layer": "B", "state": "imported", "synthetic_test_only": true,
     }])
     .to_string();
-    let report =
-        run_morphology_import(&db, &import_params(doc, "batch-mv003"), &AtomicBool::new(false), |_| {})
-            .await
-            .expect("import runs to a verdict");
+    let report = run_morphology_import(
+        &db,
+        &import_params(doc, "batch-mv003"),
+        &AtomicBool::new(false),
+        |_| {},
+    )
+    .await
+    .expect("import runs to a verdict");
     assert_eq!(report.state, "failed");
     let mut uow = db.write().await.unwrap();
     let findings = uow.quran().list_findings("batch-mv003").await.unwrap();
