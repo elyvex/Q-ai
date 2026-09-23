@@ -41,7 +41,10 @@ Status key: 🔴 open · 🟢 done (with date + where recorded).
 - **Scope:** DOC + workflow decision. No code impact.
 
 ## FU-SPEC-01 — `specs/001-redaction-hardening/tasks.md`: 28/28 unchecked vs landed implementation
-- **Status:** 🔴 open
+- **Status:** 🟢 done 2026-09-24 — rechecked: T001–T023, T025–T028 are `[x]`
+  (the "28/28 unchecked" report of 2026-09-16 is stale); only T024 (full gate
+  sweep) remains `[ ]` with partial evidence in its sync note S3. No action
+  beyond T024's own gate run.
 - **Found:** 2026-09-16 (spec reconciliation)
 - **Context:** All T001–T028 checkboxes are `[ ]`, yet the implementation
   is committed (`domain::redaction`, `RedactingWriter`, `InitOptions`,
