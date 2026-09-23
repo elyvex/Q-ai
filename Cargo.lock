@@ -139,6 +139,8 @@ dependencies = [
  "provenance",
  "quran-core",
  "quran-corpus",
+ "quran-graph",
+ "quran-morphology",
  "quran-normalization",
  "quran-search",
  "serde",
