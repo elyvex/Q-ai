@@ -15,14 +15,19 @@ word inspector) · Phase 7 (hybrid retrieval reuses the FTS layer) · Phase 9
 **Target duration (plan):** 8 calendar weeks ≈ 22–24 engineer-weeks,
 3 engineers + part-time Arabic linguist (0.4 FTE)
 **Task-board estimate:** 278.0 ed across 114 tasks → see §9
-**Status:** In progress; normalization/indexing/search core implemented, exit gates open (reviewed 2026-09-17)
+**Status:** In progress; normalization/indexing/search core implemented, exit gates open (reviewed 2026-09-24)
 
 The [completion ledger](done.md) and [execution plan](execution-plan.md) record the
 normalization pipeline, profiles and offset traces, derived-form rebuilds, FTS5 index
 builds, and exact/normalized/phrase/concatenated/cross-ayah/regex search services.
-Normalization and index-management CLI commands and normalization preview HTTP routes
-exist; search-query CLI/HTTP/SSE wiring, morphology, families, linguistic review and
+Normalization and index-management CLI commands, normalization preview routes, and
+search-query CLI/HTTP/SSE wiring exist. Morphology, families, linguistic review and
 phase-wide hardening remain unfinished. No phase exit acceptance is recorded.
+
+The normalization engine close-out is verified: P2-T13–T18/T20/T22 are ☑ (89/89
+crate tests, clippy `-D warnings`, fmt clean). P2-T21 is ◐ because the golden set
+awaits linguist sign-off. Board total: **34 / 114 sprint tasks (30%)**; 0 / 50 ACs;
+0 / 14 ADRs; 4 / 6 migrations.
 
 The current backend is **SQLite FTS5**, not the Tantivy backend specified in the original
 plan (DEV-05). Scope/deliverable tables below retain that design target; they are not a
