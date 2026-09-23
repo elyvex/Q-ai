@@ -120,11 +120,19 @@ impl storage::error::Diagnostic for MorphologyJobError {
         Some(match self {
             Self::Storage(_) => "Check the database and retry.".to_string(),
             Self::Morphology(_) => "Fix the dataset document and re-import.".to_string(),
-            Self::CanonicalChanged => "Canonical drift blocks imports; run `qai doctor`.".to_string(),
+            Self::CanonicalChanged => {
+                "Canonical drift blocks imports; run `qai doctor`.".to_string()
+            }
             Self::Approval(_) => "Request approval for the dataset URN first.".to_string(),
-            Self::BadState { .. } => "Import to Staged (zero fatals) before activating.".to_string(),
-            Self::BlockingFindings(..) => "Resolve fatal/error findings, then re-import.".to_string(),
-            Self::UnmatchedRemaining(..) => "Fix alignment gaps (per-surah report), then re-import.".to_string(),
+            Self::BadState { .. } => {
+                "Import to Staged (zero fatals) before activating.".to_string()
+            }
+            Self::BlockingFindings(..) => {
+                "Resolve fatal/error findings, then re-import.".to_string()
+            }
+            Self::UnmatchedRemaining(..) => {
+                "Fix alignment gaps (per-surah report), then re-import.".to_string()
+            }
             Self::Cancelled => "Re-run the import; staging resumes from checkpoints.".to_string(),
         })
     }
@@ -187,11 +195,7 @@ fn now() -> String {
 }
 
 fn cancel_check(cancel: &AtomicBool) -> Result<(), MorphologyJobError> {
-    if cancel.load(Ordering::SeqCst) {
-        Err(MorphologyJobError::Cancelled)
-    } else {
-        Ok(())
-    }
+    if cancel.load(Ordering::SeqCst) { Err(MorphologyJobError::Cancelled) } else { Ok(()) }
 }
 
 async fn set_checkpoint(
@@ -224,7 +228,10 @@ pub async fn run_morphology_import(
 ) -> Result<MorphologyImportReport, MorphologyJobError> {
     use quran_morphology::{InventoryToken, align, validate};
     let started = now();
-    let batch_id = params.batch_id.clone().unwrap_or_else(|| format!("morph-{}-{}", params.dataset_slug, uuid::Uuid::new_v4()));
+    let batch_id = params
+        .batch_id
+        .clone()
+        .unwrap_or_else(|| format!("morph-{}-{}", params.dataset_slug, uuid::Uuid::new_v4()));
 
     // Resolve + verify the active edition first (imports target active only).
     let edition_id = {
@@ -255,11 +262,8 @@ pub async fn run_morphology_import(
     // Open (or resume) the batch row.
     {
         let mut uow = db.write().await.map_err(MorphologyJobError::storage)?;
-        let existing = uow
-            .quran()
-            .get_staging_batch(&batch_id)
-            .await
-            .map_err(MorphologyJobError::storage)?;
+        let existing =
+            uow.quran().get_staging_batch(&batch_id).await.map_err(MorphologyJobError::storage)?;
         if existing.is_none() {
             uow.quran()
                 .insert_staging_batch(StagingBatchRow {
@@ -278,18 +282,18 @@ pub async fn run_morphology_import(
         }
         uow.commit().await.map_err(MorphologyJobError::storage)?;
     }
-async fn advance(
-    db: &SqliteDatabase,
-    batch_id: &str,
-    checkpoint: &str,
-    cb: impl Fn(&str),
-    cancel: &AtomicBool,
-) -> Result<(), MorphologyJobError> {
-    cancel_check(cancel)?;
-    set_checkpoint(db, batch_id, "reading", checkpoint, None).await?;
-    cb(checkpoint);
-    Ok(())
-}
+    async fn advance(
+        db: &SqliteDatabase,
+        batch_id: &str,
+        checkpoint: &str,
+        cb: impl Fn(&str),
+        cancel: &AtomicBool,
+    ) -> Result<(), MorphologyJobError> {
+        cancel_check(cancel)?;
+        set_checkpoint(db, batch_id, "reading", checkpoint, None).await?;
+        cb(checkpoint);
+        Ok(())
+    }
 
     // 1. read_manifest.
     advance(db, &batch_id, IMPORT_CHECKPOINTS[0], &checkpoint_cb, cancel).await?;
@@ -389,7 +393,10 @@ async fn advance(
             });
             let kind = if position_hit { kind } else { "unmatched" };
             rows.push(AlignmentRow {
-                id: format!("al-{batch_id}-{}-{}-{}-{}", analysis.surah, analysis.ayah, analysis.token_position, analysis.analysis_index),
+                id: format!(
+                    "al-{batch_id}-{}-{}-{}-{}",
+                    analysis.surah, analysis.ayah, analysis.token_position, analysis.analysis_index
+                ),
                 batch_id: batch_id.clone(),
                 direct_key: key.as_str().to_string(),
                 edition_id: edition_id.clone(),
@@ -584,22 +591,16 @@ pub async fn activate_morphology(
             approval.subject_urn
         )));
     }
-    let findings = uow
-        .quran()
-        .list_findings(&params.batch_id)
-        .await
-        .map_err(MorphologyJobError::storage)?;
+    let findings =
+        uow.quran().list_findings(&params.batch_id).await.map_err(MorphologyJobError::storage)?;
     let fatal = findings.iter().filter(|f| f.severity == "fatal").count();
     let error = findings.iter().filter(|f| f.severity == "error").count();
     if fatal + error > 0 {
         uow.rollback().await.map_err(MorphologyJobError::storage)?;
         return Err(MorphologyJobError::BlockingFindings(fatal, error));
     }
-    let alignment = uow
-        .quran()
-        .list_alignment(&params.batch_id)
-        .await
-        .map_err(MorphologyJobError::storage)?;
+    let alignment =
+        uow.quran().list_alignment(&params.batch_id).await.map_err(MorphologyJobError::storage)?;
     let unmatched: Vec<_> = alignment.iter().filter(|a| a.alignment_kind == "unmatched").collect();
     if !unmatched.is_empty() {
         let surahs: BTreeMap<i64, usize> = {
@@ -626,8 +627,8 @@ pub async fn activate_morphology(
     let mut analyses = Vec::new();
     let mut morphemes = Vec::new();
     for row in &staged {
-        let analysis: quran_morphology::TokenAnalysis =
-            serde_json::from_str(&row.payload_json).map_err(|err| {
+        let analysis: quran_morphology::TokenAnalysis = serde_json::from_str(&row.payload_json)
+            .map_err(|err| {
                 MorphologyJobError::Morphology(
                     quran_morphology::MorphologyError::ValidationFailed {
                         detail: format!("staged payload corrupt: {err}"),
@@ -672,7 +673,10 @@ pub async fn activate_morphology(
             corpus_generation: 0,
             created_at: finished.clone(),
         });
-        let analysis_id = format!("an:{dataset_id}:{}:{}:{}#{}", row.surah, row.ayah, row.token_position, analysis.analysis_index);
+        let analysis_id = format!(
+            "an:{dataset_id}:{}:{}:{}#{}",
+            row.surah, row.ayah, row.token_position, analysis.analysis_index
+        );
         for (i, segment) in analysis.segments.iter().enumerate() {
             morphemes.push(storage::quran::MorphemeRow {
                 id: format!("{analysis_id}:m{i}"),
@@ -768,9 +772,7 @@ pub async fn activate_morphology(
             outcome: AuditOutcome::Allowed,
             reason: None,
             before: None,
-            after: Some(
-                serde_json::json!({"dataset": dataset_id, "approval": params.approval_id}),
-            ),
+            after: Some(serde_json::json!({"dataset": dataset_id, "approval": params.approval_id})),
             request_id: None,
             prev_chain_hash: domain::ContentHash {
                 algorithm: domain::HashAlgorithm::Sha256,
@@ -798,11 +800,7 @@ pub async fn activate_morphology(
 }
 
 fn none_if_empty(value: &str) -> Option<String> {
-    if value.trim().is_empty() {
-        None
-    } else {
-        Some(value.to_string())
-    }
+    if value.trim().is_empty() { None } else { Some(value.to_string()) }
 }
 
 /// Read-tool errors: typed unavailability until a dataset activates.
@@ -863,9 +861,9 @@ async fn require_active_dataset(
     let mut uow = db.write().await.map_err(MorphologyToolError::storage)?;
     let active = uow.quran().active_dataset().await.map_err(MorphologyToolError::storage)?;
     uow.rollback().await.map_err(MorphologyToolError::storage)?;
-    active
-        .map(|d| d.id)
-        .ok_or_else(|| MorphologyToolError::UnavailableDataset { capability: capability.to_string() })
+    active.map(|d| d.id).ok_or_else(|| MorphologyToolError::UnavailableDataset {
+        capability: capability.to_string(),
+    })
 }
 
 /// One attributed token analysis (read-tool view).
@@ -919,7 +917,8 @@ pub async fn morphology_for_token(
         .analyses_for_token(Some(&dataset_id), &edition_id, surah, ayah, position)
         .await
         .map_err(MorphologyToolError::storage)?;
-    let lemmas = uow.quran().list_lemmas(&dataset_id).await.map_err(MorphologyToolError::storage)?;
+    let lemmas =
+        uow.quran().list_lemmas(&dataset_id).await.map_err(MorphologyToolError::storage)?;
     let roots = uow.quran().list_roots(&dataset_id).await.map_err(MorphologyToolError::storage)?;
     uow.rollback().await.map_err(MorphologyToolError::storage)?;
     let lemma_by_id: HashMap<&str, &str> =
@@ -932,8 +931,14 @@ pub async fn morphology_for_token(
             .map(|row| AttributedAnalysis {
                 dataset: row.dataset_id.clone(),
                 analysis_index: row.analysis_index,
-                lemma: row.lemma_id.as_deref().and_then(|id| lemma_by_id.get(id).map(|s| s.to_string())),
-                root: row.root_id.as_deref().and_then(|id| root_by_id.get(id).map(|s| s.to_string())),
+                lemma: row
+                    .lemma_id
+                    .as_deref()
+                    .and_then(|id| lemma_by_id.get(id).map(|s| s.to_string())),
+                root: row
+                    .root_id
+                    .as_deref()
+                    .and_then(|id| root_by_id.get(id).map(|s| s.to_string())),
                 stem: row.stem.clone(),
                 pos_unified: row.pos_unified.clone(),
                 pos_native: row.pos_native.clone(),
@@ -1125,8 +1130,11 @@ pub async fn affix_search(
         return Ok(Vec::new());
     }
     let mut uow = db.write().await.map_err(MorphologyToolError::storage)?;
-    let forms =
-        uow.quran().list_all_token_forms(&edition_id).await.map_err(MorphologyToolError::storage)?;
+    let forms = uow
+        .quran()
+        .list_all_token_forms(&edition_id)
+        .await
+        .map_err(MorphologyToolError::storage)?;
     uow.rollback().await.map_err(MorphologyToolError::storage)?;
     Ok(forms
         .iter()
@@ -1176,8 +1184,14 @@ pub async fn build_same_root_relations(
             let to = format!("token:{}:{}:{}", b.surah, b.ayah, b.token_position);
             let explanation = format!(
                 "same_root: {}:{}:{} and {}:{}:{} share root {} (dataset {})",
-                a.surah, a.ayah, a.token_position, b.surah, b.ayah, b.token_position,
-                root.root_normalized, dataset_id
+                a.surah,
+                a.ayah,
+                a.token_position,
+                b.surah,
+                b.ayah,
+                b.token_position,
+                root.root_normalized,
+                dataset_id
             );
             // Constructor-enforced non-empty explanation (T86).
             let _check = quran_morphology::FamilyMember::new(&from, "token", &explanation)?;
@@ -1323,10 +1337,16 @@ impl jobs::JobHandler for MorphologyImportHandler {
                 success: report.state == "staged",
                 result: Some(format!(
                     "morphology {} batch {}: {} matched, {} table-mapped, state {}",
-                    report.dataset, report.batch_id, report.matched, report.table_mapped, report.state
+                    report.dataset,
+                    report.batch_id,
+                    report.matched,
+                    report.table_mapped,
+                    report.state
                 )),
             }),
-            Err(MorphologyJobError::Cancelled) => Err(JobError::Cancelled { id: ctx.job.id.clone() }),
+            Err(MorphologyJobError::Cancelled) => {
+                Err(JobError::Cancelled { id: ctx.job.id.clone() })
+            }
             Err(err) => Err(JobError::Storage({
                 use storage::error::Diagnostic as _;
                 format!("{}: {}", err.code(), err.summary())
