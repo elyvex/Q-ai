@@ -35,6 +35,7 @@ fn manifest(doc_count: u64) -> IndexManifest {
         morphology_dataset_versions: BTreeMap::new(),
         built_at: "2026-09-15T00:00:00Z".to_string(),
         doc_count,
+        trigram_postings: 0,
         content_hash: "sha256:test".to_string(),
     }
 }
