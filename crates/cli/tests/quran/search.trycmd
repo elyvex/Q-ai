@@ -37,6 +37,7 @@ $ qai quran index rebuild
 index quran.ayah.v1 generation 1 active: 14 docs (corpus generation 1)
 manifest: sha256:9d1c3cfec9084d2471310ae8319fa06ec2a216decdf66dfe4eee6127dd056c2c
 previous generation: none
+trigrams: 322 postings over 18 skeletons (18 verified)
 
 ```
 
