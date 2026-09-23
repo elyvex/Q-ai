@@ -50,14 +50,14 @@ with what evidence.
 | 1.2 — Import & Validation | 17 | 16 | 42.0 | — | ◐ |
 | 1.3 — Reader, Translations, API | 11 | 11 | 21.5 | — | ☑ |
 | 1.4 — Tools, Citations, CLI, Doctor | 11 | 11 | 21.5 | — | ☑ |
-| 1.5 — Debug Reader, Hardening, Exit | 7 | 3 | 15.0 | — | ☐ |
+| 1.5 — Debug Reader, Hardening, Exit | 7 | 3 | 15.0 | — | ◐ |
 | **Total** | **65** | **53** | **131.0** | **—** | **82%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
 | Deliverables (D1.1–D1.14) | 0 | 14 |
 | Acceptance criteria (AC-P1-01…21) fully verified | 0 | 21 |
-| Acceptance criteria partial (automated-green, ritual pending) | 19 | 21 |
+| Acceptance criteria partial (automated-green, ritual pending) | 20 | 21 |
 | ADRs accepted | 12 | 14 |
 | Migrations applied (`0007`–`0012`) | 6 | 6 |
 | Required test suites green | 0 | 15 |
@@ -1116,3 +1116,32 @@ Carried into `docs/plans/handoff-p1-to-p2.md` by task P1-T60.
 - **Exceptions:** per-edition licences still unknown — mirror is
   `pending_license_review`; pushing this repo redistributes 492 translations of
   unverified status (OD-01 / ODV-02 still open). No vendored byte is canonical.
+
+## 2026-09-23 — Phase-0/1 remainder sweep: AC-P1-18 to automated-green, ledger sync
+
+- **Owner:** implementation agent; no editorial or reviewer sign-off.
+- **Implemented (all that is implementable without owner input):**
+  - AC-P1-18 → ◐ (was ☐ with an empty evidence cell): `cargo test -p server
+    --test api debug` re-verified 3/3 green 2026-09-23. OD-04 already resolved
+    the criterion's "web font" phrase as a local-only system stack (no bundled
+    `@font-face`); no font asset blocks it. Only the exit-ritual walkthrough
+    (P1-T60, OD-08/OD-09) remains. This also corrects the §2 T54 note that held
+    AC-P1-18 at ☐ — the entry's own rationale ("not pending any font asset")
+    matches the ◐ definition (automated-green, ritual pending) used by every
+    other criterion.
+  - `done.md` §1 synced: 1.5 row ☐ → ◐ (matches the `tasks.md` board rollup),
+    partial-criteria count 19 → 20.
+  - `STATUS.md` refreshed (snapshot file, by design): 53 ☑ / 2 ◐ / 10 ☐ of 65
+    task rows; remaining IDs now X01…X05, T02, T03, T26◐, T55, T56, T58◐, T60
+    (T01/T04/T54 closures recorded); §3.3 board-debt notes retired (ADR table
+    already in sync at 12 Accepted + 0101/0114 Draft; T54 note superseded by
+    OD-04 close).
+  - Phase-0 board rollup: 0.5 row "(T55, T56 deferred)" → "(T56 runtime
+    deferred; T55 verified complete 2026-09-18)".
+- **Rechecked, still blocked:** Docker daemon socket absent 2026-09-23 —
+  P0-T56 stays ◐ (recorded in `docs/05-followups/open-questions.md`).
+- **Not implementable by an agent (owner-only, unchanged):** P1-X01…X05,
+  P1-T02 (OD-01 legal/bundle), P1-T03 + P1-T26 Tier-2 (OD-03 corpus/sign-off),
+  P1-T55 (OD-02 reviewer), P1-T56 (approved data + T55), P1-T58 full-corpus run
+  (OD-01 licence), P1-T60 (OD-08/OD-09 ritual + sign-off); P0-X01…X03. No ADR
+  flipped (0101/0114 stay Draft); no `unknown` literal replaced.
