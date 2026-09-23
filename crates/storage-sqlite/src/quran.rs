@@ -1622,7 +1622,10 @@ impl QuranRepository for SqliteQuranRepository {
             .collect())
     }
 
-    async fn list_all_token_forms(&self, edition_id: &str) -> Result<Vec<TokenFormRow>, StorageError> {
+    async fn list_all_token_forms(
+        &self,
+        edition_id: &str,
+    ) -> Result<Vec<TokenFormRow>, StorageError> {
         let mut tx = self.tx.lock().await;
         let rows = sqlx::query(
             "SELECT edition_id, surah, ayah, position, simple, bare, hamza_folded, folded,
