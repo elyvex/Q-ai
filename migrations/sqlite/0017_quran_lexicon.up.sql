@@ -133,8 +133,11 @@ CREATE TABLE word_family_relations (
   CHECK (relation != 'computational_suggestion' OR provenance_layer = 'D')
 );
 
--- Review queue (D2.8): suggestion → ScholarVerified with evidence (T88).
-CREATE TABLE review_queue (
+-- Morphology review queue (D2.8): suggestion → ScholarVerified with
+-- evidence (T88). Named `morphology_review_queue` to avoid colliding with
+-- the provenance `review_queue` (migration 0003), which tracks generic
+-- human-review workflow; this table carries morphology suggestion payloads.
+CREATE TABLE morphology_review_queue (
   id                TEXT PRIMARY KEY,
   kind              TEXT NOT NULL CHECK (kind IN ('root_unification','family_relation','analysis_correction')),
   subject_json      TEXT NOT NULL,
@@ -154,4 +157,4 @@ CREATE INDEX ix_analyses_lemma ON quran_token_analyses(lemma_id);
 CREATE INDEX ix_morphemes_analysis ON quran_morphemes(analysis_id);
 CREATE INDEX ix_family_from ON word_family_relations(from_kind, from_id);
 CREATE INDEX ix_family_to ON word_family_relations(to_kind, to_id);
-CREATE INDEX ix_review_status ON review_queue(status);
+CREATE INDEX ix_morph_review_status ON morphology_review_queue(status);
