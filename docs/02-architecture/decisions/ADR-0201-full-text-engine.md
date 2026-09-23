@@ -1,11 +1,27 @@
 # ADR-0201 — Full-Text Engine: Tantivy + Custom Arabic Tokenizer
 
-- Status: Proposed
+- Status: Proposed (FTS5 provisional implementation per DEV-05; ratification pending — see annex)
 - Phase: 2 — Quran Search and Linguistics
-- Date: 2026-09-06
+- Date: 2026-09-06 (annex 2026-09-23)
 - Depends on: ADR-0001
 - Related decisions: ADR-0203, ADR-0204, ADR-0206, ADR-0702
 - Requirements: PRD §§8–9, 11–12, 19, 32.2, 36, 40, 46–47, 75–76, 85
+
+## Implementation annex — 2026-09-23 (P2-T39)
+
+The `FullTextIndex` port stands as decided; the first backend shipped is
+**SQLite FTS5**, not Tantivy (DEV-05: FTS5 cannot host custom C tokenizers,
+so the `ar_*` family runs as Rust preprocessing in front of FTS5 through the
+shared `NormalizationPipeline` — R6 tokenizer parity by construction, locked
+by the 5,000-substring parity suite). Full C-tokenizer semantics
+(positions/offsets) arrive with a future Tantivy adapter if ever adopted;
+the port needs no API breakage for the swap. `highlight()` (not `offsets()`)
+is the supported introspection on current SQLite.
+
+Ratification question for the owner: accept FTS5 as the Phase-2 engine
+(amend the Decision to FTS5 + shared-pipeline tokenizers) or schedule the
+Tantivy adapter. Either way the port, the parity suite, and the generation
+lifecycle (ADR-0213) are unchanged.
 
 ## Context
 
