@@ -11,10 +11,10 @@ use sqlx::Row;
 use storage::error::StorageError;
 use storage::quran::{
     ActiveEditionRow, AyahFormRow, AyahRow, CitationRow, DifferenceReportRow, DivisionRow,
-    ImportRunRow, IndexBuildRunRow, IndexPointerRow, NormalizationProfileRow, NormalizationRuleRow,
-    QuranEditionRow, QuranRepository, SearchCacheRow, SeparatorRow, SkeletonRow, StagedEditionRef,
-    SurahRow, TokenFormRow, TokenRow, TranslationEditionRow, TranslationPassageRow,
-    ValidationReportRow, WordGlossRow,
+    FormColumn, ImportRunRow, IndexBuildRunRow, IndexPointerRow, NormalizationProfileRow,
+    NormalizationRuleRow, QuranEditionRow, QuranRepository, SearchCacheRow, SeparatorRow,
+    SkeletonRow, StagedEditionRef, SurahRow, TokenFormRow, TokenRow, TranslationEditionRow,
+    TranslationPassageRow, ValidationReportRow, WordGlossRow,
 };
 
 use super::{SharedTx, map_sqlx_error};
@@ -306,6 +306,41 @@ impl QuranRepository for SqliteQuranRepository {
             .execute(&mut **tx)
             .await
             .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn set_edition_verification(
+        &mut self,
+        id: &str,
+        verified_by: &str,
+        verified_at: &str,
+        verification_method: &str,
+    ) -> Result<(), StorageError> {
+        if verified_by.trim().is_empty() {
+            return Err(StorageError::ConstraintViolation {
+                message: "verified_by must name the reviewer".to_string(),
+            });
+        }
+        if verification_method.trim().is_empty() {
+            return Err(StorageError::ConstraintViolation {
+                message: "verification_method must describe the comparison".to_string(),
+            });
+        }
+        let mut tx = self.tx.lock().await;
+        // Only the `verified_*` metadata columns: slug, version, and hashes
+        // stay trigger-guarded, and ayah/token rows are untouched.
+        sqlx::query(
+            "UPDATE quran_editions
+                SET verified_by = ?, verified_at = ?, verification_method = ?
+              WHERE id = ?",
+        )
+        .bind(verified_by)
+        .bind(verified_at)
+        .bind(verification_method)
+        .bind(id)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
         Ok(())
     }
 
@@ -1513,6 +1548,96 @@ impl QuranRepository for SqliteQuranRepository {
         Ok(rows.iter().map(decode_token_form).collect())
     }
 
+    async fn count_tokens_matching_form(
+        &self,
+        edition_id: &str,
+        column: FormColumn,
+        value: &str,
+    ) -> Result<i64, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let sql = format!(
+            "SELECT COUNT(*) FROM quran_token_forms WHERE edition_id = ? AND {} = ?",
+            column.column_name()
+        );
+        let count: i64 = sqlx::query_scalar(&sql)
+            .bind(edition_id)
+            .bind(value)
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        Ok(count.max(0))
+    }
+
+    async fn count_tokens_matching_form_by_surah(
+        &self,
+        edition_id: &str,
+        column: FormColumn,
+        value: &str,
+    ) -> Result<Vec<(i64, i64)>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let sql = format!(
+            "SELECT surah, COUNT(*) FROM quran_token_forms
+             WHERE edition_id = ? AND {} = ? GROUP BY surah ORDER BY surah",
+            column.column_name()
+        );
+        let rows = sqlx::query(&sql)
+            .bind(edition_id)
+            .bind(value)
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        Ok(rows
+            .iter()
+            .map(|r| {
+                use sqlx::Row as _;
+                (r.get::<i64, _>("surah"), r.get::<i64, _>("COUNT(*)"))
+            })
+            .collect())
+    }
+
+    async fn list_distinct_forms(
+        &self,
+        edition_id: &str,
+        column: FormColumn,
+    ) -> Result<Vec<(String, i64)>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let sql = format!(
+            "SELECT {}, COUNT(*) AS n FROM quran_token_forms
+             WHERE edition_id = ? GROUP BY {} ORDER BY n DESC, {} ASC",
+            column.column_name(),
+            column.column_name(),
+            column.column_name()
+        );
+        let rows = sqlx::query(&sql)
+            .bind(edition_id)
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        Ok(rows
+            .iter()
+            .map(|r| {
+                use sqlx::Row as _;
+                (r.get::<String, _>(column.column_name()), r.get::<i64, _>("n"))
+            })
+            .collect())
+    }
+
+    async fn list_all_token_forms(&self, edition_id: &str) -> Result<Vec<TokenFormRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT edition_id, surah, ayah, position, simple, bare, hamza_folded, folded,
+                    affix_stripped, transliteration, phonetic, rule_set_id, rule_set_version,
+                    corpus_generation, provenance_id
+             FROM quran_token_forms
+             WHERE edition_id = ? ORDER BY surah, ayah, position",
+        )
+        .bind(edition_id)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows.iter().map(decode_token_form).collect())
+    }
+
     async fn get_ayah_form(
         &self,
         edition_id: &str,
@@ -1695,6 +1820,16 @@ impl QuranRepository for SqliteQuranRepository {
                 .await
                 .map_err(map_sqlx_error)?;
         Ok(max.unwrap_or(0))
+    }
+
+    async fn delete_build_run(&mut self, id: &str) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query("DELETE FROM index_build_runs WHERE id = ?")
+            .bind(id)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        Ok(())
     }
 
     async fn cache_get(&self, key: &str) -> Result<Option<SearchCacheRow>, StorageError> {
