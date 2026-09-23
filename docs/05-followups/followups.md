@@ -21,7 +21,12 @@ Status key: 🔴 open · 🟢 done (with date + where recorded).
 - **Scope:** any DOC pass. No code impact.
 
 ## FU-DOC-02 — `docs/04-tasks/` required by workflow does not exist
-- **Status:** 🔴 open
+- **Status:** 🔴 open — partially addressed 2026-09-24: `docs/04-tasks/README.md`
+  + `active/README.md` + `completed/README.md` created, declaring the phase
+  boards the system of record and this directory an index.
+- **Remaining:** reconcile the workflow text (`AGENTS.md` "Before starting work",
+  `.agent/instructions.md` §3, `.agent/workflow.md`) to name the phase
+  `tasks.md` boards canonical instead of implying `docs/04-tasks/` is primary.
 - **Found:** 2026-09-16 (repo discovery sweep)
 - **Context:** `AGENTS.md` > "Agent Workflow" §2 and `.agent/instructions.md`
   §3 require every work item to map to a `TASK-nnn-slug.md` under
