@@ -90,6 +90,39 @@ async fn expired_lease_marks_interrupted_and_resumes_from_checkpoint() {
 }
 
 #[tokio::test]
+async fn rescheduled_job_is_not_claimable_until_due() {
+    let fx = common::fixture().await;
+
+    // Two due jobs; delay the second by an hour.
+    let mut uow = fx.db.write().await.unwrap();
+    uow.jobs().enqueue(job("job-due", "idem-due")).await.unwrap();
+    uow.jobs().enqueue(job("job-later", "idem-later")).await.unwrap();
+    uow.jobs().reschedule("job-later", 3600, None).await.unwrap();
+    uow.commit().await.unwrap();
+
+    // Only the due job is claimable; the rescheduled one waits.
+    let mut uow = fx.db.write().await.unwrap();
+    let first = uow.jobs().claim_next("worker-1", 300).await.unwrap().unwrap();
+    assert_eq!(first.id, "job-due");
+    let second = uow.jobs().claim_next("worker-1", 300).await.unwrap();
+    assert!(second.is_none(), "a job delayed by reschedule must not be claimable yet");
+    uow.commit().await.unwrap();
+
+    // Once its `available_at` passes (simulated by backdating), it claims normally.
+    let pool = common::rw_pool(&fx.path).await;
+    sqlx::query("UPDATE jobs SET available_at = '2000-01-01T00:00:00Z' WHERE id = 'job-later'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+
+    let mut uow = fx.db.write().await.unwrap();
+    let resumed = uow.jobs().claim_next("worker-2", 300).await.unwrap().unwrap();
+    assert_eq!(resumed.id, "job-later");
+    uow.commit().await.unwrap();
+}
+
+#[tokio::test]
 async fn cancel_is_durably_recorded() {
     let fx = common::fixture().await;
     let mut uow = fx.db.write().await.unwrap();
