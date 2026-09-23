@@ -306,13 +306,13 @@ approval.
 |---|---|---|---|---|---|
 | X — External-lead-time decisions | 5 | — | 0 | ☐ Not Started |
 | 2.0 — Dataset & Linguistic Decisions | 12 | 30.5 | 0 | ☐ Not Started |
-| 2.1 — Normalization Engine | 12 | 28.5 | 0 | ☐ Not Started |
-| 2.2 — Derived Forms & FTS Foundation | 15 | 33.5 | 0 | ☐ Not Started |
-| 2.3 — Search Tools | 17 | 42.0 ⚠️ | 0 | ☐ Not Started |
+| 2.1 — Normalization Engine | 12 | 28.5 | 3 | ◐ In Progress |
+| 2.2 — Derived Forms & FTS Foundation | 15 | 33.5 | 10 | ◐ In Progress |
+| 2.3 — Search Tools | 17 | 42.0 ⚠️ | 13 | ◐ In Progress |
 | 2.4 — Morphology Import & Lexicons | 18 | 45.0 ⚠️ | 0 | ☐ Not Started |
 | 2.5 — Morphology & Family Tools | 19 | 47.5 ⚠️ | 0 | ☐ Not Started |
 | 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 51.0 ⚠️ | 0 | ☐ Not Started |
-| **Total** | **114 + 5** | **278.0** | **0** | **0%** |
+| **Total** | **114 + 5** | **278.0** | **26** | **23%** |
 
 By role: **BE ≈ 141.0 ed** · **SRCH ≈ 40.0 ed** · **QA ≈ 40.5 ed** · **DATA ≈ 17.0 ed** ·
 **DOC ≈ 13.0 ed** · **LING ≈ 10.5 ed** · **LING+BE ≈ 3.5 ed** · **LING+QA ≈ 10.5 ed** ·
