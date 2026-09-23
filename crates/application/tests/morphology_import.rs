@@ -151,7 +151,7 @@ async fn aligned_document(db: &SqliteDatabase) -> String {
                     "lemma_str": format!("lem-{}", token.surface),
                     "root_str": "tst-root",
                     "stem_str": token.surface,
-                    "tag_native": "",
+                    "tag_native": if analysis_no == 0 { "N" } else { "V" },
                     "tag_unified": if analysis_no == 0 { "noun" } else { "verb" },
                     "layer": "B",
                     "state": "imported",
@@ -212,13 +212,18 @@ async fn adversarial_documents_reject_with_mv_ids() {
     let doc = serde_json::json!([{
         "sura_no": 1, "aya_no": 1, "tok_idx": 1, "analysis_no": 0,
         "surface_form": "", "lemma_str": "x", "root_str": "y",
+        "tag_native": "N", "tag_unified": "noun",
         "layer": "B", "state": "imported", "synthetic_test_only": true,
     }])
     .to_string();
-    let report =
-        run_morphology_import(&db, &import_params(doc, "batch-mv002"), &AtomicBool::new(false), |_| {})
-            .await
-            .expect("import runs to a verdict");
+    let report = run_morphology_import(
+        &db,
+        &import_params(doc, "batch-mv002"),
+        &AtomicBool::new(false),
+        |_| {},
+    )
+    .await
+    .expect("import runs to a verdict");
     assert_eq!(report.state, "staged", "Error (not Fatal) still stages");
     let mut uow = db.write().await.unwrap();
     let findings = uow.quran().list_findings("batch-mv002").await.unwrap();
