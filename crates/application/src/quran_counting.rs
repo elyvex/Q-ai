@@ -365,17 +365,10 @@ pub async fn first_last_occurrence(
     let forms =
         uow.quran().list_all_token_forms(&edition_id).await.map_err(CountingError::storage)?;
     uow.rollback().await.map_err(CountingError::storage)?;
-    let pick = |f: &storage::quran::TokenFormRow| match column {
-        FormColumn::Simple => &f.simple,
-        FormColumn::Bare => &f.bare,
-        FormColumn::HamzaFolded => &f.hamza_folded,
-        FormColumn::Folded => &f.folded,
-        FormColumn::AffixStripped => &f.affix_stripped,
-    };
     let mut first: Option<(i64, i64)> = None;
     let mut last: Option<(i64, i64)> = None;
     for form in &forms {
-        if pick(form) == &normalized {
+        if form_value(form, column) == normalized {
             let loc = (form.surah, form.ayah);
             if first.is_none() {
                 first = Some(loc);
@@ -477,15 +470,8 @@ pub async fn cooccurrence(
     let forms =
         uow.quran().list_all_token_forms(&edition_id).await.map_err(CountingError::storage)?;
     uow.rollback().await.map_err(CountingError::storage)?;
-    let pick = |f: &storage::quran::TokenFormRow| match column {
-        FormColumn::Simple => f.simple.clone(),
-        FormColumn::Bare => f.bare.clone(),
-        FormColumn::HamzaFolded => f.hamza_folded.clone(),
-        FormColumn::Folded => f.folded.clone(),
-        FormColumn::AffixStripped => f.affix_stripped.clone(),
-    };
     let stream: Vec<(String, i64, i64)> =
-        forms.iter().map(|f| (pick(f), f.surah, f.ayah)).collect();
+        forms.iter().map(|f| (form_value(f, column).to_string(), f.surah, f.ayah)).collect();
     let radius = window_tokens.max(1);
     let mut counts: BTreeMap<String, (u64, bool)> = BTreeMap::new();
     for (i, (form, _, _)) in stream.iter().enumerate() {
@@ -545,49 +531,36 @@ pub async fn collocation(
 ) -> Result<(CountingRules, Vec<CollocationHit>), CountingError> {
     let (rules, co) = cooccurrence(db, target, profile, window_tokens, usize::MAX).await?;
     let column = countable_column(profile)?;
-    let normalized = normalize_target(profile, target)?;
     let edition_id = active_edition_id(db).await?;
     let mut uow = db.write().await.map_err(CountingError::storage)?;
     let forms =
         uow.quran().list_all_token_forms(&edition_id).await.map_err(CountingError::storage)?;
     uow.rollback().await.map_err(CountingError::storage)?;
-    let pick = |f: &storage::quran::TokenFormRow| match column {
-        FormColumn::Simple => &f.simple,
-        FormColumn::Bare => &f.bare,
-        FormColumn::HamzaFolded => &f.hamza_folded,
-        FormColumn::Folded => &f.folded,
-        FormColumn::AffixStripped => &f.affix_stripped,
-    };
     let total = forms.len() as f64;
     if total == 0.0 {
         return Ok((rules, Vec::new()));
     }
-    let target_count = forms.iter().filter(|f| pick(f) == &normalized).count() as f64;
     let mut unigram: BTreeMap<String, f64> = BTreeMap::new();
     for form in &forms {
-        *unigram.entry(pick(form).clone()).or_insert(0.0) += 1.0;
+        *unigram.entry(form_value(form, column).to_string()).or_insert(0.0) += 1.0;
     }
-    // Windows: one window per target occurrence (radius each side).
-    let windows = co.iter().map(|h| h.count as f64).sum::<f64>().max(1.0);
-    let _ = windows;
+    let window_mass = co.iter().map(|h| h.count as f64).sum::<f64>();
     let mut hits = Vec::new();
-    for hit in co {
+    for hit in &co {
         if hit.count < COLLOCATION_MIN_COUNT {
             continue;
         }
         let observed = hit.count as f64;
         let candidate_count = unigram.get(&hit.form).copied().unwrap_or(0.0);
         // Expected joint windows under independence, scaled by window mass:
-        // E = windows * P(candidate) with P from unigram rates.
-        let expected = (co.iter().map(|h| h.count as f64).sum::<f64>() / total.max(1.0)
-            * candidate_count)
-            .max(1e-9);
+        // E = window_mass * P(candidate) with P from unigram rates.
+        let expected = (window_mass / total.max(1.0) * candidate_count).max(1e-9);
         let pmi = (observed / expected).log2();
         let t_score = (observed - expected) / observed.sqrt().max(1e-9);
         // Dunning G² over {candidate, ¬candidate} × {in-window, out}.
         let o11 = observed;
         let o12 = candidate_count - observed;
-        let o21 = co.iter().map(|h| h.count as f64).sum::<f64>() - observed;
+        let o21 = window_mass - observed;
         let o22 = total - candidate_count - o21;
         let llr = 2.0
             * (log_term(o11, expected)
@@ -597,9 +570,8 @@ pub async fn collocation(
                     o22,
                     (o12 + o22).max(1e-9) * (total - candidate_count) / total.max(1e-9),
                 ));
-        let _ = target_count;
         hits.push(CollocationHit {
-            form: hit.form,
+            form: hit.form.clone(),
             observed: hit.count,
             expected,
             pmi,
