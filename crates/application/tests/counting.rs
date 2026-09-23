@@ -162,8 +162,12 @@ async fn distribution_and_numeric_report() {
 
     let report = numeric_report(&db, &target, "L3.diacritics").await.unwrap();
     assert_eq!(report.note, NO_INTERPRETATION_NOTE);
-    let json = serde_json::to_string(&report).unwrap();
-    assert!(!json.contains("interpret"), "no interpretive commentary, only the fixed note");
+    let json: serde_json::Value =
+        serde_json::from_str(&serde_json::to_string(&report).unwrap()).unwrap();
+    // Report shape is fixed: frequency payload + note. No free-text field
+    // exists for interpretation to hide in.
+    assert_eq!(json.as_object().unwrap().len(), 2);
+    assert!(json.get("frequency").is_some() && json.get("note").is_some());
 }
 
 /// T99/T103: occurrences carry verbatim disclaimers; missing form proves zero.
