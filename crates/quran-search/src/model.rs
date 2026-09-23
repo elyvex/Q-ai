@@ -242,6 +242,9 @@ pub struct IndexManifest {
     pub built_at: String,
     /// Documents committed.
     pub doc_count: u64,
+    /// Trigram posting rows in `trigram.db` (T36; 0 for pre-T36 generations).
+    #[serde(default)]
+    pub trigram_postings: u64,
     /// Content hash over the manifest (drift detection).
     pub content_hash: String,
 }
@@ -345,6 +348,7 @@ mod tests {
             morphology_dataset_versions: BTreeMap::new(),
             built_at: "2026-09-15T00:00:00Z".to_string(),
             doc_count: 6236,
+            trigram_postings: 0,
             content_hash: "sha256:ab".to_string(),
         };
         let json = serde_json::to_string(&manifest).unwrap();
