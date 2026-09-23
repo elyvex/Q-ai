@@ -141,7 +141,6 @@ pub fn reachable<S: GraphStore>(
                 );
                 if seen_edges.insert(key) {
                     edges.push(edge);
-                    expanded_edges += 0;
                     if edges.len() > budgets.max_edges {
                         let (nodes, edges) = collect_sorted(node_records, edges);
                         return Ok(TraversalResult::incomplete(
