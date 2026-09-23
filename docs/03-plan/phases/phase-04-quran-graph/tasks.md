@@ -19,9 +19,11 @@ exit requirement.
 > `cargo test -p quran-morphology` 52/52 green, clippy `-D warnings` clean,
 > `cargo fmt --check` clean, `cargo xtask arch-check` OK, `cargo xtask
 > migrate-check` OK (19 migrations, incl. graph + morphology + lexicon tables).
-> Four tasks move ☐ → ◐ below on that evidence; **none is ☑** (M0 decisions
-> unmade, SQLite adapter / application wiring / CLI / HTTP / doctor absent,
-> DoD + `done.md` evidence entries pending with the owning session).
+> Six tasks move ☐ → ◐ below on that evidence (TASK-401/403/404/409/420/427 —
+> all present only as the pure `quran-graph` crate over the in-memory backend);
+> **none is ☑** (M0 decisions unmade, SQLite adjacency adapter / application
+> wiring / CLI / HTTP / doctor absent, DoD + `done.md` completion entries
+> pending with the owning session).
 > M5 stays ⊘ (no licensed morphology dataset; Phase-2 Sprints 2.4–2.5 at 0 tasks).
 
 ---
@@ -52,7 +54,7 @@ blocker named with an owner.
 
 | ID | Task | Deliv. | Depends | Est | Status |
 |---|---|---|---|---|---|
-| TASK-401 | `GraphStore` port: node resolution, neighbors, bounded paths/subgraphs/patterns, build/inspect/delete-verify, capability discovery; snapshot+authz+budgets+deadline on every query; incomplete-vs-empty; no backend query language leaks | D4.1 | TASK-413 | 3.0 | ☐ |
+| TASK-401 | `GraphStore` port: node resolution, neighbors, bounded paths/subgraphs/patterns, build/inspect/delete-verify, capability discovery; snapshot+authz+budgets+deadline on every query; incomplete-vs-empty; no backend query language leaks | D4.1 | TASK-413 | 3.0 | ◐ (`store.rs` + `mem.rs` over memory backend; SQLite adapter absent) |
 | TASK-415 | True read transactions (replace pooled `ReadTx`) + bounded bulk canonical reads; restart-safe durable dependency snapshots | D4.1 | TASK-401 | 3.0 | ☐ |
 | TASK-416 | Migrations: assertion authority, snapshots, build catalog, adjacency, delivery ledger (numbers from live tree; atomic DDL + ledger insert); harden migration runner transactionality if needed | D4.1 | TASK-413 | 2.5 | ☐ |
 | TASK-417 | Atomic build reservation + fenced CAS publication; revalidate complete dependency snapshots before pointer changes; preserve prior release on stale worker completion | D4.9 | TASK-415, TASK-416 | 2.0 | ☐ |
@@ -65,7 +67,7 @@ snapshot reads never mix revisions. Re-estimate M2–M7 from actuals here.
 
 | ID | Task | Deliv. | Depends | Est | Status |
 |---|---|---|---|---|---|
-| TASK-404 | Structural builder: edition/surah/ayah/token/division nodes; `CONTAINS`, `NEXT` with explicit surah-boundary behavior; input-version provenance; rebuild preserves annotations/review history; canonical lookup works with projection missing | D4.2 | TASK-415, TASK-416, TASK-417 | 3.0 | ☐ |
+| TASK-404 | Structural builder: edition/surah/ayah/token/division nodes; `CONTAINS`, `NEXT` with explicit surah-boundary behavior; input-version provenance; rebuild preserves annotations/review history; canonical lookup works with projection missing | D4.2 | TASK-415, TASK-416, TASK-417 | 3.0 | ◐ (pure builder + golden structural fixture; durable lifecycle/publication not wired) |
 | TASK-419 | Build lifecycle implementation: capture inputs → reserve build → staged resumable batches (durable progress, not in-memory checkpoints) → validate hashes/membership → atomic publication → retain previous verified build | D4.2 | TASK-404 | 3.0 | ☐ |
 
 **M2 exit:** deterministic structural graph; zero dangling edges; cancellation preserves
@@ -77,9 +79,9 @@ TASK-402: build → inspect → bounded neighbors → canonical quotation.
 | ID | Task | Deliv. | Depends | Est | Status |
 |---|---|---|---|---|---|
 | TASK-402 | SQLite adjacency adapter: indexed parameterized node/neighbor reads per ADR-0202 §3; cycle handling, interruption, effective authorization/tombstone/evidence filtering during expansion | D4.1 | TASK-404, P4-X03 | 3.0 | ☐ |
-| TASK-403 | Batched frontier traversal for bounded subgraphs, reachability, minimum-hop and up-to-K paths; counters, deterministic ordering, cancellation and explicit incomplete results; optional CTE equivalence if implemented | D4.1 | TASK-402 | 2.5 | ☐ |
-| TASK-409 | Backend-agnostic conformance suite: neighbors/paths/subgraph/pattern, budgets, authz-filtered intermediates, incomplete-result semantics; draft harness with TASK-401, complete after query implementations; new adapters must pass before activation | D4.6 | TASK-403, TASK-420 | 3.0 | ☐ |
-| TASK-420 | Typed pattern queries: allowlisted predicates, parameterized values, pattern-size budget; reject unsupported operations (no raw query text) | D4.1 | TASK-403 | 2.0 | ☐ |
+| TASK-403 | Batched frontier traversal for bounded subgraphs, reachability, minimum-hop and up-to-K paths; counters, deterministic ordering, cancellation and explicit incomplete results; optional CTE equivalence if implemented | D4.1 | TASK-402 | 2.5 | ◐ (pure `traverse.rs` over the port + cycle/high-degree/diamond tests; backend expansion pending TASK-402) |
+| TASK-409 | Backend-agnostic conformance suite: neighbors/paths/subgraph/pattern, budgets, authz-filtered intermediates, incomplete-result semantics; draft harness with TASK-401, complete after query implementations; new adapters must pass before activation | D4.6 | TASK-403, TASK-420 | 3.0 | ◐ (`tests/conformance.rs` draft over `MemGraphStore`; no second adapter has passed it) |
+| TASK-420 | Typed pattern queries: allowlisted predicates, parameterized values, pattern-size budget; reject unsupported operations (no raw query text) | D4.1 | TASK-403 | 2.0 | ◐ (`pattern.rs` typed executor + size budget; no backend adapter yet) |
 
 **M3 exit:** cyclic + high-degree fixtures terminate within limits; hidden intermediates
 cannot influence disclosed paths or counts; budget exhaustion ≠ "no path".
@@ -114,7 +116,7 @@ families pass. Synthetic fixtures prove mechanics only — never linguistic comp
 | TASK-424 | CLI: `qai graph build/inspect/neighbors/path/subgraph/pattern/root-family/export`; explicit build management and confirmed repairs stay CLI-only; thin service dispatch and cancellation | D4.4 | TASK-419, TASK-409, TASK-406, TASK-427 | 2.5 | ☐ |
 | TASK-425 | Read-only typed tools `quran.graph_neighbors/path/subgraph/pattern`, root-family and entity-timeline adapters; reproducibility binds projection/build/dataset versions, query, policy and budgets; no build-mutation tool | D4.4 | TASK-409, TASK-406, TASK-423 | 2.0 | ☐ |
 | TASK-426 | Read-only HTTP neighbors/path/subgraph/pattern/root-family/entity-timeline and projection inspection routes; missing/stale/incomplete/refused semantics; cache validators bind query+projection+deps+budgets+visibility | D4.4 | TASK-419, TASK-409, TASK-406, TASK-423 | 2.5 | ☐ |
-| TASK-427 | Application Graph JSON export service (identities, paths, attribution, versions, truncation); GraphML where practical; bounded output respects tombstones/authz | D4.5 | TASK-409, TASK-408, TASK-423, P4-X05 | 2.0 | ☐ |
+| TASK-427 | Application Graph JSON export service (identities, paths, attribution, versions, truncation); GraphML where practical; bounded output respects tombstones/authz | D4.5 | TASK-409, TASK-408, TASK-423, P4-X05 | 2.0 | ◐ (pure Graph JSON exporter in `export.rs` with truncation notice + authz/tombstone filter; GraphML + application service pending) |
 | TASK-428 | Basic local visualization: bounded exploration, evidence inspection, provenance labels, RTL, accessible non-graph alternative, reader navigation | D4.5 | TASK-426, TASK-422, TASK-427 | 3.0 | ☐ |
 
 **M6 exit:** CLI/API/tool parity; exports cannot leak restricted evidence; visualization
