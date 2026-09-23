@@ -202,7 +202,7 @@ pub fn suggest_computational(
 }
 
 /// A review-queue promotion decision: the only path from `proposed` to
-/// scholar-verified (mirrors the `0017` `review_queue` decided rows).
+/// scholar-verified (mirrors the `0017` `morphology_review_queue` decided rows).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReviewPromotion {
     /// Suggestion being decided.
