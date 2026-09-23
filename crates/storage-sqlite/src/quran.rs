@@ -10,11 +10,13 @@ use async_trait::async_trait;
 use sqlx::Row;
 use storage::error::StorageError;
 use storage::quran::{
-    ActiveEditionRow, AyahFormRow, AyahRow, CitationRow, DifferenceReportRow, DivisionRow,
-    FormColumn, ImportRunRow, IndexBuildRunRow, IndexPointerRow, NormalizationProfileRow,
-    NormalizationRuleRow, QuranEditionRow, QuranRepository, SearchCacheRow, SeparatorRow,
-    SkeletonRow, StagedEditionRef, SurahRow, TokenFormRow, TokenRow, TranslationEditionRow,
-    TranslationPassageRow, ValidationReportRow, WordGlossRow,
+    ActiveEditionRow, AlignmentRow, AyahFormRow, AyahRow, CitationRow, DifferenceReportRow,
+    DivisionRow, FamilyRelationRow, FormColumn, ImportRunRow, IndexBuildRunRow, IndexPointerRow,
+    LexiconLemmaRow, LexiconProvenance, LexiconRootRow, MorphReviewItemRow, MorphemeRow,
+    MorphologyFindingRow, NormalizationProfileRow, NormalizationRuleRow, QuranDatasetRow,
+    QuranEditionRow, QuranRepository, SearchCacheRow, SeparatorRow, SkeletonRow, StagedEditionRef,
+    StagedMorphRow, StagingBatchRow, SurahRow, TokenAnalysisRow, TokenFormRow, TokenRow,
+    TranslationEditionRow, TranslationPassageRow, ValidationReportRow, WordGlossRow,
 };
 
 use super::{SharedTx, map_sqlx_error};
@@ -1942,6 +1944,662 @@ impl QuranRepository for SqliteQuranRepository {
         .len() as u64;
         Ok(deleted)
     }
+
+    // ─── Phase 2 — morphology lexicon + staging ──────────────────────
+
+    async fn upsert_dataset(&mut self, row: QuranDatasetRow) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query(
+            "INSERT INTO quran_datasets
+               (id, slug, version, title, license_status, license_json, attribution,
+                root_convention, tagset_version, state, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               title = excluded.title, license_status = excluded.license_status,
+               license_json = excluded.license_json, attribution = excluded.attribution,
+               root_convention = excluded.root_convention,
+               tagset_version = excluded.tagset_version",
+        )
+        .bind(&row.id)
+        .bind(&row.slug)
+        .bind(&row.version)
+        .bind(&row.title)
+        .bind(&row.license_status)
+        .bind(&row.license_json)
+        .bind(&row.attribution)
+        .bind(&row.root_convention)
+        .bind(&row.tagset_version)
+        .bind(&row.state)
+        .bind(&row.created_at)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn get_dataset(
+        &self,
+        slug: &str,
+        version: &str,
+    ) -> Result<Option<QuranDatasetRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query(
+            "SELECT id, slug, version, title, license_status, license_json, attribution,
+                    root_convention, tagset_version, state, created_at
+             FROM quran_datasets WHERE slug = ? AND version = ?",
+        )
+        .bind(slug)
+        .bind(version)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(row.map(|r| decode_dataset(&r)))
+    }
+
+    async fn list_datasets(&self) -> Result<Vec<QuranDatasetRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT id, slug, version, title, license_status, license_json, attribution,
+                    root_convention, tagset_version, state, created_at
+             FROM quran_datasets ORDER BY slug, version",
+        )
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows.iter().map(decode_dataset).collect())
+    }
+
+    async fn active_dataset(&self) -> Result<Option<QuranDatasetRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query(
+            "SELECT id, slug, version, title, license_status, license_json, attribution,
+                    root_convention, tagset_version, state, created_at
+             FROM quran_datasets WHERE state = 'active' LIMIT 1",
+        )
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(row.map(|r| decode_dataset(&r)))
+    }
+
+    async fn set_dataset_state(&mut self, id: &str, state: &str) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query("UPDATE quran_datasets SET state = ? WHERE id = ?")
+            .bind(state)
+            .bind(id)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn insert_staging_batch(&mut self, row: StagingBatchRow) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query(
+            "INSERT INTO morphology_staging_batches
+               (id, dataset_slug, dataset_version, adapter, source_manifest_hash,
+                state, checkpoint, created_at, finished_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&row.id)
+        .bind(&row.dataset_slug)
+        .bind(&row.dataset_version)
+        .bind(&row.adapter)
+        .bind(&row.source_manifest_hash)
+        .bind(&row.state)
+        .bind(&row.checkpoint)
+        .bind(&row.created_at)
+        .bind(&row.finished_at)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn update_staging_batch(
+        &mut self,
+        id: &str,
+        state: &str,
+        checkpoint: &str,
+        finished_at: Option<&str>,
+    ) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query(
+            "UPDATE morphology_staging_batches SET state = ?, checkpoint = ?, finished_at = ?
+             WHERE id = ?",
+        )
+        .bind(state)
+        .bind(checkpoint)
+        .bind(finished_at)
+        .bind(id)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn get_staging_batch(&self, id: &str) -> Result<Option<StagingBatchRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query(
+            "SELECT id, dataset_slug, dataset_version, adapter, source_manifest_hash,
+                    state, checkpoint, created_at, finished_at
+             FROM morphology_staging_batches WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(row.map(|r| decode_staging_batch(&r)))
+    }
+
+    async fn replace_staging_rows(
+        &mut self,
+        batch_id: &str,
+        rows: Vec<StagedMorphRow>,
+    ) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query("DELETE FROM morphology_staging_rows WHERE batch_id = ?")
+            .bind(batch_id)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        for row in &rows {
+            sqlx::query(
+                "INSERT INTO morphology_staging_rows
+                   (id, batch_id, reference, surah, ayah, token_position,
+                    payload_json, native_tags_json, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(&row.id)
+            .bind(&row.batch_id)
+            .bind(&row.reference)
+            .bind(row.surah)
+            .bind(row.ayah)
+            .bind(row.token_position)
+            .bind(&row.payload_json)
+            .bind(&row.native_tags_json)
+            .bind(&row.created_at)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        }
+        Ok(())
+    }
+
+    async fn list_staging_rows(&self, batch_id: &str) -> Result<Vec<StagedMorphRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT id, batch_id, reference, surah, ayah, token_position,
+                    payload_json, native_tags_json, created_at
+             FROM morphology_staging_rows WHERE batch_id = ?
+             ORDER BY surah, ayah, token_position",
+        )
+        .bind(batch_id)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows.iter().map(decode_staged_row).collect())
+    }
+
+    async fn replace_alignment_rows(
+        &mut self,
+        batch_id: &str,
+        rows: Vec<AlignmentRow>,
+    ) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query("DELETE FROM morphology_alignment WHERE batch_id = ?")
+            .bind(batch_id)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        for row in &rows {
+            sqlx::query(
+                "INSERT INTO morphology_alignment
+                   (id, batch_id, direct_key, edition_id, surah, ayah, token_position,
+                    alignment_kind, alignment_hash, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(&row.id)
+            .bind(&row.batch_id)
+            .bind(&row.direct_key)
+            .bind(&row.edition_id)
+            .bind(row.surah)
+            .bind(row.ayah)
+            .bind(row.token_position)
+            .bind(&row.alignment_kind)
+            .bind(&row.alignment_hash)
+            .bind(&row.created_at)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        }
+        Ok(())
+    }
+
+    async fn list_alignment(&self, batch_id: &str) -> Result<Vec<AlignmentRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT id, batch_id, direct_key, edition_id, surah, ayah, token_position,
+                    alignment_kind, alignment_hash, created_at
+             FROM morphology_alignment WHERE batch_id = ? ORDER BY surah, ayah, token_position",
+        )
+        .bind(batch_id)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows.iter().map(decode_alignment).collect())
+    }
+
+    async fn replace_findings(
+        &mut self,
+        batch_id: &str,
+        rows: Vec<MorphologyFindingRow>,
+    ) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query("DELETE FROM morphology_findings WHERE batch_id = ?")
+            .bind(batch_id)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        for row in &rows {
+            sqlx::query(
+                "INSERT INTO morphology_findings
+                   (id, batch_id, rule_id, severity, reference, detail, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(&row.id)
+            .bind(&row.batch_id)
+            .bind(&row.rule_id)
+            .bind(&row.severity)
+            .bind(&row.reference)
+            .bind(&row.detail)
+            .bind(&row.created_at)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        }
+        Ok(())
+    }
+
+    async fn list_findings(
+        &self,
+        batch_id: &str,
+    ) -> Result<Vec<MorphologyFindingRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT id, batch_id, rule_id, severity, reference, detail, created_at
+             FROM morphology_findings WHERE batch_id = ? ORDER BY rule_id, reference",
+        )
+        .bind(batch_id)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows.iter().map(decode_finding).collect())
+    }
+
+    async fn insert_roots(&mut self, rows: Vec<LexiconRootRow>) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        for row in &rows {
+            sqlx::query(
+                "INSERT INTO quran_roots
+                   (id, dataset_id, root, root_normalized, provenance_layer, algorithm,
+                    algorithm_version, confidence, reviewer, status, corpus_generation, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(&row.id)
+            .bind(&row.dataset_id)
+            .bind(&row.root)
+            .bind(&row.root_normalized)
+            .bind(&row.provenance.layer)
+            .bind(&row.provenance.algorithm)
+            .bind(&row.provenance.algorithm_version)
+            .bind(row.provenance.confidence)
+            .bind(&row.provenance.reviewer)
+            .bind(&row.provenance.status)
+            .bind(row.corpus_generation)
+            .bind(&row.created_at)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        }
+        Ok(())
+    }
+
+    async fn insert_lemmas(&mut self, rows: Vec<LexiconLemmaRow>) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        for row in &rows {
+            sqlx::query(
+                "INSERT INTO quran_lemmas
+                   (id, dataset_id, lemma, root_id, pos_unified, pos_native, provenance_layer,
+                    algorithm, algorithm_version, confidence, reviewer, status,
+                    corpus_generation, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(&row.id)
+            .bind(&row.dataset_id)
+            .bind(&row.lemma)
+            .bind(&row.root_id)
+            .bind(&row.pos_unified)
+            .bind(&row.pos_native)
+            .bind(&row.provenance.layer)
+            .bind(&row.provenance.algorithm)
+            .bind(&row.provenance.algorithm_version)
+            .bind(row.provenance.confidence)
+            .bind(&row.provenance.reviewer)
+            .bind(&row.provenance.status)
+            .bind(row.corpus_generation)
+            .bind(&row.created_at)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        }
+        Ok(())
+    }
+
+    async fn insert_analyses(&mut self, rows: Vec<TokenAnalysisRow>) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        for row in &rows {
+            sqlx::query(
+                "INSERT INTO quran_token_analyses
+                   (id, dataset_id, edition_id, surah, ayah, token_position, analysis_index,
+                    surface, lemma_id, root_id, stem, pos_unified, pos_native, features_json,
+                    segments_json, provenance_layer, algorithm, algorithm_version, confidence,
+                    reviewer, status, corpus_generation, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(&row.id)
+            .bind(&row.dataset_id)
+            .bind(&row.edition_id)
+            .bind(row.surah)
+            .bind(row.ayah)
+            .bind(row.token_position)
+            .bind(row.analysis_index)
+            .bind(&row.surface)
+            .bind(&row.lemma_id)
+            .bind(&row.root_id)
+            .bind(&row.stem)
+            .bind(&row.pos_unified)
+            .bind(&row.pos_native)
+            .bind(&row.features_json)
+            .bind(&row.segments_json)
+            .bind(&row.provenance.layer)
+            .bind(&row.provenance.algorithm)
+            .bind(&row.provenance.algorithm_version)
+            .bind(row.provenance.confidence)
+            .bind(&row.provenance.reviewer)
+            .bind(&row.provenance.status)
+            .bind(row.corpus_generation)
+            .bind(&row.created_at)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        }
+        Ok(())
+    }
+
+    async fn insert_morphemes(&mut self, rows: Vec<MorphemeRow>) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        for row in &rows {
+            sqlx::query(
+                "INSERT INTO quran_morphemes (id, analysis_id, kind, surface, features_json, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?)",
+            )
+            .bind(&row.id)
+            .bind(&row.analysis_id)
+            .bind(&row.kind)
+            .bind(&row.surface)
+            .bind(&row.features_json)
+            .bind(&row.created_at)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        }
+        Ok(())
+    }
+
+    async fn analyses_for_token(
+        &self,
+        dataset_id: Option<&str>,
+        edition_id: &str,
+        surah: i64,
+        ayah: i64,
+        position: i64,
+    ) -> Result<Vec<TokenAnalysisRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = if let Some(dataset) = dataset_id {
+            sqlx::query(
+                "SELECT id, dataset_id, edition_id, surah, ayah, token_position, analysis_index,
+                        surface, lemma_id, root_id, stem, pos_unified, pos_native, features_json,
+                        segments_json, provenance_layer, algorithm, algorithm_version, confidence,
+                        reviewer, status, corpus_generation, created_at
+                 FROM quran_token_analyses
+                 WHERE dataset_id = ? AND edition_id = ? AND surah = ? AND ayah = ?
+                   AND token_position = ? ORDER BY analysis_index",
+            )
+            .bind(dataset)
+            .bind(edition_id)
+            .bind(surah)
+            .bind(ayah)
+            .bind(position)
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?
+        } else {
+            sqlx::query(
+                "SELECT id, dataset_id, edition_id, surah, ayah, token_position, analysis_index,
+                        surface, lemma_id, root_id, stem, pos_unified, pos_native, features_json,
+                        segments_json, provenance_layer, algorithm, algorithm_version, confidence,
+                        reviewer, status, corpus_generation, created_at
+                 FROM quran_token_analyses
+                 WHERE edition_id = ? AND surah = ? AND ayah = ? AND token_position = ?
+                 ORDER BY dataset_id, analysis_index",
+            )
+            .bind(edition_id)
+            .bind(surah)
+            .bind(ayah)
+            .bind(position)
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?
+        };
+        Ok(rows.iter().map(decode_analysis).collect())
+    }
+
+    async fn analyses_for_root(
+        &self,
+        dataset_id: &str,
+        root_normalized: &str,
+    ) -> Result<Vec<TokenAnalysisRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT a.id, a.dataset_id, a.edition_id, a.surah, a.ayah, a.token_position,
+                    a.analysis_index, a.surface, a.lemma_id, a.root_id, a.stem, a.pos_unified,
+                    a.pos_native, a.features_json, a.segments_json, a.provenance_layer,
+                    a.algorithm, a.algorithm_version, a.confidence, a.reviewer, a.status,
+                    a.corpus_generation, a.created_at
+             FROM quran_token_analyses a JOIN quran_roots r ON a.root_id = r.id
+             WHERE a.dataset_id = ? AND r.root_normalized = ?
+             ORDER BY a.surah, a.ayah, a.token_position, a.analysis_index",
+        )
+        .bind(dataset_id)
+        .bind(root_normalized)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows.iter().map(decode_analysis).collect())
+    }
+
+    async fn analyses_for_lemma(
+        &self,
+        dataset_id: &str,
+        lemma: &str,
+    ) -> Result<Vec<TokenAnalysisRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT a.id, a.dataset_id, a.edition_id, a.surah, a.ayah, a.token_position,
+                    a.analysis_index, a.surface, a.lemma_id, a.root_id, a.stem, a.pos_unified,
+                    a.pos_native, a.features_json, a.segments_json, a.provenance_layer,
+                    a.algorithm, a.algorithm_version, a.confidence, a.reviewer, a.status,
+                    a.corpus_generation, a.created_at
+             FROM quran_token_analyses a JOIN quran_lemmas l ON a.lemma_id = l.id
+             WHERE a.dataset_id = ? AND l.lemma = ?
+             ORDER BY a.surah, a.ayah, a.token_position, a.analysis_index",
+        )
+        .bind(dataset_id)
+        .bind(lemma)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows.iter().map(decode_analysis).collect())
+    }
+
+    async fn list_roots(&self, dataset_id: &str) -> Result<Vec<LexiconRootRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT id, dataset_id, root, root_normalized, provenance_layer, algorithm,
+                    algorithm_version, confidence, reviewer, status, corpus_generation, created_at
+             FROM quran_roots WHERE dataset_id = ? ORDER BY root_normalized",
+        )
+        .bind(dataset_id)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows.iter().map(decode_root).collect())
+    }
+
+    async fn list_lemmas(&self, dataset_id: &str) -> Result<Vec<LexiconLemmaRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT id, dataset_id, lemma, root_id, pos_unified, pos_native, provenance_layer,
+                    algorithm, algorithm_version, confidence, reviewer, status,
+                    corpus_generation, created_at
+             FROM quran_lemmas WHERE dataset_id = ? ORDER BY lemma",
+        )
+        .bind(dataset_id)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows.iter().map(decode_lemma).collect())
+    }
+
+    async fn insert_family_relations(
+        &mut self,
+        rows: Vec<FamilyRelationRow>,
+    ) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        for row in &rows {
+            sqlx::query(
+                "INSERT INTO word_family_relations
+                   (id, relation, from_kind, from_id, to_kind, to_id, explanation, dataset_id,
+                    provenance_layer, algorithm, algorithm_version, confidence, reviewer, status,
+                    evidence_json, corpus_generation, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(&row.id)
+            .bind(&row.relation)
+            .bind(&row.from_kind)
+            .bind(&row.from_id)
+            .bind(&row.to_kind)
+            .bind(&row.to_id)
+            .bind(&row.explanation)
+            .bind(&row.dataset_id)
+            .bind(&row.provenance.layer)
+            .bind(&row.provenance.algorithm)
+            .bind(&row.provenance.algorithm_version)
+            .bind(row.provenance.confidence)
+            .bind(&row.provenance.reviewer)
+            .bind(&row.status)
+            .bind(&row.evidence_json)
+            .bind(row.corpus_generation)
+            .bind(&row.created_at)
+            .execute(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        }
+        Ok(())
+    }
+
+    async fn family_relations_for(
+        &self,
+        kind: &str,
+        id: &str,
+    ) -> Result<Vec<FamilyRelationRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT id, relation, from_kind, from_id, to_kind, to_id, explanation, dataset_id,
+                    provenance_layer, algorithm, algorithm_version, confidence, reviewer, status,
+                    evidence_json, corpus_generation, created_at
+             FROM word_family_relations
+             WHERE (from_kind = ? AND from_id = ?) OR (to_kind = ? AND to_id = ?)",
+        )
+        .bind(kind)
+        .bind(id)
+        .bind(kind)
+        .bind(id)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows.iter().map(decode_family_relation).collect())
+    }
+
+    async fn insert_review_item(&mut self, row: MorphReviewItemRow) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query(
+            "INSERT INTO morphology_review_queue
+               (id, kind, subject_json, evidence_json, status, reviewer, decided_at, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&row.id)
+        .bind(&row.kind)
+        .bind(&row.subject_json)
+        .bind(&row.evidence_json)
+        .bind(&row.status)
+        .bind(&row.reviewer)
+        .bind(&row.decided_at)
+        .bind(&row.created_at)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn list_review_items(
+        &self,
+        status: &str,
+    ) -> Result<Vec<MorphReviewItemRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT id, kind, subject_json, evidence_json, status, reviewer, decided_at, created_at
+             FROM morphology_review_queue WHERE status = ? ORDER BY created_at",
+        )
+        .bind(status)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows.iter().map(decode_review_item).collect())
+    }
+
+    async fn decide_review_item(
+        &mut self,
+        id: &str,
+        reviewer: &str,
+        decision: &str,
+        decided_at: &str,
+    ) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query(
+            "UPDATE morphology_review_queue SET status = ?, reviewer = ?, decided_at = ?
+             WHERE id = ? AND status = 'pending'",
+        )
+        .bind(decision)
+        .bind(reviewer)
+        .bind(decided_at)
+        .bind(id)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
 }
 
 fn decode_token_form(row: &sqlx::sqlite::SqliteRow) -> TokenFormRow {
@@ -2019,5 +2677,167 @@ fn decode_build_run(row: &sqlx::sqlite::SqliteRow) -> IndexBuildRunRow {
         error: row.get("error"),
         started_at: row.get("started_at"),
         finished_at: row.get("finished_at"),
+    }
+}
+
+fn decode_dataset(row: &sqlx::sqlite::SqliteRow) -> QuranDatasetRow {
+    QuranDatasetRow {
+        id: row.get("id"),
+        slug: row.get("slug"),
+        version: row.get("version"),
+        title: row.get("title"),
+        license_status: row.get("license_status"),
+        license_json: row.get("license_json"),
+        attribution: row.get("attribution"),
+        root_convention: row.get("root_convention"),
+        tagset_version: row.get("tagset_version"),
+        state: row.get("state"),
+        created_at: row.get("created_at"),
+    }
+}
+
+fn decode_staging_batch(row: &sqlx::sqlite::SqliteRow) -> StagingBatchRow {
+    StagingBatchRow {
+        id: row.get("id"),
+        dataset_slug: row.get("dataset_slug"),
+        dataset_version: row.get("dataset_version"),
+        adapter: row.get("adapter"),
+        source_manifest_hash: row.get("source_manifest_hash"),
+        state: row.get("state"),
+        checkpoint: row.get("checkpoint"),
+        created_at: row.get("created_at"),
+        finished_at: row.get("finished_at"),
+    }
+}
+
+fn decode_staged_row(row: &sqlx::sqlite::SqliteRow) -> StagedMorphRow {
+    StagedMorphRow {
+        id: row.get("id"),
+        batch_id: row.get("batch_id"),
+        reference: row.get("reference"),
+        surah: row.get("surah"),
+        ayah: row.get("ayah"),
+        token_position: row.get("token_position"),
+        payload_json: row.get("payload_json"),
+        native_tags_json: row.get("native_tags_json"),
+        created_at: row.get("created_at"),
+    }
+}
+
+fn decode_alignment(row: &sqlx::sqlite::SqliteRow) -> AlignmentRow {
+    AlignmentRow {
+        id: row.get("id"),
+        batch_id: row.get("batch_id"),
+        direct_key: row.get("direct_key"),
+        edition_id: row.get("edition_id"),
+        surah: row.get("surah"),
+        ayah: row.get("ayah"),
+        token_position: row.get("token_position"),
+        alignment_kind: row.get("alignment_kind"),
+        alignment_hash: row.get("alignment_hash"),
+        created_at: row.get("created_at"),
+    }
+}
+
+fn decode_finding(row: &sqlx::sqlite::SqliteRow) -> MorphologyFindingRow {
+    MorphologyFindingRow {
+        id: row.get("id"),
+        batch_id: row.get("batch_id"),
+        rule_id: row.get("rule_id"),
+        severity: row.get("severity"),
+        reference: row.get("reference"),
+        detail: row.get("detail"),
+        created_at: row.get("created_at"),
+    }
+}
+
+fn decode_provenance(row: &sqlx::sqlite::SqliteRow) -> LexiconProvenance {
+    LexiconProvenance {
+        layer: row.get("provenance_layer"),
+        algorithm: row.get("algorithm"),
+        algorithm_version: row.get("algorithm_version"),
+        confidence: row.get("confidence"),
+        reviewer: row.get("reviewer"),
+        status: row.get("status"),
+    }
+}
+
+fn decode_root(row: &sqlx::sqlite::SqliteRow) -> LexiconRootRow {
+    LexiconRootRow {
+        id: row.get("id"),
+        dataset_id: row.get("dataset_id"),
+        root: row.get("root"),
+        root_normalized: row.get("root_normalized"),
+        provenance: decode_provenance(row),
+        corpus_generation: row.get("corpus_generation"),
+        created_at: row.get("created_at"),
+    }
+}
+
+fn decode_lemma(row: &sqlx::sqlite::SqliteRow) -> LexiconLemmaRow {
+    LexiconLemmaRow {
+        id: row.get("id"),
+        dataset_id: row.get("dataset_id"),
+        lemma: row.get("lemma"),
+        root_id: row.get("root_id"),
+        pos_unified: row.get("pos_unified"),
+        pos_native: row.get("pos_native"),
+        provenance: decode_provenance(row),
+        corpus_generation: row.get("corpus_generation"),
+        created_at: row.get("created_at"),
+    }
+}
+
+fn decode_analysis(row: &sqlx::sqlite::SqliteRow) -> TokenAnalysisRow {
+    TokenAnalysisRow {
+        id: row.get("id"),
+        dataset_id: row.get("dataset_id"),
+        edition_id: row.get("edition_id"),
+        surah: row.get("surah"),
+        ayah: row.get("ayah"),
+        token_position: row.get("token_position"),
+        analysis_index: row.get("analysis_index"),
+        surface: row.get("surface"),
+        lemma_id: row.get("lemma_id"),
+        root_id: row.get("root_id"),
+        stem: row.get("stem"),
+        pos_unified: row.get("pos_unified"),
+        pos_native: row.get("pos_native"),
+        features_json: row.get("features_json"),
+        segments_json: row.get("segments_json"),
+        provenance: decode_provenance(row),
+        corpus_generation: row.get("corpus_generation"),
+        created_at: row.get("created_at"),
+    }
+}
+
+fn decode_family_relation(row: &sqlx::sqlite::SqliteRow) -> FamilyRelationRow {
+    FamilyRelationRow {
+        id: row.get("id"),
+        relation: row.get("relation"),
+        from_kind: row.get("from_kind"),
+        from_id: row.get("from_id"),
+        to_kind: row.get("to_kind"),
+        to_id: row.get("to_id"),
+        explanation: row.get("explanation"),
+        dataset_id: row.get("dataset_id"),
+        provenance: decode_provenance(row),
+        status: row.get("status"),
+        evidence_json: row.get("evidence_json"),
+        corpus_generation: row.get("corpus_generation"),
+        created_at: row.get("created_at"),
+    }
+}
+
+fn decode_review_item(row: &sqlx::sqlite::SqliteRow) -> MorphReviewItemRow {
+    MorphReviewItemRow {
+        id: row.get("id"),
+        kind: row.get("kind"),
+        subject_json: row.get("subject_json"),
+        evidence_json: row.get("evidence_json"),
+        status: row.get("status"),
+        reviewer: row.get("reviewer"),
+        decided_at: row.get("decided_at"),
+        created_at: row.get("created_at"),
     }
 }
