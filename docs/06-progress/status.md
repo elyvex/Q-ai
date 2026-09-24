@@ -37,7 +37,7 @@ of truth for completion; partial work is recorded as ◐ rather than counted as 
 
 ## Current totals
 
-- **Phase 2:** 56 / 114 tasks ☑ (49%); ◐ rows are partial/synthetic/owner-gated; 0 / 50 ACs and 0 / 14 ADRs are formally accepted.
+- **Phase 2:** 57 / 114 tasks ☑ (50%); ◐ rows are partial/synthetic/owner-gated; 0 / 50 ACs and 0 / 14 ADRs are formally accepted.
 - **Graph phase:** 0 / 30 ☑; 10 ◐; M5 (TASK-405/406/407) remains blocked by licensed morphology evidence and the missing graph root-family projection.
 - **Phase 0 residual:** P0-T56 remains ◐; clean-machine/container runtime verification is still open.
 

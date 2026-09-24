@@ -202,7 +202,7 @@ before opening the sprint.
 | P2-T66 | `quran.morphology.import` job (12 checkpoints, cancel, resume) | D2.6 | T63,T64 | 3.5 | BE | ☑ (12-checkpoint import, cancellation, and retry are tested) |
 | P2-T67 | `quran.morphology.activate` (approval + pointer flip + enqueue FTS rebuild) | D2.6 | T66 | 2.0 | BE | ◐ (approval/atomic activation is tested; FTS rebuild enqueue is absent) |
 | P2-T68 | Coverage + unmatched-token reports; approval threshold gate | D2.6 | T61 | 2.0 | BE | ◐ (unmatched report/gate exists; coverage report and threshold policy are incomplete) |
-| P2-T69 | Dataset version differ (`morphology diff`) | D2.12 | T66 | 2.0 | BE | ☐ |
+| P2-T69 | Dataset version differ (`morphology diff`) | D2.12 | T66 | 2.0 | BE | ☑ (registered-version diff, per-field verdicts, and CLI dispatch are tested) |
 | P2-T70 | Layer B/D provenance writing for every analysis/root/lemma row | D2.6 | T63 | 2.0 | BE | ☑ (Layer B/D fields are persisted and read back) |
 | P2-T71 | Adversarial morphology fixtures (18 faults → correct MV rule ids) | D2.13 | T63 | 3.0 | QA | ☑ (MV-001…MV-017 fixtures and MV-018 marker are tested) |
 | P2-T72 | Import crash/cancel matrix (12 checkpoints) | D2.13 | T66 | 2.0 | QA | ◐ (12-checkpoint cooperative cancellation is green; process-kill evidence remains) |
@@ -325,10 +325,10 @@ approval.
 | 2.1 — Normalization Engine | 12 | 28.5 | 11 | ◐ In Progress |
 | 2.2 — Derived Forms & FTS Foundation | 15 | 33.5 | 11 | ◐ In Progress |
 | 2.3 — Search Tools | 17 | 42.0 ⚠️ | 14 | ◐ In Progress |
-| 2.4 — Morphology Import & Lexicons | 18 | 45.0 ⚠️ | 8 | ◐ In Progress |
+| 2.4 — Morphology Import & Lexicons | 18 | 45.0 ⚠️ | 9 | ◐ In Progress |
 | 2.5 — Morphology & Family Tools | 19 | 47.5 ⚠️ | 6 | ◐ In Progress |
 | 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 51.0 ⚠️ | 6 | ◐ In Progress |
-| **Total** | **114 + 5** | **278.0** | **56** | **49%** |
+| **Total** | **114 + 5** | **278.0** | **57** | **50%** |
 
 By role: **BE ≈ 141.0 ed** · **SRCH ≈ 40.0 ed** · **QA ≈ 40.5 ed** · **DATA ≈ 17.0 ed** ·
 **DOC ≈ 13.0 ed** · **LING ≈ 10.5 ed** · **LING+BE ≈ 3.5 ed** · **LING+QA ≈ 10.5 ed** ·
