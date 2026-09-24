@@ -671,6 +671,26 @@ fn is_loopback(bind: &str) -> bool {
     bind == "127.0.0.1" || bind == "::1" || bind == "localhost" || bind.starts_with("127.")
 }
 
+/// Run the Phase-2 index/linguistics checks (P2-T105). The database is
+/// opened read-only; `deep` upgrades samples to full-corpus scans.
+pub fn run_index_checks(cfg: &Config, json: bool, deep: bool) -> i32 {
+    let path = cfg.storage.sqlite.path.clone();
+    let runtime = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
+        Ok(runtime) => runtime,
+        Err(err) => {
+            eprintln!("failed to start async runtime: {err}");
+            return exit_code::INTERNAL;
+        }
+    };
+    let output = runtime.block_on(application::quran_cli::cmd_doctor_indexes(&path, deep));
+    if json {
+        println!("{}", serde_json::to_string_pretty(&output.json).unwrap_or_default());
+    } else {
+        println!("{}", output.human);
+    }
+    output.exit
+}
+
 /// Run the Quran corpus checks (D1.11). The database is opened read-only;
 /// `deep` upgrades the token round-trip to a full-corpus scan.
 pub fn run_quran_checks(cfg: &Config, json: bool, deep: bool) -> i32 {

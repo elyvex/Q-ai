@@ -223,10 +223,12 @@ pub fn dispatch(cli: Cli) -> i32 {
             }
             exit_code::OK
         }
-        Commands::Doctor { json, repair_preview, quran, deep, .. } => {
+        Commands::Doctor { json, repair_preview, quran, deep, indexes, .. } => {
             let probe = block_on(application::db::probe_database(&cfg));
             if repair_preview {
                 doctor::run_checks(&cfg, &probe, false, true)
+            } else if indexes {
+                doctor::run_index_checks(&cfg, json || cli.json, deep)
             } else {
                 let (doc, human, code) = doctor::doctor_report(&cfg, &probe, quran, deep);
                 if json || cli.json {
