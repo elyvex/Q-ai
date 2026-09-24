@@ -715,19 +715,20 @@ Carried into `docs/plans/handoff-p2-to-p3.md` by task P2-T114.
 ## 9. Implementation Reconciliation — 2026-09-24
 
 > **Update 2026-09-24 (later same day):** P2-T35 closed (single-step rollback
-> landed — `done.md` §2 entry; board now **59 / 114 ☑**).
+> landed — `done.md` §2 entry; board now **58 / 114 ☑**).
 
 This audit updates the board after the code landed ahead of its paperwork. It does not
 close acceptance criteria, ADRs, or owner/linguist gates.
 
-### Newly closed task groups (25 tasks)
+### Newly closed task groups (24 tasks)
 
 - **Index/search:** T35 single-step rollback, T36 trigram posting index; T54 regex/DoS abuse suite.
 - **Morphology import/lexicons:** T57, T58, T60, T61, T63, T66, T70, T71.
 - **Morphology dataset diff:** T69, including storage read ordering, version comparison, and CLI dispatch.
 - **FTS morphology projection:** T73, including edition-relative lexicon columns, explicit pattern metadata, and serving-index coverage.
 - **Morphology/family core:** T75, T76, T77, T83, T86, T93.
-- **Counting/discovery core:** T94, T98, T99, T100, T103, T109.
+- **Counting/discovery core:** T94, T98, T99, T100, T103.
+- **Partial engineering slices now evidenced:** T80 exact pattern search, T82 root/lemma browse + additive `root list`, and finalized manifest hashing; T109 is explicitly reopened to ◐ until all multi-analysis counting rules are selectable.
 
 Evidence is recorded in the task-row annotations and the landed suites:
 `quran-search/tests/{trigram_index,regex_dos}.rs`,
