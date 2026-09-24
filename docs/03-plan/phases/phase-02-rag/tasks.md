@@ -230,25 +230,25 @@ approval.
 
 | ID | Task | Deliv. | Depends | Est | Role | Status |
 |---|---|---|---|---|---|---|
-| P2-T75 | `AnalysisPolicy` + `analysis_sources` + suppression reporting | D2.7 | T64 | 2.0 | BE | ☐ |
-| P2-T76 | `quran.morphology` tool | D2.7 | T75 | 2.5 | BE | ☐ |
-| P2-T77 | `quran.morphology_compare` with agreement verdicts, no resolution field | D2.7 | T76 | 2.5 | BE | ☐ |
-| P2-T78 | `quran.root_search` (convention resolution, grouping, occurrences) | D2.7 | T64 | 3.0 | BE | ☐ |
-| P2-T79 | `quran.lemma_search` | D2.7 | T64 | 1.5 | BE | ☐ |
-| P2-T80 | `quran.pattern_search` + capability-unavailable error path | D2.7 | T64 | 2.0 | BE | ☐ |
-| P2-T81 | `quran.affix_search` (dataset backend + `L7` heuristic backend, labeled) | D2.7 | T17,T64 | 2.5 | BE | ☐ |
+| P2-T75 | `AnalysisPolicy` + `analysis_sources` + suppression reporting | D2.7 | T64 | 2.0 | BE | ☑ (policy and suppression invariants are tested) |
+| P2-T76 | `quran.morphology` tool | D2.7 | T75 | 2.5 | BE | ☑ (attributed token-analysis service and CLI dispatch landed) |
+| P2-T77 | `quran.morphology_compare` with agreement verdicts, no resolution field | D2.7 | T76 | 2.5 | BE | ☑ (comparison verdicts and no-resolution contract are tested) |
+| P2-T78 | `quran.root_search` (convention resolution, grouping, occurrences) | D2.7 | T64 | 3.0 | BE | ◐ (attributed root occurrences are served; convention resolution/browse is incomplete) |
+| P2-T79 | `quran.lemma_search` | D2.7 | T64 | 1.5 | BE | ◐ (attributed lemma reads exist; browse/convention surface is incomplete) |
+| P2-T80 | `quran.pattern_search` + capability-unavailable error path | D2.7 | T64 | 2.0 | BE | ◐ (typed unavailable path exists; pattern index/search is not implemented) |
+| P2-T81 | `quran.affix_search` (dataset backend + `L7` heuristic backend, labeled) | D2.7 | T17,T64 | 2.5 | BE | ◐ (labeled L7 path works; dataset backend remains interim) |
 | P2-T82 | Root/lemma browse endpoints + CLI `root list` | D2.11 | T78 | 1.5 | BE | ☐ |
-| P2-T83 | `FamilyRelation` taxonomy + `word_family_relations` table wiring | D2.8 | T57 | 2.0 | BE | ☐ |
-| P2-T84 | Family resolution algorithm (all 5 input paths) | D2.8 | T78,T83 | 3.5 | BE | ☐ |
-| P2-T85 | Relation builders: same-form/lemma/stem/root, derived, inflectional, affix | D2.8 | T84 | 3.5 | BE | ☐ |
-| P2-T86 | Per-member `explanation` generator (differing-feature diffing) | D2.8 | T85 | 2.5 | BE | ☐ |
-| P2-T87 | Computational-suggestion path: opt-in, confidence floor, mandatory labels | D2.8 | T85 | 2.0 | BE | ☐ |
-| P2-T88 | `review_queue` promotion flow: suggestion → `ScholarVerified` with evidence | D2.8 | T87,T65 | 2.5 | BE | ☐ |
+| P2-T83 | `FamilyRelation` taxonomy + `word_family_relations` table wiring | D2.8 | T57 | 2.0 | BE | ☑ (taxonomy, schema, and repository contract are present) |
+| P2-T84 | Family resolution algorithm (all 5 input paths) | D2.8 | T78,T83 | 3.5 | BE | ◐ (same-root path is implemented; all five input paths remain) |
+| P2-T85 | Relation builders: same-form/lemma/stem/root, derived, inflectional, affix | D2.8 | T84 | 3.5 | BE | ◐ (same-root builder exists; remaining relation builders are absent) |
+| P2-T86 | Per-member `explanation` generator (differing-feature diffing) | D2.8 | T85 | 2.5 | BE | ☑ (mandatory explanation and diffing tests are green) |
+| P2-T87 | Computational-suggestion path: opt-in, confidence floor, mandatory labels | D2.8 | T85 | 2.0 | BE | ◐ (typed suggestion primitive is tested; end-to-end flow is absent) |
+| P2-T88 | `review_queue` promotion flow: suggestion → `ScholarVerified` with evidence | D2.8 | T87,T65 | 2.5 | BE | ◐ (storage review rows exist; application promotion flow is absent) |
 | P2-T89 | Morphology/family API endpoints | D2.11 | T76–T87 | 2.5 | BE | ☐ |
-| P2-T90 | CLI morphology/root/lemma/family/pattern/affix commands | D2.12 | T76–T87 | 3.0 | BE | ☐ |
+| P2-T90 | CLI morphology/root/lemma/family/pattern/affix commands | D2.12 | T76–T87 | 3.0 | BE | ◐ (core morphology/root/lemma/affix CLI commands landed; family/pattern/browse remain) |
 | P2-T91 | Root/lemma golden-set suite (500 cases) | D2.13 | T12,T78 | 3.0 | QA | ☐ |
 | P2-T92 | Family-relation golden suite (120 curated families, reviewed by LING) | D2.13 | T85 | 3.5 | LING+QA | ☐ |
-| P2-T93 | Multi-analysis non-merge tests (no authoritative flag; suppression visible) | D2.13 | T77 | 2.0 | QA | ☐ |
+| P2-T93 | Multi-analysis non-merge tests (no authoritative flag; suppression visible) | D2.13 | T77 | 2.0 | QA | ☑ (competing analyses remain separate in activation/read tests) |
 
 > **T77 has no "winner" field.** Conflicting analyses are presented side-by-side with
 > attribution; verdicts are `Identical | CompatibleVariant | Conflicting | OnlyInOne`.
@@ -269,25 +269,25 @@ approval.
 
 | ID | Task | Deliv. | Depends | Est | Role | Status |
 |---|---|---|---|---|---|---|
-| P2-T94 | `CountingRules` type + serialization + mandatory-field enforcement | D2.9 | T75 | 2.0 | BE | ☐ |
-| P2-T95 | `quran.frequency` (exact SQL aggregation, all multi-analysis modes) | D2.9 | T94 | 2.5 | BE | ☐ |
-| P2-T96 | `quran.distribution` + partition provenance + disagreement warnings | D2.9 | T95 | 2.5 | BE | ☐ |
-| P2-T97 | `quran.cooccurrence` (token/ayah/segment windows, cross-ayah flags) | D2.9 | T95 | 2.5 | BE | ☐ |
-| P2-T98 | `quran.collocation` (PMI + LLR + t-score, min-count floor) | D2.9 | T97 | 2.5 | BE | ☐ |
-| P2-T99 | `quran.first_last_occurrence`, `quran.interval_analysis` + disclaimer | D2.9 | T95 | 2.0 | BE | ☐ |
-| P2-T100 | `quran.numeric_report` + checksum + no-interpretation policy | D2.9 | T94 | 2.5 | BE | ☐ |
-| P2-T101 | `quran.hapax_search`, `quran.unusual_usage` | D2.9 | T95 | 2.0 | BE | ☐ |
-| P2-T102 | `quran.near_duplicate_passages` (MinHash + exact verify + aligned spans) | D2.9 | T27 | 3.0 | SRCH | ☐ |
-| P2-T103 | `quran.missing_expected_form` + mandatory disclaimer | D2.9 | T85 | 2.0 | BE | ☐ |
-| P2-T104 | Counting/discovery API endpoints + CLI commands | D2.11 | T95–T103 | 3.0 | BE | ☐ |
+| P2-T94 | `CountingRules` type + serialization + mandatory-field enforcement | D2.9 | T75 | 2.0 | BE | ☑ (typed rules/checksum contract is implemented) |
+| P2-T95 | `quran.frequency` (exact SQL aggregation, all multi-analysis modes) | D2.9 | T94 | 2.5 | BE | ◐ (exact stored-form SQL is green; multi-analysis modes remain unavailable) |
+| P2-T96 | `quran.distribution` + partition provenance + disagreement warnings | D2.9 | T95 | 2.5 | BE | ◐ (surah partition and single-source warning exist; cross-dataset semantics remain) |
+| P2-T97 | `quran.cooccurrence` (token/ayah/segment windows, cross-ayah flags) | D2.9 | T95 | 2.5 | BE | ◐ (token windows and boundary flags exist; ayah/segment modes remain) |
+| P2-T98 | `quran.collocation` (PMI + LLR + t-score, min-count floor) | D2.9 | T97 | 2.5 | BE | ☑ (scores and minimum-count floor are tested) |
+| P2-T99 | `quran.first_last_occurrence`, `quran.interval_analysis` + disclaimer | D2.9 | T95 | 2.0 | BE | ☑ (ordered occurrence and verbatim disclaimer tests are green) |
+| P2-T100 | `quran.numeric_report` + checksum + no-interpretation policy | D2.9 | T94 | 2.5 | BE | ☑ (fixed report shape/checksum/note are tested) |
+| P2-T101 | `quran.hapax_search`, `quran.unusual_usage` | D2.9 | T95 | 2.0 | BE | ◐ (hapax is implemented; unusual-usage remains dataset-gated) |
+| P2-T102 | `quran.near_duplicate_passages` (MinHash + exact verify + aligned spans) | D2.9 | T27 | 3.0 | SRCH | ◐ (MinHash + exact Jaccard verification exists; aligned-span output remains) |
+| P2-T103 | `quran.missing_expected_form` + mandatory disclaimer | D2.9 | T85 | 2.0 | BE | ☑ (zero-result proof and verbatim disclaimer are tested) |
+| P2-T104 | Counting/discovery API endpoints + CLI commands | D2.11 | T95–T103 | 3.0 | BE | ◐ (CLI commands landed; HTTP endpoints remain absent) |
 | P2-T105 | `doctor` Phase-2 checks (19 checks) incl. `quran.search.smoke` | D2.13 | T34,T67 | 3.5 | BE | ☐ |
 | P2-T106 | Index-drift reporting with precise input diff + `QAI-IDX-0101` warnings | D2.10 | T105 | 2.0 | BE | ☐ |
 | P2-T107 | Nightly reconciliation job (`quran.index.verify`, 1 % sample, MV-018) | D2.10 | T105 | 2.5 | BE | ☐ |
 | P2-T108 | Evaluation harness: metric definitions, versioned datasets, gates | D2.13 | T53,T91 | 3.5 | QA | ☐ |
-| P2-T109 | Counting-rules determinism tests (same rules ⇒ same number, always) | D2.13 | T95 | 1.5 | QA | ☐ |
+| P2-T109 | Counting-rules determinism tests (same rules ⇒ same number, always) | D2.13 | T95 | 1.5 | QA | ☑ (repeat-count checksum determinism is tested) |
 | P2-T110 | Tool-contract conformance for all 22 Phase-2 tools | D2.13 | T104 | 2.5 | QA | ☐ |
 | P2-T111 | Full soak: rebuild all indexes → 50k randomized queries → doctor → reconcile | D2.13 | all | 2.5 | QA | ☐ |
-| P2-T112 | ADR-0216 + ADR index update | D2.13 | T18 | 0.5 | DOC | ☐ |
+| P2-T112 | ADR-0216 + ADR index update | D2.13 | T18 | 0.5 | DOC | ◐ (ADR exists; owner acceptance remains pending) |
 | P2-T113 | Docs: normalization spec, profile catalog, search cookbook, morphology adapter guide, counting-rules explainer, reindex runbook | D2.13 | all | 4.0 | DOC | ☐ |
 | P2-T114 | Phase-2 exit gate review + handoff to Phase 3 | — | all | 2.0 | all | ☐ |
 
@@ -306,6 +306,16 @@ approval.
 
 ---
 
+> **2026-09-24 implementation reconciliation:** the board now distinguishes full
+> task closure from landed-but-incomplete work. Targeted evidence includes
+> `application/tests/{index_lifecycle,search_goldens,search_latency,counting,morphology_import}.rs`,
+> `quran-search/tests/{trigram_index,regex_dos}.rs`, and the morphology adapter/validation
+> suites. Synthetic fixtures prove mechanics only; licensed data, linguist review,
+> owner ADR acceptance, API parity, and full-corpus gates remain open. The rollup counts
+> only `☑` tasks; `◐` rows are intentionally not counted as complete.
+
+---
+
 ## 9. Board Rollup
 
 | Sprint | Scope | Tasks | Est (ed) | Done | Status |
@@ -313,12 +323,12 @@ approval.
 | X — External-lead-time decisions | 5 | — | 0 | ☐ Not Started |
 | 2.0 — Dataset & Linguistic Decisions | 12 | 30.5 | 0 | ☐ Not Started |
 | 2.1 — Normalization Engine | 12 | 28.5 | 11 | ◐ In Progress |
-| 2.2 — Derived Forms & FTS Foundation | 15 | 33.5 | 10 | ◐ In Progress |
-| 2.3 — Search Tools | 17 | 42.0 ⚠️ | 13 | ◐ In Progress |
-| 2.4 — Morphology Import & Lexicons | 18 | 45.0 ⚠️ | 0 | ☐ Not Started |
-| 2.5 — Morphology & Family Tools | 19 | 47.5 ⚠️ | 0 | ☐ Not Started |
-| 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 51.0 ⚠️ | 0 | ☐ Not Started |
-| **Total** | **114 + 5** | **278.0** | **34** | **30%** |
+| 2.2 — Derived Forms & FTS Foundation | 15 | 33.5 | 11 | ◐ In Progress |
+| 2.3 — Search Tools | 17 | 42.0 ⚠️ | 14 | ◐ In Progress |
+| 2.4 — Morphology Import & Lexicons | 18 | 45.0 ⚠️ | 8 | ◐ In Progress |
+| 2.5 — Morphology & Family Tools | 19 | 47.5 ⚠️ | 6 | ◐ In Progress |
+| 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 51.0 ⚠️ | 6 | ◐ In Progress |
+| **Total** | **114 + 5** | **278.0** | **56** | **49%** |
 
 By role: **BE ≈ 141.0 ed** · **SRCH ≈ 40.0 ed** · **QA ≈ 40.5 ed** · **DATA ≈ 17.0 ed** ·
 **DOC ≈ 13.0 ed** · **LING ≈ 10.5 ed** · **LING+BE ≈ 3.5 ed** · **LING+QA ≈ 10.5 ed** ·

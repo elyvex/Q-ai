@@ -15,19 +15,22 @@ word inspector) · Phase 7 (hybrid retrieval reuses the FTS layer) · Phase 9
 **Target duration (plan):** 8 calendar weeks ≈ 22–24 engineer-weeks,
 3 engineers + part-time Arabic linguist (0.4 FTE)
 **Task-board estimate:** 278.0 ed across 114 tasks → see §9
-**Status:** In progress; normalization/indexing/search core implemented, exit gates open (reviewed 2026-09-24)
+**Status:** In progress; normalization/indexing/search/morphology/counting cores implemented, exit gates open (reviewed 2026-09-24)
 
 The [completion ledger](done.md) and [execution plan](execution-plan.md) record the
 normalization pipeline, profiles and offset traces, derived-form rebuilds, FTS5 index
 builds, and exact/normalized/phrase/concatenated/cross-ayah/regex search services.
-Normalization and index-management CLI commands, normalization preview routes, and
-search-query CLI/HTTP/SSE wiring exist. Morphology, families, linguistic review and
-phase-wide hardening remain unfinished. No phase exit acceptance is recorded.
+Normalization and index-management CLI commands, normalization preview routes,
+search-query CLI/HTTP/SSE wiring, morphology/counting CLI dispatch, and structural
+morphology/search services exist. Linguistic review, full API parity, production
+datasets, doctor/evaluation hardening, and phase exit remain unfinished. No phase exit
+acceptance is recorded.
 
 The normalization engine close-out is verified: P2-T13–T18/T20/T22 are ☑ (89/89
 crate tests, clippy `-D warnings`, fmt clean). P2-T21 is ◐ because the golden set
-awaits linguist sign-off. Board total: **34 / 114 sprint tasks (30%)**; 0 / 50 ACs;
-0 / 14 ADRs; 4 / 6 migrations.
+awaits linguist sign-off. The 2026-09-24 implementation reconciliation raises the
+board to **56 / 114 sprint tasks (49%)**; ◐ rows are partial, synthetic, or owner-gated.
+The board still has 0 / 50 ACs, 0 / 14 ADRs, and 6 / 6 Phase-2 migrations.
 
 The current backend is **SQLite FTS5**, not the Tantivy backend specified in the original
 plan (DEV-05). Scope/deliverable tables below retain that design target; they are not a
@@ -237,10 +240,12 @@ is a gate failure and must not be merged.
 ## 7. Migration Status
 
 Implemented files under `migrations/sqlite/` are `0013_quran_normalization.up.sql`,
-`0014_quran_forms.up.sql`, `0015_quran_indexes.up.sql` and
-`0016_quran_search_cache.up.sql`. The normalization append-only trigger uses
-`QAI-NORM-0003`. Lexicon and morphology-staging migrations remain planned.
-See `done.md` DEV-04/06/07/08 for numbering and schema deviations.
+`0014_quran_forms.up.sql`, `0015_quran_indexes.up.sql`,
+`0016_quran_search_cache.up.sql`, `0017_quran_lexicon.up.sql`, and
+`0018_morphology_staging.up.sql`. The normalization append-only trigger uses
+`QAI-NORM-0003`. The lexicon/staging schemas are present; licensed dataset and
+activation evidence remain gated. See `done.md` DEV-04/06/07/08 for numbering and schema
+deviations.
 
 The following is the original design table, not the installed schema:
 
@@ -254,7 +259,7 @@ The following is the original design table, not the installed schema:
 | `0025_quran_search_cache.up.sql` | `search_result_cache` (generation-keyed, LRU-capped at 128 MiB) |
 
 Migrations are **append-only and checksummed** (Phase 0 D0.7). Phase-1 migrations end at
-`0012`; implemented Phase-2 migrations continue at `0013`–`0016`. Allocate future numbers
+`0012`; implemented Phase-2 migrations continue at `0013`–`0018`. Allocate future numbers
 from the actual migration directory, not the original table, and never renumber an
 applied migration.
 
