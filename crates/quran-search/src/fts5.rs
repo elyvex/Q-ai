@@ -32,7 +32,7 @@ use crate::tokenizer::{INDEXED_FIELDS, TokenizerFamily};
 
 /// Indexed text columns in FTS table order (highlight addressing depends on it).
 const TEXT_COLUMNS: [&str; 7] = INDEXED_FIELDS;
-/// Lexicon columns (populated from M4; empty strings until then).
+/// Lexicon columns (populated from the active, edition-relative M4 projection).
 const LEX_COLUMNS: [&str; 5] = ["roots", "lemmas", "stems", "pos_tags", "patterns"];
 /// I16 budgets (construction budgets live in [`crate::regex`]).
 const MAX_REGEX_EXPANSION: usize = 128;
@@ -225,10 +225,20 @@ impl Fts5Index {
 }
 
 impl Fts5Index {
+    /// Normalize a query value according to its field family. Lexicon fields
+    /// retain their dataset spelling; only the canonical text fields use the
+    /// profile-specific tokenizers.
+    fn query_value(&self, field: &str, value: &str) -> Result<String, IndexError> {
+        if LEX_COLUMNS.contains(&field) {
+            return Ok(value.trim().to_string());
+        }
+        self.family.tokenize(field, value)
+    }
+
     async fn match_expression(&self, query: &FtsQuery) -> Result<MatchPlan, IndexError> {
         match query {
             FtsQuery::Term { field, term } => {
-                let normalized = self.family.tokenize(field, term)?;
+                let normalized = self.query_value(field, term)?;
                 if normalized.trim().is_empty() {
                     return Ok(MatchPlan::Unsatisfiable);
                 }
@@ -237,7 +247,7 @@ impl Fts5Index {
             FtsQuery::Phrase { field, terms, slop, ordered } => {
                 let mut normalized = Vec::with_capacity(terms.len());
                 for term in terms {
-                    let piece = self.family.tokenize(field, term)?;
+                    let piece = self.query_value(field, term)?;
                     if !piece.trim().is_empty() {
                         normalized.push(piece);
                     }
@@ -596,6 +606,7 @@ impl FullTextIndex for Fts5Index {
         for doc in &docs {
             let normalized = self.normalize_doc(doc)?;
             let cell = |field: &str| normalized.get(field).cloned().unwrap_or_default();
+            let lex_cell = |field: &str| doc.lexicon_fields.get(field).cloned().unwrap_or_default();
             let int_meta =
                 |key: &str| doc.metadata.get(key).and_then(|v| v.parse::<i64>().ok()).unwrap_or(0);
             sqlx::query(
@@ -603,7 +614,7 @@ impl FullTextIndex for Fts5Index {
                     (doc_id, text_exact, text_ws, text_marks, text_bare, text_hamza,
                      text_folded, text_affix, roots, lemmas, stems, pos_tags, patterns,
                      surah, ayah, global_index, juz, page, generation, revelation)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', '', '', '', '', ?, ?, ?, ?, ?, ?, ?)",
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )
             .bind(&doc.id)
             .bind(cell("text_exact"))
@@ -613,6 +624,11 @@ impl FullTextIndex for Fts5Index {
             .bind(cell("text_hamza"))
             .bind(cell("text_folded"))
             .bind(cell("text_affix"))
+            .bind(lex_cell("roots"))
+            .bind(lex_cell("lemmas"))
+            .bind(lex_cell("stems"))
+            .bind(lex_cell("pos_tags"))
+            .bind(lex_cell("patterns"))
             .bind(doc.surah as i64)
             .bind(doc.ayah as i64)
             .bind(doc.global_index as i64)

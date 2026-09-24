@@ -11,7 +11,7 @@
 //! and the previous generation stays on disk for single-step rollback.
 //! Retention enforcement is `qai index gc` (P2-T35), not this job.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -22,6 +22,7 @@ use quran_search::{
 };
 use storage::Database as _;
 use storage::error::StorageError;
+use storage::quran::TokenAnalysisRow;
 use storage_sqlite::SqliteDatabase;
 
 /// Ayah-level index id built here.
@@ -161,6 +162,101 @@ pub fn index_root_for_db(db_path: &str) -> PathBuf {
         .map_or_else(|| PathBuf::from("index"), |parent| parent.join("index"))
 }
 
+type LexiconProjection = BTreeMap<(i64, i64), BTreeMap<FieldId, BTreeSet<String>>>;
+
+#[derive(Debug, Default)]
+struct MorphologyProjection {
+    dataset_versions: BTreeMap<String, SemVer>,
+    fields: LexiconProjection,
+}
+
+fn add_lexicon_value(
+    projection: &mut LexiconProjection,
+    reference: (i64, i64),
+    field: &str,
+    value: &str,
+) {
+    let value = value.trim();
+    if value.is_empty() {
+        return;
+    }
+    projection
+        .entry(reference)
+        .or_default()
+        .entry(field.to_string())
+        .or_default()
+        .insert(value.to_string());
+}
+
+fn pattern_values(row: &TokenAnalysisRow) -> Vec<String> {
+    let Ok(features) = serde_json::from_str::<serde_json::Value>(&row.features_json) else {
+        return Vec::new();
+    };
+    ["pattern", "verb_form", "morphological_pattern"]
+        .iter()
+        .filter_map(|key| features.get(*key).and_then(serde_json::Value::as_str))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+/// Load the active, edition-relative morphology projection for an index build.
+///
+/// A dataset is never applied to a different edition: rows are filtered by the
+/// exact `edition_id` before any lexicon value reaches an FTS document. If the
+/// active dataset has no rows for this edition, the index simply remains
+/// text-only rather than borrowing another edition's analysis.
+async fn load_morphology_projection(
+    db: &SqliteDatabase,
+    edition_id: &str,
+) -> Result<Option<MorphologyProjection>, IndexBuildError> {
+    let mut uow = db.write().await.map_err(IndexBuildError::storage)?;
+    let dataset = uow.quran().active_dataset().await.map_err(IndexBuildError::storage)?;
+    let Some(dataset) = dataset else {
+        uow.rollback().await.map_err(IndexBuildError::storage)?;
+        return Ok(None);
+    };
+    let analyses =
+        uow.quran().list_analyses(&dataset.id).await.map_err(IndexBuildError::storage)?;
+    let roots = uow.quran().list_roots(&dataset.id).await.map_err(IndexBuildError::storage)?;
+    let lemmas = uow.quran().list_lemmas(&dataset.id).await.map_err(IndexBuildError::storage)?;
+    uow.rollback().await.map_err(IndexBuildError::storage)?;
+
+    let analyses: Vec<TokenAnalysisRow> =
+        analyses.into_iter().filter(|row| row.edition_id == edition_id).collect();
+    if analyses.is_empty() {
+        return Ok(None);
+    }
+
+    let root_map: HashMap<String, String> =
+        roots.into_iter().map(|row| (row.id, row.root)).collect();
+    let lemma_map: HashMap<String, String> =
+        lemmas.into_iter().map(|row| (row.id, row.lemma)).collect();
+    let mut fields = LexiconProjection::new();
+    for row in &analyses {
+        let reference = (row.surah, row.ayah);
+        if let Some(root) = row.root_id.as_ref().and_then(|id| root_map.get(id)) {
+            add_lexicon_value(&mut fields, reference, "roots", root);
+        }
+        if let Some(lemma) = row.lemma_id.as_ref().and_then(|id| lemma_map.get(id)) {
+            add_lexicon_value(&mut fields, reference, "lemmas", lemma);
+        }
+        add_lexicon_value(&mut fields, reference, "stems", &row.stem);
+        add_lexicon_value(&mut fields, reference, "pos_tags", &row.pos_unified);
+        add_lexicon_value(&mut fields, reference, "pos_tags", &row.pos_native);
+        for pattern in pattern_values(row) {
+            add_lexicon_value(&mut fields, reference, "patterns", &pattern);
+        }
+    }
+
+    let mut dataset_versions = BTreeMap::new();
+    if let Ok(version) = dataset.version.parse::<SemVer>() {
+        dataset_versions.insert(dataset.slug, version);
+    }
+    Ok(Some(MorphologyProjection { dataset_versions, fields }))
+}
+
 /// Rebuild one index end to end (P2-T34).
 ///
 /// See the module docs for the stage order. Nothing serves partial results:
@@ -264,6 +360,11 @@ pub async fn rebuild_index(
             detail: format!("edition version {edition_version} is not MAJOR.MINOR.PATCH"),
         })
     })?;
+    let morphology = load_morphology_projection(db, &edition_id).await?;
+    let morphology_dataset_versions = morphology
+        .as_ref()
+        .map(|projection| projection.dataset_versions.clone())
+        .unwrap_or_default();
 
     // 4. Stage the next generation.
     let generation = {
@@ -284,7 +385,7 @@ pub async fn rebuild_index(
         edition_version: edition_semver,
         rule_set_versions,
         tokenizer_version: ladder,
-        morphology_dataset_versions: BTreeMap::new(),
+        morphology_dataset_versions,
         built_at: started_at.clone(),
         doc_count: 0,
         trigram_postings: 0,
@@ -381,6 +482,18 @@ pub async fn rebuild_index(
         fields.insert("text_hamza".to_string(), forms.hamza_folded.clone());
         fields.insert("text_folded".to_string(), forms.folded.clone());
         fields.insert("text_affix".to_string(), String::new());
+        let lexicon_fields = morphology
+            .as_ref()
+            .and_then(|projection| projection.fields.get(&(ayah.surah, ayah.ayah)))
+            .map(|values| {
+                values
+                    .iter()
+                    .map(|(field, entries)| {
+                        (field.clone(), entries.iter().cloned().collect::<Vec<_>>().join(" "))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         batch.push(FtsDoc {
             id: format!("{}:{}:{}:{}", params.index_id, edition_id, ayah.surah, ayah.ayah),
             edition_id: edition_id.clone(),
@@ -397,6 +510,7 @@ pub async fn rebuild_index(
                 ),
             ]),
             fields,
+            lexicon_fields,
         });
         if batch.len() >= BATCH_SIZE {
             let chunk = std::mem::take(&mut batch);

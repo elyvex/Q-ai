@@ -185,6 +185,11 @@ pub struct FtsDoc {
     pub metadata: BTreeMap<String, String>,
     /// Normalized text fields by [`FieldId`].
     pub fields: BTreeMap<FieldId, String>,
+    /// Optional morphology projection fields (`roots`, `lemmas`, `stems`,
+    /// `pos_tags`, and `patterns`). They are kept separate from text-profile
+    /// fields so lexicon values are never silently normalized as ayah text.
+    #[serde(default)]
+    pub lexicon_fields: BTreeMap<FieldId, String>,
 }
 
 /// One ranked (or canonically ordered) hit with backend evidence.

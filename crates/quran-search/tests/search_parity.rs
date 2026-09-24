@@ -139,6 +139,7 @@ async fn end_to_end_parity_both_directions() {
             generation: 3,
             metadata: BTreeMap::new(),
             fields,
+            lexicon_fields: BTreeMap::new(),
         }
     };
     let index = Fts5Index::stage(dir.path(), 3, manifest(2), family()).await.unwrap();

@@ -80,6 +80,7 @@ fn doc(id: &str, surah: u16, ayah: u16, global: u64, raw: &str) -> FtsDoc {
             ("revelation".to_string(), "makki".to_string()),
         ]),
         fields,
+        lexicon_fields: BTreeMap::new(),
     }
 }
 
