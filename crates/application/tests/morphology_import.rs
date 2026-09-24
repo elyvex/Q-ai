@@ -13,9 +13,10 @@ use application::quran_forms::{RebuildParams, rebuild_forms};
 use application::quran_index::{IndexBuildParams, QURAN_AYAH_INDEX_ID, rebuild_index};
 use application::quran_morphology::{
     IMPORT_CHECKPOINTS, MorphologyActivateParams, MorphologyDiffKind, MorphologyImportParams,
-    activate_morphology, affix_search, browse_lemmas, browse_roots, build_same_root_relations,
-    dataset_urn, diff_datasets, lemma_search, morphology_compare, morphology_for_token,
-    pattern_search, root_search, run_morphology_import, word_family,
+    RootUnificationCandidate, activate_morphology, affix_search, browse_lemmas, browse_roots,
+    build_same_root_relations, dataset_urn, diff_datasets, enqueue_root_unification, lemma_search,
+    morphology_compare, morphology_for_token, pattern_search, root_search, run_morphology_import,
+    word_family,
 };
 use domain::{PrincipalId, Timestamp};
 use quran_corpus::import::{ImportInput, ImportOptions, ImportOutcome, ImportProgress, run_import};
@@ -761,4 +762,46 @@ async fn browse_roots_and_lemmas_are_attributed_and_bounded() {
     assert_eq!(dataset, format!("{SLUG}@{VERSION}"));
     assert_eq!(lemmas.len(), 2);
     assert!(lemmas.iter().all(|lemma| lemma.dataset == dataset));
+}
+
+/// P2-T65: explicitly supplied root-unification candidates are queued once and
+/// remain pending; no automatic merge or reviewer state is created.
+#[tokio::test]
+async fn root_unification_candidate_is_idempotent_and_reviewable() {
+    let (_dir, db) = ready_db().await;
+    let candidate = RootUnificationCandidate {
+        left_dataset: "dataset-a".to_string(),
+        left_root_id: "root-a".to_string(),
+        left_root: "كَتَب".to_string(),
+        left_normalized: "كتب".to_string(),
+        left_convention: "bare-v1".to_string(),
+        right_dataset: "dataset-b".to_string(),
+        right_root_id: "root-b".to_string(),
+        right_root: "كَتَبَ".to_string(),
+        right_normalized: "كتب".to_string(),
+        right_convention: "bare-v1".to_string(),
+        confidence: 0.91,
+        evidence: serde_json::json!({"source": "explicit-review-fixture"}),
+        algorithm: Some("manual-review".to_string()),
+        algorithm_version: Some("1".to_string()),
+    };
+    let first = enqueue_root_unification(&db, &candidate).await.unwrap();
+    let second = enqueue_root_unification(&db, &candidate).await.unwrap();
+    assert_eq!(first.id, second.id);
+    assert_eq!(first.status, "pending");
+    assert!(first.reviewer.is_none());
+
+    let mut uow = db.write().await.unwrap();
+    let pending = uow.quran().list_review_items("pending").await.unwrap();
+    uow.rollback().await.unwrap();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].kind, "root_unification");
+    assert!(pending[0].subject_json.contains("dataset-a"));
+    assert!(pending[0].subject_json.contains("dataset-b"));
+    assert!(pending[0].evidence_json.contains("explicit-review-fixture"));
+
+    let mut invalid = candidate;
+    invalid.confidence = 1.1;
+    let error = enqueue_root_unification(&db, &invalid).await.unwrap_err();
+    assert!(error.to_string().contains("[0,1]"));
 }
