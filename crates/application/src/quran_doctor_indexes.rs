@@ -107,8 +107,13 @@ fn sample_ayahs(ayahs: &[storage::quran::AyahRow], deep: bool) -> Vec<&storage::
     if deep {
         return ayahs.iter().collect();
     }
-    let mut out: Vec<&storage::quran::AyahRow> =
-        ayahs.iter().enumerate().filter(|(i, _)| i % 7 == 0).map(|(_, row)| row).take(200).collect();
+    let mut out: Vec<&storage::quran::AyahRow> = ayahs
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| i % 7 == 0)
+        .map(|(_, row)| row)
+        .take(200)
+        .collect();
     if let Some(first) = ayahs.first()
         && !out.iter().any(|row| row.surah == first.surah && row.ayah == first.ayah)
     {
@@ -152,8 +157,19 @@ pub async fn run_index_checks(
     checks.push(check_forms_current(db, &snapshot).await);
     checks.push(check_forms_coverage(&snapshot));
     checks.push(check_canonical_unchanged(db, &snapshot).await);
-    checks.push(check_fts_pointer(db, data_dir, &snapshot, "quran.fts.ayah_index", super::quran_index::QURAN_AYAH_INDEX_ID).await);
-    checks.push(check_fts_pointer(db, data_dir, &snapshot, "quran.fts.token_index", "quran.token.v1").await);
+    checks.push(
+        check_fts_pointer(
+            db,
+            data_dir,
+            &snapshot,
+            "quran.fts.ayah_index",
+            super::quran_index::QURAN_AYAH_INDEX_ID,
+        )
+        .await,
+    );
+    checks.push(
+        check_fts_pointer(db, data_dir, &snapshot, "quran.fts.token_index", "quran.token.v1").await,
+    );
     checks.push(check_skeleton_index(data_dir, &snapshot).await);
     checks.push(check_index_drift(&snapshot));
     checks.push(check_index_orphans(data_dir, &snapshot));
@@ -312,36 +328,41 @@ fn check_spanmap_sanity(snapshot: &Snapshot) -> QuranDoctorCheck {
     let version = quran_normalization::SemVer::new(1, 0, 0);
     let mut checked = 0;
     for profile in [quran_normalization::ProfileId::L3, quran_normalization::ProfileId::L5] {
-        let pipeline =
-            match quran_normalization::NormalizationPipeline::for_profile(&registry, profile, version)
-            {
-                Ok(pipeline) => pipeline,
-                Err(error) => {
+        let pipeline = match quran_normalization::NormalizationPipeline::for_profile(
+            &registry, profile, version,
+        ) {
+            Ok(pipeline) => pipeline,
+            Err(error) => {
+                return fail(
+                    ID,
+                    format!("cannot build {profile} pipeline: {error}"),
+                    "re-seed the profile catalog",
+                    NEXT,
+                );
+            }
+        };
+        for (location, text) in sample_texts(snapshot, 100) {
+            let (derived, _) = pipeline.apply(&text);
+            // I10 reversibility, per derived char: each maps back to an exact
+            // non-empty canonical span that maps forward onto itself. (Full-
+            // range hulls legitimately shrink past stripped edges, so the
+            // probe is per-char, not whole-text.)
+            let dlen = derived.spans().derived_len();
+            for i in 0..dlen {
+                let span = derived.spans().to_canonical(i..i + 1);
+                let back = if span.exact && !span.char_range.is_empty() {
+                    derived.spans().to_derived(span.char_range.clone())
+                } else {
+                    None
+                };
+                if back.as_ref().is_none_or(|range| !range.contains(&i)) {
                     return fail(
                         ID,
-                        format!("cannot build {profile} pipeline: {error}"),
-                        "re-seed the profile catalog",
+                        format!("{profile} offset round-trip broken at {location} char {i}"),
+                        "offset maps must be reversible (I10); fix the rule span construction",
                         NEXT,
                     );
                 }
-            };
-        for (location, text) in sample_texts(snapshot, 100) {
-            let (derived, _) = pipeline.apply(&text);
-            let chars = text.chars().count() as u32;
-            let roundtrip = derived
-                .spans()
-                .to_derived(0..chars)
-                .map(|range| derived.spans().to_canonical(range))
-                .filter(|span| span.exact)
-                .map(|span| span.char_range)
-                .filter(|range| *range == (0..chars));
-            if roundtrip.is_none() {
-                return fail(
-                    ID,
-                    format!("{profile} offset round-trip broken at {location}"),
-                    "offset maps must be reversible (I10); fix the rule span construction",
-                    NEXT,
-                );
             }
             checked += 1;
         }
@@ -376,16 +397,29 @@ async fn check_forms_current(db: &SqliteDatabase, snapshot: &Snapshot) -> QuranD
     let mut uow = match db.write().await {
         Ok(uow) => uow,
         Err(error) => {
-            return fail(ID, format!("cannot read derived forms: {error}"), "check the database", NEXT);
+            return fail(
+                ID,
+                format!("cannot read derived forms: {error}"),
+                "check the database",
+                NEXT,
+            );
         }
     };
     for ayah in sample_ayahs(&snapshot.ayahs, false).into_iter().take(20) {
-        let Ok(tokens) = uow.quran().list_token_forms(&snapshot.edition_id, ayah.surah, ayah.ayah).await else {
+        let Ok(tokens) =
+            uow.quran().list_token_forms(&snapshot.edition_id, ayah.surah, ayah.ayah).await
+        else {
             let _ = uow.rollback().await;
-            return fail(ID, "cannot read derived token forms".to_string(), "check the database", NEXT);
+            return fail(
+                ID,
+                "cannot read derived token forms".to_string(),
+                "check the database",
+                NEXT,
+            );
         };
         for row in &tokens {
-            if row.corpus_generation != snapshot.corpus_generation || row.rule_set_version != ladder {
+            if row.corpus_generation != snapshot.corpus_generation || row.rule_set_version != ladder
+            {
                 let _ = uow.rollback().await;
                 return fail(
                     ID,
@@ -399,8 +433,10 @@ async fn check_forms_current(db: &SqliteDatabase, snapshot: &Snapshot) -> QuranD
             }
             checked += 1;
         }
-        if let Ok(Some(row)) = uow.quran().get_ayah_form(&snapshot.edition_id, ayah.surah, ayah.ayah).await
-            && (row.corpus_generation != snapshot.corpus_generation || row.rule_set_version != ladder)
+        if let Ok(Some(row)) =
+            uow.quran().get_ayah_form(&snapshot.edition_id, ayah.surah, ayah.ayah).await
+            && (row.corpus_generation != snapshot.corpus_generation
+                || row.rule_set_version != ladder)
         {
             let _ = uow.rollback().await;
             return fail(
@@ -415,7 +451,13 @@ async fn check_forms_current(db: &SqliteDatabase, snapshot: &Snapshot) -> QuranD
         }
     }
     let _ = uow.rollback().await;
-    pass(ID, format!("{checked} sampled form rows match generation {} + rules {ladder}", snapshot.corpus_generation))
+    pass(
+        ID,
+        format!(
+            "{checked} sampled form rows match generation {} + rules {ladder}",
+            snapshot.corpus_generation
+        ),
+    )
 }
 
 fn check_forms_coverage(snapshot: &Snapshot) -> QuranDoctorCheck {
@@ -483,14 +525,24 @@ async fn check_fts_pointer(
     let mut uow = match db.write().await {
         Ok(uow) => uow,
         Err(error) => {
-            return fail(id, format!("cannot read index catalog: {error}"), "check the database", NEXT);
+            return fail(
+                id,
+                format!("cannot read index catalog: {error}"),
+                "check the database",
+                NEXT,
+            );
         }
     };
     let pointer = match uow.quran().get_index_pointer(index_id).await {
         Ok(pointer) => pointer,
         Err(error) => {
             let _ = uow.rollback().await;
-            return fail(id, format!("cannot read index catalog: {error}"), "check the database", NEXT);
+            return fail(
+                id,
+                format!("cannot read index catalog: {error}"),
+                "check the database",
+                NEXT,
+            );
         }
     };
     let _ = uow.rollback().await;
@@ -526,19 +578,30 @@ async fn check_fts_pointer(
     let family = match quran_search::TokenizerFamily::new(&registry, manifest.tokenizer_version) {
         Ok(family) => family,
         Err(error) => {
-            return fail(id, format!("index {index_id} tokenizer unusable: {error}"), "rebuild the index", NEXT);
+            return fail(
+                id,
+                format!("index {index_id} tokenizer unusable: {error}"),
+                "rebuild the index",
+                NEXT,
+            );
         }
     };
     let index = match quran_search::Fts5Index::open(data_dir, generation, manifest, family).await {
         Ok(index) => index,
         Err(error) => {
-            return fail(id, format!("index {index_id} gen-{generation} will not open: {error}"), "rebuild the index", NEXT);
+            return fail(
+                id,
+                format!("index {index_id} gen-{generation} will not open: {error}"),
+                "rebuild the index",
+                NEXT,
+            );
         }
     };
     match quran_search::FullTextIndex::verify(&index).await {
-        Ok(report) if report.ok => {
-            pass(id, format!("index {index_id} gen-{generation} healthy: {} docs", report.doc_count))
-        }
+        Ok(report) if report.ok => pass(
+            id,
+            format!("index {index_id} gen-{generation} healthy: {} docs", report.doc_count),
+        ),
         Ok(report) => fail(
             id,
             format!("index {index_id} gen-{generation} FAILED verification: {}", report.doc_count),
@@ -581,7 +644,10 @@ async fn check_skeleton_index(data_dir: &Path, snapshot: &Snapshot) -> QuranDoct
                 if !set.contains(&want) {
                     return fail(
                         ID,
-                        format!("trigram recall missed {}:{} in gen-{generation}", ayah.surah, ayah.ayah),
+                        format!(
+                            "trigram recall missed {}:{} in gen-{generation}",
+                            ayah.surah, ayah.ayah
+                        ),
                         "rebuild the index; postings must recall indexed skeletons",
                         NEXT,
                     );
@@ -597,12 +663,22 @@ async fn check_skeleton_index(data_dir: &Path, snapshot: &Snapshot) -> QuranDoct
                 );
             }
             Err(error) => {
-                return fail(ID, format!("trigram recall failed: {error}"), "rebuild the index", NEXT);
+                return fail(
+                    ID,
+                    format!("trigram recall failed: {error}"),
+                    "rebuild the index",
+                    NEXT,
+                );
             }
         }
     }
     if probes == 0 {
-        return skipped(ID, "no skeleton probes available".to_string(), "index an edition with longer ayahs", NEXT);
+        return skipped(
+            ID,
+            "no skeleton probes available".to_string(),
+            "index an edition with longer ayahs",
+            NEXT,
+        );
     }
     pass(ID, format!("trigram postings consistent in gen-{generation} ({probes} recall probes)"))
 }
@@ -616,7 +692,12 @@ fn check_index_drift(snapshot: &Snapshot) -> QuranDoctorCheck {
     let manifest: quran_search::IndexManifest = match serde_json::from_str(&pointer.manifest_json) {
         Ok(manifest) => manifest,
         Err(error) => {
-            return fail(ID, format!("serving manifest corrupt: {error}"), "rebuild the index", NEXT);
+            return fail(
+                ID,
+                format!("serving manifest corrupt: {error}"),
+                "rebuild the index",
+                NEXT,
+            );
         }
     };
     let mut drifted = Vec::new();
@@ -645,7 +726,12 @@ fn check_index_drift(snapshot: &Snapshot) -> QuranDoctorCheck {
             ),
         )
     } else {
-        warn(ID, format!("stale index inputs: {}", drifted.join("; ")), "rebuild the index to refresh derived inputs", NEXT)
+        warn(
+            ID,
+            format!("stale index inputs: {}", drifted.join("; ")),
+            "rebuild the index to refresh derived inputs",
+            NEXT,
+        )
     }
 }
 
@@ -663,7 +749,8 @@ fn check_index_orphans(data_dir: &Path, snapshot: &Snapshot) -> QuranDoctorCheck
             .collect(),
         Err(_) => BTreeSet::new(),
     };
-    let mut expected: BTreeSet<u64> = snapshot.runs.iter().map(|run| run.generation as u64).collect();
+    let mut expected: BTreeSet<u64> =
+        snapshot.runs.iter().map(|run| run.generation as u64).collect();
     if let Some(pointer) = snapshot.pointer.as_ref() {
         expected.insert(pointer.generation as u64);
     }
@@ -673,7 +760,10 @@ fn check_index_orphans(data_dir: &Path, snapshot: &Snapshot) -> QuranDoctorCheck
     } else {
         warn(
             ID,
-            format!("orphaned on-disk generations: {}", orphans.iter().map(u64::to_string).collect::<Vec<_>>().join(", ")),
+            format!(
+                "orphaned on-disk generations: {}",
+                orphans.iter().map(u64::to_string).collect::<Vec<_>>().join(", ")
+            ),
             "remove them with retention GC",
             NEXT,
         )
@@ -687,7 +777,12 @@ fn check_dataset_active(snapshot: &Snapshot) -> QuranDoctorCheck {
         return pass(ID, format!("active morphology dataset {}@{}", active.slug, active.version));
     }
     if snapshot.datasets.is_empty() {
-        skipped(ID, "no morphology datasets catalogued (explicit none)".to_string(), "import a morphology dataset to enable analysis checks", NEXT)
+        skipped(
+            ID,
+            "no morphology datasets catalogued (explicit none)".to_string(),
+            "import a morphology dataset to enable analysis checks",
+            NEXT,
+        )
     } else {
         warn(
             ID,
@@ -741,8 +836,7 @@ async fn morphology_token_probe(
             return probe;
         }
     };
-    let ayahs: Vec<(i64, i64)> =
-        snapshot.ayahs.iter().map(|row| (row.surah, row.ayah)).collect();
+    let ayahs: Vec<(i64, i64)> = snapshot.ayahs.iter().map(|row| (row.surah, row.ayah)).collect();
     for (surah, ayah) in ayahs {
         if probe.tokens_sampled >= cap {
             break;
@@ -760,7 +854,13 @@ async fn morphology_token_probe(
             }
             match uow
                 .quran()
-                .analyses_for_token(Some(&dataset.id), &snapshot.edition_id, surah, ayah, token.position)
+                .analyses_for_token(
+                    Some(&dataset.id),
+                    &snapshot.edition_id,
+                    surah,
+                    ayah,
+                    token.position,
+                )
                 .await
             {
                 Ok(rows) => {
@@ -833,7 +933,10 @@ fn check_morphology_coverage(_snapshot: &Snapshot, probe: &MorphProbe) -> QuranD
         return fail(ID, format!("morphology probe failed: {error}"), "check the database", NEXT);
     }
     if probe.tokens_covered == probe.tokens_sampled {
-        pass(ID, format!("{}/{} sampled tokens covered", probe.tokens_covered, probe.tokens_sampled))
+        pass(
+            ID,
+            format!("{}/{} sampled tokens covered", probe.tokens_covered, probe.tokens_sampled),
+        )
     } else {
         fail(
             ID,
@@ -866,7 +969,11 @@ fn check_morphology_provenance(_snapshot: &Snapshot, probe: &MorphProbe) -> Qura
             NEXT,
         );
     }
-    let bad = probe.analyses.iter().filter(|row| row.provenance.layer != "B" && row.provenance.layer != "D").count();
+    let bad = probe
+        .analyses
+        .iter()
+        .filter(|row| row.provenance.layer != "B" && row.provenance.layer != "D")
+        .count();
     if bad == 0 {
         pass(ID, format!("{} analyses carry Layer B/D provenance", probe.analyses.len()))
     } else {
@@ -937,14 +1044,24 @@ async fn check_lexicon_integrity(
         Ok(rows) => rows.into_iter().map(|row| row.id).collect(),
         Err(error) => {
             let _ = uow.rollback().await;
-            return fail(ID, format!("cannot read lexicon roots: {error}"), "check the database", NEXT);
+            return fail(
+                ID,
+                format!("cannot read lexicon roots: {error}"),
+                "check the database",
+                NEXT,
+            );
         }
     };
     let lemmas: BTreeSet<String> = match uow.quran().list_lemmas(&dataset.id).await {
         Ok(rows) => rows.into_iter().map(|row| row.id).collect(),
         Err(error) => {
             let _ = uow.rollback().await;
-            return fail(ID, format!("cannot read lexicon lemmas: {error}"), "check the database", NEXT);
+            return fail(
+                ID,
+                format!("cannot read lexicon lemmas: {error}"),
+                "check the database",
+                NEXT,
+            );
         }
     };
     let analyses = if probe.analyses.is_empty() {
@@ -953,7 +1070,12 @@ async fn check_lexicon_integrity(
             Ok(rows) => rows,
             Err(error) => {
                 let _ = uow.rollback().await;
-                return fail(ID, format!("cannot read lexicon analyses: {error}"), "check the database", NEXT);
+                return fail(
+                    ID,
+                    format!("cannot read lexicon analyses: {error}"),
+                    "check the database",
+                    NEXT,
+                );
             }
         }
     } else {
@@ -1033,19 +1155,34 @@ async fn check_search_smoke(
         let mut uow = match db.write().await {
             Ok(uow) => uow,
             Err(error) => {
-                return fail(ID, format!("cannot read tokens: {error}"), "check the database", NEXT);
+                return fail(
+                    ID,
+                    format!("cannot read tokens: {error}"),
+                    "check the database",
+                    NEXT,
+                );
             }
         };
         for ayah in sample_ayahs(&snapshot.ayahs, false) {
             match uow.quran().get_tokens(&snapshot.edition_id, ayah.surah, ayah.ayah).await {
                 Ok(rows) => {
                     for row in rows {
-                        tokens.push((row.surface.chars().count(), row.surface.clone(), ayah.surah, ayah.ayah));
+                        tokens.push((
+                            row.surface.chars().count(),
+                            row.surface.clone(),
+                            ayah.surah,
+                            ayah.ayah,
+                        ));
                     }
                 }
                 Err(error) => {
                     let _ = uow.rollback().await;
-                    return fail(ID, format!("cannot read tokens: {error}"), "check the database", NEXT);
+                    return fail(
+                        ID,
+                        format!("cannot read tokens: {error}"),
+                        "check the database",
+                        NEXT,
+                    );
                 }
             }
         }
@@ -1062,7 +1199,12 @@ async fn check_search_smoke(
     ) {
         Ok(pipeline) => pipeline,
         Err(error) => {
-            return fail(ID, format!("cannot build L3 pipeline: {error}"), "re-seed the profile catalog", NEXT);
+            return fail(
+                ID,
+                format!("cannot build L3 pipeline: {error}"),
+                "re-seed the profile catalog",
+                NEXT,
+            );
         }
     };
     let mut probes: Vec<(String, String, String)> = Vec::new();
@@ -1091,14 +1233,15 @@ async fn check_search_smoke(
             continue;
         }
         let slice: String = chars[2..10].iter().collect();
-        probes.push((
-            format!("concatenated:{slice}"),
-            slice,
-            pinned(ayah.surah, ayah.ayah),
-        ));
+        probes.push((format!("concatenated:{slice}"), slice, pinned(ayah.surah, ayah.ayah)));
     }
     if probes.is_empty() {
-        return skipped(ID, "no smoke probes derivable".to_string(), "index an edition with longer ayahs", NEXT);
+        return skipped(
+            ID,
+            "no smoke probes derivable".to_string(),
+            "index an edition with longer ayahs",
+            NEXT,
+        );
     }
     let mut missed = Vec::new();
     for (index, (label, query, expected)) in probes.iter().enumerate() {
@@ -1145,7 +1288,14 @@ async fn check_search_smoke(
         }
     }
     if missed.is_empty() {
-        pass(ID, format!("{}/{} smoke probes hit (exact + normalized + concatenated)", probes.len(), probes.len()))
+        pass(
+            ID,
+            format!(
+                "{}/{} smoke probes hit (exact + normalized + concatenated)",
+                probes.len(),
+                probes.len()
+            ),
+        )
     } else {
         fail(
             ID,
