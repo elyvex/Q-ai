@@ -376,4 +376,39 @@ mod tests {
         let back: IndexManifest = serde_json::from_str(&json).unwrap();
         assert_eq!(back, manifest);
     }
+
+    #[test]
+    fn manifest_hash_covers_inputs_but_not_hash_field() {
+        let manifest = IndexManifest {
+            index_id: "quran.ayah.v1".to_string(),
+            schema_version: 1,
+            corpus_generation: 7,
+            edition_id: "ed-1".to_string(),
+            edition_version: SemVer::new(1, 0, 0),
+            rule_set_versions: BTreeMap::from([(
+                "L3.diacritics".to_string(),
+                SemVer::new(1, 0, 0),
+            )]),
+            tokenizer_version: SemVer::new(1, 0, 0),
+            morphology_dataset_versions: BTreeMap::new(),
+            built_at: "2026-09-15T00:00:00Z".to_string(),
+            doc_count: 6236,
+            trigram_postings: 12,
+            content_hash: "sha256:old".to_string(),
+        };
+        let baseline = manifest_content_hash(&manifest);
+        assert!(baseline.starts_with("sha256:"));
+
+        let mut changed = manifest.clone();
+        changed.doc_count += 1;
+        assert_ne!(manifest_content_hash(&changed), baseline);
+
+        let mut changed = manifest.clone();
+        changed.rule_set_versions.insert("L3.diacritics".to_string(), SemVer::new(1, 0, 1));
+        assert_ne!(manifest_content_hash(&changed), baseline);
+
+        let mut changed = manifest;
+        changed.content_hash = "sha256:different".to_string();
+        assert_eq!(manifest_content_hash(&changed), baseline);
+    }
 }
