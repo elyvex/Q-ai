@@ -2357,6 +2357,35 @@ pub async fn cmd_morphology_datasets(db_path: &str) -> CommandOutput {
     CommandOutput::ok(human, serde_json::json!({ "datasets": rows }))
 }
 
+/// `qai quran root list`.
+pub async fn cmd_morphology_root_list(
+    db_path: &str,
+    prefix: Option<&str>,
+    limit: usize,
+) -> CommandOutput {
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    match super::quran_morphology::browse_roots(&db, prefix, limit).await {
+        Ok((dataset, roots)) => {
+            let mut human = vec![format!("{}: {} root(s)", dataset, roots.len())];
+            for root in &roots {
+                human.push(format!("{} [{}] {}", root.root, root.normalized, root.status));
+            }
+            json_or_err(
+                human.join("\n"),
+                &serde_json::json!({
+                    "dataset": dataset,
+                    "prefix": prefix.unwrap_or_default(),
+                    "roots": roots,
+                }),
+            )
+        }
+        Err(error) => CommandOutput::err(tool_exit(&error), error.to_string()),
+    }
+}
+
 /// `qai quran morphology diff`.
 pub async fn cmd_morphology_diff(
     db_path: &str,
