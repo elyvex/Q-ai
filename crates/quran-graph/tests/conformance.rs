@@ -178,6 +178,73 @@ fn authz_hides_intermediates_from_paths_and_counts() {
 }
 
 #[test]
+fn out_of_range_budgets_are_rejected_before_execution() {
+    // ADR-0217 rule 1: a budget outside its valid range is an error, never a
+    // clamped-and-truncated result and never a silent empty answer. Every port
+    // operation must reject it, including operations that would otherwise
+    // return an empty-but-complete result.
+    let store = triangle();
+    let (cancel, authz, _) = open();
+    // `max_hops = 0` and `max_nodes = 0` are both below the accepted ranges.
+    let invalid = QueryBudgets { max_hops: 0, max_nodes: 0, ..QueryBudgets::default() };
+    let pattern = Pattern::new(vec![PatternStep::edge_to("MENTIONS_CONCEPT", NodeKind::Concept)]);
+
+    let err = store.resolve_node("s", &invalid, &cancel, &authz).unwrap_err();
+    assert!(matches!(err, quran_graph::GraphError::BudgetExceeded { .. }), "resolve: {err}");
+
+    let err = store.neighbors("s", &EdgeFilter::any(), &invalid, &cancel, &authz).unwrap_err();
+    assert!(matches!(err, quran_graph::GraphError::BudgetExceeded { .. }), "neighbors: {err}");
+
+    let err = store.bounded_paths("s", "t", 4, &invalid, &cancel, &authz).unwrap_err();
+    assert!(matches!(err, quran_graph::GraphError::BudgetExceeded { .. }), "paths: {err}");
+
+    let err = store.subgraph(&["s".to_string()], &invalid, &cancel, &authz).unwrap_err();
+    assert!(matches!(err, quran_graph::GraphError::BudgetExceeded { .. }), "subgraph: {err}");
+
+    let err =
+        store.pattern_query(&pattern, &["s".to_string()], &invalid, &cancel, &authz).unwrap_err();
+    assert!(matches!(err, quran_graph::GraphError::BudgetExceeded { .. }), "pattern: {err}");
+
+    // A single out-of-range field is enough; the rest of the budget stays legal.
+    for bad in [
+        QueryBudgets { max_paths: 0, ..QueryBudgets::default() },
+        QueryBudgets { max_edges: 0, ..QueryBudgets::default() },
+        QueryBudgets { max_fanout: 0, ..QueryBudgets::default() },
+        QueryBudgets { timeout_ms: 0, ..QueryBudgets::default() },
+    ] {
+        assert!(
+            store.neighbors("s", &EdgeFilter::any(), &bad, &cancel, &authz).is_err(),
+            "out-of-range budget must be rejected: {bad:?}"
+        );
+    }
+}
+
+#[test]
+fn pattern_queries_apply_authz_during_expansion() {
+    // The authz suite above covers neighbors/paths/subgraph; pattern queries
+    // expand a typed predicate chain and must filter the same way, otherwise a
+    // restricted scope could enumerate hidden concepts through a pattern.
+    let store = triangle();
+    let (cancel, _, budgets) = open();
+    let pattern = Pattern::new(vec![PatternStep::edge_to("MENTIONS_CONCEPT", NodeKind::Concept)]);
+
+    let full = store
+        .pattern_query(&pattern, &["s".to_string()], &budgets, &cancel, &AuthzScope::all_visible())
+        .unwrap();
+    assert!(full.nodes.iter().any(|n| n.stable_id == "c1"));
+
+    // `a-hidden` is the only accepted assertion behind `s -> c1`.
+    let scope = AuthzScope::restricted(["a-link".to_string()]);
+    let restricted =
+        store.pattern_query(&pattern, &["s".to_string()], &budgets, &cancel, &scope).unwrap();
+    assert!(!restricted.truncated, "a policy-filtered empty result is complete, not truncated");
+    assert!(
+        !restricted.nodes.iter().any(|n| n.stable_id == "c1"),
+        "hidden concepts must not leak through a pattern query"
+    );
+}
+
+#[test]
 fn build_inspect_and_capabilities() {
     let mut store = MemGraphStore::new("proj-1");
     store.stage_nodes(vec![node("a", NodeKind::Ayah), node("b", NodeKind::Ayah)]).unwrap();
