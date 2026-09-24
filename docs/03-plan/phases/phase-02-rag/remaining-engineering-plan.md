@@ -65,7 +65,7 @@ that rejects activation when required license/attribution evidence is absent.
 | Tasks | Work | Completion evidence |
 |---|---|---|
 | P2-T64 | Finish lexicon builder outputs, counts, coverage, and derived-index integration. | Real SQLite activation/index tests and count invariants. |
-| P2-T65 | Add cross-dataset root-unification suggestions to the morphology review queue; never merge. | Non-merge test, evidence payload, reviewer-only promotion test. |
+| P2-T65 | Add an idempotent, explicitly reviewed candidate path for cross-dataset root-unification suggestions to the morphology review queue; never fuzzy-match or merge. Promotion remains T88. | Non-merge test, evidence payload, idempotent retry, reviewer-only promotion test. |
 | P2-T67 | Make activation enqueue/rebuild the FTS generation after approval. | Job/enqueue test plus pointer/generation test. |
 | P2-T68 | Complete coverage reports, unmatched-token reports, and configurable approval threshold. | Boundary tests at/below/above threshold. |
 | P2-T72 | Add process-kill evidence for every import checkpoint, not only cooperative cancellation. | Checkpoint matrix with killed-process fixtures. |
