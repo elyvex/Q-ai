@@ -1262,6 +1262,85 @@ pub struct RootOccurrence {
     pub dataset: String,
 }
 
+/// One deterministic root-browse result (P2-T82).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RootBrowseItem {
+    /// Dataset identity.
+    pub dataset: String,
+    /// Native root spelling.
+    pub root: String,
+    /// Convention-normalized spelling.
+    pub normalized: String,
+    /// Row status/provenance state.
+    pub status: String,
+}
+
+/// One deterministic lemma-browse result (P2-T82).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct LemmaBrowseItem {
+    /// Dataset identity.
+    pub dataset: String,
+    /// Lemma spelling.
+    pub lemma: String,
+    /// Unified POS tag.
+    pub pos_unified: String,
+    /// Native POS tag.
+    pub pos_native: String,
+    /// Row status/provenance state.
+    pub status: String,
+}
+
+/// Browse active-dataset roots with deterministic prefix filtering (P2-T82).
+pub async fn browse_roots(
+    db: &SqliteDatabase,
+    prefix: Option<&str>,
+    limit: usize,
+) -> Result<(String, Vec<RootBrowseItem>), MorphologyToolError> {
+    let dataset_id = require_active_dataset(db, "root browse").await?;
+    let mut uow = db.write().await.map_err(MorphologyToolError::storage)?;
+    let rows = uow.quran().list_roots(&dataset_id).await.map_err(MorphologyToolError::storage)?;
+    uow.rollback().await.map_err(MorphologyToolError::storage)?;
+    let prefix = prefix.unwrap_or_default();
+    let items = rows
+        .into_iter()
+        .filter(|row| row.root.starts_with(prefix) || row.root_normalized.starts_with(prefix))
+        .take(limit.clamp(1, 500))
+        .map(|row| RootBrowseItem {
+            dataset: row.dataset_id,
+            root: row.root,
+            normalized: row.root_normalized,
+            status: row.provenance.status,
+        })
+        .collect();
+    Ok((dataset_id, items))
+}
+
+/// Browse active-dataset lemmas with deterministic prefix filtering (P2-T82).
+pub async fn browse_lemmas(
+    db: &SqliteDatabase,
+    prefix: Option<&str>,
+    limit: usize,
+) -> Result<(String, Vec<LemmaBrowseItem>), MorphologyToolError> {
+    let dataset_id = require_active_dataset(db, "lemma browse").await?;
+    let mut uow = db.write().await.map_err(MorphologyToolError::storage)?;
+    let rows = uow.quran().list_lemmas(&dataset_id).await.map_err(MorphologyToolError::storage)?;
+    uow.rollback().await.map_err(MorphologyToolError::storage)?;
+    let prefix = prefix.unwrap_or_default();
+    let items = rows
+        .into_iter()
+        .filter(|row| row.lemma.starts_with(prefix))
+        .take(limit.clamp(1, 500))
+        .map(|row| LemmaBrowseItem {
+            dataset: row.dataset_id,
+            lemma: row.lemma,
+            pos_unified: row.pos_unified,
+            pos_native: row.pos_native,
+            status: row.provenance.status,
+        })
+        .collect();
+    Ok((dataset_id, items))
+}
+
 /// `quran.root_search` (convention-resolved grouping + occurrences).
 pub async fn root_search(
     db: &SqliteDatabase,
