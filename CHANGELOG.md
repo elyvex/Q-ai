@@ -21,6 +21,15 @@ All notable changes to Q-ai are documented here.
 - Added real-SQLite coverage and CLI snapshot coverage; existing dataset
   identity, multi-analysis coexistence, and approval gates are unchanged.
 
+### Added — Edition-relative morphology FTS projection (P2-T73)
+
+- Index builds now project active morphology roots, lemmas, stems, POS tags,
+  and explicit pattern/verb-form metadata into the five FTS lexicon columns.
+- Competing analyses are retained as separate values; datasets are filtered by
+  the exact aligned edition and never borrowed across editions.
+- FTS document tests and a real serving-index test cover all five columns;
+  missing pattern metadata remains empty rather than guessed.
+
 ### Added — Quran corpus: typed comparison + editorial verification plumbing (P1-T26/T55, 2026-09-24)
 
 - Typed corpus comparison (ADR-0114 Tier-2 engineering): `quran-corpus::differ`
