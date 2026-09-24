@@ -686,11 +686,11 @@ The retained assumptions are implementation boundaries, not open preference ques
 
 ### Wave 0 Gaps
 
-- [ ] `crates/cli/tests/foundation.rs` or an equivalent trycmd harness — covers the seven stable groups, effective config origins, migration remedies, job cancel/retry, and audit verify output. [ASSUMED: proposed path/name]
-- [ ] `crates/application/tests/phase1_foundation.rs` or focused existing-suite additions — covers audited mutation rollback, job lifecycle events, named checkpoints, and cancellation outcomes. [ASSUMED: proposed path/name]
-- [ ] `crates/storage-sqlite/tests/phase1_jobs_audit.rs` or focused additions — covers same-transaction audit/outbox and durable checkpoint behavior against real SQLite. [ASSUMED: proposed path/name]
-- [ ] `xtask` synthetic external-dependency mutation fixture — covers the currently untested registry/git edge policy. [ASSUMED: proposed fixture]
-- [ ] `crates/testkit` shared fixture extension — isolated config/data/audit seed and tamper helper; the crate already exists as the dev-only fixture boundary. [VERIFIED: .planning/codebase/ARCHITECTURE.md:73-77] [ASSUMED: proposed helper names]
+- [ ] `crates/cli/tests/foundation.rs` — covers the seven stable groups, effective config origins, validation remedies, migration remedies, job cancel/retry, and audit verify output.
+- [ ] `crates/application/tests/phase1_foundation.rs` — covers audited mutation rollback and approval boundaries against real SQLite; job lifecycle evidence extends the existing `crates/storage-sqlite/tests/recovery_jobs.rs` suite.
+- [ ] Extend `crates/storage-sqlite/tests/recovery_jobs.rs` — covers same-transaction lifecycle audit plus durable checkpoint, retry, cancellation, and ownership behavior against real SQLite.
+- [ ] Extend the inline `xtask/src/arch.rs` test module — covers synthetic registry/git edge policy because `arch` is private to the binary target and no xtask library target exists.
+- [ ] `crates/testkit` shared fixture extension — isolated config/data/audit seed and tamper helper only where it removes duplication; the crate already exists as the dev-only fixture boundary. [VERIFIED: .planning/codebase/ARCHITECTURE.md:73-77] [ASSUMED: proposed helper names]
 - [ ] Framework install: **none**; Rust, Cargo, Tokio, SQLx, Clap, trycmd, tempfile, and the existing test targets are present. [VERIFIED: Cargo.toml:70-90] [VERIFIED: live environment probe, 2026-09-24]
 
 ## Security Domain
