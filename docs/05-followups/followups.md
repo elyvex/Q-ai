@@ -123,6 +123,9 @@ Status key: 🔴 open · 🟢 done (with date + where recorded).
 
 ## FU-P1-01 — P1-T58: extend fixture soak to an approved standard edition
 - **Status:** open; full-corpus run blocked on approved data.
+  Re-verified 2026-09-24: `cargo test -p application --test quran_doctor`
+  3/3 green (fixture 10k-lookup soak + hash recomputation + deep scan, ~14 s
+  for the binary). Fixture evidence only — T58 stays ◐.
 - **Found:** 2026-09-17 (Phase-1 implementation review).
 - **Evidence:** `crates/application/tests/quran_doctor.rs::fixture_soak_ten_thousand_lookups_preserves_corpus_integrity` passes: fixture import/validation/activation, 10,000 seeded lookups, exact text and token offsets, then deep hashes and round-trip checks.
 - **Next action:** once ADR-0101 supplies an approved edition, adapt the fixture-bound harness to accept it and run the complete pipeline; record corpus identity, hashes, lookup results, and deep-scan duration. The current fixture run is not evidence of standard-edition performance or editorial correctness.
@@ -137,6 +140,16 @@ Status key: 🔴 open · 🟢 done (with date + where recorded).
 - **Found:** 2026-09-17 (Phase-1 gate preparation).
 - **Verified:** `cargo test -p application -- --test-threads=1` passed (110 tests); workspace fmt, clippy with warnings denied, build check, architecture check, and migration check passed.
 - **Next action:** run workspace-wide tests, required coverage and dependency-audit gates; record commands and failures without assuming unrelated worktree edits are broken. An initial parallel application run timed out during doctor tests, while isolated and serial reruns passed; investigate if reproducible rather than claiming it fixed.
+- **Targeted gates 2026-09-24 (P1 scope only):** `cargo clippy -p quran-corpus
+  -p storage -p storage-sqlite -p application -p cli --all-targets -- -D warnings`
+  clean; `cargo xtask arch-check` OK; `cargo xtask migrate-check` OK
+  (19 migrations); `cargo fmt --check` clean on the touched crates;
+  `quran-corpus` 49+6+7, `storage` 32, `storage-sqlite::quran` 10/10,
+  `application::quran_import` 14/14, `application::quran_verification` 3/3
+  (new), `application::quran_doctor` 3/3, `cli::quran` 5/5 — all green.
+  Workspace-wide `cargo test` was not run (15-minute timeout is a known
+  pre-existing suite-size limit; a concurrent Phase-2 writer was active in
+  the tree). Coverage + `deny` + recorded walkthrough still outstanding.
 - **Closure boundary:** automated checks do not replace the independent recorded walkthrough, editorial approval, or handoff sign-off. P1-T60 remains open.
 
 ## FU-P1-03 — Resume owner-gated Phase-1 implementation
@@ -152,3 +165,34 @@ Status key: 🔴 open · 🟢 done (with date + where recorded).
   none can advance without the named owner inputs (approved dataset, reference
   corpus + signer, font license). An agent verification pass was appended to the
   `decisions-needed.md` answer log; no row was closed.
+- **Engineering 2026-09-24 (code landed, owner gates unchanged):**
+  - **P1-T26 Tier-2:** `quran-corpus::differ` now carries the ADR-0114
+    comparison taxonomy — `ComparisonKind`
+    (integrity/version/readings/translation/reference/checksum),
+    `DifferenceClass` (the nine ADR literals, serialized verbatim),
+    `classify_difference` (presence → `edition_difference`,
+    whitespace-only → `normalization_only`, else `unknown_difference` —
+    never forced benign), `diff_ayahs_typed`, `ComparisonOperands`, and
+    `CLASSIFICATION_VOCABULARY = "ADR-0114-v1"`. `diff_ayahs` keeps its
+    signature and Tier-1 exact behavior; new fields are `#[serde(default)]`
+    so legacy reports deserialize. QV-015 `compared()` evidence now records
+    `comparison_kind: "reference"`, `classification_vocabulary`, and
+    `normalization_applied: []`. Evidence: 6 new `differ` unit tests;
+    `cargo test -p quran-corpus` 49+6+7 green; `quran_import` 14/14 green.
+    ADR-0114 stays Draft; T26 stays ◐ on the Tier-2 corpus + sign-off.
+  - **P1-T55 plumbing:** `QuranRepository::set_edition_verification`
+    (trait + SQLite impl; only the `verified_*` metadata columns — the
+    edition-identity trigger cannot fire, proven by test) plus the
+    approval-gated `application::quran::record_edition_verification`
+    service (`EditionVerification{reviewer, method}` recorded verbatim,
+    empty values → `QAI-QUR-0306`, missing/denied/mismatched approvals
+    rejected like activation, `SourceApproved` audit in the same
+    transaction) plus `qai quran edition verify --reviewer --method`.
+    Evidence: `application --test quran_verification` 3/3 (new),
+    `storage-sqlite --test quran` 10/10 (new stamp test), `cli --test
+    quran` 5/5 (snapshots intact). T55 stays ☐ — the mechanism records a
+    reviewer; only OD-02 can name one.
+  - **P1-T02/T03/X01…X05:** no status change available to an agent. Legal
+    review (bundle vs user-supplied), reference-corpus selection, dataset
+    choice, reviewer naming, morphology dataset/license, and linguist
+    engagement remain `_unassigned_` owner acts (OD-01/02/03/10/11/12).

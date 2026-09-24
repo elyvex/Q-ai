@@ -139,3 +139,24 @@ must remain strictly read-only (Phase-0 AC-P0-14).
   are now published (5/5), and the read/CLI/doctor surfaces are automated-green.
 - Phase 2 is not blocked by the *engineering* of Phase 1 — only by the owner/editorial
   decisions above, which have external lead time and should be started now.
+
+## 9. Addendum — 2026-09-24 (engineering only; no gate signed)
+
+- **Typed comparison (P1-T26 Tier-2):** `quran-corpus::differ` now exports
+  `ComparisonKind`, `DifferenceClass` (ADR-0114 literals), `classify_difference`,
+  `diff_ayahs_typed`, `ComparisonOperands`, and `CLASSIFICATION_VOCABULARY`.
+  `EditionDiff` carries `comparison_kind` + `normalization_applied`;
+  `AyahChange` carries `classification` (all `#[serde(default)]`, legacy
+  reports deserialize). Phase 2 comparison surfaces should build on these
+  types, not a second vocabulary. QV-015 Tier-1 exact behavior unchanged;
+  ADR-0114 still Draft; T26 still ◐ on the Tier-2 corpus + sign-off.
+- **Editorial verification recording (P1-T55 plumbing):**
+  `QuranRepository::set_edition_verification` (metadata-only write),
+  approval-gated `application::quran::record_edition_verification`
+  (`SourceApproved` audit, `QAI-QUR-0306` on empty reviewer), and
+  `qai quran edition verify --reviewer --method`. `verified_by` /
+  `verification_method` are already in the edition `--json`; the reviewer
+  name itself remains OD-02. T55 still ☐.
+- Owner gates unchanged: P1-X01…X05 `_unassigned_`; P1-T02/T03 ☐;
+  P1-T56 ☐ (no fabricated scripture); P1-T58 ◐ (fixture soak re-passes);
+  P1-T60 ☐ (ritual + coverage + deny outstanding).

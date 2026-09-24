@@ -4,6 +4,22 @@ All notable changes to Q-ai are documented here.
 
 ## [Unreleased]
 
+### Added — Quran corpus: typed comparison + editorial verification plumbing (P1-T26/T55, 2026-09-24)
+
+- Typed corpus comparison (ADR-0114 Tier-2 engineering): `quran-corpus::differ`
+  now exports `ComparisonKind`, `DifferenceClass` (the nine ADR literals,
+  serialized verbatim), `classify_difference`, `diff_ayahs_typed`,
+  `ComparisonOperands`, and `CLASSIFICATION_VOCABULARY`. QV-015 evidence records
+  `comparison_kind`/`classification_vocabulary`/`normalization_applied`. Tier-1
+  exact behavior unchanged; ADR-0114 stays Draft; T26 stays ◐ on the Tier-2
+  corpus + sign-off.
+- Editorial verification recording (P1-T55 plumbing, OD-02 still open):
+  `set_edition_verification` repository method (verified_* metadata columns
+  only), approval-gated `record_edition_verification` service with `SourceApproved`
+  audit (`QAI-QUR-0306` on empty reviewer), and `qai quran edition verify
+  --reviewer --method`. Records — never invents — the reviewer; T55 stays ☐
+  pending the named reviewer.
+
 ### Added — Graph decision drafts (P4-X03, P4-X05)
 
 - `ADR-0217` Graph query safety limits: budget defaults and validation ranges,

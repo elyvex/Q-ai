@@ -269,6 +269,20 @@ suite is green; `doctor --quran --deep` passes on the fixture edition.
 > bundled font; `done.md` §2 entry). T26 Tier-1 rustdoc landed; Tier-2 stays ◐
 > on ADR-0114 corpus/sign-off. T56 stays ☐ on approved data + P1-T55 review.
 >
+> **Engineering 2026-09-24 (no status flips — owner inputs unchanged):**
+> T26 Tier-2 comparator taxonomy landed in `quran-corpus::differ`
+> (`ComparisonKind`, `DifferenceClass` with the ADR-0114 literals,
+> `classify_difference`, `diff_ayahs_typed`, `ComparisonOperands`; QV-015
+> evidence now carries `comparison_kind`/`classification_vocabulary`) —
+> covered by 6 new unit tests, Tier-1 exact behavior unchanged, ADR-0114
+> stays Draft. T55 recording plumbing landed (`set_edition_verification`
+> repo method + SQLite impl, approval-gated `record_edition_verification`
+> service with `QAI-QUR-0306` fail-closed on empty reviewer, `qai quran
+> edition verify` CLI verb) — covered by `quran_verification` 3/3 +
+> storage-sqlite verification test; T55 stays ☐ pending the named OD-02
+> reviewer. T58 fixture soak re-passes (`quran_doctor` 3/3). Details in
+> `followups.md` FU-P1-01…FU-P1-03.
+>
 > **T60 preparation (2026-09-17):** all 110 application tests passed with
 > `--test-threads=1`; workspace format, clippy, build, architecture, and migration
 > checks passed. This is preparation only: workspace-wide tests, coverage,
