@@ -92,3 +92,13 @@ $ qai quran morphology diff missing@0.1.0 other@1.0.0
 error: unknown dataset 'missing:0.1.0': dataset is not registered
 
 ```
+
+The additive top-level root browse command is typed-unavailable without an active
+morphology dataset.
+
+```console
+$ qai quran root list
+? 5
+error: no active morphology dataset for root browse; import and activate one first
+
+```
