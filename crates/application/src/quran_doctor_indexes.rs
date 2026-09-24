@@ -906,7 +906,7 @@ fn check_alignment(_snapshot: &Snapshot, probe: &MorphProbe) -> QuranDoctorCheck
     } else {
         let mut worst: Vec<(i64, usize)> =
             probe.unmatched_by_surah.iter().map(|(s, n)| (*s, *n)).collect();
-        worst.sort_by(|a, b| b.1.cmp(&a.1));
+        worst.sort_by_key(|b| std::cmp::Reverse(b.1));
         let detail: Vec<String> =
             worst.into_iter().take(3).map(|(s, n)| format!("surah {s}: {n}")).collect();
         fail(
@@ -1222,7 +1222,7 @@ async fn check_search_smoke(
         }
     }
     let mut ayahs: Vec<&storage::quran::AyahRow> = snapshot.ayahs.iter().collect();
-    ayahs.sort_by(|a, b| b.text.chars().count().cmp(&a.text.chars().count()));
+    ayahs.sort_by_key(|b| std::cmp::Reverse(b.text.chars().count()));
     for ayah in ayahs.iter().take(8) {
         if probes.len() >= 12 {
             break;
