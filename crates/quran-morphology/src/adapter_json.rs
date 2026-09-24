@@ -49,6 +49,12 @@ struct ArrayRow {
     reviewer: String,
     #[serde(default)]
     segmented: bool,
+    /// Optional dataset-supplied morphological pattern label.
+    #[serde(default)]
+    pattern: String,
+    /// Optional dataset-supplied verb-form label.
+    #[serde(default)]
+    verb_form: String,
     #[serde(default)]
     morphs: Vec<MorphRow>,
     #[serde(default)]
@@ -86,6 +92,12 @@ pub fn parse_array_shape(
             let mut features = serde_json::json!({});
             if r.segmented {
                 features["segmented"] = serde_json::Value::Bool(true);
+            }
+            if !r.pattern.is_empty() {
+                features["pattern"] = serde_json::Value::String(r.pattern);
+            }
+            if !r.verb_form.is_empty() {
+                features["verb_form"] = serde_json::Value::String(r.verb_form);
             }
             TokenAnalysis {
                 surah: r.sura_no,
