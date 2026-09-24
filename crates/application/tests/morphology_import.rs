@@ -13,9 +13,9 @@ use application::quran_forms::{RebuildParams, rebuild_forms};
 use application::quran_index::{IndexBuildParams, QURAN_AYAH_INDEX_ID, rebuild_index};
 use application::quran_morphology::{
     IMPORT_CHECKPOINTS, MorphologyActivateParams, MorphologyDiffKind, MorphologyImportParams,
-    activate_morphology, affix_search, build_same_root_relations, dataset_urn, diff_datasets,
-    lemma_search, morphology_compare, morphology_for_token, root_search, run_morphology_import,
-    word_family,
+    activate_morphology, affix_search, browse_lemmas, browse_roots, build_same_root_relations,
+    dataset_urn, diff_datasets, lemma_search, morphology_compare, morphology_for_token,
+    pattern_search, root_search, run_morphology_import, word_family,
 };
 use domain::{PrincipalId, Timestamp};
 use quran_corpus::import::{ImportInput, ImportOptions, ImportOutcome, ImportProgress, run_import};
@@ -640,4 +640,125 @@ async fn morphology_lexicon_fields_reach_serving_index() {
             .unwrap();
         assert!(found.total_matches > 0, "field {field} value {value}");
     }
+}
+
+/// P2-T80: exact pattern search distinguishes a supported dataset, a zero-match
+/// query, and an active dataset that supplies no pattern metadata.
+#[tokio::test]
+async fn pattern_search_exact_and_typed_unavailable() {
+    let (_dir, db) = ready_db().await;
+    let patterned_doc = aligned_document(&db).await;
+    run_morphology_import(
+        &db,
+        &import_params(patterned_doc.clone(), "batch-pattern"),
+        &AtomicBool::new(false),
+        |_| {},
+    )
+    .await
+    .unwrap();
+    activate_morphology(
+        &db,
+        &MorphologyActivateParams {
+            batch_id: "batch-pattern".to_string(),
+            approval_id: "appr-morph".to_string(),
+            invoked_by: PRINCIPAL.to_string(),
+        },
+        &principal(),
+    )
+    .await
+    .unwrap();
+
+    let matched = pattern_search(&db, "synthetic-pattern").await.unwrap();
+    assert_eq!(matched.dataset, format!("{SLUG}@{VERSION}"));
+    assert!(!matched.occurrences.is_empty());
+    assert!(matched.occurrences.iter().all(|hit| {
+        hit.matched_label == "synthetic-pattern"
+            && hit.matched_field == "pattern"
+            && !hit.surface.is_empty()
+    }));
+    let unmatched = pattern_search(&db, "not-present").await.unwrap();
+    assert!(unmatched.occurrences.is_empty());
+
+    let mut rows: Vec<serde_json::Value> = serde_json::from_str(&patterned_doc).unwrap();
+    for row in &mut rows {
+        row.as_object_mut().unwrap().remove("pattern");
+    }
+    let no_pattern_doc = serde_json::to_string(&rows).unwrap();
+    let second_slug = "test-morph-no-pattern";
+    let second_version = "0.1.0";
+    let mut uow = db.write().await.unwrap();
+    uow.sources()
+        .insert_approval(ApprovalRow {
+            id: "appr-morph-no-pattern".to_string(),
+            subject_urn: dataset_urn(second_slug, second_version),
+            kind: "CanonicalChange".to_string(),
+            requested_by: Some(PRINCIPAL.to_string()),
+            decided_by: Some(PRINCIPAL.to_string()),
+            decision: Some("approved".to_string()),
+            request_payload: "{}".to_string(),
+            decision_note: None,
+            requested_at: CREATED_AT.to_string(),
+            decided_at: Some(CREATED_AT.to_string()),
+        })
+        .await
+        .unwrap();
+    uow.commit().await.unwrap();
+    let mut params = import_params(no_pattern_doc, "batch-no-pattern");
+    params.dataset_slug = second_slug.to_string();
+    params.dataset_version = second_version.to_string();
+    run_morphology_import(&db, &params, &AtomicBool::new(false), |_| {}).await.unwrap();
+    activate_morphology(
+        &db,
+        &MorphologyActivateParams {
+            batch_id: "batch-no-pattern".to_string(),
+            approval_id: "appr-morph-no-pattern".to_string(),
+            invoked_by: PRINCIPAL.to_string(),
+        },
+        &principal(),
+    )
+    .await
+    .unwrap();
+
+    let error = pattern_search(&db, "synthetic-pattern").await.unwrap_err();
+    assert!(matches!(
+        error,
+        application::quran_morphology::MorphologyToolError::UnavailablePatternField { .. }
+    ));
+    assert!(error.to_string().contains("pattern, verb_form, morphological_pattern"));
+}
+
+/// P2-T82: active-dataset root/lemma browse is deterministic and prefixable.
+#[tokio::test]
+async fn browse_roots_and_lemmas_are_attributed_and_bounded() {
+    let (_dir, db) = ready_db().await;
+    let doc = aligned_document(&db).await;
+    run_morphology_import(
+        &db,
+        &import_params(doc, "batch-browse"),
+        &AtomicBool::new(false),
+        |_| {},
+    )
+    .await
+    .unwrap();
+    activate_morphology(
+        &db,
+        &MorphologyActivateParams {
+            batch_id: "batch-browse".to_string(),
+            approval_id: "appr-morph".to_string(),
+            invoked_by: PRINCIPAL.to_string(),
+        },
+        &principal(),
+    )
+    .await
+    .unwrap();
+
+    let (dataset, roots) = browse_roots(&db, Some("tst"), 10).await.unwrap();
+    assert_eq!(dataset, format!("{SLUG}@{VERSION}"));
+    assert_eq!(roots.len(), 1);
+    assert_eq!(roots[0].root, "tst-root");
+    assert_eq!(roots[0].dataset, dataset);
+    let (dataset, lemmas) = browse_lemmas(&db, Some("lem-"), 2).await.unwrap();
+    assert_eq!(dataset, format!("{SLUG}@{VERSION}"));
+    assert_eq!(lemmas.len(), 2);
+    assert!(lemmas.iter().all(|lemma| lemma.dataset == dataset));
 }
