@@ -48,7 +48,40 @@ that rejects activation when required license/attribution evidence is absent.
 6. Acceptance criteria, ADRs, and owner/linguist gates are not marked complete by
    synthetic fixtures alone.
 
-## 4. Work waves
+## 4. Audit constraints from the current code
+
+- T65 may add queue mechanics for explicitly supplied candidates, but automatic
+  normalization/fuzzy matching waits for the root convention decision; no root rows may
+  be merged.
+- T80 must distinguish no active dataset, an active dataset without pattern metadata, and
+  a supported dataset with zero matches. It reuses the T73 FTS projection; it does not
+  create a second index.
+- T82 follows the authoritative top-level `qai quran root list` shape while preserving
+  the existing morphology-root command.
+- T89 transport must wait until the underlying DTOs truthfully report policy, dataset
+  attribution, suppression, and provenance; an API wrapper must not hide incomplete
+  service semantics.
+## 4A. P0 contract repairs before transport/evaluation work
+
+The audit found shared-contract defects that must be repaired before T104–T111 can be
+trusted:
+
+1. Finalize the retained `manifest.json` after document/trigram counts are known; the
+   SQLite pointer and rollback path must read the same complete manifest.
+2. Define one canonical manifest-hash function covering schema, edition, profile/tokenizer
+   versions, morphology dataset versions, document count, and trigram postings; use it in
+   build, doctor, search/cache invalidation, and reconciliation.
+3. Freeze the Phase-2 tool inventory at **23** unless a named tool is explicitly removed
+   (the current plan/AC wording says 22 but enumerates 23).
+4. Freeze the index inventory: `quran.ayah.v1` is implemented; `quran.token.v1` is not.
+   Doctor must report that capability explicitly rather than silently passing it.
+5. Use `docs/plans/handoff-p2-to-p3.md` as the canonical handoff path and correct the
+   conflicting agent-prompt path.
+
+These repairs are prerequisites for honest T105, T106, T107, T109, T110, and T111
+completion. T109 should be reopened to ◐ until selectable multi-analysis rules and the
+full `CountingRules` contract are implemented.
+
 
 ### Wave 0 — Decision, licensing, and evidence packet
 
