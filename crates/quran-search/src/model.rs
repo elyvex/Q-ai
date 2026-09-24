@@ -257,14 +257,16 @@ pub struct IndexManifest {
 
 /// Compute the canonical content hash for an index manifest.
 ///
-/// The hash covers every manifest input except the hash field itself, including
-/// schema/edition identity, all rule and dataset versions, document/trigram counts,
-/// and the build timestamp. Struct serialization is deterministic and BTreeMap fields
-/// are ordered, so build, doctor, and reconciliation can share this function.
+/// The hash covers every reproducibility input except the hash field and the
+/// volatile build timestamp, including schema/edition identity, all rule and
+/// dataset versions, and document/trigram counts. Struct serialization is
+/// deterministic and BTreeMap fields are ordered, so build, doctor, and
+/// reconciliation can share this function.
 #[must_use]
 pub fn manifest_content_hash(manifest: &IndexManifest) -> String {
     let mut canonical = manifest.clone();
     canonical.content_hash.clear();
+    canonical.built_at.clear();
     let bytes = serde_json::to_vec(&canonical).expect("IndexManifest serialization is infallible");
     format!("sha256:{:x}", Sha256::digest(bytes))
 }
