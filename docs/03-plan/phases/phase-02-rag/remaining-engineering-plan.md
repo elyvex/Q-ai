@@ -102,8 +102,8 @@ full `CountingRules` contract are implemented.
 | P2-T67 | Make activation enqueue/rebuild the FTS generation after approval. | Job/enqueue test plus pointer/generation test. |
 | P2-T68 | Complete coverage reports, unmatched-token reports, and configurable approval threshold. | Boundary tests at/below/above threshold. |
 | P2-T72 | Add process-kill evidence for every import checkpoint, not only cooperative cancellation. | Checkpoint matrix with killed-process fixtures. |
-| P2-T78–T81 | Complete root/lemma/pattern/affix tools and typed dataset-unavailable paths. | Tool contract tests, dataset backend tests, heuristic backend tests. |
-| P2-T82 | Add root/lemma browse endpoints and `qai quran morphology root list`. | API + CLI snapshot tests. |
+| P2-T78–T81 | Complete root/lemma/pattern/affix tools and typed dataset-unavailable paths. Pattern search must distinguish no dataset, active dataset without pattern fields, and a supported dataset with zero matches. | Tool contract tests, dataset backend tests, heuristic backend tests, shared pattern-label helper tests. |
+| P2-T82 | Add root/lemma browse endpoints and the authoritative additive `qai quran root list` command; retain the existing morphology-root syntax for compatibility. | API + CLI snapshot tests. |
 | P2-T84, T85, T87, T88 | Complete five-path family resolution, relation builders, opt-in computational suggestions, and reviewer promotion. | Explanation/provenance/review-queue matrix. |
 | P2-T89, T90 | Expose morphology/family APIs and complete CLI dispatch, including pattern/browse paths. | Shared contract tests across application, API, and CLI. |
 | P2-T91, T92 | Build root/lemma and family golden suites; label synthetic versus linguist-reviewed cases. | Versioned reports with explicit reviewer status. |
