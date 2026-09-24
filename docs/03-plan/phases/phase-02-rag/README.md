@@ -29,7 +29,7 @@ acceptance is recorded.
 The normalization engine close-out is verified: P2-T13–T18/T20/T22 are ☑ (89/89
 crate tests, clippy `-D warnings`, fmt clean). P2-T21 is ◐ because the golden set
 awaits linguist sign-off. The 2026-09-24 implementation reconciliation raises the
-board to **57 / 114 sprint tasks (50%)**; ◐ rows are partial, synthetic, or owner-gated.
+board to **58 / 114 sprint tasks (51%)**; ◐ rows are partial, synthetic, or owner-gated.
 The board still has 0 / 50 ACs, 0 / 14 ADRs, and 6 / 6 Phase-2 migrations.
 
 The current backend is **SQLite FTS5**, not the Tantivy backend specified in the original
@@ -46,6 +46,7 @@ name `phase-02-rag` does not describe this phase: multi-RAG is later work.
 | `tasks.md` | Work Breakdown Structure as a live task board (P2-T01…T114, swimlane X) |
 | `acceptance.md` | Phase-2 exit gate: AC-P2-01…50 + supporting gates and required test suites |
 | `done.md` | Append-only completion ledger (tasks, ACs, ADRs, deviations, deferrals) |
+| `remaining-engineering-plan.md` | Remaining-task waves, licensing boundary, dependencies, and evidence plan (2026-09-24) |
 
 ---
 
