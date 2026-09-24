@@ -92,6 +92,21 @@ pub enum IndexBuildError {
     /// Cancellation was requested mid-build; the pointer is untouched.
     #[error("index build cancelled")]
     Cancelled,
+    /// Single-step rollback found no previous generation to restore.
+    #[error("index `{index_id}` has no previous generation to restore")]
+    NoPreviousGeneration {
+        /// Index identity.
+        index_id: String,
+    },
+    /// Single-step rollback refused: the previous generation's directory is
+    /// gone (GC evicted it); flipping the pointer would stop serving.
+    #[error("index `{index_id}` generation {generation} was evicted from disk")]
+    PreviousGenerationEvicted {
+        /// Index identity.
+        index_id: String,
+        /// Missing generation.
+        generation: u64,
+    },
 }
 
 impl IndexBuildError {
@@ -131,6 +146,10 @@ impl storage::error::Diagnostic for IndexBuildError {
                 storage::error::DiagnosticCode::new("QAI-IDX", number)
             }
             Self::Cancelled => storage::error::DiagnosticCode::new("QAI-IDX", 3),
+            Self::NoPreviousGeneration { .. } => storage::error::DiagnosticCode::new("QAI-IDX", 8),
+            Self::PreviousGenerationEvicted { .. } => {
+                storage::error::DiagnosticCode::new("QAI-IDX", 9)
+            }
         }
     }
 
@@ -146,6 +165,14 @@ impl storage::error::Diagnostic for IndexBuildError {
             }
             Self::Index(inner) => inner.remedy().unwrap_or_else(|| "See above.".to_string()),
             Self::Cancelled => "Rerun the build; staging is wiped and rebuilt.".to_string(),
+            Self::NoPreviousGeneration { .. } => {
+                "Only one generation ever served (or GC already evicted the previous one); nothing to undo."
+                    .to_string()
+            }
+            Self::PreviousGenerationEvicted { .. } => {
+                "The previous generation's directory is gone; rebuild to create a fresh generation."
+                    .to_string()
+            }
         })
     }
 
@@ -984,4 +1011,130 @@ impl jobs::JobHandler for IndexBuildHandler {
             Err(err) => Err(JobError::Storage(format!("{}: {}", err.code(), err.summary()))),
         }
     }
+}
+
+/// Parameters for single-step index rollback (P2-T35).
+#[derive(Debug, Clone)]
+pub struct RollbackParams {
+    /// Index id (defaults to [`QURAN_AYAH_INDEX_ID`]).
+    pub index_id: String,
+    /// Operator principal id (recorded on the pointer row).
+    pub invoked_by: String,
+    /// Index root directory (`<root>/gen-<N>/` lives here).
+    pub data_dir: PathBuf,
+}
+
+/// Report for one single-step rollback.
+#[derive(Debug, Clone)]
+pub struct RollbackReport {
+    /// Index identity.
+    pub index_id: String,
+    /// Previously serving generation (now superseded; still on disk).
+    pub from_generation: u64,
+    /// Restored serving generation.
+    pub to_generation: u64,
+}
+
+/// Restore the previous serving generation (P2-T35).
+///
+/// Single-step undo of the last activation: the serving pointer flips back to
+/// the newest `superseded` run below the current generation, run states swap
+/// (`active` ↔ `superseded`) in ONE SQLite transaction, and the newer
+/// generation stays on disk (a later rebuild or a second flip can move
+/// forward again only through a new build — rollback never moves the pointer
+/// to a *newer* generation, so it cannot ping-pong).
+///
+/// Fail-closed: with no previous generation ([`IndexBuildError::NoPreviousGeneration`])
+/// or with the previous directory evicted ([`IndexBuildError::PreviousGenerationEvicted`])
+/// the pointer is untouched. Like activation, this needs no approval (derived
+/// data, not canonical text) and writes no audit event.
+pub async fn rollback_index_single_step(
+    db: &SqliteDatabase,
+    params: &RollbackParams,
+) -> Result<RollbackReport, IndexBuildError> {
+    let mut uow = db.write().await.map_err(IndexBuildError::storage)?;
+    let pointer =
+        uow.quran().get_index_pointer(&params.index_id).await.map_err(IndexBuildError::storage)?;
+    let Some(pointer) = pointer else {
+        uow.rollback().await.map_err(IndexBuildError::storage)?;
+        return Err(IndexBuildError::NoPreviousGeneration { index_id: params.index_id.clone() });
+    };
+    let current = pointer.generation as u64;
+    let runs =
+        uow.quran().list_build_runs(&params.index_id).await.map_err(IndexBuildError::storage)?;
+    let previous = runs
+        .iter()
+        .filter(|run| run.state == "superseded" && (run.generation as u64) < current)
+        .map(|run| run.generation as u64)
+        .max();
+    let Some(previous) = previous else {
+        uow.rollback().await.map_err(IndexBuildError::storage)?;
+        return Err(IndexBuildError::NoPreviousGeneration { index_id: params.index_id.clone() });
+    };
+    // The retained directory must still exist: flipping to a missing
+    // generation would stop serving. GC eviction (or manual deletion) makes
+    // rollback impossible — rebuild instead.
+    if !params.data_dir.join(format!("gen-{previous}")).exists() {
+        uow.rollback().await.map_err(IndexBuildError::storage)?;
+        return Err(IndexBuildError::PreviousGenerationEvicted {
+            index_id: params.index_id.clone(),
+            generation: previous,
+        });
+    }
+    let now = domain::Timestamp::now().to_string();
+    uow.quran()
+        .upsert_index_pointer(storage::quran::IndexPointerRow {
+            index_id: params.index_id.clone(),
+            generation: previous as i64,
+            manifest_json: previous_run_manifest(&params.data_dir, previous)?,
+            updated_at: now.clone(),
+            updated_by: params.invoked_by.clone(),
+        })
+        .await
+        .map_err(IndexBuildError::storage)?;
+    for run in &runs {
+        let generation = run.generation as u64;
+        if generation == current && run.state == "active" {
+            uow.quran()
+                .set_build_run_state(
+                    &run.id,
+                    "superseded",
+                    run.doc_count,
+                    &run.manifest_hash,
+                    None,
+                    &now,
+                )
+                .await
+                .map_err(IndexBuildError::storage)?;
+        } else if generation == previous && run.state == "superseded" {
+            uow.quran()
+                .set_build_run_state(
+                    &run.id,
+                    "active",
+                    run.doc_count,
+                    &run.manifest_hash,
+                    None,
+                    &now,
+                )
+                .await
+                .map_err(IndexBuildError::storage)?;
+        }
+    }
+    uow.commit().await.map_err(IndexBuildError::storage)?;
+    Ok(RollbackReport {
+        index_id: params.index_id.clone(),
+        from_generation: current,
+        to_generation: previous,
+    })
+}
+
+/// Read the complete manifest of a retained generation for the pointer row.
+fn previous_run_manifest(data_dir: &Path, generation: u64) -> Result<String, IndexBuildError> {
+    let path = data_dir.join(format!("gen-{generation}")).join("manifest.json");
+    std::fs::read_to_string(&path).map_err(|error| {
+        IndexBuildError::Index(IndexError::BuildFailed {
+            stage: "rollback".to_string(),
+            detail: format!("cannot read retained manifest {}: {error}", path.display()),
+        })
+    })
 }
