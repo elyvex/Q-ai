@@ -19,7 +19,7 @@
 
 ## Phase 2 — implementation reconciliation, 2026-09-24
 
-- Reconciled the live task board with landed code: **58 / 114 tasks ☑ (51%)**;
+- Reconciled the live task board with landed code: **59 / 114 tasks ☑ (52%)**;
   partial/synthetic/owner-gated work is explicitly ◐ rather than overstated.
 - Newly closed task groups: T36/T54 (index/search hardening), T57/T58/T60/T61/T63/T66/T69/T70/T71
   (morphology import/validation/diff), T73 (edition-relative FTS lexicon projection), T75/T76/T77/T83/T86/T93
