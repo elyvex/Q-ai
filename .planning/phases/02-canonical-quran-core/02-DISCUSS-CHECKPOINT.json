@@ -1,0 +1,61 @@
+{
+  "phase": "2",
+  "phase_name": "Canonical Quran Core",
+  "timestamp": "2026-09-24T23:15:00Z",
+  "areas_completed": [
+    "Phase posture — harden vs build",
+    "Canonical dataset & bundle policy"
+  ],
+  "areas_remaining": [
+    "Reference corpus & integrity strictness",
+    "Immutability & quotation evidence depth"
+  ],
+  "decisions": {
+    "Phase posture — harden vs build": [
+      {
+        "question": "How should Phase 2 treat the existing canonical core?",
+        "answer": "Evidence-driven harden — map each of the 5 success criteria to existing code + at least one repeatable check; implement only missing behavior or weak evidence (mirrors Phase 1 D-01).",
+        "options_presented": ["Evidence-driven harden (Recommended)", "Harden + targeted redesign", "Rebuild from scratch"]
+      },
+      {
+        "question": "Which authority governs scope and evidence for this phase?",
+        "answer": "Legacy docs as evidence — docs/03-plan phase-1 board, specs/005·006·012·015·016·019, ADR-0101…0114 as authoritative evidence/reference; .planning/ROADMAP.md stays the phase contract.",
+        "options_presented": ["Legacy docs as evidence (Recommended)", "Plan only from .planning", "You decide"]
+      },
+      {
+        "question": "How do the owner-gated blockers affect Phase 2 completion?",
+        "answer": "Fixture-complete, record gates — Phase 2 can complete on the synthetic fixture; OD-01/OD-02/OD-03 recorded as explicit blocked/deferred gates that block REAL canonical activation, never a silent pass.",
+        "options_presented": ["Fixture-complete, record gates (Recommended)", "Block completion on sign-off", "Out of planning scope"]
+      },
+      {
+        "question": "Is translation-edition work in Phase 2 scope?",
+        "answer": "Translations IN scope — model/validate translation editions as a distinct non-canonical layer (translator NOT NULL, aligned edition, own hash, no path into canonical slot), exercised on synthetic data (ADR-0112).",
+        "options_presented": ["Translations IN scope (Recommended)", "Canonical Arabic only", "You decide"]
+      }
+    ],
+    "Canonical dataset & bundle policy": [
+      {
+        "question": "Bundle policy for the canonical edition (ADR-0101 Options A/B/C)?",
+        "answer": "B — fixture + user import — ship no real canonical text; engineering runs on synthetic test-edition-min, operator imports an approved edition via `qai quran import`.",
+        "options_presented": ["B — fixture + user import (Recommended)", "A — bundle a licensed edition", "C — defer Phase 2"]
+      },
+      {
+        "question": "Should Phase 2 pin a concrete canonical edition identity, or keep it owner-gated?",
+        "answer": "Leave identity owner-gated — do not invent an upstream slug/publisher/license; record exact upstream_edition_slug and license as pending owner gates (OD-01).",
+        "options_presented": ["Leave identity owner-gated (Recommended)", "Name a candidate now", "You decide"]
+      },
+      {
+        "question": "How is the primary/default edition designation represented?",
+        "answer": "Explicit primary/default flag (Uthmani + Hafs 'an Asim) feeding the existing quran_active_edition singleton.",
+        "options_presented": ["Explicit flag + active pointer (Recommended)", "Active pointer only", "You decide"]
+      },
+      {
+        "question": "What synthetic dataset posture should the phase plan against?",
+        "answer": "Add a richer synthetic fixture — larger synthetic edition (more surahs/ayahs, basmala variants, multi-token ayahs, division boundaries) to exercise integrity checks more deeply.",
+        "options_presented": ["Keep test-edition-min (Recommended)", "Add a richer synthetic fixture", "You decide"]
+      }
+    ]
+  },
+  "deferred_ideas": [],
+  "canonical_refs": []
+}
