@@ -409,8 +409,12 @@ mod tests {
         changed.rule_set_versions.insert("L3.diacritics".to_string(), SemVer::new(1, 0, 1));
         assert_ne!(manifest_content_hash(&changed), baseline);
 
-        let mut changed = manifest;
+        let mut changed = manifest.clone();
         changed.content_hash = "sha256:different".to_string();
+        assert_eq!(manifest_content_hash(&changed), baseline);
+
+        let mut changed = manifest;
+        changed.built_at = "2026-09-16T00:00:00Z".to_string();
         assert_eq!(manifest_content_hash(&changed), baseline);
     }
 }
