@@ -622,28 +622,19 @@ Doctor should consume this result rather than reimplementing a weaker check. [VE
 | A7 | Newer registry search results do not justify an upgrade; publish dates and compatibility were not observed because the registry API probe timed out. | Standard Stack | If an upgrade is separately required, run a dedicated compatibility and supply-chain review. |
 | A8 | ASVS is used only as a review vocabulary; exact versioned ASVS control identifiers are not treated as locked requirements. | Security Domain, Sources | Security acceptance must still be checked against the project’s locked ADRs and implementation tests. |
 
-## Open Questions
+## Open Questions — Resolved 2026-09-24
 
-1. **Does Phase 1 require a fully usable `source import`, or only a stable foundation surface?**
-   - What we know: D-08 includes `source`; D-09 requires source lifecycle/import audit; the current handler refuses import and points to the later Quran command. [VERIFIED: crates/cli/src/lib.rs:612-652] [VERIFIED: .planning/phases/01-foundations/01-CONTEXT.md:76-80]
-   - What's unclear: whether catalog-only import is sufficient for the Phase 1 acceptance contract.
-   - Recommendation: implement only validated catalog/source-version staging and audited lifecycle transitions; do not activate canonical text or absorb the Phase 2 corpus pipeline. [ASSUMED: recommended narrow interpretation]
-2. **Should secret mutation commands remain explicitly out of scope?**
-   - What we know: the stable group exists, but current set/delete handlers refuse durable writes and the project overview places secret management in a later surface. [VERIFIED: crates/cli/src/lib.rs:86-89] [VERIFIED: crates/cli/src/lib.rs:692-731]
-   - What's unclear: whether “stable group” means command presence or mutation capability.
-   - Recommendation: preserve reference-only inspection and explicit refusal; any future value mutation needs a separate threat model and audit design. [ASSUMED: recommended interpretation]
-3. **What exact per-kind retry policy should be persisted?**
-   - What we know: D-15 allows agent discretion for constants; current `WorkerConfig` is global and `JobRecord` has `max_attempts`. [VERIFIED: .planning/phases/01-foundations/01-CONTEXT.md:42-43] [VERIFIED: crates/jobs/src/worker.rs:18-44]
-   - What's unclear: the policy table and whether it is config-, registry-, or migration-backed.
-   - Recommendation: keep a typed per-kind policy in the jobs/application boundary, expose it in job inspection, and test each kind’s exhausted outcome before locking names. [ASSUMED]
-4. **Should the Phase 1 migration be schema-changing or only an enforcement/test change?**
-   - What we know: 19 checksummed migrations currently pass `migrate-check`; no `0020_*` file exists. [VERIFIED: migrations/sqlite/checksums.json:2-26] [VERIFIED: live `migrate-check` output, 2026-09-24]
-   - What's unclear: whether lifecycle audit/outbox/checkpoint fields require columns or can use existing JSON/event tables.
-   - Recommendation: inventory required fields first; add one append-only migration only if a durable field cannot be represented by the current schema. [ASSUMED: migration path remains unchosen]
-5. **What should `qai serve` do when the database is unmigrated?**
-   - What we know: doctor must report readiness, and ordinary commands must not auto-migrate. [VERIFIED: .planning/phases/01-foundations/01-CONTEXT.md:24-28]
-   - What's unclear: whether serve should exit immediately, stay alive for health endpoints, or run a read-only degraded mode.
-   - Recommendation: fail startup with the same migration remedy and exit code as other ordinary commands; do not silently migrate. [ASSUMED: recommended operator behavior]
+**Status: RESOLVED — no unresolved research question remains before execution.** The resolutions below use D-01 through D-16 and the Phase 1 boundary; they do not add a product preference that the owner withheld.
+
+| Research question | Resolution | Status | Plan / assumption mapping |
+|---|---|---|---|
+| RQ-01 — Does Phase 1 require a fully usable generic `source import`, or only the stable foundation source surface plus audited existing lifecycle paths? | Phase 1 keeps the existing `source` group and closes the already-demonstrated Quran source/version staging, approval, activation, rollback, provenance, audit, and outbox seams. It does not add a new generic internet/source-catalog workflow or canonical activation path; those remain with the later source-catalog phase. This is the narrowest behavior that still satisfies D-04 and D-09 without treating command presence under D-08 as a new mutation surface. | RETAINED ASSUMPTION RA-01 | 01-02 tasks 01-02-01/02; 01-04 task 01-04-02; source audit rows FND-04/FND-06. |
+| RQ-02 — Should `secret set` / `secret delete` gain durable mutation behavior in Phase 1? | No. D-07 requires redacted inspection, D-08 fixes the stable group, and no locked decision requires secret-value writes. Preserve the existing explicit refusal and reference-only validation/inspection. A future mutation workflow requires its own threat model, secret backend, and audit contract. | RETAINED ASSUMPTION RA-02 | 01-01 task 01-01-02; 01-05 task 01-05-03 scope check. |
+| RQ-03 — What exact per-kind retry policy should be persisted? | Use a typed policy in `HandlerRegistry`, snapshot the selected attempt/backoff bounds through the existing `JobRecord` fields, and let the executor choose exact deterministic constants under D-15’s explicit discretion. Exhaustion and explicit retry must be inspectable. No new configuration surface or migration is introduced for this phase. | RESOLVED BY D-15 DISCRETION | 01-03 tasks 01-03-01/02/03; assumption A2 remains limited to exact constants and serialized names. |
+| RQ-04 — Should Phase 1 add a schema migration? | No planned migration. Existing jobs, progress, checkpoint, error, cancellation, and audit/outbox storage must represent the required state. If implementation proves a durable contract cannot fit, it must halt for an explicit plan revision/ADR rather than silently adding a migration or weakening the locked behavior. | RETAINED ASSUMPTION RA-03 | 01-01 task 01-01-03; 01-03 tasks 01-03-01/02; 01-05 task 01-05-02 `migrate-check`. |
+| RQ-05 — What should `qai serve` do when the database is unmigrated? | Fail before binding the server or starting the worker, emit the centralized migration-required diagnostic with exact `qai db migrate` remedy/next command, and use the same exit mapping as other ordinary commands. Do not auto-migrate or enter a degraded write-capable mode. | RESOLVED BY D-05 | 01-01 readiness result; 01-04 task 01-04-01 and its real-CLI test. |
+
+The retained assumptions are implementation boundaries, not open preference questions. Any change to RA-01, RA-02, or RA-03 requires a planning revision; the executor may not infer new product scope.
 
 ## Environment Availability
 
