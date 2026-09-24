@@ -85,7 +85,7 @@
 |---|---|---|---|---|---|
 | `xtask/src/arch.rs` | utility / build gate | transform | modify | same file `Dependency`, `Allowlist`, `violations` at `17-164`; synthetic tests at `166-331` | exact |
 | `xtask/allowlist.toml` | config | transform / build-time | modify | current workspace policy at `1-101`; parser at `xtask/src/arch.rs:47-85` | partial; external policy is new |
-| `xtask/tests/arch_dependencies.rs` | test | transform / build-time | new or inline alternative | synthetic `package`/`meta` helpers at `xtask/src/arch.rs:180-213` | role-match |
+| `xtask/src/arch.rs` inline test module | test | transform / build-time | existing inline module, extend | synthetic `package`/`meta` helpers at `xtask/src/arch.rs:180-213` | exact |
 
 ## Pattern Assignments
 
@@ -771,7 +771,7 @@ forbidden external edge is accepted. No CI workflow rewrite is implied.
 
 ---
 
-### WP-5 / `xtask/allowlist.toml` and optional `xtask/tests/arch_dependencies.rs`
+### WP-5 / `xtask/allowlist.toml` and inline architecture tests
 
 **Analogs:** current workspace policy at `xtask/allowlist.toml:1-55` and the
 parser at `xtask/src/arch.rs:47-85`.
@@ -790,9 +790,7 @@ is per-crate or global. Keep the existing fail-closed behavior for unknown crate
 The exact external list is intentionally a planner/owner decision; do not infer a
 new package or dependency from this phase.
 
-An inline `xtask/src/arch.rs` test is sufficient. If the planner prefers a
-separate `xtask/tests/arch_dependencies.rs`, copy the existing `package`/`meta`
-builders and keep the test dependency-free (no new package).
+An inline `xtask/src/arch.rs` test is the established seam. Keep the synthetic registry/git cases in that existing module; the project has no separate xtask integration-test target and no new test package is needed.
 
 ## Shared Patterns
 
@@ -881,7 +879,7 @@ gate.
 | `migrations/sqlite/0020_*.up.sql` (if needed) | migration | file-I/O | The research explicitly leaves schema fields and migration number unchosen; current 0004/0005 are older schemas | `0004_jobs.up.sql`, `0005_audit.up.sql`, `crates/storage-sqlite/src/migrate.rs` |
 | New worker-host lifecycle module, if created | provider/service | event-driven | No existing worker supervisor, signal abstraction, or graceful shutdown implementation | `crates/cli/src/lib.rs:301-345`, `crates/server/src/api.rs:1323-1330`, `jobs::Worker::run_once` |
 | External dependency allow/deny representation | config/build gate | transform | `xtask/allowlist.toml` reserves `external.allow` but no checked-in rule or parser exists | `xtask/src/arch.rs:105-142` pure `violations` and synthetic metadata builders |
-| `xtask/tests/arch_dependencies.rs` | test | transform | No separate xtask integration-test target exists; current policy tests are inline | Inline tests in `xtask/src/arch.rs:166-331` (preferred unless file separation is required) |
+| `xtask/src/arch.rs` inline test module | test | transform | Existing policy tests are inline; the project has no separate xtask integration-test target | Extend the existing synthetic cases at `xtask/src/arch.rs:166-331` |
 
 ## Evidence Matrix Support
 
