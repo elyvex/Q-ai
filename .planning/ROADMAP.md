@@ -56,7 +56,15 @@ Plans:
   3. Corpus integrity checks (counts, addressing, Unicode, checksums, round-trip, reference comparison) pass
   4. Canonical tables reject all non-approved writes; importer has no code path to canonical tables
   5. Every quotation verifies via `verify_quotation` with mismatch as a hard failure
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — TRACER: edition upstream identity, declared license, and primary/default designation persisted from manifest to operator surface
+- [ ] 02-02-PLAN.md — Operator integrity evidence: `qai quran verify` six-family surface, state-derived reference check, stored hash on lookup, richer synthetic fixture, and the reference-comparison operator path
+- [ ] 02-03-PLAN.md — Canonical-write fence completion: append-only trigger set, non-forgeable ApprovalToken + real CanonicalWriter, importer code-path audit, rollback rejection and cache-invalidation coverage
+- [ ] 02-04-PLAN.md — Quotation hard-failure wiring: shared verdict mapping, `qai quran verify-quotation`, and HTTP answer-path enforcement
+- [ ] 02-05-PLAN.md — Translation-layer completion: additive translation hash recipe, verbatim declared license, and a layer-separation negative test
+- [ ] 02-06-PLAN.md — Owner gates OD-01/OD-02/OD-03 recorded as blocked, coverage-gate reconciliation, and committed evidence of record
 
 ### Phase 3: Quran Search & Linguistics
 **Goal**: Users can find and analyze Quranic words across orthographic variation without ever seeing altered display text.
@@ -181,7 +189,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundations | 0/5 | Not started | - |
-| 2. Canonical Quran Core | 0/TBD | Not started | - |
+| 2. Canonical Quran Core | 0/6 | Not started | - |
 | 3. Quran Search & Linguistics | 0/TBD | Not started | - |
 | 4. Quran Graph | 0/TBD | Not started | - |
 | 5. Rich Quran Experience | 0/TBD | Not started | - |
