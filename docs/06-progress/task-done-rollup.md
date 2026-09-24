@@ -27,7 +27,7 @@
   T80/T82 are now evidence-backed partial slices; T109 was reopened to ◐ until the full
   multi-analysis CountingRules contract is implemented.
 - Evidence: `cargo test -p quran-search` (36/36),
-  `cargo test -p application --test morphology_import` (10/10),
+  `cargo test -p application --test morphology_import` (11/11),
   `cargo test -p application --test index_build` (4/4),
   `cargo test -p application --test index_lifecycle` (12/12),
   `cargo test -p cli --test quran quran_counting_graph_snapshots` (13 trycmd cases),
