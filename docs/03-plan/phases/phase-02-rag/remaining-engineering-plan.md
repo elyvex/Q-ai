@@ -162,12 +162,12 @@ full `CountingRules` contract are implemented.
 ## 6. Immediate next execution slice
 
 The first engineering checkpoint has landed the finalized manifest/hash contract, exact
-T80 pattern search, and T82 root/lemma browse plus `qai quran root list`. The next
-checkpoint is:
+T80 pattern search, T82 root/lemma browse plus `qai quran root list`, and T65 explicit
+review-queue candidate mechanics. The next checkpoint is:
 
 1. the machine-readable license matrix and activation rejection test;
-2. T65 explicit/idempotent review-queue candidate mechanics;
-3. T89 shared morphology API seams;
-4. T105/T106 shared drift/doctor foundations.
+2. T89 shared morphology API seams;
+3. T105/T106 shared drift/doctor foundations;
+4. T104/T109 counting contract repairs.
 
 Each item must leave owner, linguist, licensed-data, and full-corpus blockers explicit.
