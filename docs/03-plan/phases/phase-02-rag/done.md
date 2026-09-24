@@ -1,7 +1,7 @@
 # Phase 2 — Completion Ledger
 
 **Phase:** P2 — Quran Search, Arabic Normalization, Morphology & Word Families
-**Status:** 🟡 In Progress — 59 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 6 / 6 migrations
+**Status:** 🟡 In Progress — 58 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 6 / 6 migrations
 **Started:** 2026-09-14
 **Completed:** —
 
@@ -51,8 +51,8 @@ with what evidence.
 | 2.3 — Search Tools | 17 | 14 | 42.0 | — | ◐ |
 | 2.4 — Morphology Import & Lexicons | 18 | 10 | 45.0 | — | ◐ |
 | 2.5 — Morphology & Family Tools | 19 | 6 | 47.5 | — | ◐ |
-| 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 6 | 51.0 | — | ◐ |
-| **Total** | **114 + 5** | **59** | **278.0** | **—** | **52%** |
+| 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 5 | 51.0 | — | ◐ |
+| **Total** | **114 + 5** | **58** | **278.0** | **—** | **51%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -73,7 +73,7 @@ wrong capacity model.
 
 ## 2. Completed Tasks
 
-**59 task entries are closed or grouped in the implementation reconciliation below; no
+**58 task entries are closed or grouped in the implementation reconciliation below; no
 acceptance criterion or ADR acceptance is implied.** The detailed entries begin below;
 see §9 for the 2026-09-24 grouped close-out and partial-work boundary.
 
@@ -741,14 +741,16 @@ counting dispatch, including the new `morphology diff` command, is covered by
 
 ### Partial work kept at ◐ (updated 2026-09-24: T35 closed, see §2)
 
-T37–T39, T53, T55–T56, T59, T62, T64, T67–T68, T72, T74, T78–T81, T84–T85,
-T87–T88, T90, T95–T97, T101–T102, T104, and T112 have implementation evidence but
-still miss a required surface, owner decision, licensed data, linguist review,
-full-corpus gate, or process-kill/API requirement. T65, T82, T89, T91–T92,
-T105–T108, T110–T111, and T113–T114 remain ☐.
+T37–T39, T53, T55–T56, T59, T62, T64, T67–T68, T72, T74, T78–T81, T82, T84–T85,
+T87–T88, T90, T95–T97, T101–T102, T104, T109, and T112 have implementation evidence
+but still miss a required surface, owner decision, licensed data, linguist review,
+full-corpus gate, or process-kill/API requirement. T65, T89, T91–T92, T105–T108,
+T110–T111, and T113–T114 remain ☐.
 
-**Evidence run during reconciliation:** `cargo test -p quran-search --test trigram_index --test regex_dos --test fts5_backend`
-(12/12), `cargo test -p application --test morphology_import --test counting --test index_lifecycle --test search_goldens --test search_latency`
-(26/26), `cargo test -p application --test index_build --test index_lifecycle` (16/16), `cargo test -p cli --test quran quran_counting_graph_snapshots` (11 trycmd cases), and
+**Evidence run during reconciliation:** `cargo test -p quran-search` (36/36),
+`cargo test -p application --test morphology_import` (10/10),
+`cargo test -p application --test index_build` (4/4),
+`cargo test -p application --test index_lifecycle` (12/12),
+`cargo test -p cli --test quran quran_counting_graph_snapshots` (13 trycmd cases), and
 `cargo test -p storage-sqlite --test quran` (10/10). The licensed
 full-corpus, linguist, API, doctor, and exit-ritual gates remain open.
