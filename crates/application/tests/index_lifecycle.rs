@@ -14,13 +14,15 @@ use std::time::Instant;
 use application::quran::activate_edition;
 use application::quran_forms::{RebuildParams, rebuild_forms};
 use application::quran_index::{
-    GcParams, IndexBuildError, IndexBuildParams, QURAN_AYAH_INDEX_ID, gc_index, rebuild_index,
+    GcParams, IndexBuildError, IndexBuildParams, QURAN_AYAH_INDEX_ID, RollbackParams, gc_index,
+    rebuild_index, rollback_index_single_step,
 };
 use application::quran_search::{MatchMode, SearchParams, search_concatenated};
 use domain::{PrincipalId, Timestamp};
 use quran_corpus::import::{ImportInput, ImportOptions, ImportOutcome, ImportProgress, run_import};
 use quran_corpus::sha256_hex;
 use storage::Database as _;
+use storage::error::Diagnostic as _;
 use storage_sqlite::SqliteDatabase;
 use tempfile::tempdir;
 
@@ -289,6 +291,109 @@ async fn gc_cancel_leaves_active_untouched() {
     assert!(matches!(err, IndexBuildError::Cancelled));
     assert_eq!(pointer_generation(&db).await, Some(2));
     assert!(data_dir.join("gen-2").exists());
+}
+
+fn rollback_params(data_dir: &std::path::Path) -> RollbackParams {
+    RollbackParams {
+        index_id: QURAN_AYAH_INDEX_ID.to_string(),
+        invoked_by: PRINCIPAL.to_string(),
+        data_dir: data_dir.to_path_buf(),
+    }
+}
+
+async fn run_states(db: &SqliteDatabase) -> Vec<(i64, String)> {
+    let mut uow = db.write().await.unwrap();
+    let mut states: Vec<(i64, String)> = uow
+        .quran()
+        .list_build_runs(QURAN_AYAH_INDEX_ID)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|run| (run.generation, run.state))
+        .collect();
+    uow.rollback().await.unwrap();
+    states.sort_unstable();
+    states
+}
+
+/// P2-T35: single-step rollback flips the pointer back to the retained
+/// previous generation, swaps run states atomically, and keeps serving.
+#[tokio::test]
+async fn rollback_restores_previous_generation_and_serves() {
+    let (dir, db) = ready_db().await;
+    let data_dir = dir.path().join("index");
+    build(&db, &data_dir, "g1").await;
+    build(&db, &data_dir, "g2").await;
+    assert_eq!(pointer_generation(&db).await, Some(2));
+
+    let report =
+        rollback_index_single_step(&db, &rollback_params(&data_dir)).await.expect("rollback runs");
+    assert_eq!(report.index_id, QURAN_AYAH_INDEX_ID);
+    assert_eq!((report.from_generation, report.to_generation), (2, 1));
+    assert_eq!(pointer_generation(&db).await, Some(1));
+    assert_eq!(
+        run_states(&db).await,
+        vec![(1, "active".to_string()), (2, "superseded".to_string())]
+    );
+    // Both generations stay on disk; the restored one answers search.
+    assert!(data_dir.join("gen-1").exists());
+    assert!(data_dir.join("gen-2").exists());
+    let query = skeleton_query(&db, 1, 1).await;
+    let out = search_concatenated(&db, &data_dir, &concat_params(&query), false, 1).await.unwrap();
+    assert!(out.total_matches > 0, "post-rollback search must serve");
+}
+
+/// P2-T35: a second rollback does not ping-pong forward — only strictly
+/// older generations are rollback targets, so the pointer stays put.
+#[tokio::test]
+async fn rollback_twice_fails_closed() {
+    let (dir, db) = ready_db().await;
+    let data_dir = dir.path().join("index");
+    build(&db, &data_dir, "g1").await;
+    build(&db, &data_dir, "g2").await;
+    rollback_index_single_step(&db, &rollback_params(&data_dir)).await.unwrap();
+
+    let err = rollback_index_single_step(&db, &rollback_params(&data_dir)).await.unwrap_err();
+    assert!(matches!(err, IndexBuildError::NoPreviousGeneration { .. }));
+    assert_eq!(err.code().to_string(), "QAI-IDX-0008");
+    assert_eq!(pointer_generation(&db).await, Some(1));
+    assert_eq!(
+        run_states(&db).await,
+        vec![(1, "active".to_string()), (2, "superseded".to_string())]
+    );
+}
+
+/// P2-T35: with a single generation there is nothing to undo; the pointer
+/// is untouched.
+#[tokio::test]
+async fn rollback_without_previous_fails_closed() {
+    let (dir, db) = ready_db().await;
+    let data_dir = dir.path().join("index");
+    build(&db, &data_dir, "g1").await;
+
+    let err = rollback_index_single_step(&db, &rollback_params(&data_dir)).await.unwrap_err();
+    assert!(matches!(err, IndexBuildError::NoPreviousGeneration { .. }));
+    assert_eq!(pointer_generation(&db).await, Some(1));
+}
+
+/// P2-T35: when the previous directory is gone (GC eviction or manual
+/// deletion), rollback refuses rather than pointing at a missing generation.
+#[tokio::test]
+async fn rollback_after_eviction_fails_closed() {
+    let (dir, db) = ready_db().await;
+    let data_dir = dir.path().join("index");
+    build(&db, &data_dir, "g1").await;
+    build(&db, &data_dir, "g2").await;
+    std::fs::remove_dir_all(data_dir.join("gen-1")).unwrap();
+
+    let err = rollback_index_single_step(&db, &rollback_params(&data_dir)).await.unwrap_err();
+    assert!(matches!(err, IndexBuildError::PreviousGenerationEvicted { .. }));
+    assert_eq!(err.code().to_string(), "QAI-IDX-0009");
+    assert_eq!(pointer_generation(&db).await, Some(2));
+    assert_eq!(
+        run_states(&db).await,
+        vec![(1, "superseded".to_string()), (2, "active".to_string())]
+    );
 }
 
 /// P2-T37: cancellation at every build stage leaves the pointer unchanged
