@@ -1834,6 +1834,8 @@ pub async fn cmd_index_rebuild(
                     _ => exit::INTERNAL,
                 },
                 IndexBuildError::Storage(_) | IndexBuildError::Index(_) => exit::INTERNAL,
+                IndexBuildError::NoPreviousGeneration { .. }
+                | IndexBuildError::PreviousGenerationEvicted { .. } => exit::CONFLICT,
             };
             CommandOutput::err(exit, error.to_string())
         }
@@ -1946,6 +1948,47 @@ pub async fn cmd_index_gc(db_path: &str, index: Option<&str>, keep: usize) -> Co
         Err(error) => {
             use super::quran_index::IndexBuildError;
             let exit = match &error {
+                IndexBuildError::Cancelled => exit::CANCELLED,
+                _ => exit::INTERNAL,
+            };
+            CommandOutput::err(exit, error.to_string())
+        }
+    }
+}
+
+/// Restore the previous serving generation: `qai quran index rollback` (P2-T35).
+///
+/// Single-step undo of the last index activation. The newer generation stays
+/// on disk and in the run history; only the pointer and run states move.
+pub async fn cmd_index_rollback(db_path: &str, index: Option<&str>) -> CommandOutput {
+    use super::quran_index::{QURAN_AYAH_INDEX_ID, RollbackParams, rollback_index_single_step};
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let params = RollbackParams {
+        index_id: index.unwrap_or(QURAN_AYAH_INDEX_ID).to_string(),
+        invoked_by: LOCAL_PRINCIPAL.to_string(),
+        data_dir: super::quran_index::index_root_for_db(db_path),
+    };
+    match rollback_index_single_step(&db, &params).await {
+        Ok(report) => {
+            let human = format!(
+                "index {} rolled back: generation {} → {} (previous generation retained on disk)",
+                report.index_id, report.from_generation, report.to_generation,
+            );
+            let json = serde_json::json!({
+                "index_id": report.index_id,
+                "from_generation": report.from_generation,
+                "to_generation": report.to_generation,
+            });
+            CommandOutput::ok(human, json)
+        }
+        Err(error) => {
+            use super::quran_index::IndexBuildError;
+            let exit = match &error {
+                IndexBuildError::NoPreviousGeneration { .. }
+                | IndexBuildError::PreviousGenerationEvicted { .. } => exit::CONFLICT,
                 IndexBuildError::Cancelled => exit::CANCELLED,
                 _ => exit::INTERNAL,
             };
