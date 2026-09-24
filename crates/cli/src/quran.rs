@@ -183,6 +183,11 @@ pub enum QuranAction {
         #[command(flatten)]
         args: Box<QuranSearchArgs>,
     },
+    /// Lexicon browse commands.
+    Root {
+        #[command(subcommand)]
+        action: RootAction,
+    },
     /// Exact counting & discovery tools (read-only; rule-relative).
     Count {
         #[command(subcommand)]
@@ -378,6 +383,20 @@ pub enum IndexAction {
         /// Index id (default `quran.ayah.v1`).
         #[arg(long)]
         index: Option<String>,
+    },
+}
+
+/// Lexicon browse subcommands (P2-T82).
+#[derive(Subcommand)]
+pub enum RootAction {
+    /// List active-dataset roots in deterministic normalized order.
+    List {
+        /// Optional native or normalized prefix.
+        #[arg(long)]
+        prefix: Option<String>,
+        /// Maximum rows (clamped to 1..=500).
+        #[arg(long, default_value_t = 50)]
+        limit: usize,
     },
 }
 
@@ -770,6 +789,12 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
             }
             IndexAction::Rollback { index } => {
                 application::quran_cli::cmd_index_rollback(db_path, index.as_deref()).await
+            }
+        },
+        QuranAction::Root { action } => match action {
+            RootAction::List { prefix, limit } => {
+                application::quran_cli::cmd_morphology_root_list(db_path, prefix.as_deref(), limit)
+                    .await
             }
         },
         QuranAction::Count { action } => match action {
