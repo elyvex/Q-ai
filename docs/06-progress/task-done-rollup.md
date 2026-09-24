@@ -2,6 +2,21 @@
 
 > Completed tasks across all phases. Newest first.
 
+## Phase 2 — P2-T35 single-step index rollback, 2026-09-24
+
+- `rollback_index_single_step` flips the serving pointer back to the newest
+  `superseded` run below the serving generation with run states swapping in one
+  transaction; the newer generation stays on disk (no ping-pong — never moves to
+  a newer generation). Fail-closed `QAI-IDX-0008` (no previous) / `0009`
+  (evicted dir); pointer manifest re-read from the retained `gen-<N>/manifest.json`.
+  New `qai quran index rollback` verb (conflict exit 6 when nothing to undo).
+- Evidence: `application --test index_lifecycle` 12/12 (4 new rollback tests:
+  restore-and-serve, no-ping-pong, no-previous, evicted); `cli` suites green;
+  `clippy -D warnings` clean; live CLI proof (`generation 2 → 1`, second
+  rollback refused). Board 59/114 (52%).
+- Remaining: T37 process-kill evidence, T38 full-corpus benchmark, and the
+  owner/linguist/licensed-data gates listed in the phase board.
+
 ## Phase 2 — implementation reconciliation, 2026-09-24
 
 - Reconciled the live task board with landed code: **57 / 114 tasks ☑ (50%)**;
