@@ -29,7 +29,7 @@ acceptance is recorded.
 The normalization engine close-out is verified: P2-T13–T18/T20/T22 are ☑ (89/89
 crate tests, clippy `-D warnings`, fmt clean). P2-T21 is ◐ because the golden set
 awaits linguist sign-off. The 2026-09-24 implementation reconciliation raises the
-board to **59 / 114 sprint tasks (52%)**; ◐ rows are partial, synthetic, or owner-gated.
+board to **58 / 114 sprint tasks (51%)**; ◐ rows are partial, synthetic, or owner-gated.
 The board still has 0 / 50 ACs, 0 / 14 ADRs, and 6 / 6 Phase-2 migrations.
 
 The current backend is **SQLite FTS5**, not the Tantivy backend specified in the original
