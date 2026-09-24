@@ -373,6 +373,12 @@ pub enum IndexAction {
         #[arg(long, default_value_t = 2)]
         keep: usize,
     },
+    /// Restore the previous serving generation (single-step rollback, P2-T35).
+    Rollback {
+        /// Index id (default `quran.ayah.v1`).
+        #[arg(long)]
+        index: Option<String>,
+    },
 }
 
 /// Exact counting & discovery subcommands (P2-T94…T103).
@@ -761,6 +767,9 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
             }
             IndexAction::Gc { index, keep } => {
                 application::quran_cli::cmd_index_gc(db_path, index.as_deref(), keep).await
+            }
+            IndexAction::Rollback { index } => {
+                application::quran_cli::cmd_index_rollback(db_path, index.as_deref()).await
             }
         },
         QuranAction::Count { action } => match action {
