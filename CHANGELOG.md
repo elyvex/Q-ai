@@ -8,7 +8,7 @@ All notable changes to Q-ai are documented here.
 
 - `qai quran index rollback` restores the previous serving index generation
   (pointer + run-state swap in one transaction; `QAI-IDX-0008`/`0009`
-  fail-closed). Board 59/114 (52%).
+  fail-closed). Board 58/114 (51%).
 
 ### Added — Quran corpus: typed comparison + editorial verification plumbing (P1-T26/T55, 2026-09-24)
 
