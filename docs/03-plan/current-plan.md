@@ -5,7 +5,7 @@
 
 - Search core is implemented: P2-T51/T52 (search API + CLI) completed 2026-09-23
   (see `docs/06-progress/task-done-rollup.md`). The 2026-09-24 reconciliation now
-  records 58/114 Phase-2 tasks ☑, plus P2-T35 (single-step index rollback)
+  records 59/114 Phase-2 tasks ☑, including P2-T35 (single-step index rollback)
   closed later the same day → **59/114 ☑ (52%)**; ◐ rows cover
   partial/synthetic/owner-gated work.
   Licensed morphology evidence, API parity, doctor/evaluation, and exit gates remain open.
