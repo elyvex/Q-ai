@@ -122,7 +122,7 @@ properties, and the fuzz battery; `normalize --explain` teaches the transformati
 | P2-T32 | Query/index tokenizer-parity test (5,000 random substrings) | D2.13 | T31 | 1.5 | QA | ☑ |
 | P2-T33 | Migration `0023_quran_indexes` + `index_pointers` + build-run tracking | D2.10 | T25 | 1.5 | BE | ☑ |
 | P2-T34 | `quran.index.build` job: staging dir → verify → atomic pointer flip | D2.10 | T30,T33 | 3.0 | SRCH | ☑ |
-| P2-T35 | Index generation retention, `gc`, single-step rollback | D2.10 | T34 | 1.5 | SRCH | ◐ (retention/GC implemented; explicit single-step rollback still absent) |
+| P2-T35 | Index generation retention, `gc`, single-step rollback | D2.10 | T34 | 1.5 | SRCH | ☑ (retention/GC + `rollback_index_single_step` + `qai quran index rollback`; `index_lifecycle` 12/12; `done.md` §2 entry 2026-09-24) |
 | P2-T36 | Trigram skeleton posting index + build job | D2.4 | T27 | 3.0 | SRCH | ☑ (posting build, recall, and scan-parity tests landed) |
 | P2-T37 | Index build crash/cancel matrix (kill at each stage; active pointer unchanged) | D2.13 | T34 | 2.0 | QA | ◐ (cooperative cancellation matrix is green; process-kill evidence remains) |
 | P2-T38 | Cold-rebuild benchmark + CI threshold gate (< 6 min total) | D2.10 | T34,T36 | 1.5 | QA | ◐ (fixture timing gate only; full-corpus benchmark remains) |
