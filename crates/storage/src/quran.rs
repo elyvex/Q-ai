@@ -990,6 +990,11 @@ pub trait QuranRepository: Send + Sync {
         Err(StorageError::StorageUnavailable)
     }
 
+    /// Count derived ayah-form rows for one edition (doctor coverage, P2-T105).
+    async fn count_ayah_forms(&self, _edition_id: &str) -> Result<i64, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
     /// Delete all derived forms for one edition (rebuilds only; canonical
     /// tables are never touched by this method).
     async fn delete_forms_for_edition(&mut self, _edition_id: &str) -> Result<(), StorageError> {
