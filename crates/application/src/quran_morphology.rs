@@ -21,8 +21,8 @@ use domain::{AuditEventId, SubjectRef};
 use storage::Database as _;
 use storage::error::StorageError;
 use storage::quran::{
-    AlignmentRow, LexiconProvenance, MorphologyFindingRow, QuranDatasetRow, StagedMorphRow,
-    StagingBatchRow, TokenAnalysisRow,
+    AlignmentRow, LexiconProvenance, MorphReviewItemRow, MorphologyFindingRow, QuranDatasetRow,
+    StagedMorphRow, StagingBatchRow, TokenAnalysisRow,
 };
 use storage_sqlite::SqliteDatabase;
 
@@ -1339,6 +1339,166 @@ pub async fn browse_lemmas(
         })
         .collect();
     Ok((dataset_id, items))
+}
+
+/// Explicit, auditable cross-dataset root candidate for T65.
+///
+/// This is deliberately not a fuzzy matcher. A caller or a future approved
+/// policy supplies both sides; this service only validates and queues them.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RootUnificationCandidate {
+    /// Left dataset identity.
+    pub left_dataset: String,
+    /// Left root row id.
+    pub left_root_id: String,
+    /// Left native spelling.
+    pub left_root: String,
+    /// Left normalized spelling.
+    pub left_normalized: String,
+    /// Left root convention.
+    pub left_convention: String,
+    /// Right dataset identity.
+    pub right_dataset: String,
+    /// Right root row id.
+    pub right_root_id: String,
+    /// Right native spelling.
+    pub right_root: String,
+    /// Right normalized spelling.
+    pub right_normalized: String,
+    /// Right root convention.
+    pub right_convention: String,
+    /// Candidate confidence in [0,1].
+    pub confidence: f64,
+    /// Evidence supporting the candidate.
+    pub evidence: serde_json::Value,
+    /// Algorithm/version that proposed the candidate, if computational.
+    pub algorithm: Option<String>,
+    pub algorithm_version: Option<String>,
+}
+
+impl RootUnificationCandidate {
+    fn validate(&self) -> Result<(), MorphologyToolError> {
+        let fields = [
+            &self.left_dataset,
+            &self.left_root_id,
+            &self.left_root,
+            &self.left_normalized,
+            &self.left_convention,
+            &self.right_dataset,
+            &self.right_root_id,
+            &self.right_root,
+            &self.right_normalized,
+            &self.right_convention,
+        ];
+        if fields.iter().any(|value| value.trim().is_empty()) {
+            return Err(MorphologyToolError::Morphology(
+                quran_morphology::MorphologyError::ValidationFailed {
+                    detail: "root-unification candidate fields must not be empty".to_string(),
+                },
+            ));
+        }
+        if self.left_dataset == self.right_dataset && self.left_root_id == self.right_root_id {
+            return Err(MorphologyToolError::Morphology(
+                quran_morphology::MorphologyError::ValidationFailed {
+                    detail: "root-unification candidate must reference two distinct roots"
+                        .to_string(),
+                },
+            ));
+        }
+        if !(0.0..=1.0).contains(&self.confidence) {
+            return Err(MorphologyToolError::Morphology(
+                quran_morphology::MorphologyError::ValidationFailed {
+                    detail: "root-unification confidence must be in [0,1]".to_string(),
+                },
+            ));
+        }
+        if !self.evidence.is_object() {
+            return Err(MorphologyToolError::Morphology(
+                quran_morphology::MorphologyError::ValidationFailed {
+                    detail: "root-unification evidence must be a JSON object".to_string(),
+                },
+            ));
+        }
+        Ok(())
+    }
+
+    fn content_id(&self) -> String {
+        let payload = serde_json::json!({
+            "left_dataset": self.left_dataset,
+            "left_root_id": self.left_root_id,
+            "right_dataset": self.right_dataset,
+            "right_root_id": self.right_root_id,
+        });
+        format!(
+            "root-unification:{}",
+            quran_corpus::sha256_hex(serde_json::to_vec(&payload).unwrap_or_default().as_slice())
+        )
+    }
+}
+
+/// Enqueue an explicitly supplied root-unification candidate (P2-T65).
+/// The queue item remains `pending`; promotion is a separate reviewer flow.
+pub async fn enqueue_root_unification(
+    db: &SqliteDatabase,
+    candidate: &RootUnificationCandidate,
+) -> Result<MorphReviewItemRow, MorphologyToolError> {
+    candidate.validate()?;
+    let id = candidate.content_id();
+    let subject = serde_json::json!({
+        "left": {
+            "dataset": candidate.left_dataset,
+            "root_id": candidate.left_root_id,
+            "root": candidate.left_root,
+            "normalized": candidate.left_normalized,
+            "convention": candidate.left_convention,
+        },
+        "right": {
+            "dataset": candidate.right_dataset,
+            "root_id": candidate.right_root_id,
+            "root": candidate.right_root,
+            "normalized": candidate.right_normalized,
+            "convention": candidate.right_convention,
+        },
+    });
+    let evidence = serde_json::json!({
+        "confidence": candidate.confidence,
+        "evidence": candidate.evidence,
+        "algorithm": candidate.algorithm,
+        "algorithm_version": candidate.algorithm_version,
+    });
+    let row = MorphReviewItemRow {
+        id: id.clone(),
+        kind: "root_unification".to_string(),
+        subject_json: serde_json::to_string(&subject).map_err(|error| {
+            MorphologyToolError::Morphology(quran_morphology::MorphologyError::ValidationFailed {
+                detail: error.to_string(),
+            })
+        })?,
+        evidence_json: serde_json::to_string(&evidence).map_err(|error| {
+            MorphologyToolError::Morphology(quran_morphology::MorphologyError::ValidationFailed {
+                detail: error.to_string(),
+            })
+        })?,
+        status: "pending".to_string(),
+        reviewer: None,
+        decided_at: None,
+        created_at: domain::Timestamp::now().to_string(),
+    };
+    let mut uow = db.write().await.map_err(MorphologyToolError::storage)?;
+    let existing = uow
+        .quran()
+        .list_review_items("pending")
+        .await
+        .map_err(MorphologyToolError::storage)?
+        .into_iter()
+        .find(|item| item.id == id);
+    if let Some(existing) = existing {
+        uow.rollback().await.map_err(MorphologyToolError::storage)?;
+        return Ok(existing);
+    }
+    uow.quran().insert_review_item(row.clone()).await.map_err(MorphologyToolError::storage)?;
+    uow.commit().await.map_err(MorphologyToolError::storage)?;
+    Ok(row)
 }
 
 /// `quran.root_search` (convention-resolved grouping + occurrences).
