@@ -617,26 +617,26 @@ pub async fn rebuild_index(
     let stamp = staged.commit().await.map_err(IndexBuildError::Index)?;
     // Identity-bound (not row-surrogate-bound): re-imports of the same
     // edition version reproduce the same hash, so drift reports compare
-    // derivations, not import runs.
-    let manifest_hash = quran_corpus::sha256_hex(
-        format!(
-            "{}|{}|{}@{}|{}|{}",
-            params.index_id,
-            corpus_generation,
-            params.edition_slug,
-            params.edition_version,
-            stamp.doc_count,
-            ladder
-        )
-        .as_bytes(),
-    );
-    let manifest_hash = format!("sha256:{manifest_hash}");
-    let manifest = IndexManifest {
-        doc_count: stamp.doc_count,
-        trigram_postings: trigram_built.1,
-        content_hash: manifest_hash.clone(),
-        ..manifest
-    };
+    // derivations, not import runs. Hash the complete manifest, excluding only
+    // the hash field itself, then persist the finalized manifest before the
+    // pointer can expose this generation.
+    let mut manifest =
+        IndexManifest { doc_count: stamp.doc_count, trigram_postings: trigram_built.1, ..manifest };
+    let manifest_hash = quran_search::manifest_content_hash(&manifest);
+    manifest.content_hash = manifest_hash.clone();
+    let manifest_path = index_root.join(format!("gen-{generation}")).join("manifest.json");
+    let manifest_json = serde_json::to_string_pretty(&manifest).map_err(|err| {
+        IndexBuildError::Index(IndexError::BuildFailed {
+            stage: "manifest".to_string(),
+            detail: err.to_string(),
+        })
+    })?;
+    std::fs::write(&manifest_path, manifest_json).map_err(|err| {
+        IndexBuildError::Index(IndexError::BuildFailed {
+            stage: "manifest".to_string(),
+            detail: format!("cannot write {}: {err}", manifest_path.display()),
+        })
+    })?;
     let serving =
         Fts5Index::open(&index_root, generation, manifest.clone(), family_from(&registry, ladder)?)
             .await
