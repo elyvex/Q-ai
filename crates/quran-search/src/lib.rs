@@ -27,7 +27,7 @@ pub use hit::{ScoreExplain, SearchHit, SearchHitParts, Segmentation, Warning};
 pub use index::FullTextIndex;
 pub use model::{
     CommitStamp, FieldId, Filter, FtsBackend, FtsDoc, FtsHit, FtsIntegrityReport, FtsQuery,
-    FtsResults, FtsSchema, FtsStats, IndexManifest, ResultOrder, SearchOpts,
+    FtsResults, FtsSchema, FtsStats, IndexManifest, ResultOrder, SearchOpts, manifest_content_hash,
 };
 pub use regex::{DFA_SIZE_LIMIT, MAX_PATTERN_LEN, NFA_SIZE_LIMIT, compile_dfa, first_match};
 pub use skeleton::{BuiltSkeleton, ayah_skeleton, skeletons_for_surah};
