@@ -10,6 +10,7 @@ quran-core = { path = "../quran-core" }
 quran-normalization = { path = "../quran-normalization" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
 regex-automata = { workspace = true }
