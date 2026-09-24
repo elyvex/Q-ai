@@ -76,6 +76,30 @@ Status key: 🔴 open · 🟢 done (with date + where recorded).
 - **Scope:** redaction session only. Second sessions: do not touch this
   file while it is under live edit.
 
+## FU-TEST-02 — `lookup_performance_smoke` is load-sensitive and aborts workspace runs
+- **Status:** 🔴 open (reproduced 2026-09-24; not a regression)
+- **Evidence:** `cargo test --workspace` (2026-09-24) failed
+  `application::quran_reader::lookup_performance_smoke` with
+  `warm average 6.009 ms over budget` — a 5.0 ms average over 2,000 sequential
+  warm `get_ayah` calls (`crates/application/tests/quran_reader.rs:366`).
+  Two control runs both pass: in isolation (`cargo test -p application --test
+  quran_reader lookup_performance_smoke` → ok, 2.21 s) and in a full
+  `cargo test --workspace --no-fail-fast` (zero failures workspace-wide, same
+  test included). The failing run was executed while a second cargo build and
+  another live agent session were competing for CPU, i.e. wall-clock latency
+  was measuring machine load, not a code regression. No reader/lookup/query code
+  changed in that window.
+- **Impact:** because the gate aborts the crate, one perf miss hides the rest
+  of that test binary; a workspace run should use `--no-fail-fast` and report
+  the failing test separately.
+- **Next action (owning/search session):** make the gate robust rather than
+  noisy — measure a median or p95 instead of a mean, take the minimum of a few
+  warm repetitions, and/or gate on a dedicated benchmark job with a stated
+  machine class, keeping the strict 5 ms mean only for isolated runs. Record the
+  decision (ADR-0212 already owns regex limits; a new ADR is not required for a
+  test-harness statistic).
+- **Scope:** test harness only. No reader behaviour may be relaxed.
+
 ## FU-COORD-01 — Parallel sessions editing the same files (observed 2026-09-16)
 - **Status:** 🟢 resolved for T45 (2026-09-16, recorded here as precedent)
 - **Context:** During P2-T45 verification, 7+ live agent sessions were
@@ -105,7 +129,11 @@ Status key: 🔴 open · 🟢 done (with date + where recorded).
 - **Task status:** P1-T58 stays partial; do not close it on synthetic-fixture results.
 
 ## FU-P1-02 — P1-T60: complete automated exit-gate evidence
-- **Status:** open; engineering verification can proceed now.
+- **Status:** open; engineering verification can proceed now. Partial refresh
+  2026-09-24: `cargo fmt --all -- --check` clean, `cargo clippy --workspace
+  --all-targets -- -D warnings` clean, `cargo xtask arch-check` OK, `cargo xtask
+  migrate-check` OK (19 migrations). Coverage + `deny` gates and the recorded
+  walkthrough are still outstanding.
 - **Found:** 2026-09-17 (Phase-1 gate preparation).
 - **Verified:** `cargo test -p application -- --test-threads=1` passed (110 tests); workspace fmt, clippy with warnings denied, build check, architecture check, and migration check passed.
 - **Next action:** run workspace-wide tests, required coverage and dependency-audit gates; record commands and failures without assuming unrelated worktree edits are broken. An initial parallel application run timed out during doctor tests, while isolated and serial reruns passed; investigate if reproducible rather than claiming it fixed.
@@ -118,3 +146,9 @@ Status key: 🔴 open · 🟢 done (with date + where recorded).
 - **P1-T54:** `server::api::router_with_debug_font` serves a caller-supplied woff2 in memory at `/debug/assets/reader.woff2` (font/woff2, no-store, nosniff) and the debug page emits `@font-face` only when a font is wired; without it, the system Arabic stack remains and no `@font-face` is emitted. Remaining: an owner-chosen font asset + license before any release bundles one.
 - **P1-T56:** `golden_ayah_texts_match_the_imported_fixture` ties every fixture ayah to `fixtures/quran/golden/ayah_texts.jsonl` byte-for-byte; the 331-case reference golden set remains green. Remaining: expand fixtures only after approved data + P1-T55 review; never fabricate scripture.
 - **Decision tracking:** dataset/license/reviewer and reference-corpus choices remain the existing ADR-0101/ADR-0114 owner decisions, not approvals supplied by this follow-up.
+- **Re-verified 2026-09-24 (no code change):** OD-01…OD-14 all still 🔴 in
+  `decisions-needed.md`; the three groundwork items above are still exactly as
+  described (compare_reference, debug-font route, golden 331-case tie-out) and
+  none can advance without the named owner inputs (approved dataset, reference
+  corpus + signer, font license). An agent verification pass was appended to the
+  `decisions-needed.md` answer log; no row was closed.

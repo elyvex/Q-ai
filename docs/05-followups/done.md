@@ -101,6 +101,10 @@ locally (`cargo xtask ci` on macOS, `cargo llvm-cov` + coverage gate).
   (platform dependencies / large dependency tree); both compile and are covered by tests
   when enabled.
 - The 7-step exit-gate walkthrough still needs to be recorded on a clean machine.
+  **Status 2026-09-24: still open — no recording, no non-implementer reviewer, no
+  archive link.** This is owner/human work (OD-08/OD-09/OD-13); no automated gate
+  substitutes for it. Container runtime (P0-T56) is likewise unverified because the
+  Docker daemon is unavailable — see `docs/05-followups/open-questions.md`.
 
 ## Recommended next phase
 
