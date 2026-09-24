@@ -12,7 +12,7 @@
 //! until a dataset activates — never guessed data. `affix_search` additionally
 //! serves the L7 heuristic backend over stored forms, always labeled.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -22,7 +22,7 @@ use storage::Database as _;
 use storage::error::StorageError;
 use storage::quran::{
     AlignmentRow, LexiconProvenance, MorphologyFindingRow, QuranDatasetRow, StagedMorphRow,
-    StagingBatchRow,
+    StagingBatchRow, TokenAnalysisRow,
 };
 use storage_sqlite::SqliteDatabase;
 
@@ -864,6 +864,215 @@ async fn require_active_dataset(
     active.map(|d| d.id).ok_or_else(|| MorphologyToolError::UnavailableDataset {
         capability: capability.to_string(),
     })
+}
+
+/// Classification of one analysis key in a dataset-version diff.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum MorphologyDiffKind {
+    /// The analysis key exists only in the destination dataset.
+    Added,
+    /// The analysis key exists only in the source dataset.
+    Removed,
+    /// Both datasets contain the key, but at least one field differs.
+    Changed,
+}
+
+/// One analysis-key change between two morphology dataset versions.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct MorphologyDiffChange {
+    /// Stable `surah:ayah:position#analysis_index` key.
+    pub reference: String,
+    /// Change classification.
+    pub kind: MorphologyDiffKind,
+    /// Source analysis, when present.
+    pub old: Option<quran_morphology::TokenAnalysis>,
+    /// Destination analysis, when present.
+    pub new: Option<quran_morphology::TokenAnalysis>,
+    /// Field verdicts for a changed key; empty for added/removed keys.
+    pub verdicts: Vec<quran_morphology::FieldVerdict>,
+}
+
+/// Reproducible comparison of two registered morphology dataset versions.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct MorphologyDiffReport {
+    /// Source dataset identity (`slug@version`).
+    pub from_dataset: String,
+    /// Destination dataset identity (`slug@version`).
+    pub to_dataset: String,
+    /// Number of analysis keys only in the destination.
+    pub added: usize,
+    /// Number of analysis keys only in the source.
+    pub removed: usize,
+    /// Number of keys with field changes.
+    pub changed: usize,
+    /// Number of keys with identical field values.
+    pub unchanged: usize,
+    /// Deterministic changes ordered by stable analysis key.
+    pub changes: Vec<MorphologyDiffChange>,
+}
+
+fn analysis_key(row: &TokenAnalysisRow) -> String {
+    format!("{}:{}:{}#{}", row.surah, row.ayah, row.token_position, row.analysis_index)
+}
+
+fn analysis_from_row(
+    row: &TokenAnalysisRow,
+    roots: &HashMap<String, String>,
+    lemmas: &HashMap<String, String>,
+) -> quran_morphology::TokenAnalysis {
+    quran_morphology::TokenAnalysis {
+        surah: row.surah as u32,
+        ayah: row.ayah as u32,
+        token_position: row.token_position as u32,
+        analysis_index: row.analysis_index as u32,
+        surface: row.surface.clone(),
+        lemma: row.lemma_id.as_deref().and_then(|id| lemmas.get(id).cloned()).unwrap_or_default(),
+        root: row.root_id.as_deref().and_then(|id| roots.get(id).cloned()).unwrap_or_default(),
+        stem: row.stem.clone(),
+        pos_unified: row.pos_unified.clone(),
+        pos_native: row.pos_native.clone(),
+        features_json: serde_json::from_str(&row.features_json)
+            .unwrap_or_else(|_| serde_json::json!({})),
+        segments: serde_json::from_str(&row.segments_json).unwrap_or_default(),
+        provenance_layer: row.provenance.layer.clone(),
+        algorithm: row.provenance.algorithm.clone().unwrap_or_default(),
+        algorithm_version: row.provenance.algorithm_version.clone().unwrap_or_default(),
+        confidence: row.provenance.confidence,
+        reviewer: row.provenance.reviewer.clone().unwrap_or_default(),
+        status: row.provenance.status.clone(),
+    }
+}
+
+fn analysis_map(
+    rows: Vec<TokenAnalysisRow>,
+    roots: Vec<storage::quran::LexiconRootRow>,
+    lemmas: Vec<storage::quran::LexiconLemmaRow>,
+) -> BTreeMap<String, quran_morphology::TokenAnalysis> {
+    let root_map: HashMap<String, String> =
+        roots.into_iter().map(|row| (row.id, row.root)).collect();
+    let lemma_map: HashMap<String, String> =
+        lemmas.into_iter().map(|row| (row.id, row.lemma)).collect();
+    rows.into_iter()
+        .map(|row| {
+            let key = analysis_key(&row);
+            (key, analysis_from_row(&row, &root_map, &lemma_map))
+        })
+        .collect()
+}
+
+/// Compare two registered morphology dataset versions without merging or
+/// rewriting either dataset. Competing analyses remain distinct by
+/// `analysis_index`, and every changed key carries per-field verdicts.
+pub async fn diff_datasets(
+    db: &SqliteDatabase,
+    from_slug: &str,
+    from_version: &str,
+    to_slug: &str,
+    to_version: &str,
+) -> Result<MorphologyDiffReport, MorphologyToolError> {
+    use storage::Database as _;
+
+    let from_id = format!("{from_slug}@{from_version}");
+    let to_id = format!("{to_slug}@{to_version}");
+    let mut uow = db.write().await.map_err(MorphologyToolError::storage)?;
+    let from = match uow.quran().get_dataset(from_slug, from_version).await {
+        Ok(Some(row)) => row,
+        Ok(None) => {
+            let _ = uow.rollback().await;
+            return Err(MorphologyToolError::Morphology(
+                quran_morphology::MorphologyError::UnknownDataset {
+                    slug: from_slug.to_string(),
+                    version: from_version.to_string(),
+                    detail: "dataset is not registered".to_string(),
+                },
+            ));
+        }
+        Err(error) => {
+            let _ = uow.rollback().await;
+            return Err(MorphologyToolError::Storage(error.to_string()));
+        }
+    };
+    let to = match uow.quran().get_dataset(to_slug, to_version).await {
+        Ok(Some(row)) => row,
+        Ok(None) => {
+            let _ = uow.rollback().await;
+            return Err(MorphologyToolError::Morphology(
+                quran_morphology::MorphologyError::UnknownDataset {
+                    slug: to_slug.to_string(),
+                    version: to_version.to_string(),
+                    detail: "dataset is not registered".to_string(),
+                },
+            ));
+        }
+        Err(error) => {
+            let _ = uow.rollback().await;
+            return Err(MorphologyToolError::Storage(error.to_string()));
+        }
+    };
+    let from_roots =
+        uow.quran().list_roots(&from.id).await.map_err(MorphologyToolError::storage)?;
+    let from_lemmas =
+        uow.quran().list_lemmas(&from.id).await.map_err(MorphologyToolError::storage)?;
+    let from_rows =
+        uow.quran().list_analyses(&from.id).await.map_err(MorphologyToolError::storage)?;
+    let to_roots = uow.quran().list_roots(&to.id).await.map_err(MorphologyToolError::storage)?;
+    let to_lemmas = uow.quran().list_lemmas(&to.id).await.map_err(MorphologyToolError::storage)?;
+    let to_rows = uow.quran().list_analyses(&to.id).await.map_err(MorphologyToolError::storage)?;
+    uow.rollback().await.map_err(MorphologyToolError::storage)?;
+
+    let from_map = analysis_map(from_rows, from_roots, from_lemmas);
+    let to_map = analysis_map(to_rows, to_roots, to_lemmas);
+    let keys: BTreeSet<String> = from_map.keys().chain(to_map.keys()).cloned().collect();
+    let mut report = MorphologyDiffReport {
+        from_dataset: from_id,
+        to_dataset: to_id,
+        added: 0,
+        removed: 0,
+        changed: 0,
+        unchanged: 0,
+        changes: Vec::new(),
+    };
+    for key in keys {
+        match (from_map.get(&key), to_map.get(&key)) {
+            (None, Some(new)) => {
+                report.added += 1;
+                report.changes.push(MorphologyDiffChange {
+                    reference: key,
+                    kind: MorphologyDiffKind::Added,
+                    old: None,
+                    new: Some(new.clone()),
+                    verdicts: Vec::new(),
+                });
+            }
+            (Some(old), None) => {
+                report.removed += 1;
+                report.changes.push(MorphologyDiffChange {
+                    reference: key,
+                    kind: MorphologyDiffKind::Removed,
+                    old: Some(old.clone()),
+                    new: None,
+                    verdicts: Vec::new(),
+                });
+            }
+            (Some(old), Some(new)) => {
+                let verdicts = quran_morphology::compare(old, new);
+                if verdicts.iter().all(|v| v.verdict == quran_morphology::Verdict::Identical) {
+                    report.unchanged += 1;
+                } else {
+                    report.changed += 1;
+                    report.changes.push(MorphologyDiffChange {
+                        reference: key,
+                        kind: MorphologyDiffKind::Changed,
+                        old: Some(old.clone()),
+                        new: Some(new.clone()),
+                        verdicts,
+                    });
+                }
+            }
+            (None, None) => unreachable!("BTreeSet key must exist in at least one map"),
+        }
+    }
+    Ok(report)
 }
 
 /// One attributed token analysis (read-tool view).

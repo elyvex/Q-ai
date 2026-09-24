@@ -2166,7 +2166,9 @@ fn tool_exit(error: &super::quran_morphology::MorphologyToolError) -> i32 {
     use super::quran_morphology::MorphologyToolError as T;
     match error {
         T::UnavailableDataset { .. } => exit::NOT_FOUND,
-        _ => exit::INTERNAL,
+        T::Morphology(quran_morphology::MorphologyError::UnknownDataset { .. }) => exit::NOT_FOUND,
+        T::Morphology(_) => exit::VALIDATION,
+        T::Storage(_) => exit::INTERNAL,
     }
 }
 
@@ -2309,6 +2311,74 @@ pub async fn cmd_morphology_datasets(db_path: &str) -> CommandOutput {
             .join("\n")
     };
     CommandOutput::ok(human, serde_json::json!({ "datasets": rows }))
+}
+
+/// `qai quran morphology diff`.
+pub async fn cmd_morphology_diff(
+    db_path: &str,
+    from: &str,
+    to: &str,
+    format: &str,
+) -> CommandOutput {
+    use super::quran_morphology::{MorphologyDiffKind, diff_datasets};
+    if !matches!(format, "text" | "json") {
+        return CommandOutput::err(exit::USAGE, format!("unknown format `{format}`"));
+    }
+    let (from_slug, from_version) = match dataset_spec(from) {
+        Ok(parts) => parts,
+        Err(message) => return CommandOutput::err(exit::USAGE, message.to_string()),
+    };
+    let (to_slug, to_version) = match dataset_spec(to) {
+        Ok(parts) => parts,
+        Err(message) => return CommandOutput::err(exit::USAGE, message.to_string()),
+    };
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    match diff_datasets(&db, &from_slug, &from_version, &to_slug, &to_version).await {
+        Ok(report) => {
+            let human = format!(
+                "{} → {}: {} added, {} removed, {} changed, {} unchanged",
+                report.from_dataset,
+                report.to_dataset,
+                report.added,
+                report.removed,
+                report.changed,
+                report.unchanged
+            );
+            let mut lines = vec![human];
+            for change in report.changes.iter().take(20) {
+                let label = match change.kind {
+                    MorphologyDiffKind::Added => "+",
+                    MorphologyDiffKind::Removed => "-",
+                    MorphologyDiffKind::Changed => "~",
+                };
+                lines.push(format!("{label} {}", change.reference));
+            }
+            if report.changes.len() > 20 {
+                lines.push(format!("… {} more change(s)", report.changes.len() - 20));
+            }
+            if format == "json" {
+                CommandOutput::ok(
+                    lines.join("\n"),
+                    serde_json::to_value(&report).unwrap_or_default(),
+                )
+            } else {
+                json_or_err(lines.join("\n"), &report)
+            }
+        }
+        Err(error) => CommandOutput::err(tool_exit(&error), error.to_string()),
+    }
+}
+
+fn dataset_spec(dataset: &str) -> Result<(String, String), &'static str> {
+    match dataset.split_once('@') {
+        Some((slug, version)) if !slug.is_empty() && !version.is_empty() => {
+            Ok((slug.to_string(), version.to_string()))
+        }
+        _ => Err("use dataset slug@version"),
+    }
 }
 
 fn edition_spec(edition: &str) -> Result<(String, String), &'static str> {
