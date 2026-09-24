@@ -122,11 +122,11 @@ properties, and the fuzz battery; `normalize --explain` teaches the transformati
 | P2-T32 | Query/index tokenizer-parity test (5,000 random substrings) | D2.13 | T31 | 1.5 | QA | ☑ |
 | P2-T33 | Migration `0023_quran_indexes` + `index_pointers` + build-run tracking | D2.10 | T25 | 1.5 | BE | ☑ |
 | P2-T34 | `quran.index.build` job: staging dir → verify → atomic pointer flip | D2.10 | T30,T33 | 3.0 | SRCH | ☑ |
-| P2-T35 | Index generation retention, `gc`, single-step rollback | D2.10 | T34 | 1.5 | SRCH | ☐ |
-| P2-T36 | Trigram skeleton posting index + build job | D2.4 | T27 | 3.0 | SRCH | ☐ |
-| P2-T37 | Index build crash/cancel matrix (kill at each stage; active pointer unchanged) | D2.13 | T34 | 2.0 | QA | ☐ |
-| P2-T38 | Cold-rebuild benchmark + CI threshold gate (< 6 min total) | D2.10 | T34,T36 | 1.5 | QA | ☐ |
-| P2-T39 | ADR-0201/0208/0213 | D2.13 | T31,T34 | 2.0 | DOC | ☐ |
+| P2-T35 | Index generation retention, `gc`, single-step rollback | D2.10 | T34 | 1.5 | SRCH | ◐ (retention/GC implemented; explicit single-step rollback still absent) |
+| P2-T36 | Trigram skeleton posting index + build job | D2.4 | T27 | 3.0 | SRCH | ☑ (posting build, recall, and scan-parity tests landed) |
+| P2-T37 | Index build crash/cancel matrix (kill at each stage; active pointer unchanged) | D2.13 | T34 | 2.0 | QA | ◐ (cooperative cancellation matrix is green; process-kill evidence remains) |
+| P2-T38 | Cold-rebuild benchmark + CI threshold gate (< 6 min total) | D2.10 | T34,T36 | 1.5 | QA | ◐ (fixture timing gate only; full-corpus benchmark remains) |
+| P2-T39 | ADR-0201/0208/0213 | D2.13 | T31,T34 | 2.0 | DOC | ◐ (ADR drafts exist; owner acceptance remains pending) |
 
 > **T28 is the mechanical guarantee of I8.** Every build job re-runs MV-018; a hash drift
 > fails the job. No index build may alter canonical tables.
@@ -162,10 +162,10 @@ before opening the sprint.
 | P2-T50 | Result cache (`0025`) + generation invalidation + LRU cap | D2.10 | T40 | 2.0 | BE | ☑ |
 | P2-T51 | Search API endpoints + SSE streaming variant | D2.11 | T41–T46 | 3.0 | BE | ☑ |
 | P2-T52 | CLI search command group with all flags + `--json` | D2.12 | T41–T46 | 2.5 | BE | ☑ |
-| P2-T53 | Search golden-set suite (400 queries × expected reference sets) | D2.13 | T44,T46 | 4.0 | QA | ☐ |
-| P2-T54 | Regex/DoS abuse suite (pathological patterns, timeout, limits) | D2.13 | T46 | 2.0 | QA | ☐ |
-| P2-T55 | Search latency benchmarks + CI gates (table §17.1) | D2.13 | T44 | 2.0 | QA | ☐ |
-| P2-T56 | ADR-0207/0212/0214 | D2.13 | T44,T46,T50 | 1.5 | DOC | ☐ |
+| P2-T53 | Search golden-set suite (400 queries × expected reference sets) | D2.13 | T44,T46 | 4.0 | QA | ◐ (400 synthetic queries pass; licensed/linguist goldens remain) |
+| P2-T54 | Regex/DoS abuse suite (pathological patterns, timeout, limits) | D2.13 | T46 | 2.0 | QA | ☑ (15-pattern abuse/rate-limit suite is green) |
+| P2-T55 | Search latency benchmarks + CI gates (table §17.1) | D2.13 | T44 | 2.0 | QA | ◐ (fixture latency harness is green; full-corpus p50/p99 gate remains) |
+| P2-T56 | ADR-0207/0212/0214 | D2.13 | T44,T46,T50 | 1.5 | DOC | ◐ (ADR drafts exist; owner acceptance remains pending) |
 
 > **T41 never silently folds.** An exact query with foreign code points returns zero results
 > **plus a warning** naming the normalized profile to use.
@@ -190,24 +190,24 @@ before opening the sprint.
 
 | ID | Task | Deliv. | Depends | Est | Role | Status |
 |---|---|---|---|---|---|---|
-| P2-T57 | Migrations `0022_quran_lexicon`, `0024_morphology_staging` | D2.6 | T25 | 2.0 | BE | ☐ |
-| P2-T58 | Intermediate morphology format + JSON Schema + serde types | D2.6 | T57 | 2.0 | DATA | ☐ |
-| P2-T59 | Adapter for the chosen dataset (per ADR-0203) | D2.6 | T58 | 4.0 | DATA | ☐ |
-| P2-T60 | Second adapter (different shape) proving extensibility | D2.6 | T59 | 2.0 | DATA | ☐ |
-| P2-T61 | Alignment engine: `DirectKey` + `AlignmentTable` + unmatched reporting | D2.6 | T59 | 4.0 | DATA | ☐ |
-| P2-T62 | Unified tagset mapper (native tags preserved verbatim) | D2.6 | T58,T07 | 2.5 | BE | ☐ |
-| P2-T63 | Validation rules MV-001…MV-018 | D2.6 | T61,T62 | 4.0 | BE | ☐ |
-| P2-T64 | Lexicon builder: roots, lemmas, stems, counts | D2.6 | T63 | 3.0 | BE | ☐ |
+| P2-T57 | Migrations `0022_quran_lexicon`, `0024_morphology_staging` | D2.6 | T25 | 2.0 | BE | ☑ (migrations 0017/0018 and checksums landed) |
+| P2-T58 | Intermediate morphology format + JSON Schema + serde types | D2.6 | T57 | 2.0 | DATA | ☑ (intermediate format, schemas, and serde adapters landed) |
+| P2-T59 | Adapter for the chosen dataset (per ADR-0203) | D2.6 | T58 | 4.0 | DATA | ◐ (JSON/CSV mechanics exist; licensed ADR-0203 dataset remains open) |
+| P2-T60 | Second adapter (different shape) proving extensibility | D2.6 | T59 | 2.0 | DATA | ☑ (JSON and CSV shape adapters are tested) |
+| P2-T61 | Alignment engine: `DirectKey` + `AlignmentTable` + unmatched reporting | D2.6 | T59 | 4.0 | DATA | ☑ (alignment, unmatched reporting, and resume paths are tested) |
+| P2-T62 | Unified tagset mapper (native tags preserved verbatim) | D2.6 | T58,T07 | 2.5 | BE | ◐ (mapper and native-tag preservation are implemented; linguist/tagset sign-off is open) |
+| P2-T63 | Validation rules MV-001…MV-018 | D2.6 | T61,T62 | 4.0 | BE | ☑ (18 rules and adversarial validation tests are green) |
+| P2-T64 | Lexicon builder: roots, lemmas, stems, counts | D2.6 | T63 | 3.0 | BE | ◐ (activation promotes lexicon rows; FTS/count semantics remain incomplete) |
 | P2-T65 | Cross-dataset root unification as `review_queue` suggestions (never merge) | D2.8 | T64 | 2.5 | BE | ☐ |
-| P2-T66 | `quran.morphology.import` job (12 checkpoints, cancel, resume) | D2.6 | T63,T64 | 3.5 | BE | ☐ |
-| P2-T67 | `quran.morphology.activate` (approval + pointer flip + enqueue FTS rebuild) | D2.6 | T66 | 2.0 | BE | ☐ |
-| P2-T68 | Coverage + unmatched-token reports; approval threshold gate | D2.6 | T61 | 2.0 | BE | ☐ |
+| P2-T66 | `quran.morphology.import` job (12 checkpoints, cancel, resume) | D2.6 | T63,T64 | 3.5 | BE | ☑ (12-checkpoint import, cancellation, and retry are tested) |
+| P2-T67 | `quran.morphology.activate` (approval + pointer flip + enqueue FTS rebuild) | D2.6 | T66 | 2.0 | BE | ◐ (approval/atomic activation is tested; FTS rebuild enqueue is absent) |
+| P2-T68 | Coverage + unmatched-token reports; approval threshold gate | D2.6 | T61 | 2.0 | BE | ◐ (unmatched report/gate exists; coverage report and threshold policy are incomplete) |
 | P2-T69 | Dataset version differ (`morphology diff`) | D2.12 | T66 | 2.0 | BE | ☐ |
-| P2-T70 | Layer B/D provenance writing for every analysis/root/lemma row | D2.6 | T63 | 2.0 | BE | ☐ |
-| P2-T71 | Adversarial morphology fixtures (18 faults → correct MV rule ids) | D2.13 | T63 | 3.0 | QA | ☐ |
-| P2-T72 | Import crash/cancel matrix (12 checkpoints) | D2.13 | T66 | 2.0 | QA | ☐ |
+| P2-T70 | Layer B/D provenance writing for every analysis/root/lemma row | D2.6 | T63 | 2.0 | BE | ☑ (Layer B/D fields are persisted and read back) |
+| P2-T71 | Adversarial morphology fixtures (18 faults → correct MV rule ids) | D2.13 | T63 | 3.0 | QA | ☑ (MV-001…MV-017 fixtures and MV-018 marker are tested) |
+| P2-T72 | Import crash/cancel matrix (12 checkpoints) | D2.13 | T66 | 2.0 | QA | ◐ (12-checkpoint cooperative cancellation is green; process-kill evidence remains) |
 | P2-T73 | Populate FTS lexicon fields (roots/lemmas/stems/pos/patterns) | D2.3 | T67 | 2.0 | SRCH | ☐ |
-| P2-T74 | ADR-0209 | D2.13 | T63 | 0.5 | DOC | ☐ |
+| P2-T74 | ADR-0209 | D2.13 | T63 | 0.5 | DOC | ◐ (ADR exists; owner acceptance remains pending) |
 
 > **T61 is the highest-risk data step.** `DirectKey` requires a 100% key match; anything else
 > needs a hashed, auditable `AlignmentTable` with per-surah unmatched reporting. Under no
