@@ -198,7 +198,7 @@ before opening the sprint.
 | P2-T62 | Unified tagset mapper (native tags preserved verbatim) | D2.6 | T58,T07 | 2.5 | BE | ◐ (mapper and native-tag preservation are implemented; linguist/tagset sign-off is open) |
 | P2-T63 | Validation rules MV-001…MV-018 | D2.6 | T61,T62 | 4.0 | BE | ☑ (18 rules and adversarial validation tests are green) |
 | P2-T64 | Lexicon builder: roots, lemmas, stems, counts | D2.6 | T63 | 3.0 | BE | ◐ (activation promotes lexicon rows; FTS/count semantics remain incomplete) |
-| P2-T65 | Cross-dataset root unification as `review_queue` suggestions (never merge) | D2.8 | T64 | 2.5 | BE | ☐ |
+| P2-T65 | Cross-dataset root unification as `review_queue` suggestions (never merge) | D2.8 | T64 | 2.5 | BE | ◐ (explicit, idempotent candidate queue and non-merge test are implemented; automatic policy and linguist-reviewed candidates remain) |
 | P2-T66 | `quran.morphology.import` job (12 checkpoints, cancel, resume) | D2.6 | T63,T64 | 3.5 | BE | ☑ (12-checkpoint import, cancellation, and retry are tested) |
 | P2-T67 | `quran.morphology.activate` (approval + pointer flip + enqueue FTS rebuild) | D2.6 | T66 | 2.0 | BE | ◐ (approval/atomic activation is tested; FTS rebuild enqueue is absent) |
 | P2-T68 | Coverage + unmatched-token reports; approval threshold gate | D2.6 | T61 | 2.0 | BE | ◐ (unmatched report/gate exists; coverage report and threshold policy are incomplete) |
