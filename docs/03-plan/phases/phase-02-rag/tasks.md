@@ -235,9 +235,9 @@ approval.
 | P2-T77 | `quran.morphology_compare` with agreement verdicts, no resolution field | D2.7 | T76 | 2.5 | BE | ☑ (comparison verdicts and no-resolution contract are tested) |
 | P2-T78 | `quran.root_search` (convention resolution, grouping, occurrences) | D2.7 | T64 | 3.0 | BE | ◐ (attributed root occurrences are served; convention resolution/browse is incomplete) |
 | P2-T79 | `quran.lemma_search` | D2.7 | T64 | 1.5 | BE | ◐ (attributed lemma reads exist; browse/convention surface is incomplete) |
-| P2-T80 | `quran.pattern_search` + capability-unavailable error path | D2.7 | T64 | 2.0 | BE | ◐ (typed unavailable path exists; pattern index/search is not implemented) |
+| P2-T80 | `quran.pattern_search` + capability-unavailable error path | D2.7 | T64 | 2.0 | BE | ◐ (exact application search, zero-match behavior, and typed missing-field error are tested; CLI/API and real-dataset coverage remain) |
 | P2-T81 | `quran.affix_search` (dataset backend + `L7` heuristic backend, labeled) | D2.7 | T17,T64 | 2.5 | BE | ◐ (labeled L7 path works; dataset backend remains interim) |
-| P2-T82 | Root/lemma browse endpoints + CLI `root list` | D2.11 | T78 | 1.5 | BE | ☐ |
+| P2-T82 | Root/lemma browse endpoints + CLI `root list` | D2.11 | T78 | 1.5 | BE | ◐ (application browse service and additive `qai quran root list` are tested; API routes and convention detail remain) |
 | P2-T83 | `FamilyRelation` taxonomy + `word_family_relations` table wiring | D2.8 | T57 | 2.0 | BE | ☑ (taxonomy, schema, and repository contract are present) |
 | P2-T84 | Family resolution algorithm (all 5 input paths) | D2.8 | T78,T83 | 3.5 | BE | ◐ (same-root path is implemented; all five input paths remain) |
 | P2-T85 | Relation builders: same-form/lemma/stem/root, derived, inflectional, affix | D2.8 | T84 | 3.5 | BE | ◐ (same-root builder exists; remaining relation builders are absent) |
