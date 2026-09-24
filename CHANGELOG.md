@@ -30,6 +30,16 @@ All notable changes to Q-ai are documented here.
 - FTS document tests and a real serving-index test cover all five columns;
   missing pattern metadata remains empty rather than guessed.
 
+### Added — Morphology pattern/browse surfaces and manifest integrity (P2-T73/T80/T82)
+
+- Finalized retained index manifests before pointer activation and added a shared
+  deterministic manifest hash covering reproducibility inputs.
+- Added exact pattern/verb-form search with distinct no-dataset, missing-field, and
+  zero-match behavior; no pattern is inferred.
+- Added active-dataset root/lemma browse services and additive `qai quran root list`.
+- Added real-SQLite and CLI coverage; T80/T82 remain partial until API/real-dataset
+  coverage is complete.
+
 ### Added — Quran corpus: typed comparison + editorial verification plumbing (P1-T26/T55, 2026-09-24)
 
 - Typed corpus comparison (ADR-0114 Tier-2 engineering): `quran-corpus::differ`
