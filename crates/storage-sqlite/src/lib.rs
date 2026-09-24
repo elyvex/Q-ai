@@ -1468,8 +1468,12 @@ mod tests {
     use storage::repository::SourceVersionRow as _SVRow;
     use tempfile::tempdir;
 
+    fn migrations_dir() -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../migrations/sqlite")
+    }
+
     async fn migrated_db(dir: &Path) -> SqliteDatabase {
-        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../migrations/sqlite");
+        let repo_root = migrations_dir();
         let db_path = dir.join("qai.db");
         migrate::apply_migrations(db_path.to_str().unwrap(), &repo_root).await.unwrap();
         // Seed a principal for FK targets (jobs.created_by, settings.updated_by).
@@ -1499,7 +1503,12 @@ mod tests {
         assert_eq!(db.backend(), DbBackend::SQLite);
         let health = db.health().await.unwrap();
         assert!(health.healthy);
-        assert_eq!(health.schema_version, 16);
+        // Derive the expected version from the live migration tree: hard-coding
+        // it here silently breaks every time a migration is appended.
+        let expected = migrate::discover_migrations(&migrations_dir())
+            .map(|list| list.iter().map(|m| m.version).max().unwrap_or(0))
+            .unwrap();
+        assert_eq!(health.schema_version, expected);
     }
 
     #[tokio::test]
