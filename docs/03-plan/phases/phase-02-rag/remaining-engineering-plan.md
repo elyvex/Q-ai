@@ -13,7 +13,7 @@ a full-corpus run, or the Phase-2 exit ritual. Engineering evidence never closes
 gates by implication.
 
 The live task board is the source of truth. At the time this plan was drafted it
-contained **59 ☑ / 30 ◐ / 25 ☐** rows. T73 (FTS morphology projection) is complete;
+contained **58 ☑ / 32 ◐ / 24 ☐** rows. T73 (FTS morphology projection) is complete;
 all other non-☑ rows are assigned to a wave below.
 
 ## 2. Licensing direction
