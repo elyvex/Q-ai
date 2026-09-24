@@ -2565,7 +2565,8 @@ impl QuranRepository for SqliteQuranRepository {
         sqlx::query(
             "INSERT INTO morphology_review_queue
                (id, kind, subject_json, evidence_json, status, reviewer, decided_at, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO NOTHING",
         )
         .bind(&row.id)
         .bind(&row.kind)
