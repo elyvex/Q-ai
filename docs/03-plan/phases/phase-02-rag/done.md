@@ -1,7 +1,7 @@
 # Phase 2 — Completion Ledger
 
 **Phase:** P2 — Quran Search, Arabic Normalization, Morphology & Word Families
-**Status:** 🟡 In Progress — 58 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 6 / 6 migrations
+**Status:** 🟡 In Progress — 59 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 6 / 6 migrations
 **Started:** 2026-09-14
 **Completed:** —
 
@@ -73,7 +73,7 @@ wrong capacity model.
 
 ## 2. Completed Tasks
 
-**58 task entries are closed or grouped in the implementation reconciliation below; no
+**59 task entries are closed or grouped in the implementation reconciliation below; no
 acceptance criterion or ADR acceptance is implied.** The detailed entries begin below;
 see §9 for the 2026-09-24 grouped close-out and partial-work boundary.
 
@@ -720,9 +720,9 @@ Carried into `docs/plans/handoff-p2-to-p3.md` by task P2-T114.
 This audit updates the board after the code landed ahead of its paperwork. It does not
 close acceptance criteria, ADRs, or owner/linguist gates.
 
-### Newly closed task groups (24 tasks)
+### Newly closed task groups (25 tasks)
 
-- **Index/search:** T36 trigram posting index; T54 regex/DoS abuse suite.
+- **Index/search:** T35 single-step rollback, T36 trigram posting index; T54 regex/DoS abuse suite.
 - **Morphology import/lexicons:** T57, T58, T60, T61, T63, T66, T70, T71.
 - **Morphology dataset diff:** T69, including storage read ordering, version comparison, and CLI dispatch.
 - **FTS morphology projection:** T73, including edition-relative lexicon columns, explicit pattern metadata, and serving-index coverage.
