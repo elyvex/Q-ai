@@ -176,4 +176,82 @@ mod tests {
         assert_eq!(kept_edges[0].edge, "NEXT");
         let _ = (AssertionDecision::Accepted, AssertionKind::Annotation, ProvenanceLayer::B);
     }
+
+    fn annotation(id: &str, decision: AssertionDecision) -> Assertion {
+        Assertion {
+            id: id.to_string(),
+            kind: AssertionKind::Annotation,
+            claim: serde_json::json!({"relation": "CITES"}),
+            evidence: serde_json::json!({"source": "annotation-set-v1"}),
+            source_location: "annotation-set-v1:row-3".to_string(),
+            reviewer: Some("reviewer-1".to_string()),
+            decision,
+            decided_at: Some("2026-01-02T00:00:00Z".to_string()),
+            supersedes_id: None,
+            layer: ProvenanceLayer::B,
+            algorithm: None,
+            algorithm_version: None,
+            confidence: Some(0.8),
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    /// ADR-0218 rule 2: an exported interpretive edge never travels without the
+    /// assertion + evidence record that licenses it.
+    #[test]
+    fn interpretive_edges_travel_with_their_assertions() {
+        let nodes = vec![
+            GraphNode::new("a", NodeKind::Ayah, serde_json::Value::Null),
+            GraphNode::new("b", NodeKind::Ayah, serde_json::Value::Null),
+        ];
+        let edges = vec![
+            GraphEdge::structural("a", "NEXT", "b", serde_json::Value::Null),
+            GraphEdge::asserted("a", "CITES", "b", "ann-1"),
+        ];
+        let assertions = vec![annotation("ann-1", AssertionDecision::Accepted)];
+        let doc = export_json(&nodes, &edges, &assertions, &sample_manifest());
+
+        let exported: HashSet<String> = doc["assertions"]
+            .as_array()
+            .expect("assertions array")
+            .iter()
+            .filter_map(|a| a["id"].as_str().map(str::to_string))
+            .collect();
+        for edge in doc["edges"].as_array().expect("edges array") {
+            if let Some(id) = edge["assertion_id"].as_str() {
+                assert!(exported.contains(id), "asserted edge {edge} lost its assertion record");
+            }
+        }
+        // Attribution is lossless: source location, reviewer, decision, timestamp.
+        let ann = &doc["assertions"][0];
+        assert_eq!(ann["source_location"], "annotation-set-v1:row-3");
+        assert_eq!(ann["reviewer"], "reviewer-1");
+        assert_eq!(ann["decision"], "accepted");
+        assert_eq!(ann["decided_at"], "2026-01-02T00:00:00Z");
+        assert!(ann["evidence"].is_object(), "evidence must travel with the claim");
+    }
+
+    /// ADR-0218 rule 4: a restricted assertion is not recoverable from the
+    /// serialized document — not through an edge, not through the assertion
+    /// list, and not as a stray string in any field.
+    #[test]
+    fn restricted_evidence_never_appears_in_the_serialized_document() {
+        let nodes = vec![GraphNode::new("a", NodeKind::Ayah, serde_json::Value::Null)];
+        let edges = vec![
+            GraphEdge::structural("a", "NEXT", "b", serde_json::Value::Null),
+            GraphEdge::asserted("a", "CITES", "b", "ann-visible"),
+            GraphEdge::asserted("a", "CONTRASTS_WITH", "b", "ann-restricted"),
+        ];
+        let visible = HashSet::from(["ann-visible".to_string()]);
+        let (kept_nodes, kept_edges) =
+            retain_visible(&nodes, &edges, assertion_allowlist_predicate(&visible));
+        let kept_assertions = vec![annotation("ann-visible", AssertionDecision::Accepted)];
+        let doc = export_json(&kept_nodes, &kept_edges, &kept_assertions, &sample_manifest());
+
+        let serialized = serde_json::to_string(&doc).expect("serialize export");
+        assert!(!serialized.contains("ann-restricted"), "restricted assertion leaked into export");
+        assert!(serialized.contains("ann-visible"), "visible assertion must travel");
+        assert_eq!(doc["counts"]["edges"], kept_edges.len());
+        assert_eq!(doc["counts"]["nodes"], kept_nodes.len());
+    }
 }
