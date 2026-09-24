@@ -791,6 +791,8 @@ Any D-10 compliance report must classify this as **skipped**, not passed. [VERIF
 - **Per wave merge:** the canonical quick suite above + `cargo run -q -p xtask -- arch-check && cargo run -q -p xtask -- migrate-check`.
 - **Phase gate:** `cargo test --workspace` and `cargo run -p xtask -- ci` green, **plus** the five success-criterion commands recorded with their output as the phase's evidence-of-record (D-11).
 
+**Known baseline exception (not this phase's scope).** `cargo test -p cli --test quran` currently reports 3 passed / 2 failed: `quran_search_snapshots` (`crates/cli/tests/quran/search.trycmd`) and `quran_normalize_snapshots` (`crates/cli/tests/quran/normalize.trycmd`) fail while `quran_snapshots` (`read_flow.trycmd`), `quran_catalog_snapshots`, and `quran_counting_graph_snapshots` pass. Those two files belong to the legacy search/normalization phase (roadmap Phase 3) and were being edited by a concurrent session during this research. The phase gate must not be declared red or green on their account without re-checking on a quiet worktree — but the plan should record them so a later `cargo test --workspace` failure is not misattributed to Phase 2. [VERIFIED: live `cargo test -p cli --test quran` output, 2026-09-25]
+
 ### Wave 0 Gaps
 
 - [ ] `crates/application/tests/quran_import.rs` — add rollback rejection coverage (missing/denied/mismatched approval → pointer unchanged) and a rollback cache-invalidation case. [QC-01]
@@ -858,7 +860,7 @@ Security enforcement is treated as **enabled** because `.planning/config.json` i
 - `specs/016-typed-corpus-comparison/spec.md`, `specs/019-reference-corpus-config/spec.md`.
 - `docs/03-plan/phases/phase-01-core/{acceptance,done,tasks,technology-stack}.md`, `docs/03-plan/phases/phase-02-rag/done.md`, `docs/03-plan/current-plan.md`, `docs/06-progress/task-done-rollup.md:200-296`, `docs/plans/handoff-p1-to-p2.md`.
 - `.planning/{ROADMAP,REQUIREMENTS,PROJECT,STATE}.md`, `.planning/phases/01-foundations/{01-CONTEXT,01-RESEARCH}.md`, `.planning/phases/02-canonical-quran-core/02-CONTEXT.md`, `.planning/codebase/{ARCHITECTURE,TESTING}.md`, `AGENTS.md`, `.agent/coding-rules.md`.
-- Live probes: `rustc`/`cargo`/`sqlite3`/`python3`/`git` versions; `cargo-deny` and `cargo-llvm-cov` availability; `ls migrations/sqlite/*.up.sql` (19); `grep -rn "CREATE TRIGGER"`; `grep -rn 'CanonicalWriter\|ApprovalToken' crates/`; `grep -rn 'INSERT INTO quran_*'`; `ls fixtures/upstream/quran-api/database/chapterverse/`; `ls docs/plans/`; `.planning/config.json` absence; `cargo test --workspace --no-fail-fast` (run in this session, see Metadata).
+- Live probes: `rustc`/`cargo`/`sqlite3`/`python3`/`git` versions; `cargo-deny` and `cargo-llvm-cov` availability; `ls migrations/sqlite/*.up.sql` (19); `grep -rn "CREATE TRIGGER"`; `grep -rn 'CanonicalWriter\|ApprovalToken' crates/`; `grep -rn 'INSERT INTO quran_*'`; `ls fixtures/upstream/quran-api/database/chapterverse/`; `ls docs/plans/`; `.planning/config.json` absence; `cargo build --bin qai -p cli`; the focused Quran-area `cargo test` runs, `cargo run -q -p xtask -- arch-check`, `-- migrate-check`, and `cargo fmt --all -- --check` recorded in Metadata.
 
 ### Secondary (MEDIUM confidence)
 
@@ -881,7 +883,22 @@ Security enforcement is treated as **enabled** because `.planning/config.json` i
 - **Reference-corpus and owner gates:** MEDIUM — upstream facts come from the in-repo verified record; identity/license/signer are deliberately left as gates and are **not** asserted anywhere in this document.
 - **Future implementation shapes:** LOW — task ids, the primary/default flag shape, the new translation hash recipe name, and the exact verifying surface are explicitly `[ASSUMED]` and need planner/owner confirmation.
 
-**Evidence state at write time:** `cargo test --workspace --no-fail-fast` was started in this session to re-confirm the baseline. Individual suites observed green during that run included `crates/application/tests/quran_doctor.rs::{recomputed_hashes_match_import_time, deep_scan_of_the_fixture_has_no_failures}`; no `test result: FAILED` was observed. The final workspace total must be re-confirmed by the planner before it is recorded as the phase baseline, because a concurrent writer was active in the tree (`crates/application/src/quran_doctor_indexes.rs` modified, `crates/application/tests/doctor_indexes.rs` untracked) and a long compile/test cycle was in flight. [VERIFIED: live `cargo test --workspace --no-fail-fast` invocation, 2026-09-24] [VERIFIED: live git status, 2026-09-24]
+**Evidence state at write time (live probes, 2026-09-24/25).** A whole-workspace `cargo test --workspace --no-fail-fast` returned exit 101, but its failures were **not** assertion failures in the Quran area: 35 targets reported `could not execute process … (never executed)` and only 4 test functions panicked, all in the two CLI harnesses that spawn the real `qai` binary while a concurrent process was rebuilding `target/` (`crates/cli/tests/catalog.rs:20`, `crates/cli/tests/doctor_json.rs:17`, `:98`). After rebuilding the binary, the Quran-area suites were re-run serially and are **green**:
+
+| Suite | Result |
+|---|---|
+| `cargo test -p quran-core -p quran-corpus -p citations -p provenance --lib --tests` | 117 passed, 0 failed |
+| `cargo test -p storage --lib` | 32 passed, 0 failed |
+| `cargo test -p storage-sqlite --test quran` | 10 passed, 0 failed |
+| `cargo test -p application --test quran_import --test quran_reader --test quran_translation --test quran_verification --test quran_tools --test quran_doctor` | 46 passed, 0 failed |
+| `cargo test -p server --test api` | 17 passed, 0 failed |
+| `cargo test -p cli --test catalog` / `--test doctor_json` | 2 + 2 passed, 0 failed |
+| `cargo test -p cli --test quran` | **3 passed, 2 failed** — `quran_catalog_snapshots`, `quran_snapshots` (i.e. `read_flow.trycmd`), and `quran_counting_graph_snapshots` pass; `quran_search_snapshots` (`search.trycmd`) and `quran_normalize_snapshots` (`normalize.trycmd`) fail. **Both failing files belong to the legacy search/normalization phase (roadmap Phase 3), which was under active edit by a concurrent session during this research**, not to the canonical core. |
+| `cargo run -q -p xtask -- arch-check` | `arch-check: OK — no forbidden dependency edges.` |
+| `cargo run -q -p xtask -- migrate-check` | `migrate-check: OK — 19 migration(s) ordered; checksums stable.` |
+| `cargo fmt --all -- --check` | clean |
+
+The planner must re-run the full gate on a quiet worktree before recording the phase baseline. A concurrent writer was active throughout this session (`crates/application/src/quran_doctor_indexes.rs`, `CHANGELOG.md`, `docs/03-plan/current-plan.md`, `docs/03-plan/phases/phase-02-rag/{done,tasks}.md`, `docs/06-progress/task-done-rollup.md` all show as modified), and at one point `cargo check -p application` transiently failed with `this function takes 7 arguments but 5 arguments were supplied` — a mid-edit state that resolved without intervention. [VERIFIED: live `cargo test`/`cargo run -p xtask`/`cargo fmt` output, 2026-09-24/25] [VERIFIED: live `git status --short`, 2026-09-25]
 
 **Research date:** 2026-09-24
 **Valid until:** 2026-10-24 for stable repository findings (the canonical core, migrations, and ADRs change slowly). Re-check sooner if a new migration lands, if Phase 1's plans are executed and modify shared files, or if the owner answers OD-01/OD-02/OD-03.
