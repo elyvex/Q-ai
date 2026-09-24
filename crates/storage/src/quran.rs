@@ -1223,6 +1223,14 @@ pub trait QuranRepository: Send + Sync {
         Err(StorageError::StorageUnavailable)
     }
 
+    /// All analyses for one dataset in canonical location order.
+    async fn list_analyses(
+        &self,
+        _dataset_id: &str,
+    ) -> Result<Vec<TokenAnalysisRow>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
     /// Analyses by normalized root within a dataset (root search).
     async fn analyses_for_root(
         &self,

@@ -2405,6 +2405,24 @@ impl QuranRepository for SqliteQuranRepository {
         Ok(rows.iter().map(decode_analysis).collect())
     }
 
+    async fn list_analyses(&self, dataset_id: &str) -> Result<Vec<TokenAnalysisRow>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT id, dataset_id, edition_id, surah, ayah, token_position, analysis_index,
+                    surface, lemma_id, root_id, stem, pos_unified, pos_native, features_json,
+                    segments_json, provenance_layer, algorithm, algorithm_version, confidence,
+                    reviewer, status, corpus_generation, created_at
+             FROM quran_token_analyses
+             WHERE dataset_id = ?
+             ORDER BY surah, ayah, token_position, analysis_index",
+        )
+        .bind(dataset_id)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows.iter().map(decode_analysis).collect())
+    }
+
     async fn analyses_for_root(
         &self,
         dataset_id: &str,
