@@ -284,7 +284,7 @@ approval.
 | P2-T106 | Index-drift reporting with precise input diff + `QAI-IDX-0101` warnings | D2.10 | T105 | 2.0 | BE | ☐ |
 | P2-T107 | Nightly reconciliation job (`quran.index.verify`, 1 % sample, MV-018) | D2.10 | T105 | 2.5 | BE | ☐ |
 | P2-T108 | Evaluation harness: metric definitions, versioned datasets, gates | D2.13 | T53,T91 | 3.5 | QA | ☐ |
-| P2-T109 | Counting-rules determinism tests (same rules ⇒ same number, always) | D2.13 | T95 | 1.5 | QA | ☑ (repeat-count checksum determinism is tested) |
+| P2-T109 | Counting-rules determinism tests (same rules ⇒ same number, always) | D2.13 | T95 | 1.5 | QA | ◐ (repeat-count checksum determinism is tested; multi-analysis mode selection and the full CountingRules contract remain) |
 | P2-T110 | Tool-contract conformance for all 22 Phase-2 tools | D2.13 | T104 | 2.5 | QA | ☐ |
 | P2-T111 | Full soak: rebuild all indexes → 50k randomized queries → doctor → reconcile | D2.13 | all | 2.5 | QA | ☐ |
 | P2-T112 | ADR-0216 + ADR index update | D2.13 | T18 | 0.5 | DOC | ◐ (ADR exists; owner acceptance remains pending) |
