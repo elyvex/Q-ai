@@ -14,8 +14,8 @@ exit requirement.
 > **Code-provenance note (2026-09-24):** `crates/quran-graph` (2,883 lines) and
 > `crates/quran-morphology` (2,534 lines) landed in-tree across 81 unpushed
 > local commits while this board still read 0/30 — code is ahead of its
-> paperwork. Verified this date: `cargo test -p quran-graph` 34/34 green
-> (lib 20 + conformance 6 + no-query-language 2 + structural 1 + traversal 5),
+> paperwork. Verified this date: `cargo test -p quran-graph` 38/38 green
+> (lib 22 + conformance 8 + no-query-language 2 + structural 1 + traversal 5),
 > `cargo test -p quran-morphology` 52/52 green, clippy `-D warnings` clean,
 > `cargo fmt --check` clean, `cargo xtask arch-check` OK, `cargo xtask
 > migrate-check` OK (19 migrations, incl. graph + morphology + lexicon tables).
@@ -49,9 +49,9 @@ exit requirement.
 |---|---|---|---|---|---|
 | P4-X01 | Ratify ADR-0202 (Proposed → Accepted) | ADR-0202 | Before M1 | _unassigned_ | ☐ |
 | P4-X02 | Accept Phase-3 subset of ADR-0702 (snapshot/publication/fencing contract) | ADR-0702 | Before M1 | _unassigned_ | ☐ |
-| P4-X03 | Graph query safety limits ADR (budget defaults, exhaustion semantics) | new ADR | Before M3 | _unassigned_ | ☐ |
+| P4-X03 | Graph query safety limits ADR (budget defaults, exhaustion semantics) | ADR-0217 (drafted 2026-09-24, Proposed) | Before M3 | _unassigned_ | ◐ (draft ready; ratification is owner work) |
 | P4-X04 | Confirm Phase-2 morphology dataset/ADR-0203 landing — gates M5 and full phase exit, not structural engineering | ADR-0203 | Before M5 | _unassigned_ | ☐ |
-| P4-X05 | Export format decision (Graph JSON mandatory; GraphML scope) | new ADR | Before M6 | _unassigned_ | ☐ |
+| P4-X05 | Export format decision (Graph JSON mandatory; GraphML scope) | ADR-0218 (drafted 2026-09-24, Proposed) | Before M6 | _unassigned_ | ◐ (draft ready; ratification is owner work) |
 
 ---
 

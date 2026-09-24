@@ -4,6 +4,16 @@ All notable changes to Q-ai are documented here.
 
 ## [Unreleased]
 
+### Added — Graph decision drafts (P4-X03, P4-X05)
+
+- `ADR-0217` Graph query safety limits: budget defaults and validation ranges,
+  "truncated ≠ empty" exhaustion semantics, authorization applied to expanded
+  intermediates, deterministic ordering, cancellation as a typed partial result.
+- `ADR-0218` Graph export formats: `quran-graph-json-v1` as the mandatory lossless
+  format (assertions, versions, explicit truncation, policy filtering), GraphML as a
+  declared-lossy derived view. Both ADRs are **Proposed** — owner ratification
+  pending (P4-X03 before M3, P4-X05 before M6).
+
 ### Fixed — Telemetry redaction + job scheduling precision (2026-09-24)
 
 - OTLP export now scrubs span attributes at the exporter boundary: the new

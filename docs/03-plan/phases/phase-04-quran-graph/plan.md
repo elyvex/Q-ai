@@ -112,7 +112,9 @@ M1 + M2 → M7 foundations; M6 + recovery evidence → full exit
   direction rules, duplicate-edge identity (multiple assertions per triple preserved).
 - Reconcile `PRECEDES`/`FOLLOWS` vs `NEXT`; record alias policy.
 - Define path modes, completion/truncation semantics, budget defaults (recorded in the
-  graph query safety ADR the PRD requests at requirements.md:6639).
+  graph query safety ADR the PRD requests at requirements.md:6639 — drafted as
+  `ADR-0217` (Proposed, owner ratification = P4-X03); defaults and "truncated ≠ empty"
+  semantics already implemented in `quran-graph`'s `QueryBudgets`).
 - Define local authorization context, review permissions, revocation, and pinned
   historical-edition read semantics.
 - Update allowlist + crate manifests; write the requirement-to-task matrix.
@@ -209,7 +211,9 @@ M1 + M2 → M7 foundations; M6 + recovery evidence → full exit
   ETags/cache keys bind projection + dependency versions + budgets + visibility — not the
   Quran text hash alone.
 - Graph JSON export (identities, paths, attribution, versions, truncation); GraphML where
-  practical (PRD §24.4).
+  practical (PRD §24.4). Format decision drafted as `ADR-0218` (Proposed; owner
+  ratification = P4-X05): `quran-graph-json-v1` is the mandatory lossless format and
+  GraphML is a declared-lossy derived view.
 - Basic local visualization: bounded exploration, evidence inspection, provenance-category
   labels, RTL Arabic, accessible table/list alternative, working reader navigation.
 - **Exit:** CLI/API/tool semantic parity; no unbounded dump; exports cannot leak

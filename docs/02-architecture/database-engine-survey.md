@@ -63,6 +63,8 @@ Rules that make polyglot persistence safe (this is the part most projects get wr
 - **ADR-0001** Relational store: SQLite + `sqlx`, Postgres-portable SQL *(Phase 0)*
 - **ADR-0201** Full-text engine: Tantivy + custom Arabic tokenizer *(Phase 2)*
 - **ADR-0202** Graph store abstraction: relational adjacency + bounded CTE first *(Phase 3)*
+- **ADR-0217** Graph query safety limits + exhaustion semantics *(Phase 3 — written, Proposed)*
+- **ADR-0218** Graph export formats: Graph JSON v1 mandatory, GraphML derived *(Phase 3 — written, Proposed)*
 - **ADR-0701** Vector store: `sqlite-vec` default, LanceDB/Qdrant adapters *(Phase 7)*
 - **ADR-0702** Cross-store consistency, generation stamping, reconciliation *(Phase 7)*
 

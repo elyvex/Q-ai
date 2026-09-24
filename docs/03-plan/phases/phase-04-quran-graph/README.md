@@ -1,10 +1,10 @@
 # Phase 3 (dir: phase-04) — Quran Knowledge Graph
 
-Status: **Planned** — planning artifacts authored 2026-09-17 from code + requirements
-inspection; no graph implementation delivered. This directory carries PRD **Phase 3**
-numbering internally as P4 (`TASK-4xx`, `D4.x`, `AC-P4-xx`); the PRD roadmap places Quran
-graph work at Phase 3 and numbering reconciliation remains open — do not renumber by hand
-(agent briefing §14.5).
+Status: **In progress** — pure `quran-graph` foundations and a partial file-backed CLI
+surface are implemented and tested; SQLite persistence, durable lifecycle, API/tools,
+doctor, visualization, and full exit gates remain open. This directory carries PRD
+**Phase 3** numbering internally as P4 (`TASK-4xx`, `D4.x`, `AC-P4-xx`); do not renumber
+by hand (agent briefing §14.5).
 
 Depends on: Phase 1 canonical corpus + Phase 2 morphology datasets.
 Morphology gates **M5 and full phase exit**, but not the start of structural work.
@@ -22,11 +22,12 @@ Schema versioning belongs to TASK-413, not a fifth ADR.
 | [`plan.md`](plan.md) | Full implementation plan: findings, scope, crate ownership, milestones M0–M7, risks |
 | [`tasks.md`](tasks.md) | Task board: TASK-401–412 (original) + TASK-413–430 (new work packages), swimlane X, estimates |
 | [`acceptance.md`](acceptance.md) | AC-P4-01…28 matrix, AC/task ownership, required test suites, DoD, exit gate |
-| [`done.md`](done.md) | Append-only completion ledger (no completed tasks; planning provenance recorded) |
+| [`done.md`](done.md) | Append-only completion ledger (0 ☑, 10 ◐ code-landed-partial; planning provenance recorded) |
 
 **Totals:** 30 tasks (TASK-401–430): 28 required / 71 engineer-days, plus 2 optional /
 3.5 engineer-days; 74.5 engineer-days overall. M1 contains 5 tasks / 13.5 engineer-days.
-All 28 acceptance criteria remain unverified.
+All 28 acceptance criteria remain unverified; 10 tasks are ◐ code-landed-partial and 3 M5
+tasks remain ⊘ blocked.
 
 ## Objective
 
