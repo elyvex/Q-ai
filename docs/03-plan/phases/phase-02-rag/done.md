@@ -741,14 +741,14 @@ counting dispatch, including the new `morphology diff` command, is covered by
 
 ### Partial work kept at ◐ (updated 2026-09-24: T35 closed, see §2)
 
-T37–T39, T53, T55–T56, T59, T62, T64, T67–T68, T72, T74, T78–T81, T82, T84–T85,
+T37–T39, T53, T55–T56, T59, T62, T64–T65, T67–T68, T72, T74, T78–T81, T82, T84–T85,
 T87–T88, T90, T95–T97, T101–T102, T104, T109, and T112 have implementation evidence
 but still miss a required surface, owner decision, licensed data, linguist review,
-full-corpus gate, or process-kill/API requirement. T65, T89, T91–T92, T105–T108,
+full-corpus gate, or process-kill/API requirement. T89, T91–T92, T105–T108,
 T110–T111, and T113–T114 remain ☐.
 
 **Evidence run during reconciliation:** `cargo test -p quran-search` (36/36),
-`cargo test -p application --test morphology_import` (10/10),
+`cargo test -p application --test morphology_import` (11/11),
 `cargo test -p application --test index_build` (4/4),
 `cargo test -p application --test index_lifecycle` (12/12),
 `cargo test -p cli --test quran quran_counting_graph_snapshots` (13 trycmd cases), and
