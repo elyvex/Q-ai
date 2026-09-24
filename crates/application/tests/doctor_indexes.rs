@@ -14,7 +14,6 @@ use application::quran_index::{IndexBuildParams, QURAN_AYAH_INDEX_ID, rebuild_in
 use domain::{PrincipalId, Timestamp};
 use quran_corpus::import::{ImportInput, ImportOptions, ImportOutcome, ImportProgress, run_import};
 use quran_corpus::sha256_hex;
-use storage::Database as _;
 use storage_sqlite::SqliteDatabase;
 use tempfile::tempdir;
 
