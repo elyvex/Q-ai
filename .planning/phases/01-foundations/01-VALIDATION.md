@@ -5,7 +5,7 @@ status: draft
 nyquist_compliant: false
 wave_0_complete: false
 created: "2026-09-24"
-updated: "2026-09-24"
+updated: "2026-09-25"
 ---
 
 # Phase 1 — Validation Strategy
