@@ -206,7 +206,7 @@ before opening the sprint.
 | P2-T70 | Layer B/D provenance writing for every analysis/root/lemma row | D2.6 | T63 | 2.0 | BE | ☑ (Layer B/D fields are persisted and read back) |
 | P2-T71 | Adversarial morphology fixtures (18 faults → correct MV rule ids) | D2.13 | T63 | 3.0 | QA | ☑ (MV-001…MV-017 fixtures and MV-018 marker are tested) |
 | P2-T72 | Import crash/cancel matrix (12 checkpoints) | D2.13 | T66 | 2.0 | QA | ◐ (12-checkpoint cooperative cancellation is green; process-kill evidence remains) |
-| P2-T73 | Populate FTS lexicon fields (roots/lemmas/stems/pos/patterns) | D2.3 | T67 | 2.0 | SRCH | ☐ |
+| P2-T73 | Populate FTS lexicon fields (roots/lemmas/stems/pos/patterns) | D2.3 | T67 | 2.0 | SRCH | ☑ (active, edition-relative morphology projection fills all five FTS columns; direct and serving-index tests are green) |
 | P2-T74 | ADR-0209 | D2.13 | T63 | 0.5 | DOC | ◐ (ADR exists; owner acceptance remains pending) |
 
 > **T61 is the highest-risk data step.** `DirectKey` requires a 100% key match; anything else
