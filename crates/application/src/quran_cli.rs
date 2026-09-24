@@ -2209,6 +2209,7 @@ fn tool_exit(error: &super::quran_morphology::MorphologyToolError) -> i32 {
     use super::quran_morphology::MorphologyToolError as T;
     match error {
         T::UnavailableDataset { .. } => exit::NOT_FOUND,
+        T::UnavailablePatternField { .. } => exit::VALIDATION,
         T::Morphology(quran_morphology::MorphologyError::UnknownDataset { .. }) => exit::NOT_FOUND,
         T::Morphology(_) => exit::VALIDATION,
         T::Storage(_) => exit::INTERNAL,

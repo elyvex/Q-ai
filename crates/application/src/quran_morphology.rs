@@ -836,6 +836,14 @@ pub enum MorphologyToolError {
         /// Capability needing a dataset.
         capability: String,
     },
+    /// Active dataset does not expose the requested pattern metadata.
+    #[error("active morphology dataset {dataset} has no pattern metadata (looked for {fields})")]
+    UnavailablePatternField {
+        /// Active dataset identity.
+        dataset: String,
+        /// Candidate fields that would satisfy the capability.
+        fields: String,
+    },
     /// Crate-level failure (compare/review/family constructors).
     #[error(transparent)]
     Morphology(#[from] quran_morphology::MorphologyError),
@@ -852,6 +860,9 @@ impl storage::error::Diagnostic for MorphologyToolError {
         match self {
             Self::Storage(_) => storage::error::DiagnosticCode::new("QAI-MORPH", 2),
             Self::UnavailableDataset { .. } => storage::error::DiagnosticCode::new("QAI-MORPH", 4),
+            Self::UnavailablePatternField { .. } => {
+                storage::error::DiagnosticCode::new("QAI-MORPH", 6)
+            }
             Self::Morphology(_) => storage::error::DiagnosticCode::new("QAI-MORPH", 5),
         }
     }
@@ -865,6 +876,10 @@ impl storage::error::Diagnostic for MorphologyToolError {
             Self::Storage(_) => "Check the database and retry.".to_string(),
             Self::UnavailableDataset { .. } => {
                 "Run `qai quran morphology import`, then `activate`.".to_string()
+            }
+            Self::UnavailablePatternField { .. } => {
+                "Use a dataset that explicitly supplies pattern, verb_form, or morphological_pattern metadata; do not infer patterns."
+                    .to_string()
             }
             Self::Morphology(_) => "Check the request against the dataset inventory.".to_string(),
         })
@@ -1299,17 +1314,112 @@ pub async fn lemma_search(
     ))
 }
 
-/// `quran.pattern_search` (P2-T80): capability-unavailable until a pattern
-/// index exists over an active lexicon.
+/// One explicitly labelled pattern match (P2-T80).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PatternOccurrence {
+    /// Surah number.
+    pub surah: i64,
+    /// Ayah number.
+    pub ayah: i64,
+    /// Token position.
+    pub position: i64,
+    /// Competing-analysis index.
+    pub analysis_index: i64,
+    /// Canonical token surface.
+    pub surface: String,
+    /// Dataset that supplied the analysis.
+    pub dataset: String,
+    /// Feature field that supplied the label (`pattern`, `verb_form`, or
+    /// `morphological_pattern`).
+    pub matched_field: String,
+    /// Exact label value.
+    pub matched_label: String,
+    /// Layer B/D provenance layer.
+    pub provenance_layer: String,
+    /// Layer-D algorithm, if present.
+    pub algorithm: Option<String>,
+    /// Layer-D algorithm version, if present.
+    pub algorithm_version: Option<String>,
+    /// Layer-D confidence, if present.
+    pub confidence: Option<f64>,
+    /// Reviewer for human-verified data, if present.
+    pub reviewer: Option<String>,
+    /// Row verification status.
+    pub status: String,
+}
+
+/// Result of an exact pattern/verb-form lookup (P2-T80).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PatternSearchReport {
+    /// Active dataset identity.
+    pub dataset: String,
+    /// Exact requested label.
+    pub pattern: String,
+    /// All matching analyses, in canonical order; no winner is selected.
+    pub occurrences: Vec<PatternOccurrence>,
+}
+
+/// `quran.pattern_search` (P2-T80): exact lookup over explicitly declared
+/// pattern metadata. It never derives a pattern from segment order.
 pub async fn pattern_search(
     db: &SqliteDatabase,
-    _pattern: &str,
-) -> Result<Vec<RootOccurrence>, MorphologyToolError> {
-    let _ = require_active_dataset(db, "pattern search").await?;
-    Err(MorphologyToolError::UnavailableDataset {
-        capability: "pattern index (lexicon active, but pattern search is not yet implemented)"
-            .to_string(),
-    })
+    pattern: &str,
+) -> Result<PatternSearchReport, MorphologyToolError> {
+    let pattern = pattern.trim();
+    if pattern.is_empty() {
+        return Err(MorphologyToolError::Morphology(
+            quran_morphology::MorphologyError::ValidationFailed {
+                detail: "pattern must not be empty".to_string(),
+            },
+        ));
+    }
+    let dataset_id = require_active_dataset(db, "pattern search").await?;
+    let mut uow = db.write().await.map_err(MorphologyToolError::storage)?;
+    let rows =
+        uow.quran().list_analyses(&dataset_id).await.map_err(MorphologyToolError::storage)?;
+    uow.rollback().await.map_err(MorphologyToolError::storage)?;
+
+    let has_pattern_metadata = rows.iter().any(|row| !pattern_labels(row).is_empty());
+    if !has_pattern_metadata {
+        return Err(MorphologyToolError::UnavailablePatternField {
+            dataset: dataset_id,
+            fields: "pattern, verb_form, morphological_pattern".to_string(),
+        });
+    }
+
+    let mut occurrences = Vec::new();
+    for row in rows {
+        for (matched_field, matched_label) in pattern_labels(&row) {
+            if matched_label == pattern {
+                occurrences.push(PatternOccurrence {
+                    surah: row.surah,
+                    ayah: row.ayah,
+                    position: row.token_position,
+                    analysis_index: row.analysis_index,
+                    surface: row.surface.clone(),
+                    dataset: row.dataset_id.clone(),
+                    matched_field: matched_field.to_string(),
+                    matched_label,
+                    provenance_layer: row.provenance.layer.clone(),
+                    algorithm: row.provenance.algorithm.clone(),
+                    algorithm_version: row.provenance.algorithm_version.clone(),
+                    confidence: row.provenance.confidence,
+                    reviewer: row.provenance.reviewer.clone(),
+                    status: row.provenance.status.clone(),
+                });
+            }
+        }
+    }
+    occurrences.sort_by(|left, right| {
+        (left.surah, left.ayah, left.position, left.analysis_index, &left.matched_field).cmp(&(
+            right.surah,
+            right.ayah,
+            right.position,
+            right.analysis_index,
+            &right.matched_field,
+        ))
+    });
+    Ok(PatternSearchReport { dataset: dataset_id, pattern: pattern.to_string(), occurrences })
 }
 
 /// Affix hit with its answering backend label (P2-T81).
