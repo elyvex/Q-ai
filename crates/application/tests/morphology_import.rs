@@ -10,6 +10,7 @@ use std::sync::atomic::AtomicBool;
 
 use application::quran::activate_edition;
 use application::quran_forms::{RebuildParams, rebuild_forms};
+use application::quran_index::{IndexBuildParams, QURAN_AYAH_INDEX_ID, rebuild_index};
 use application::quran_morphology::{
     IMPORT_CHECKPOINTS, MorphologyActivateParams, MorphologyDiffKind, MorphologyImportParams,
     activate_morphology, affix_search, build_same_root_relations, dataset_urn, diff_datasets,
@@ -19,6 +20,7 @@ use application::quran_morphology::{
 use domain::{PrincipalId, Timestamp};
 use quran_corpus::import::{ImportInput, ImportOptions, ImportOutcome, ImportProgress, run_import};
 use quran_corpus::sha256_hex;
+use quran_search::{Fts5Index, FtsQuery, FullTextIndex, TokenizerFamily};
 use storage::Database as _;
 use storage::repository::ApprovalRow;
 use storage_sqlite::SqliteDatabase;
@@ -158,6 +160,7 @@ async fn aligned_document(db: &SqliteDatabase) -> String {
                     "tag_unified": if analysis_no == 0 { "noun" } else { "verb" },
                     "layer": "B",
                     "state": "imported",
+                    "pattern": "synthetic-pattern",
                     "synthetic_test_only": true,
                 }));
             }
@@ -546,4 +549,95 @@ async fn morphology_dataset_version_diff_preserves_analysis_identity() {
 
     let missing = diff_datasets(&db, SLUG, VERSION, "missing", "9.9.9").await.unwrap_err();
     assert!(missing.to_string().contains("unknown dataset"));
+}
+
+/// P2-T73: an active morphology dataset is projected into all five FTS
+/// lexicon columns, while the index remains edition-relative and deterministic.
+#[tokio::test]
+async fn morphology_lexicon_fields_reach_serving_index() {
+    let (dir, db) = ready_db().await;
+    let doc = aligned_document(&db).await;
+    run_morphology_import(
+        &db,
+        &import_params(doc, "batch-fts-lexicon"),
+        &AtomicBool::new(false),
+        |_| {},
+    )
+    .await
+    .unwrap();
+    activate_morphology(
+        &db,
+        &MorphologyActivateParams {
+            batch_id: "batch-fts-lexicon".to_string(),
+            approval_id: "appr-morph".to_string(),
+            invoked_by: PRINCIPAL.to_string(),
+        },
+        &principal(),
+    )
+    .await
+    .unwrap();
+
+    let (stem_value, lemma_value) = {
+        let mut uow = db.write().await.unwrap();
+        let active = uow.quran().get_active().await.unwrap().unwrap();
+        let ayahs = uow.quran().list_ayahs_range(&active.edition_id, 1, 1).await.unwrap();
+        let token = uow
+            .quran()
+            .get_tokens(&active.edition_id, ayahs[0].surah, ayahs[0].ayah)
+            .await
+            .unwrap()[0]
+            .surface
+            .clone();
+        uow.rollback().await.unwrap();
+        (token.clone(), format!("lem-{token}"))
+    };
+
+    let data_dir = dir.path().join("index");
+    let report = rebuild_index(
+        &db,
+        &IndexBuildParams {
+            index_id: QURAN_AYAH_INDEX_ID.to_string(),
+            edition_slug: "test-edition-min".to_string(),
+            edition_version: "0.1.0".to_string(),
+            invoked_by: PRINCIPAL.to_string(),
+            run_tag: "fts-lexicon".to_string(),
+            data_dir: data_dir.clone(),
+        },
+        &AtomicBool::new(false),
+        |_| {},
+    )
+    .await
+    .unwrap();
+    assert_eq!(report.doc_count, 14);
+
+    let mut uow = db.write().await.unwrap();
+    let pointer = uow.quran().get_index_pointer(QURAN_AYAH_INDEX_ID).await.unwrap().unwrap();
+    uow.rollback().await.unwrap();
+    let manifest: quran_search::IndexManifest =
+        serde_json::from_str(&pointer.manifest_json).unwrap();
+    assert!(manifest.morphology_dataset_versions.contains_key(SLUG));
+
+    let family = TokenizerFamily::new(
+        &application::quran_normalize::builtin_registry(),
+        manifest.tokenizer_version,
+    )
+    .unwrap();
+    let index =
+        Fts5Index::open(&data_dir, pointer.generation as u64, manifest, family).await.unwrap();
+    for (field, value) in [
+        ("roots", "tst-root".to_string()),
+        ("lemmas", lemma_value),
+        ("stems", stem_value),
+        ("pos_tags", "noun".to_string()),
+        ("patterns", "synthetic-pattern".to_string()),
+    ] {
+        let found = index
+            .search(
+                &FtsQuery::Term { field: field.to_string(), term: value.clone() },
+                &quran_search::SearchOpts::default(),
+            )
+            .await
+            .unwrap();
+        assert!(found.total_matches > 0, "field {field} value {value}");
+    }
 }

@@ -256,6 +256,31 @@ async fn regex_guards_and_expansion() {
 }
 
 #[tokio::test]
+async fn lexicon_fields_are_persisted_and_searchable() {
+    let mut document = doc("lex", 1, 1, 1, "نص");
+    document.lexicon_fields = BTreeMap::from([
+        ("roots".to_string(), "كتب".to_string()),
+        ("lemmas".to_string(), "كتب".to_string()),
+        ("stems".to_string(), "كتب".to_string()),
+        ("pos_tags".to_string(), "Verb".to_string()),
+        ("patterns".to_string(), "II".to_string()),
+    ]);
+    let (_dir, index, _, _) = staged(vec![document]).await;
+
+    for (field, value) in [
+        ("roots", "كتب"),
+        ("lemmas", "كتب"),
+        ("stems", "كتب"),
+        ("pos_tags", "Verb"),
+        ("patterns", "II"),
+    ] {
+        let found = index.search(&term(field, value), &SearchOpts::default()).await.unwrap();
+        assert_eq!(found.total_matches, 1, "field {field}");
+        assert_eq!(found.hits[0].doc_id, "lex");
+    }
+}
+
+#[tokio::test]
 async fn tokenizer_mismatch_and_generation_lifecycle() {
     let dir = tempfile::tempdir().unwrap();
     // Unknown ladder versions fail at family construction.
