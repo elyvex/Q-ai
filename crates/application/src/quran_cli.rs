@@ -1954,6 +1954,754 @@ pub async fn cmd_index_gc(db_path: &str, index: Option<&str>, keep: usize) -> Co
     }
 }
 
+// ─── Counting & discovery commands (P2-T104) ────────────────────────────
+
+fn json_or_err<T: serde::Serialize>(human: String, value: &T) -> CommandOutput {
+    match serde_json::to_value(value) {
+        Ok(json) => CommandOutput::ok(human, json),
+        Err(error) => CommandOutput::err(exit::INTERNAL, error.to_string()),
+    }
+}
+
+fn counting_exit(error: &super::quran_counting::CountingError) -> i32 {
+    use super::quran_counting::CountingError as C;
+    match error {
+        C::UnknownProfile(_) | C::EmptyTarget => exit::USAGE,
+        C::UnavailableDataset { .. } => exit::NOT_FOUND,
+        C::ProfileNotCountable(_) => exit::VALIDATION,
+        C::Storage(_) => exit::INTERNAL,
+    }
+}
+
+/// `qai quran count frequency`.
+pub async fn cmd_count_frequency(db_path: &str, target: &str, profile: &str) -> CommandOutput {
+    use super::quran_counting::frequency;
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    match frequency(&db, target, profile).await {
+        Ok(report) => json_or_err(
+            format!(
+                "{}: {} occurrence(s) under {} (checksum {})",
+                report.target, report.count, report.rules.profile, report.checksum
+            ),
+            &report,
+        ),
+        Err(error) => CommandOutput::err(counting_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran count distribution`.
+pub async fn cmd_count_distribution(db_path: &str, target: &str, profile: &str) -> CommandOutput {
+    use super::quran_counting::distribution;
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    match distribution(&db, target, profile).await {
+        Ok(report) => json_or_err(
+            format!(
+                "{}: {} occurrence(s) across {} surah(s); {}",
+                report.frequency.target,
+                report.frequency.count,
+                report.frequency.by_surah.len(),
+                report.partition_provenance
+            ),
+            &report,
+        ),
+        Err(error) => CommandOutput::err(counting_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran count occurrences`.
+pub async fn cmd_count_occurrences(db_path: &str, target: &str, profile: &str) -> CommandOutput {
+    use super::quran_counting::first_last_occurrence;
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    match first_last_occurrence(&db, target, profile).await {
+        Ok(report) => json_or_err(
+            format!(
+                "first {:?}, last {:?}, span {:?}\n{}",
+                report.first, report.last, report.ayah_span, report.disclaimer
+            ),
+            &report,
+        ),
+        Err(error) => CommandOutput::err(counting_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran count hapax`.
+pub async fn cmd_count_hapax(db_path: &str, profile: &str, limit: usize) -> CommandOutput {
+    use super::quran_counting::hapax_search;
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    match hapax_search(&db, profile, limit).await {
+        Ok(report) => json_or_err(
+            format!("profile {}: {} hapax form(s)", report.profile, report.hapax.len()),
+            &report,
+        ),
+        Err(error) => CommandOutput::err(counting_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran count cooccurrence`.
+pub async fn cmd_count_cooccurrence(
+    db_path: &str,
+    target: &str,
+    profile: &str,
+    window: usize,
+    limit: usize,
+) -> CommandOutput {
+    use super::quran_counting::cooccurrence;
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    match cooccurrence(&db, target, profile, window, limit).await {
+        Ok((rules, hits)) => json_or_err(
+            format!("co-occurrence within token:{} — {} candidate(s)", window, hits.len()),
+            &serde_json::json!({"rules": rules, "hits": hits}),
+        ),
+        Err(error) => CommandOutput::err(counting_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran count collocation`.
+pub async fn cmd_count_collocation(
+    db_path: &str,
+    target: &str,
+    profile: &str,
+    window: usize,
+    limit: usize,
+) -> CommandOutput {
+    use super::quran_counting::collocation;
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    match collocation(&db, target, profile, window, limit).await {
+        Ok((rules, hits)) => json_or_err(
+            format!("collocations (LLR-ranked) — {} candidate(s)", hits.len()),
+            &serde_json::json!({"rules": rules, "hits": hits}),
+        ),
+        Err(error) => CommandOutput::err(counting_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran count numeric-report`.
+pub async fn cmd_count_numeric_report(db_path: &str, target: &str, profile: &str) -> CommandOutput {
+    use super::quran_counting::numeric_report;
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    match numeric_report(&db, target, profile).await {
+        Ok(report) => json_or_err(
+            format!("{}: {}\n{}", report.frequency.target, report.frequency.count, report.note),
+            &report,
+        ),
+        Err(error) => CommandOutput::err(counting_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran count missing-form`.
+pub async fn cmd_count_missing_form(db_path: &str, target: &str, profile: &str) -> CommandOutput {
+    use super::quran_counting::missing_expected_form;
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    match missing_expected_form(&db, target, profile).await {
+        Ok(report) => json_or_err(
+            format!(
+                "{}: 0 occurrence(s) under {}\n{}",
+                report.target, report.rules.profile, report.disclaimer
+            ),
+            &report,
+        ),
+        Err(error) => CommandOutput::err(counting_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran count near-duplicates`.
+pub async fn cmd_count_near_duplicates(
+    db_path: &str,
+    threshold: f64,
+    limit: usize,
+) -> CommandOutput {
+    use super::quran_counting::near_duplicate_passages;
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    match near_duplicate_passages(&db, threshold, limit).await {
+        Ok((rules, hits)) => json_or_err(
+            format!("near-duplicates (>= {threshold}) — {} pair(s)", hits.len()),
+            &serde_json::json!({"rules": rules, "hits": hits}),
+        ),
+        Err(error) => CommandOutput::err(counting_exit(&error), error.to_string()),
+    }
+}
+
+// ─── Morphology commands (import/activate separation, T69/T90) ──────────
+
+fn morphology_exit(error: &super::quran_morphology::MorphologyJobError) -> i32 {
+    use super::quran_morphology::MorphologyJobError as M;
+    match error {
+        M::Cancelled => exit::CANCELLED,
+        M::BlockingFindings(..) | M::UnmatchedRemaining(..) => exit::VALIDATION,
+        M::Approval(_) => exit::CONFLICT,
+        M::BadState { .. } => exit::CONFLICT,
+        M::CanonicalChanged => exit::CONFLICT,
+        _ => exit::INTERNAL,
+    }
+}
+
+fn tool_exit(error: &super::quran_morphology::MorphologyToolError) -> i32 {
+    use super::quran_morphology::MorphologyToolError as T;
+    match error {
+        T::UnavailableDataset { .. } => exit::NOT_FOUND,
+        _ => exit::INTERNAL,
+    }
+}
+
+/// `qai quran morphology import`.
+#[allow(clippy::too_many_arguments)]
+pub async fn cmd_morphology_import(
+    db_path: &str,
+    file: &str,
+    dataset: &str,
+    version: &str,
+    adapter: &str,
+    edition: &str,
+    attribution: &str,
+    batch: Option<&str>,
+) -> CommandOutput {
+    use super::quran_morphology::{MorphologyImportParams, run_morphology_import};
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let document_text = match std::fs::read_to_string(file) {
+        Ok(text) => text,
+        Err(error) => {
+            return CommandOutput::err(exit::NOT_FOUND, format!("read {file}: {error}"));
+        }
+    };
+    let (slug, edition_version) = match edition.split_once('@') {
+        Some((slug, version)) if !slug.is_empty() && !version.is_empty() => {
+            (slug.to_string(), version.to_string())
+        }
+        _ => return CommandOutput::err(exit::USAGE, "use --edition slug@version".to_string()),
+    };
+    let params = MorphologyImportParams {
+        dataset_slug: dataset.to_string(),
+        dataset_version: version.to_string(),
+        adapter: adapter.to_string(),
+        document_text,
+        edition_slug: slug,
+        edition_version,
+        invoked_by: LOCAL_PRINCIPAL.to_string(),
+        batch_id: batch.map(str::to_string),
+        attribution: attribution.to_string(),
+        license_status: "Unspecified".to_string(),
+        license_json: "{}".to_string(),
+    };
+    match run_morphology_import(&db, &params, &std::sync::atomic::AtomicBool::new(false), |_| {})
+        .await
+    {
+        Ok(report) => json_or_err(
+            format!(
+                "imported {} batch {}: {} matched, {} table-mapped, state {}",
+                report.dataset, report.batch_id, report.matched, report.table_mapped, report.state
+            ),
+            &serde_json::json!({
+                "batch_id": report.batch_id,
+                "dataset": report.dataset,
+                "matched": report.matched,
+                "table_mapped": report.table_mapped,
+                "unmatched_by_surah": report.unmatched_by_surah,
+                "findings": report.findings,
+                "state": report.state,
+                "mv018_unchanged": report.mv018_unchanged,
+            }),
+        ),
+        Err(error) => CommandOutput::err(morphology_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran morphology activate`.
+pub async fn cmd_morphology_activate(db_path: &str, batch: &str, approval: &str) -> CommandOutput {
+    use super::quran_morphology::{MorphologyActivateParams, activate_morphology};
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let principal: domain::PrincipalId = match LOCAL_PRINCIPAL.parse() {
+        Ok(principal) => principal,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let params = MorphologyActivateParams {
+        batch_id: batch.to_string(),
+        approval_id: approval.to_string(),
+        invoked_by: LOCAL_PRINCIPAL.to_string(),
+    };
+    match activate_morphology(&db, &params, &principal).await {
+        Ok(report) => json_or_err(
+            format!(
+                "activated {}: {} roots, {} lemmas, {} analyses, {} morphemes",
+                report.dataset,
+                report.promoted.0,
+                report.promoted.1,
+                report.promoted.2,
+                report.promoted.3
+            ),
+            &serde_json::json!({
+                "dataset": report.dataset,
+                "roots": report.promoted.0,
+                "lemmas": report.promoted.1,
+                "analyses": report.promoted.2,
+                "morphemes": report.promoted.3,
+                "previous_dataset": report.previous_dataset,
+            }),
+        ),
+        Err(error) => CommandOutput::err(morphology_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran morphology datasets`.
+pub async fn cmd_morphology_datasets(db_path: &str) -> CommandOutput {
+    use storage::Database as _;
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let mut uow = match db.write().await {
+        Ok(uow) => uow,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let datasets = match uow.quran().list_datasets().await {
+        Ok(datasets) => datasets,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let _ = uow.rollback().await;
+    let rows: Vec<serde_json::Value> = datasets
+        .iter()
+        .map(|d| {
+            serde_json::json!({
+                "slug": d.slug, "version": d.version, "state": d.state,
+                "attribution": d.attribution, "license_status": d.license_status,
+            })
+        })
+        .collect();
+    let human = if datasets.is_empty() {
+        "no morphology datasets registered".to_string()
+    } else {
+        datasets
+            .iter()
+            .map(|d| format!("{}@{} [{}]", d.slug, d.version, d.state))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    CommandOutput::ok(human, serde_json::json!({ "datasets": rows }))
+}
+
+fn edition_spec(edition: &str) -> Result<(String, String), &'static str> {
+    match edition.split_once('@') {
+        Some((slug, version)) if !slug.is_empty() && !version.is_empty() => {
+            Ok((slug.to_string(), version.to_string()))
+        }
+        _ => Err("use --edition slug@version"),
+    }
+}
+
+/// `qai quran morphology token`.
+pub async fn cmd_morphology_token(
+    db_path: &str,
+    edition: &str,
+    surah: i64,
+    ayah: i64,
+    position: i64,
+) -> CommandOutput {
+    use super::quran_morphology::morphology_for_token;
+    let (slug, version) = match edition_spec(edition) {
+        Ok(parts) => parts,
+        Err(message) => return CommandOutput::err(exit::USAGE, message.to_string()),
+    };
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    match morphology_for_token(&db, &slug, &version, surah, ayah, position).await {
+        Ok((dataset, analyses)) => json_or_err(
+            format!("{}:{}:{} — {} analysis(es)", surah, ayah, position, analyses.len()),
+            &serde_json::json!({"dataset": dataset, "analyses": analyses}),
+        ),
+        Err(error) => CommandOutput::err(tool_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran morphology compare`.
+pub async fn cmd_morphology_compare(
+    db_path: &str,
+    edition: &str,
+    surah: i64,
+    ayah: i64,
+    position: i64,
+) -> CommandOutput {
+    use super::quran_morphology::morphology_compare;
+    let (slug, version) = match edition_spec(edition) {
+        Ok(parts) => parts,
+        Err(message) => return CommandOutput::err(exit::USAGE, message.to_string()),
+    };
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    match morphology_compare(&db, &slug, &version, surah, ayah, position).await {
+        Ok(verdicts) => json_or_err(
+            format!(
+                "{}:{}:{} — {} field verdict(s); no resolution given",
+                surah,
+                ayah,
+                position,
+                verdicts.len()
+            ),
+            &serde_json::json!({"verdicts": verdicts}),
+        ),
+        Err(error) => CommandOutput::err(tool_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran morphology root`.
+pub async fn cmd_morphology_root(db_path: &str, root: &str) -> CommandOutput {
+    use super::quran_morphology::root_search;
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    match root_search(&db, root).await {
+        Ok((dataset, occurrences)) => json_or_err(
+            format!("root {root}: {} occurrence(s) in {dataset}", occurrences.len()),
+            &serde_json::json!({"dataset": dataset, "occurrences": occurrences}),
+        ),
+        Err(error) => CommandOutput::err(tool_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran morphology lemma`.
+pub async fn cmd_morphology_lemma(db_path: &str, lemma: &str) -> CommandOutput {
+    use super::quran_morphology::lemma_search;
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    match lemma_search(&db, lemma).await {
+        Ok((dataset, occurrences)) => json_or_err(
+            format!("lemma {lemma}: {} occurrence(s) in {dataset}", occurrences.len()),
+            &serde_json::json!({"dataset": dataset, "occurrences": occurrences}),
+        ),
+        Err(error) => CommandOutput::err(tool_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran morphology affix`.
+pub async fn cmd_morphology_affix(db_path: &str, affix: &str, profile: &str) -> CommandOutput {
+    use super::quran_morphology::affix_search;
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    match affix_search(&db, affix, profile).await {
+        Ok(hits) => json_or_err(
+            format!("affix {affix}: {} hit(s)", hits.len()),
+            &serde_json::json!({"hits": hits}),
+        ),
+        Err(error) => CommandOutput::err(tool_exit(&error), error.to_string()),
+    }
+}
+
+// ─── Knowledge-graph commands (TASK-424 slice) ──────────────────────────
+
+/// On-disk projection document: manifest + node/edge sets.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct GraphFile {
+    /// Projection manifest (identity, versions, status).
+    manifest: quran_graph::ProjectionManifest,
+    /// Nodes sorted by stable id.
+    nodes: Vec<quran_graph::GraphNode>,
+    /// Edges sorted by `(src, edge, dst)`.
+    edges: Vec<quran_graph::GraphEdge>,
+}
+
+fn read_graph_file(file: &str) -> Result<GraphFile, String> {
+    let text = std::fs::read_to_string(file).map_err(|error| format!("read {file}: {error}"))?;
+    serde_json::from_str(&text).map_err(|error| format!("parse {file}: {error}"))
+}
+
+fn stage_graph(graph: &GraphFile) -> Result<quran_graph::MemGraphStore, String> {
+    use quran_graph::{GraphStore, MemGraphStore};
+    let mut store = MemGraphStore::new(graph.manifest.projection_id.clone());
+    store.stage_nodes(graph.nodes.clone()).map_err(|error| error.to_string())?;
+    store.stage_edges(graph.edges.clone()).map_err(|error| error.to_string())?;
+    Ok(store)
+}
+
+fn structural_manifest(
+    edition_id: &str,
+    corpus_generation: i64,
+) -> quran_graph::ProjectionManifest {
+    quran_graph::ProjectionManifest {
+        id: format!("build-{edition_id}-{corpus_generation}"),
+        projection_id: quran_graph::STRUCTURAL_PROJECTION_ID.to_string(),
+        builder_version: quran_graph::STRUCTURAL_BUILDER_VERSION.to_string(),
+        edition_id: edition_id.to_string(),
+        corpus_generation: corpus_generation as u64,
+        dataset_versions: std::collections::BTreeMap::new(),
+        dependency_snapshot: std::collections::BTreeMap::from([(
+            "canonical".to_string(),
+            format!("generation-{corpus_generation}"),
+        )]),
+        status: quran_graph::ProjectionStatus::Active,
+        manifest: serde_json::json!({"source": "quran_cli.cmd_graph_build"}),
+        created_at: domain::Timestamp::now().to_string(),
+    }
+}
+
+/// `qai quran graph build`: structural projection from the active edition.
+pub async fn cmd_graph_build(db_path: &str, out: Option<&str>) -> CommandOutput {
+    use quran_graph::{AyahInput, StructuralInput, SurahInput, TokenInput, build_structural};
+    use storage::Database as _;
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let mut uow = match db.write().await {
+        Ok(uow) => uow,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let active = match uow.quran().get_active().await {
+        Ok(active) => active,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let Some(active) = active else {
+        let _ = uow.rollback().await;
+        return CommandOutput::err(
+            exit::NOT_FOUND,
+            "no active edition; import one first".to_string(),
+        );
+    };
+    let edition_id = active.edition_id.clone();
+    let surahs = match uow.quran().list_surahs(&edition_id).await {
+        Ok(surahs) => surahs,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let ayahs = match uow.quran().list_ayahs_range(&edition_id, 1, i64::MAX).await {
+        Ok(ayahs) => ayahs,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let mut structural_ayahs = Vec::new();
+    let mut tokens = Vec::new();
+    for ayah in &ayahs {
+        structural_ayahs.push(AyahInput {
+            surah: ayah.surah as u32,
+            ayah: ayah.ayah as u32,
+            text: String::new(),
+        });
+        match uow.quran().get_tokens(&edition_id, ayah.surah, ayah.ayah).await {
+            Ok(rows) => {
+                for token in rows {
+                    tokens.push(TokenInput {
+                        surah: ayah.surah as u32,
+                        ayah: ayah.ayah as u32,
+                        position: token.position as u32,
+                        surface: String::new(),
+                    });
+                }
+            }
+            Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        }
+    }
+    let _ = uow.rollback().await;
+
+    let input = StructuralInput {
+        edition_id: edition_id.clone(),
+        input_version: format!("corpus-generation-{}", active.corpus_generation),
+        surahs: surahs.iter().map(|s| SurahInput { number: s.number as u32 }).collect(),
+        ayahs: structural_ayahs,
+        tokens,
+        divisions: Vec::new(),
+    };
+    let built = build_structural(&input);
+    let manifest = structural_manifest(&edition_id, active.corpus_generation);
+    let document = GraphFile { manifest, nodes: built.nodes.clone(), edges: built.edges.clone() };
+    let json = match serde_json::to_value(&document) {
+        Ok(json) => json,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    if let Some(path) = out {
+        let text = serde_json::to_string_pretty(&document).unwrap_or_default();
+        if let Err(error) = std::fs::write(path, text) {
+            return CommandOutput::err(exit::INTERNAL, format!("write {path}: {error}"));
+        }
+    }
+    CommandOutput::ok(
+        format!(
+            "structural projection: {} nodes, {} edges (edition {edition_id})",
+            built.nodes.len(),
+            built.edges.len()
+        ),
+        json,
+    )
+}
+
+/// `qai quran graph inspect`.
+pub async fn cmd_graph_inspect(file: &str) -> CommandOutput {
+    use quran_graph::GraphStore;
+    let graph = match read_graph_file(file) {
+        Ok(graph) => graph,
+        Err(message) => return CommandOutput::err(exit::NOT_FOUND, message),
+    };
+    // Stage into the reference backend to exercise the port (zero dangling
+    // edges validated by `stage_edges`).
+    let store = match stage_graph(&graph) {
+        Ok(store) => store,
+        Err(error) => return CommandOutput::err(exit::VALIDATION, error),
+    };
+    let inspection = store.inspect();
+    let capabilities = store.capabilities();
+    CommandOutput::ok(
+        format!(
+            "projection {}: {} nodes, {} edges; staged {} nodes / {} edges; capabilities: {}",
+            graph.manifest.projection_id,
+            graph.nodes.len(),
+            graph.edges.len(),
+            inspection.node_count,
+            inspection.edge_count,
+            capabilities.join(", ")
+        ),
+        serde_json::json!({
+            "manifest": graph.manifest,
+            "nodes": graph.nodes.len(),
+            "edges": graph.edges.len(),
+            "staged": {"nodes": inspection.node_count, "edges": inspection.edge_count},
+            "capabilities": capabilities,
+        }),
+    )
+}
+
+/// `qai quran graph neighbors` (budgeted, explicit truncation).
+pub async fn cmd_graph_neighbors(file: &str, node: &str, hops: usize) -> CommandOutput {
+    use quran_graph::{AuthzScope, EdgeFilter, GraphStore, QueryBudgets};
+    let graph = match read_graph_file(file) {
+        Ok(graph) => graph,
+        Err(message) => return CommandOutput::err(exit::NOT_FOUND, message),
+    };
+    let store = match stage_graph(&graph) {
+        Ok(store) => store,
+        Err(error) => return CommandOutput::err(exit::VALIDATION, error),
+    };
+    let budgets = QueryBudgets { max_hops: hops, ..QueryBudgets::default() };
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    let scope = AuthzScope::all_visible();
+    match store.neighbors(node, &EdgeFilter::any(), &budgets, &cancel, &scope) {
+        Ok(result) => json_or_err(
+            format!(
+                "neighbors of {node}: {} node(s), {} edge(s){}",
+                result.nodes.len(),
+                result.edges.len(),
+                if result.truncated { " (truncated)" } else { "" }
+            ),
+            &serde_json::json!({
+                "nodes": result.nodes,
+                "edges": result.edges,
+                "truncated": result.truncated,
+                "incomplete_reason": result.incomplete_reason,
+            }),
+        ),
+        Err(error) => CommandOutput::err(exit::NOT_FOUND, error.to_string()),
+    }
+}
+
+/// `qai quran graph path` (bounded, deterministic).
+pub async fn cmd_graph_path(file: &str, from: &str, to: &str, hops: usize) -> CommandOutput {
+    use quran_graph::{AuthzScope, GraphStore, QueryBudgets};
+    let graph = match read_graph_file(file) {
+        Ok(graph) => graph,
+        Err(message) => return CommandOutput::err(exit::NOT_FOUND, message),
+    };
+    let store = match stage_graph(&graph) {
+        Ok(store) => store,
+        Err(error) => return CommandOutput::err(exit::VALIDATION, error),
+    };
+    let budgets = QueryBudgets { max_hops: hops, ..QueryBudgets::default() };
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    let scope = AuthzScope::all_visible();
+    match store.bounded_paths(from, to, hops, &budgets, &cancel, &scope) {
+        Ok(result) => json_or_err(
+            format!(
+                "paths {from} -> {to}: {} ({} hop budget){}",
+                result.paths.len(),
+                hops,
+                if result.truncated { " (truncated)" } else { "" }
+            ),
+            &serde_json::json!({
+                "paths": result.paths,
+                "truncated": result.truncated,
+                "incomplete_reason": result.incomplete_reason,
+            }),
+        ),
+        Err(error) => CommandOutput::err(exit::NOT_FOUND, error.to_string()),
+    }
+}
+
+/// `qai quran graph root-family`: lexicon-gated ranked ayahs.
+pub async fn cmd_graph_root_family(db_path: &str, root: &str, limit: usize) -> CommandOutput {
+    use super::quran_morphology::root_search;
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    match root_search(&db, root).await {
+        Ok((dataset, mut occurrences)) => {
+            occurrences.sort_by_key(|o| (o.surah, o.ayah, o.position));
+            occurrences.dedup_by_key(|o| (o.surah, o.ayah));
+            occurrences.truncate(limit.max(1));
+            json_or_err(
+                format!("root family {root}: {} ranked ayah(s) in {dataset}", occurrences.len()),
+                &serde_json::json!({"dataset": dataset, "ayahs": occurrences}),
+            )
+        }
+        Err(error) => CommandOutput::err(tool_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran graph export`: Graph JSON with identities + truncation flags.
+pub async fn cmd_graph_export(file: &str, out: Option<&str>) -> CommandOutput {
+    use quran_graph::export_json;
+    let graph = match read_graph_file(file) {
+        Ok(graph) => graph,
+        Err(message) => return CommandOutput::err(exit::NOT_FOUND, message),
+    };
+    let json = export_json(&graph.nodes, &graph.edges, &[], &graph.manifest);
+    match out {
+        Some(path) => {
+            let text = serde_json::to_string_pretty(&json).unwrap_or_default();
+            if let Err(error) = std::fs::write(path, text) {
+                return CommandOutput::err(exit::INTERNAL, format!("write {path}: {error}"));
+            }
+            CommandOutput::ok(format!("exported {} nodes to {path}", graph.nodes.len()), json)
+        }
+        None => {
+            CommandOutput::ok(format!("exported {} nodes as Graph JSON", graph.nodes.len()), json)
+        }
+    }
+}
 /// Search mode requested on the CLI (one flag family per tool).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SearchCliMode {

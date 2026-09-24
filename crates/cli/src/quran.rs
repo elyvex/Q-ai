@@ -764,17 +764,17 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
                 application::quran_cli::cmd_count_occurrences(db_path, &target, &profile).await
             }
             CountAction::Hapax { profile, limit } => {
-                application::quran_cli::cmd_count_hapax(db_path, &profile, *limit).await
+                application::quran_cli::cmd_count_hapax(db_path, &profile, limit).await
             }
             CountAction::Cooccurrence { target, profile, window, limit } => {
                 application::quran_cli::cmd_count_cooccurrence(
-                    db_path, &target, &profile, *window, *limit,
+                    db_path, &target, &profile, window, limit,
                 )
                 .await
             }
             CountAction::Collocation { target, profile, window, limit } => {
                 application::quran_cli::cmd_count_collocation(
-                    db_path, &target, &profile, *window, *limit,
+                    db_path, &target, &profile, window, limit,
                 )
                 .await
             }
@@ -785,11 +785,19 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
                 application::quran_cli::cmd_count_missing_form(db_path, &target, &profile).await
             }
             CountAction::NearDuplicates { threshold, limit } => {
-                application::quran_cli::cmd_count_near_duplicates(db_path, *threshold, *limit).await
+                application::quran_cli::cmd_count_near_duplicates(db_path, threshold, limit).await
             }
         },
         QuranAction::Morphology { action } => match action {
-            MorphologyAction::Import { file, dataset, version, adapter, edition, attribution, batch } => {
+            MorphologyAction::Import {
+                file,
+                dataset,
+                version,
+                adapter,
+                edition,
+                attribution,
+                batch,
+            } => {
                 application::quran_cli::cmd_morphology_import(
                     db_path,
                     &file,
@@ -810,13 +818,13 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
             }
             MorphologyAction::Token { edition, surah, ayah, position } => {
                 application::quran_cli::cmd_morphology_token(
-                    db_path, &edition, *surah, *ayah, *position,
+                    db_path, &edition, surah, ayah, position,
                 )
                 .await
             }
             MorphologyAction::Compare { edition, surah, ayah, position } => {
                 application::quran_cli::cmd_morphology_compare(
-                    db_path, &edition, *surah, *ayah, *position,
+                    db_path, &edition, surah, ayah, position,
                 )
                 .await
             }
@@ -834,17 +842,15 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
             GraphAction::Build { out } => {
                 application::quran_cli::cmd_graph_build(db_path, out.as_deref()).await
             }
-            GraphAction::Inspect { file } => {
-                application::quran_cli::cmd_graph_inspect(&file).await
-            }
+            GraphAction::Inspect { file } => application::quran_cli::cmd_graph_inspect(&file).await,
             GraphAction::Neighbors { file, node, hops } => {
-                application::quran_cli::cmd_graph_neighbors(&file, &node, *hops).await
+                application::quran_cli::cmd_graph_neighbors(&file, &node, hops).await
             }
             GraphAction::Path { file, from, to, hops } => {
-                application::quran_cli::cmd_graph_path(&file, &from, &to, *hops).await
+                application::quran_cli::cmd_graph_path(&file, &from, &to, hops).await
             }
             GraphAction::RootFamily { root, limit } => {
-                application::quran_cli::cmd_graph_root_family(db_path, &root, *limit).await
+                application::quran_cli::cmd_graph_root_family(db_path, &root, limit).await
             }
             GraphAction::Export { file, out } => {
                 application::quran_cli::cmd_graph_export(&file, out.as_deref()).await

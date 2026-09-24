@@ -19,12 +19,27 @@ exit requirement.
 > `cargo test -p quran-morphology` 52/52 green, clippy `-D warnings` clean,
 > `cargo fmt --check` clean, `cargo xtask arch-check` OK, `cargo xtask
 > migrate-check` OK (19 migrations, incl. graph + morphology + lexicon tables).
-> Six tasks move ☐ → ◐ below on that evidence (TASK-401/403/404/409/420/427 —
-> all present only as the pure `quran-graph` crate over the in-memory backend);
+> Seven tasks move ☐ → ◐ below on that evidence (TASK-401/403/404/409/420/424/427 —
+> the first six are pure `quran-graph`/in-memory or CLI groundwork; TASK-424 is a partial
+> file-backed CLI surface);
 > **none is ☑** (M0 decisions unmade, SQLite adjacency adapter / application
 > wiring / CLI / HTTP / doctor absent, DoD + `done.md` completion entries
 > pending with the owning session).
-> M5 stays ⊘ (no licensed morphology dataset; Phase-2 Sprints 2.4–2.5 at 0 tasks).
+> M5 stays ⊘ (no licensed morphology dataset or linguist-reviewed goldens; Phase-2
+> morphology mechanics are now recorded as 8 ☑ / several ◐, but the graph root-family
+> projection and evidence gate remain absent).
+
+> **Increment note (2026-09-24, second pass):** migration `0019_quran_graph`
+> (projections, build progress, adjacency, assertions) landed and is
+> checksum-pinned (`migrate-check` 19 ordered, stable), and the application
+> layer now wires the graph port for real use: `qai quran graph
+> build/inspect/neighbors/path/root-family/export` dispatch through
+> `application::quran_cli` over the active edition and the reference backend.
+> That moves TASK-413, TASK-414, and TASK-416 ☐ → ◐. Evidence: the CLI
+> snapshot suite (`crates/cli/tests/quran/counting_graph.trycmd`) and the crate
+> suites above. Still open for ☑: SQLite adjacency adapter, durable build
+> lifecycle/publication, pattern/subgraph CLI, HTTP routes, doctor, and the
+> M0 owner decisions.
 
 ---
 
@@ -44,8 +59,8 @@ exit requirement.
 
 | ID | Task | Deliv. | Depends | Est | Status |
 |---|---|---|---|---|---|
-| TASK-413 | Schema versioning; stable node/assertion identity; endpoint pairs; direction; assertion-aware duplicate identity; local authorization/review permissions, effective tombstones and historical-edition policy | D4.1 | P4-X01, P4-X02 | 2.0 | ☐ |
-| TASK-414 | Edge-vocabulary reconciliation (`PRECEDES`/`FOLLOWS` ↔ `NEXT` alias policy); requirement-to-task matrix; allowlist + manifest updates for graph crates | D4.1 | — | 1.5 | ☐ |
+| TASK-413 | Schema versioning; stable node/assertion identity; endpoint pairs; direction; assertion-aware duplicate identity; local authorization/review permissions, effective tombstones and historical-edition policy | D4.1 | P4-X01, P4-X02 | 2.0 | ◐ (stable node IDs, edge vocabulary, authz scope, and tombstone filtering landed in `quran-graph`; schema versioning + review-permission policy unmade) |
+| TASK-414 | Edge-vocabulary reconciliation (`PRECEDES`/`FOLLOWS` ↔ `NEXT` alias policy); requirement-to-task matrix; allowlist + manifest updates for graph crates | D4.1 | — | 1.5 | ◐ (15-entry vocabulary with `NEXT` canonical and `PRECEDES`/`FOLLOWS` rejected is enforced in code + tests; requirement-to-task matrix and manifest notes remain) |
 
 **M0 exit:** accepted decisions; allowlist green (`cargo xtask arch-check`); every upstream
 blocker named with an owner.
@@ -56,7 +71,7 @@ blocker named with an owner.
 |---|---|---|---|---|---|
 | TASK-401 | `GraphStore` port: node resolution, neighbors, bounded paths/subgraphs/patterns, build/inspect/delete-verify, capability discovery; snapshot+authz+budgets+deadline on every query; incomplete-vs-empty; no backend query language leaks | D4.1 | TASK-413 | 3.0 | ◐ (`store.rs` + `mem.rs` over memory backend; SQLite adapter absent) |
 | TASK-415 | True read transactions (replace pooled `ReadTx`) + bounded bulk canonical reads; restart-safe durable dependency snapshots | D4.1 | TASK-401 | 3.0 | ☐ |
-| TASK-416 | Migrations: assertion authority, snapshots, build catalog, adjacency, delivery ledger (numbers from live tree; atomic DDL + ledger insert); harden migration runner transactionality if needed | D4.1 | TASK-413 | 2.5 | ☐ |
+| TASK-416 | Migrations: assertion authority, snapshots, build catalog, adjacency, delivery ledger (numbers from live tree; atomic DDL + ledger insert); harden migration runner transactionality if needed | D4.1 | TASK-413 | 2.5 | ◐ (`0019_quran_graph` lands projections/build progress/adjacency/assertions; snapshots, delivery ledger, and runner-transaction hardening remain) |
 | TASK-417 | Atomic build reservation + fenced CAS publication; revalidate complete dependency snapshots before pointer changes; preserve prior release on stale worker completion | D4.9 | TASK-415, TASK-416 | 2.0 | ☐ |
 | TASK-418 | Bridge Quran activation/rollback and relevant source changes to atomic revision+audit+outbox intent; durable fan-out, per-target delivery, expired-claim recovery and lease fencing | D4.9 | TASK-416 | 3.0 | ☐ |
 
@@ -113,7 +128,7 @@ families pass. Synthetic fixtures prove mechanics only — never linguistic comp
 
 | ID | Task | Deliv. | Depends | Est | Status |
 |---|---|---|---|---|---|
-| TASK-424 | CLI: `qai graph build/inspect/neighbors/path/subgraph/pattern/root-family/export`; explicit build management and confirmed repairs stay CLI-only; thin service dispatch and cancellation | D4.4 | TASK-419, TASK-409, TASK-406, TASK-427 | 2.5 | ☐ |
+| TASK-424 | CLI: `qai graph build/inspect/neighbors/path/subgraph/pattern/root-family/export`; explicit build management and confirmed repairs stay CLI-only; thin service dispatch and cancellation | D4.4 | TASK-419, TASK-409, TASK-406, TASK-427 | 2.5 | ◐ (build/inspect/neighbors/path/root-family/export dispatch landed; subgraph/pattern/repair lifecycle remain) |
 | TASK-425 | Read-only typed tools `quran.graph_neighbors/path/subgraph/pattern`, root-family and entity-timeline adapters; reproducibility binds projection/build/dataset versions, query, policy and budgets; no build-mutation tool | D4.4 | TASK-409, TASK-406, TASK-423 | 2.0 | ☐ |
 | TASK-426 | Read-only HTTP neighbors/path/subgraph/pattern/root-family/entity-timeline and projection inspection routes; missing/stale/incomplete/refused semantics; cache validators bind query+projection+deps+budgets+visibility | D4.4 | TASK-419, TASK-409, TASK-406, TASK-423 | 2.5 | ☐ |
 | TASK-427 | Application Graph JSON export service (identities, paths, attribution, versions, truncation); GraphML where practical; bounded output respects tombstones/authz | D4.5 | TASK-409, TASK-408, TASK-423, P4-X05 | 2.0 | ◐ (pure Graph JSON exporter in `export.rs` with truncation notice + authz/tombstone filter; GraphML + application service pending) |

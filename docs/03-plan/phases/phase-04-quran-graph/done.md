@@ -1,7 +1,7 @@
 # Phase 3 (dir: phase-04) — Completion Ledger — Quran Knowledge Graph
 
 **Phase:** PRD Phase 3 — Quran Graph (directory numbering unchanged — see `README.md`)
-**Status:** In progress — 0 / 30 ☑ (6 ◐ code-landed-partial, 3 ⊘ M5 blocked) · 0 / 28 acceptance criteria
+**Status:** In progress — 0 / 30 ☑ (7 ◐ code-landed-partial, 3 ⊘ M5 blocked) · 0 / 28 acceptance criteria
 **Started:** —
 **Completed:** —
 
@@ -51,17 +51,17 @@ and with what evidence.
 | M3 — Bounded traversal | 4 | 0 ☑ / 3 ◐ (TASK-403/409/420) | 10.5 | — | ◐ |
 | M4 — Annotations/concepts | 4 | 0 | 11.5 | — | ☐ |
 | M5 — Linguistic/root family | 3 | 0 | 7.5 | — | ⊘ blocked |
-| M6 — Interfaces/export/viz | 5 | 0 ☑ / 1 ◐ (TASK-427) | 12.0 | — | ◐ |
+| M6 — Interfaces/export/viz | 5 | 0 ☑ / 2 ◐ (TASK-424/T427) | 12.0 | — | ◐ |
 | M7 — Operations/exit | 3 | 0 | 6.5 | — | ☐ |
 | Spikes (optional) | 2 | 0 | 3.5 | — | ☐ |
-| **Total** | **30 (28 required + 2 optional)** | **0 ☑ / 6 ◐** | **71.0 required + 3.5 optional = 74.5** | **—** | **0% ☑; 6 partial** |
+| **Total** | **30 (28 required + 2 optional)** | **0 ☑ / 7 ◐** | **71.0 required + 3.5 optional = 74.5** | **—** | **0% ☑; 7 partial** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
 | Deliverables (D4.1–D4.9) | 0 | 9 (7 required + 2 optional: D4.7/D4.8) |
 | Acceptance criteria (AC-P4-01…28) | 0 | 28 |
 | ADRs accepted | 0 | 4 planned decisions (0202, 0702 Phase-3 subset, safety limits, export formats); schema versioning belongs to TASK-413 |
-| Migrations applied | 0 | est. 4–6 (allocate from live tree) |
+| Migrations applied | 1 | 4–6 (only `0019_quran_graph` adjacency/catalog skeleton; assertion authority, dependency snapshots, build catalog and delivery ledger still missing — TASK-416) |
 | Required test suites green | 0 | see acceptance.md §2 |
 
 Track actual vs estimate from the first completed task and re-baseline M2–M7 after the M1
@@ -99,6 +99,25 @@ in `tasks.md` (◐ rows) and summarised here:_
 - **TASK-427 ◐** — `src/export.rs` (179 lines): Graph JSON export with
   identities/attribution/versions plus `ExportNotice` truncation, tombstone and
   authz filtering. GraphML + application-level export service: not implemented.
+- **TASK-424 ◐** — CLI dispatch in `crates/application/src/quran_cli.rs` and
+  `crates/cli/src/quran.rs` now covers structural build/inspect, neighbors, path,
+  root-family, and Graph JSON export over a file-backed in-memory projection.
+  Subgraph/pattern commands, durable build management, repair confirmation, and
+  production persistence remain absent.
+- **TASK-413 ◐** — stable node IDs (`edition:…`, `surah:…`, `ayah:…`,
+  `token:…`), the allowlisted edge vocabulary, `AuthzScope` visibility, and
+  effective-tombstone filtering landed in `quran-graph`. Schema-version
+  constants, assertion-aware duplicate identity, review permissions, and the
+  historical-edition policy remain unmade (M0 owner decisions).
+- **TASK-414 ◐** — the 15-entry `EDGE_VOCABULARY` names `NEXT` canonically and
+  rejects `PRECEDES`/`FOLLOWS` (`tests/no_query_language.rs`, staging validates
+  predicates). The requirement-to-task matrix and manifest notes remain.
+- **TASK-416 ◐** — `migrations/sqlite/0019_quran_graph.up.sql` creates
+  `graph_projections`, `graph_build_progress`, `graph_nodes`, `graph_edges`, and
+  `graph_assertions` (assertion authority, build catalog, adjacency) with
+  checksum pinning (`migrate-check` 19 ordered, stable). Dependency snapshots,
+  the durable delivery ledger, and migration-runner transaction hardening
+  remain.
 
 Gates run 2026-09-24 for the above: `cargo test -p quran-graph` 34/34 green,
 `cargo clippy -p quran-graph --all-targets -- -D warnings` clean,
@@ -106,7 +125,8 @@ Gates run 2026-09-24 for the above: `cargo test -p quran-graph` 34/34 green,
 `cargo xtask migrate-check` OK (19 migrations, incl. `0019_quran_graph`).
 Commits: `5a32a15` (crate), `d4ed983`/`093d225`/`496903c`/`b8baad0` (tests),
 `27d796d` (refactor), `8380acd` (golden fixture). None is pushed (`main` is
-81 commits ahead of `origin/main` as of this entry).
+~70+ commits ahead of `origin/main` as of this entry; the exact count moves as
+concurrent sessions commit).
 
 ---
 
@@ -114,9 +134,9 @@ Commits: `5a32a15` (crate), `d4ed983`/`093d225`/`496903c`/`b8baad0` (tests),
 
 | Task | Reason | Unblocks when | Owner |
 |---|---|---|---|
-| TASK-405/406/407 (M5) | **Correction 2026-09-24:** the code is no longer a placeholder — `crates/quran-morphology` has 2,534 lines (adapters JSON/CSV, align, compare, dataset, family, policy, tagset, validate) with 52/52 tests green, plus ADRs 0209–0215 recorded. What is still missing is the *evidence* gate: no ADR-0203-licensed production dataset, no Phase-2 Sprint 2.4–2.5 tasks (P2 board: T57–T65 all ☐), no linguist-reviewed goldens. Mechanics may be exercised on synthetic fixtures only; no task closes. | ADR-0203-licensed dataset + P2 Sprints 2.4–2.5 + linguist sign-off | _unassigned_ (P4-X04) |
+| TASK-405/406/407 (M5) | **Correction 2026-09-24:** the code is no longer a placeholder — `crates/quran-morphology` has 2,534 lines (adapters JSON/CSV, align, compare, dataset, family, policy, tagset, validate) with 52/52 tests green, plus ADRs 0209–0215 recorded. The Phase-2 board now records morphology mechanics as 8 ☑ / several ◐ (T57–T74), but the *evidence* gate remains: no ADR-0203-licensed production dataset, no linguist-reviewed goldens, and no graph root-family projection. Mechanics may be exercised on synthetic fixtures only; no graph M5 task closes. | ADR-0203-licensed dataset + linguist sign-off + graph root-family projection | _unassigned_ (P4-X04) |
 | TASK-411/412 (spikes) | Optional accelerators; phase exit does not depend on them | M3 conformance suite stable after a real adapter ships | _unassigned_ |
-| TASK-401/403/404/409/420/427 → ☑ | Implemented only as the pure `quran-graph` crate over `MemGraphStore`; no SQLite adapter, application wiring, CLI/HTTP/tools, doctor, or lifecycle | SQLite adapter + application services + `done.md` evidence per task | _unassigned_ |
+| TASK-401/403/404/409/420/424/427 → ☑ | Implemented only as pure `quran-graph`/in-memory or file-backed CLI groundwork; no SQLite adapter, durable application lifecycle, HTTP/tools, doctor, or full interface parity | SQLite adapter + application services + `done.md` evidence per task | _unassigned_ |
 
 ---
 

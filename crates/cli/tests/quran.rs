@@ -37,6 +37,12 @@ fn quran_search_snapshots() {
     run_cases("tests/quran/search.trycmd");
 }
 
+/// Phase 2 counting + Phase 4 graph CLI surfaces (P2-T104, TASK-424 slice).
+#[test]
+fn quran_counting_graph_snapshots() {
+    run_cases("tests/quran/counting_graph.trycmd");
+}
+
 /// Upstream catalog ingestion (metadata-only, no database).
 #[test]
 fn quran_catalog_snapshots() {
