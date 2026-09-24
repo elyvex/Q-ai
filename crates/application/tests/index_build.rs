@@ -169,6 +169,12 @@ async fn first_build_activates_and_serves() {
     let manifest: quran_search::IndexManifest =
         serde_json::from_str(&pointer.manifest_json).unwrap();
     assert_eq!(manifest.doc_count, 14);
+    let disk_manifest: quran_search::IndexManifest = serde_json::from_str(
+        &std::fs::read_to_string(data_dir.join("gen-1").join("manifest.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(disk_manifest, manifest);
+    assert_eq!(quran_search::manifest_content_hash(&disk_manifest), disk_manifest.content_hash);
     let registry = application::quran_normalize::builtin_registry();
     let family = TokenizerFamily::new(&registry, manifest.tokenizer_version).unwrap();
     let index =
