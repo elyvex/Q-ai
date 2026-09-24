@@ -37,7 +37,14 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. System records provenance and append-only audit events for every state-changing operation
   4. Background jobs enqueue, lease, checkpoint, and cancel without an external broker
   5. `xtask arch-check` passes and CI fails on any forbidden crate dependency
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Fresh-workspace operator readiness tracer: config origins, explicit migration, read-only doctor, and persisted audit verification
+- [ ] 01-02-PLAN.md — Audited durable mutations with same-UnitOfWork provenance/audit/outbox coverage and rollback proof
+- [ ] 01-03-PLAN.md — Durable job checkpoints, per-kind retry, cooperative cancellation, and lifecycle audit controls
+- [ ] 01-04-PLAN.md — Long-lived `qai serve` worker host with safe shutdown and enqueue-only one-shot import boundary
+- [ ] 01-05-PLAN.md — Registry/git architecture enforcement, final evidence gates, and TASK-001 repository closure
 
 ### Phase 2: Canonical Quran Core
 **Goal**: One validated Quran edition is importable, addressable, and provably immutable.
@@ -173,7 +180,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundations | 0/TBD | Not started | - |
+| 1. Foundations | 0/5 | Not started | - |
 | 2. Canonical Quran Core | 0/TBD | Not started | - |
 | 3. Quran Search & Linguistics | 0/TBD | Not started | - |
 | 4. Quran Graph | 0/TBD | Not started | - |
