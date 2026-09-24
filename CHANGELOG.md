@@ -4,6 +4,15 @@ All notable changes to Q-ai are documented here.
 
 ## [Unreleased]
 
+### Added — Morphology dataset version diff (P2-T69)
+
+- Added deterministic `slug@version` dataset comparison with stable
+  `surah:ayah:position#analysis_index` keys, added/removed/changed/unchanged
+  counts, per-field verdicts, and no winner/resolution field.
+- Added `qai quran morphology diff <from> <to> [--format text|json]`.
+- Added real-SQLite coverage and CLI snapshot coverage; existing dataset
+  identity, multi-analysis coexistence, and approval gates are unchanged.
+
 ### Added — Quran corpus: typed comparison + editorial verification plumbing (P1-T26/T55, 2026-09-24)
 
 - Typed corpus comparison (ADR-0114 Tier-2 engineering): `quran-corpus::differ`
