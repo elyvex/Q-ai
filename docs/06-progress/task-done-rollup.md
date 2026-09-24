@@ -2,22 +2,57 @@
 
 > Completed tasks across all phases. Newest first.
 
+## Phase 2 — implementation reconciliation, 2026-09-24
+
+- Reconciled the live task board with landed code: **56 / 114 tasks ☑ (49%)**;
+  partial/synthetic/owner-gated work is explicitly ◐ rather than overstated.
+- Newly closed task groups: T36/T54 (index/search hardening), T57/T58/T60/T61/T63/T66/T70/T71
+  (morphology import/validation), T75/T76/T77/T83/T86/T93 (morphology/family core), and
+  T94/T98/T99/T100/T103/T109 (counting/discovery core).
+- Evidence: `cargo test -p quran-search --test trigram_index --test regex_dos` (6/6),
+  `cargo test -p application --test morphology_import --test counting --test index_lifecycle --test search_goldens --test search_latency`
+  (24/24), and `cargo test -p quran-morphology -p quran-graph` (86/86). Synthetic fixtures
+  do not close licensed-data, linguist, ADR-acceptance, API-parity, doctor/evaluation,
+  or full-corpus exit gates; those remain ◐/☐ in the phase board.
+
 ## Cross-phase — Phase-4 board reconciliation + Phase-0 residual fixes, 2026-09-24
 
 - **Phase-4 graph (code ahead of paperwork).** `crates/quran-graph` (2,883 lines)
   and `crates/quran-morphology` (2,534 lines) had landed while the Phase-4 board
-  still read 0/30. Verified and reconciled honestly: TASK-401/403/404/409/420/427
-  moved ☐ → ◐ (pure crate over `MemGraphStore`; SQLite adapter, application wiring,
-  CLI/HTTP/tools, doctor and durable lifecycle still absent), M5 (TASK-405/406/407)
-  stays ⊘ — the blocker is now correctly described as the *missing licensed dataset
-  + Phase-2 Sprints 2.4–2.5 + linguist goldens*, not a placeholder crate. No task
-  marked ☑; AC-P4-* all remain unverified.
+  still read 0/30. Verified and reconciled honestly: TASK-401/403/404/409/413/414/416/420/424/427
+  moved ☐ → ◐ — board total **0 ☑ / 10 ◐ / 3 ⊘** (pure crate/file-backed CLI groundwork
+  over `MemGraphStore`; SQLite persistence, durable application lifecycle, HTTP/tools,
+  doctor and visualization remain absent), M5 (TASK-405/406/407) stays ⊘ — the blocker is
+  the missing licensed dataset + linguist goldens + graph root-family projection, not a
+  placeholder crate. No task marked ☑; AC-P4-* all remain unverified.
+- **P4-X03 / P4-X05 decision drafts landed.** ADR-0217 (graph query safety limits:
+  budget defaults, validation ranges, "truncated ≠ empty" exhaustion semantics) and
+  ADR-0218 (Graph JSON v1 mandatory/lossless; GraphML as a declared-lossy derived
+  view) are written as **Proposed** — they record what `QueryBudgets` and
+  `export.rs` already implement, so the owner ratifies a concrete proposal rather
+  than an empty slot. Ratification is owner work; no status was flipped by an agent.
+- **Conformance hardened to match ADR-0217** (TASK-409, still ◐): two new
+  port-level tests in `crates/quran-graph/tests/conformance.rs` —
+  out-of-range budgets are rejected at *every* port entry point (never clamped,
+  never silently empty) and authorization is applied during pattern expansion.
+  Suite 6 → 8 tests; `cargo test -p quran-graph` 36/36, clippy clean.
+- **Export contract pinned to match ADR-0218** (TASK-427, still ◐): two new
+  `export.rs` tests assert that an interpretive edge never leaves the exporter
+  without its assertion + evidence record (source location, reviewer, decision,
+  timestamp), and that a restricted assertion is absent from the *serialized
+  bytes* — not merely dropped from the edge list. `cargo test -p quran-graph`
+  38/38, clippy clean.
 - **P0-T39/T40 scheduling follow-up closed on the code side.** `plus` keeps
   sub-second precision (`d.as_secs()` + `d.subsec_nanos()`); regression
   `queue::tests::plus_preserves_subsecond_delays`. SQLite scheduling validated by
   `recovery_jobs::rescheduled_job_is_not_claimable_until_due`. Real-time
   lease-recovery behaviour and the intermittent parallel `retries_then_succeeds`
   flake remain under watch.
+- **Stale schema-version assertion fixed** (`storage-sqlite` `sqlite_database_health`
+  hard-coded 16 while the live tree has 19 migrations — the test had been failing
+  since the lexicon/morphology/graph migrations landed). It now derives the
+  expected version from the migration tree, so appending a migration cannot break
+  it again.
 - **OTLP span-field scrubbing implemented** (deferred since P0-T16): new
   `observability::otlp::ScrubbingProcessor` strips denylisted + secret-named span
   attributes at the exporter boundary; `telemetry::is_scrubbed_span_field` is the
@@ -32,12 +67,21 @@
 - **P0-T56 remains ◐.** Docker daemon socket still absent (`docker info` fails
   2026-09-24) — container runtime verification and the clean-machine exit-gate
   ritual stay open; recorded in `docs/05-followups/open-questions.md`.
-- Gates this session: `cargo test -p quran-graph` 34/34, `cargo test -p
+- Gates this session: `cargo test -p quran-graph` 38/38, `cargo test -p
   quran-morphology` 52/52, `cargo test -p jobs --lib` 22/22, `cargo test -p
-  storage-sqlite --test recovery_jobs` 4/4, `cargo test -p observability
+  storage-sqlite` (all targets) green, `cargo test -p observability
   --features otlp` 14/14, `cargo test -p testkit --test secret_leak` 9/9; clippy
   `-D warnings` clean on all touched crates; fmt clean; `cargo xtask arch-check`
-  OK; `cargo xtask migrate-check` OK (19 migrations).
+  OK; `cargo xtask migrate-check` OK (19 migrations); `cargo xtask adr-lint` OK;
+  **`cargo test --workspace --no-fail-fast` — zero failures workspace-wide.**
+- **One workspace-test finding, triaged as a harness issue, not a regression:**
+  `application::quran_reader::lookup_performance_smoke` failed at 6.009 ms
+  average (5.0 ms budget) while a second cargo build and another live session
+  were competing for CPU. It then passed in isolation *and* in a full
+  `cargo test --workspace --no-fail-fast` (zero failures workspace-wide),
+  confirming the load hypothesis. Filed as FU-TEST-02 with a concrete fix
+  (median/p95 or best-of-N instead of a single mean) — no reader behaviour may
+  be relaxed.
 
 ## Phase 2 — P2-T13–T18/T20/T22 normalization engine close-out, 2026-09-24
 
