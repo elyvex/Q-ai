@@ -534,6 +534,16 @@ pub enum MorphologyAction {
         #[arg(long, default_value_t = 1)]
         position: i64,
     },
+    /// Compare two registered morphology dataset versions.
+    Diff {
+        /// Source dataset `slug@version`.
+        from: String,
+        /// Destination dataset `slug@version`.
+        to: String,
+        /// Output format (`text` or `json`).
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
     /// Root search (grouped occurrences with dataset attribution).
     Root {
         /// Normalized root spelling.
@@ -827,6 +837,9 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
                     db_path, &edition, surah, ayah, position,
                 )
                 .await
+            }
+            MorphologyAction::Diff { from, to, format } => {
+                application::quran_cli::cmd_morphology_diff(db_path, &from, &to, &format).await
             }
             MorphologyAction::Root { root } => {
                 application::quran_cli::cmd_morphology_root(db_path, &root).await
