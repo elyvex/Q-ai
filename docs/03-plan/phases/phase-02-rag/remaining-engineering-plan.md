@@ -13,7 +13,7 @@ a full-corpus run, or the Phase-2 exit ritual. Engineering evidence never closes
 gates by implication.
 
 The live task board is the source of truth. At the time this plan was drafted it
-contained **58 ☑ / 32 ◐ / 24 ☐** rows. T73 (FTS morphology projection) is complete;
+contained **58 ☑ / 33 ◐ / 23 ☐** rows. T73 (FTS morphology projection) is complete;
 all other non-☑ rows are assigned to a wave below.
 
 ## 2. Licensing direction
@@ -161,11 +161,13 @@ full `CountingRules` contract are implemented.
 
 ## 6. Immediate next execution slice
 
-Start Wave 0's machine-readable license gate and Wave 1's T65/T78–T81/T82 work in
-parallel where dependencies permit. Do not wait for a final dataset license to build
-the fallback path. The first implementation checkpoint should produce:
+The first engineering checkpoint has landed the finalized manifest/hash contract, exact
+T80 pattern search, and T82 root/lemma browse plus `qai quran root list`. The next
+checkpoint is:
 
-1. a license matrix and activation rejection test;
-2. `quran.pattern_search` with typed unavailable behavior when no pattern field exists;
-3. root/lemma browse API/CLI surfaces;
-4. a fresh evidence report showing exactly which owner/linguist gates remain.
+1. the machine-readable license matrix and activation rejection test;
+2. T65 explicit/idempotent review-queue candidate mechanics;
+3. T89 shared morphology API seams;
+4. T105/T106 shared drift/doctor foundations.
+
+Each item must leave owner, linguist, licensed-data, and full-corpus blockers explicit.
