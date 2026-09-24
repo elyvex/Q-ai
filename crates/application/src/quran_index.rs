@@ -215,19 +215,6 @@ fn add_lexicon_value(
         .insert(value.to_string());
 }
 
-fn pattern_values(row: &TokenAnalysisRow) -> Vec<String> {
-    let Ok(features) = serde_json::from_str::<serde_json::Value>(&row.features_json) else {
-        return Vec::new();
-    };
-    ["pattern", "verb_form", "morphological_pattern"]
-        .iter()
-        .filter_map(|key| features.get(*key).and_then(serde_json::Value::as_str))
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-        .collect()
-}
-
 /// Load the active, edition-relative morphology projection for an index build.
 ///
 /// A dataset is never applied to a different edition: rows are filtered by the
@@ -272,7 +259,7 @@ async fn load_morphology_projection(
         add_lexicon_value(&mut fields, reference, "stems", &row.stem);
         add_lexicon_value(&mut fields, reference, "pos_tags", &row.pos_unified);
         add_lexicon_value(&mut fields, reference, "pos_tags", &row.pos_native);
-        for pattern in pattern_values(row) {
+        for (_, pattern) in crate::quran_morphology::pattern_labels(row) {
             add_lexicon_value(&mut fields, reference, "patterns", &pattern);
         }
     }

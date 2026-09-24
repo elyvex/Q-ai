@@ -803,6 +803,27 @@ fn none_if_empty(value: &str) -> Option<String> {
     if value.trim().is_empty() { None } else { Some(value.to_string()) }
 }
 
+/// Pattern labels explicitly supplied by a morphology row.
+///
+/// The helper deliberately reads only declared feature fields. It never derives
+/// a pattern from segment order or guesses a missing linguistic label.
+pub(crate) fn pattern_labels(row: &TokenAnalysisRow) -> Vec<(&'static str, String)> {
+    let Ok(features) = serde_json::from_str::<serde_json::Value>(&row.features_json) else {
+        return Vec::new();
+    };
+    ["pattern", "verb_form", "morphological_pattern"]
+        .iter()
+        .filter_map(|field| {
+            features
+                .get(*field)
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(|value| (*field, value.to_string()))
+        })
+        .collect()
+}
+
 /// Read-tool errors: typed unavailability until a dataset activates.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum MorphologyToolError {
