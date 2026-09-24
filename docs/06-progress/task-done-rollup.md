@@ -13,21 +13,24 @@
 - Evidence: `application --test index_lifecycle` 12/12 (4 new rollback tests:
   restore-and-serve, no-ping-pong, no-previous, evicted); `cli` suites green;
   `clippy -D warnings` clean; live CLI proof (`generation 2 → 1`, second
-  rollback refused). Board 59/114 (52%).
+  rollback refused). Board 58/114 (51%).
 - Remaining: T37 process-kill evidence, T38 full-corpus benchmark, and the
   owner/linguist/licensed-data gates listed in the phase board.
 
 ## Phase 2 — implementation reconciliation, 2026-09-24
 
-- Reconciled the live task board with landed code: **59 / 114 tasks ☑ (52%)**;
+- Reconciled the live task board with landed code: **58 / 114 tasks ☑ (51%)**;
   partial/synthetic/owner-gated work is explicitly ◐ rather than overstated.
 - Newly closed task groups: T36/T54 (index/search hardening), T57/T58/T60/T61/T63/T66/T69/T70/T71
   (morphology import/validation/diff), T73 (edition-relative FTS lexicon projection), T75/T76/T77/T83/T86/T93
-  (morphology/family core), and T94/T98/T99/T100/T103/T109 (counting/discovery core).
-- Evidence: `cargo test -p quran-search --test trigram_index --test regex_dos --test fts5_backend`
-  (12/12), `cargo test -p application --test morphology_import --test counting --test index_lifecycle --test search_goldens --test search_latency`
-  (26/26), `cargo test -p application --test index_build --test index_lifecycle` (16/16),
-  `cargo test -p cli --test quran quran_counting_graph_snapshots` (11 trycmd cases),
+  (morphology/family core), and T94/T98/T99/T100/T103 (counting/discovery core).
+  T80/T82 are now evidence-backed partial slices; T109 was reopened to ◐ until the full
+  multi-analysis CountingRules contract is implemented.
+- Evidence: `cargo test -p quran-search` (36/36),
+  `cargo test -p application --test morphology_import` (10/10),
+  `cargo test -p application --test index_build` (4/4),
+  `cargo test -p application --test index_lifecycle` (12/12),
+  `cargo test -p cli --test quran quran_counting_graph_snapshots` (13 trycmd cases),
   `cargo test -p storage-sqlite --test quran` (10/10), and
   `cargo test -p quran-morphology -p quran-graph` (86/86). Synthetic fixtures
   do not close licensed-data, linguist, ADR-acceptance, API-parity, doctor/evaluation,
