@@ -1456,6 +1456,56 @@ pub async fn cmd_doctor_quran(db_path: &str, deep: bool) -> CommandOutput {
     CommandOutput { exit, human, json }
 }
 
+/// `doctor --indexes`: the 19 Phase-2 index/linguistics checks (P2-T105).
+///
+/// Opens the database read-only; `deep` upgrades samples to full-corpus scans.
+/// Mirrors `cmd_doctor_quran` shapes so the merged `--json` document keeps
+/// validating against `docs/schemas/doctor.v1.schema.json`.
+pub async fn cmd_doctor_indexes(db_path: &str, deep: bool) -> CommandOutput {
+    let db = match storage_sqlite::SqliteDatabase::open_read_only(db_path).await {
+        Ok(db) => db,
+        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+    };
+    let data_dir = super::quran_index::index_root_for_db(db_path);
+    let checks = match super::quran_doctor_indexes::run_index_checks(&db, &data_dir, deep).await {
+        Ok(checks) => checks,
+        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+    };
+    let mut human = String::from("INDEXES\n");
+    for check in &checks {
+        human.push_str(&format!(
+            "[{}] {} — {}\n",
+            check.status.as_str().to_uppercase(),
+            check.id,
+            check.summary
+        ));
+        if let Some(remedy) = &check.remedy {
+            human.push_str(&format!("      remedy: {remedy}\n"));
+        }
+        if let Some(next) = &check.next_command {
+            human.push_str(&format!("      next: {next}\n"));
+        }
+    }
+    let json = serde_json::json!({
+        "checks": checks
+            .iter()
+            .map(|check| serde_json::json!({
+                "id": check.id,
+                "status": check.status.as_str(),
+                "summary": check.summary,
+                "remedy": check.remedy,
+                "next_command": check.next_command,
+            }))
+            .collect::<Vec<_>>(),
+    });
+    let exit = if checks.iter().any(|check| check.status == super::quran_doctor::CheckLevel::Fail) {
+        exit::VALIDATION
+    } else {
+        exit::OK
+    };
+    CommandOutput { exit, human, json }
+}
+
 /// `quran normalize` — normalize text through a profile or adhoc rule list.
 ///
 /// The pipeline runs from the seeded profile definitions (proving the
