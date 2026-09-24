@@ -11,14 +11,16 @@ use std::sync::atomic::AtomicBool;
 use application::quran::activate_edition;
 use application::quran_forms::{RebuildParams, rebuild_forms};
 use application::quran_morphology::{
-    IMPORT_CHECKPOINTS, MorphologyActivateParams, MorphologyImportParams, activate_morphology,
-    affix_search, build_same_root_relations, dataset_urn, lemma_search, morphology_compare,
-    morphology_for_token, root_search, run_morphology_import, word_family,
+    IMPORT_CHECKPOINTS, MorphologyActivateParams, MorphologyDiffKind, MorphologyImportParams,
+    activate_morphology, affix_search, build_same_root_relations, dataset_urn, diff_datasets,
+    lemma_search, morphology_compare, morphology_for_token, root_search, run_morphology_import,
+    word_family,
 };
 use domain::{PrincipalId, Timestamp};
 use quran_corpus::import::{ImportInput, ImportOptions, ImportOutcome, ImportProgress, run_import};
 use quran_corpus::sha256_hex;
 use storage::Database as _;
+use storage::repository::ApprovalRow;
 use storage_sqlite::SqliteDatabase;
 use tempfile::tempdir;
 
@@ -461,4 +463,87 @@ async fn family_relations_explained() {
     // Member 1:1:1 pairs with its window sibling under the shared test root.
     assert!(members.iter().all(|m| !m.explanation.is_empty()));
     assert!(members.iter().all(|m| m.relation == "same_root"));
+}
+
+/// P2-T69: compare two registered dataset versions without merging analyses.
+#[tokio::test]
+async fn morphology_dataset_version_diff_preserves_analysis_identity() {
+    let (_dir, db) = ready_db().await;
+    let first_doc = aligned_document(&db).await;
+    run_morphology_import(
+        &db,
+        &import_params(first_doc.clone(), "batch-diff-v1"),
+        &AtomicBool::new(false),
+        |_| {},
+    )
+    .await
+    .unwrap();
+    activate_morphology(
+        &db,
+        &MorphologyActivateParams {
+            batch_id: "batch-diff-v1".to_string(),
+            approval_id: "appr-morph".to_string(),
+            invoked_by: PRINCIPAL.to_string(),
+        },
+        &principal(),
+    )
+    .await
+    .unwrap();
+
+    let second_slug = "test-morph-v2";
+    let second_version = "0.2.0";
+    let second_urn = dataset_urn(second_slug, second_version);
+    let mut uow = db.write().await.unwrap();
+    uow.sources()
+        .insert_approval(ApprovalRow {
+            id: "appr-morph-v2".to_string(),
+            subject_urn: second_urn,
+            kind: "CanonicalChange".to_string(),
+            requested_by: Some(PRINCIPAL.to_string()),
+            decided_by: Some(PRINCIPAL.to_string()),
+            decision: Some("approved".to_string()),
+            request_payload: "{}".to_string(),
+            decision_note: None,
+            requested_at: CREATED_AT.to_string(),
+            decided_at: Some(CREATED_AT.to_string()),
+        })
+        .await
+        .unwrap();
+    uow.commit().await.unwrap();
+
+    let mut second_rows: Vec<serde_json::Value> = serde_json::from_str(&first_doc).unwrap();
+    second_rows[0]["lemma_str"] = serde_json::json!("changed-lemma");
+    let second_doc = serde_json::to_string(&second_rows).unwrap();
+    let mut second_params = import_params(second_doc, "batch-diff-v2");
+    second_params.dataset_slug = second_slug.to_string();
+    second_params.dataset_version = second_version.to_string();
+    run_morphology_import(&db, &second_params, &AtomicBool::new(false), |_| {}).await.unwrap();
+    activate_morphology(
+        &db,
+        &MorphologyActivateParams {
+            batch_id: "batch-diff-v2".to_string(),
+            approval_id: "appr-morph-v2".to_string(),
+            invoked_by: PRINCIPAL.to_string(),
+        },
+        &principal(),
+    )
+    .await
+    .unwrap();
+
+    let report = diff_datasets(&db, SLUG, VERSION, second_slug, second_version).await.unwrap();
+    assert_eq!(report.from_dataset, format!("{SLUG}@{VERSION}"));
+    assert_eq!(report.to_dataset, format!("{second_slug}@{second_version}"));
+    assert_eq!(report.added, 0);
+    assert_eq!(report.removed, 0);
+    assert_eq!(report.changed, 1);
+    assert!(report.unchanged > 0);
+    let change = report.changes.iter().find(|c| c.kind == MorphologyDiffKind::Changed).unwrap();
+    assert!(change.old.is_some() && change.new.is_some());
+    assert!(change.verdicts.iter().any(|v| v.field == "lemma"));
+    let json = serde_json::to_string(&report).unwrap();
+    assert!(!json.contains("winner"));
+    assert!(!json.contains("resolution"));
+
+    let missing = diff_datasets(&db, SLUG, VERSION, "missing", "9.9.9").await.unwrap_err();
+    assert!(missing.to_string().contains("unknown dataset"));
 }
