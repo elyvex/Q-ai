@@ -52,7 +52,7 @@ with what evidence.
 | 2.4 — Morphology Import & Lexicons | 18 | 9 | 45.0 | — | ◐ |
 | 2.5 — Morphology & Family Tools | 19 | 6 | 47.5 | — | ◐ |
 | 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 6 | 51.0 | — | ◐ |
-| **Total** | **114 + 5** | **56** | **278.0** | **—** | **49%** |
+| **Total** | **114 + 5** | **57** | **278.0** | **—** | **50%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -73,7 +73,7 @@ wrong capacity model.
 
 ## 2. Completed Tasks
 
-**56 task entries are closed or grouped in the implementation reconciliation below; no
+**57 task entries are closed or grouped in the implementation reconciliation below; no
 acceptance criterion or ADR acceptance is implied.** The detailed entries begin below;
 see §9 for the 2026-09-24 grouped close-out and partial-work boundary.
 
