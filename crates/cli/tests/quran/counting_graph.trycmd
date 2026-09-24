@@ -87,8 +87,8 @@ Morphology diff validates dataset selectors and reports an unregistered dataset
 with a typed not-found error.
 
 ```console
-$ qai quran morphology diff test-morph@0.1.0 missing@9.9.9
+$ qai quran morphology diff missing@0.1.0 other@1.0.0
 ? 5
-error: unknown dataset 'missing:9.9.9': dataset is not registered
+error: unknown dataset 'missing:0.1.0': dataset is not registered
 
 ```
