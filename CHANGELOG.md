@@ -37,8 +37,10 @@ All notable changes to Q-ai are documented here.
 - Added exact pattern/verb-form search with distinct no-dataset, missing-field, and
   zero-match behavior; no pattern is inferred.
 - Added active-dataset root/lemma browse services and additive `qai quran root list`.
-- Added real-SQLite and CLI coverage; T80/T82 remain partial until API/real-dataset
-  coverage is complete.
+- Added explicit, idempotent cross-dataset root candidates to the morphology review
+  queue; candidates stay pending and no roots are merged.
+- Added real-SQLite and CLI coverage; T65/T80/T82 remain partial until policy,
+  API, and real-dataset coverage are complete.
 
 ### Added — Quran corpus: typed comparison + editorial verification plumbing (P1-T26/T55, 2026-09-24)
 
