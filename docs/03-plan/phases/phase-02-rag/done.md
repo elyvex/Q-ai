@@ -1,7 +1,7 @@
 # Phase 2 — Completion Ledger
 
 **Phase:** P2 — Quran Search, Arabic Normalization, Morphology & Word Families
-**Status:** 🟡 In Progress — 56 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 6 / 6 migrations
+**Status:** 🟡 In Progress — 57 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 6 / 6 migrations
 **Started:** 2026-09-14
 **Completed:** —
 
@@ -49,7 +49,7 @@ with what evidence.
 | 2.1 — Normalization Engine | 12 | 11 | 28.5 | — | ◐ |
 | 2.2 — Derived Forms & FTS Foundation | 15 | 11 | 33.5 | — | ◐ |
 | 2.3 — Search Tools | 17 | 14 | 42.0 | — | ◐ |
-| 2.4 — Morphology Import & Lexicons | 18 | 8 | 45.0 | — | ◐ |
+| 2.4 — Morphology Import & Lexicons | 18 | 9 | 45.0 | — | ◐ |
 | 2.5 — Morphology & Family Tools | 19 | 6 | 47.5 | — | ◐ |
 | 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 6 | 51.0 | — | ◐ |
 | **Total** | **114 + 5** | **56** | **278.0** | **—** | **49%** |
@@ -708,10 +708,11 @@ Carried into `docs/plans/handoff-p2-to-p3.md` by task P2-T114.
 This audit updates the board after the code landed ahead of its paperwork. It does not
 close acceptance criteria, ADRs, or owner/linguist gates.
 
-### Newly closed task groups (22 tasks)
+### Newly closed task groups (23 tasks)
 
 - **Index/search:** T36 trigram posting index; T54 regex/DoS abuse suite.
 - **Morphology import/lexicons:** T57, T58, T60, T61, T63, T66, T70, T71.
+- **Morphology dataset diff:** T69, including storage read ordering, version comparison, and CLI dispatch.
 - **Morphology/family core:** T75, T76, T77, T83, T86, T93.
 - **Counting/discovery core:** T94, T98, T99, T100, T103, T109.
 
@@ -719,17 +720,19 @@ Evidence is recorded in the task-row annotations and the landed suites:
 `quran-search/tests/{trigram_index,regex_dos}.rs`,
 `application/tests/{index_lifecycle,search_goldens,search_latency,counting,morphology_import}.rs`,
 and the `quran-morphology` adapter/validation/family-policy suites. The CLI morphology and
-counting dispatch is recorded by the task rows; transport/API coverage remains partial.
+counting dispatch, including the new `morphology diff` command, is covered by
+`crates/cli/tests/quran/counting_graph.trycmd`; transport/API coverage remains partial.
 
 ### Partial work kept at ◐
 
 T35, T37–T39, T53, T55–T56, T59, T62, T64, T67–T68, T72, T74, T78–T81, T84–T85,
 T87–T88, T90, T95–T97, T101–T102, T104, and T112 have implementation evidence but
 still miss a required surface, owner decision, licensed data, linguist review,
-full-corpus gate, or process-kill/API requirement. T65, T69, T73, T82, T89, T91–T92,
+full-corpus gate, or process-kill/API requirement. T65, T73, T82, T89, T91–T92,
 T105–T108, T110–T111, and T113–T114 remain ☐.
 
 **Evidence run during reconciliation:** `cargo test -p quran-search --test trigram_index --test regex_dos`
 (6/6), `cargo test -p application --test morphology_import --test counting --test index_lifecycle --test search_goldens --test search_latency`
-(24/24), and `cargo test -p quran-morphology -p quran-graph` (86/86). The licensed
+(25/25), `cargo test -p cli --test quran quran_counting_graph_snapshots` (11 trycmd cases), and
+`cargo test -p storage-sqlite --test quran` (10/10). The licensed
 full-corpus, linguist, API, doctor, and exit-ritual gates remain open.

@@ -4,14 +4,16 @@
 
 ## Phase 2 — implementation reconciliation, 2026-09-24
 
-- Reconciled the live task board with landed code: **56 / 114 tasks ☑ (49%)**;
+- Reconciled the live task board with landed code: **57 / 114 tasks ☑ (50%)**;
   partial/synthetic/owner-gated work is explicitly ◐ rather than overstated.
-- Newly closed task groups: T36/T54 (index/search hardening), T57/T58/T60/T61/T63/T66/T70/T71
-  (morphology import/validation), T75/T76/T77/T83/T86/T93 (morphology/family core), and
+- Newly closed task groups: T36/T54 (index/search hardening), T57/T58/T60/T61/T63/T66/T69/T70/T71
+  (morphology import/validation/diff), T75/T76/T77/T83/T86/T93 (morphology/family core), and
   T94/T98/T99/T100/T103/T109 (counting/discovery core).
 - Evidence: `cargo test -p quran-search --test trigram_index --test regex_dos` (6/6),
   `cargo test -p application --test morphology_import --test counting --test index_lifecycle --test search_goldens --test search_latency`
-  (24/24), and `cargo test -p quran-morphology -p quran-graph` (86/86). Synthetic fixtures
+  (25/25), `cargo test -p cli --test quran quran_counting_graph_snapshots` (11 trycmd cases),
+  `cargo test -p storage-sqlite --test quran` (10/10), and
+  `cargo test -p quran-morphology -p quran-graph` (86/86). Synthetic fixtures
   do not close licensed-data, linguist, ADR-acceptance, API-parity, doctor/evaluation,
   or full-corpus exit gates; those remain ◐/☐ in the phase board.
 
