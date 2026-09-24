@@ -1695,6 +1695,15 @@ impl QuranRepository for SqliteQuranRepository {
             .map_err(map_sqlx_error)
     }
 
+    async fn count_ayah_forms(&self, edition_id: &str) -> Result<i64, StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query_scalar("SELECT COUNT(*) FROM quran_ayah_forms WHERE edition_id = ?")
+            .bind(edition_id)
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(map_sqlx_error)
+    }
+
     async fn delete_forms_for_edition(&mut self, edition_id: &str) -> Result<(), StorageError> {
         let mut tx = self.tx.lock().await;
         for table in ["quran_token_forms", "quran_ayah_forms", "quran_skeletons"] {
