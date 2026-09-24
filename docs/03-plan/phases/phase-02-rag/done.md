@@ -301,6 +301,15 @@ this close-out. It is separate work, not evidence for any task flipped above.
 - **DoD:** ✅ all items / partial builds never serve (pointer-only activation); previous generation retained; exact doc counts; MV-018 both ends
 - **Notes:** `Fts5Index` now takes an explicit build generation (dir key) separate from `manifest.corpus_generation` (multi-build retention required it). Manifest hash binds edition identity (slug@version), not the run-surrogate edition id — verified identical across fresh databases. Token-level index (`quran.token.v1`) and retention GC are follow-ups (T35/next session).
 
+### P2-T35 — Index generation retention, `gc`, single-step rollback
+- **Deliverable:** D2.10
+- **Completed:** 2026-09-24
+- **Owner:** agent (SRCH)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/application/src/quran_index.rs`)
+- **Evidence:** `GcParams`/`gc_index` (active never touched, newest `keep-1` superseded retained, older lose dir+row, failed runs keep history rows; `qai quran index gc --keep N`) + `RollbackParams`/`rollback_index_single_step` (pointer flips back to the newest `superseded` run below the serving generation, run states swap in ONE tx, newer generation stays on disk; never moves to a newer generation so it cannot ping-pong; `PreviousGenerationEvicted`/`NoPreviousGeneration` fail closed as `QAI-IDX-0009`/`0008`); `qai quran index rollback` CLI verb; `crates/application/tests/index_lifecycle.rs` 12/12 (4 new rollback tests: restore-and-serve, no-ping-pong, no-previous, evicted); live CLI proof (`generation 2 → 1`, second rollback refused exit 6)
+- **DoD:** ✅ all items / retention keeps active+previous by default (single-step rollback material); GC and rollback both leave a servable index or refuse; pointer+states move atomically
+- **Notes:** plan §9.3 retention line is now fully implemented. Rollback needs no approval (derived data, mirroring activation) and writes no audit event. Pointer manifest is re-read from the retained `gen-<N>/manifest.json` (faithful to activation), not synthesized.
+
 ### Sprint 2.3 — Search Tools
 
 ### P2-T41 — `quran.search_exact` (+ zero-result normalization hint)
