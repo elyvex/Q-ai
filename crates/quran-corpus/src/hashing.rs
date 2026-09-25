@@ -152,6 +152,28 @@ pub fn token_order_hash(slug: &str, version: &str, tokens: &[TokenOrder<'_>]) ->
     finish(hasher)
 }
 
+/// Hash over a translation's passages in ascending `(surah, ayah)` order.
+///
+/// Additive and **domain-separated** from the frozen canonical v1 recipes
+/// (`qai-text-hash-v1` / `qai-token-order-hash-v1`): a translation is a
+/// non-canonical layer, so its content hash carries its own recipe label and can
+/// never be confused with — or mutate — a canonical digest (ADR-0108, D-12). The
+/// label is length-prefixed like every other field so no input can shift the
+/// domain boundary.
+///
+/// Callers must pass the passage texts already sorted by `(surah, ayah)` so the
+/// digest is independent of the manifest's passage order (QC-08).
+pub fn translation_text_hash(slug: &str, version: &str, texts_in_order: &[&str]) -> ContentHash {
+    let mut hasher = Sha256::new();
+    feed(&mut hasher, b"qai-translation-hash-v1");
+    feed(&mut hasher, slug.as_bytes());
+    feed(&mut hasher, version.as_bytes());
+    for text in texts_in_order {
+        feed(&mut hasher, text.as_bytes());
+    }
+    finish(hasher)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -203,6 +225,48 @@ mod tests {
         assert_ne!(text.hex, structure.hex);
         assert_ne!(text.hex, order.hex);
         assert_ne!(structure.hex, order.hex);
+    }
+
+    #[test]
+    fn translation_recipe_is_domain_separated_from_the_frozen_v1_recipes() {
+        // Same logical input through all four recipes: the additive translation
+        // digest must differ from each frozen v1 digest, proving the new recipe
+        // cannot collide with or be mistaken for a canonical hash (T-02-23).
+        let translation = translation_text_hash("s", "1.0.0", &["x"]);
+        let text = text_hash("s", "1.0.0", &["x"]);
+        let structure = structure_hash(
+            "s",
+            "1.0.0",
+            &[(1, 1)],
+            &[AyahLayout {
+                surah: 1,
+                ayah: 1,
+                juz: None,
+                hizb: None,
+                rub: None,
+                manzil: None,
+                ruku: None,
+                page: None,
+                sajdah: None,
+            }],
+        );
+        let order = token_order_hash(
+            "s",
+            "1.0.0",
+            &[TokenOrder { surah: 1, ayah: 1, position: 1, surface: "x" }],
+        );
+        assert_eq!(translation.algorithm, HashAlgorithm::Sha256);
+        assert_eq!(translation.hex.len(), 64);
+        assert_ne!(translation.hex, text.hex, "must differ from qai-text-hash-v1");
+        assert_ne!(translation.hex, structure.hex, "must differ from structure_hash");
+        assert_ne!(translation.hex, order.hex, "must differ from token_order_hash");
+        // Deterministic and order-sensitive over the supplied sequence.
+        assert_eq!(translation, translation_text_hash("s", "1.0.0", &["x"]));
+        assert_ne!(translation, translation_text_hash("s", "1.0.0", &["y"]));
+        assert_ne!(
+            translation_text_hash("s", "1.0.0", &["ab", "c"]),
+            translation_text_hash("s", "1.0.0", &["a", "bc"])
+        );
     }
 
     #[test]

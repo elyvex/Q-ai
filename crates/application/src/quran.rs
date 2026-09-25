@@ -921,6 +921,18 @@ pub async fn import_translations(
         }
     }
     let id = format!("tr-{}-{}", manifest.translation.slug, manifest.translation.version);
+    // A translation's content hash uses its own additive, domain-separated
+    // recipe — never the frozen canonical `qai-text-hash-v1` — and is computed
+    // over the passages in ascending `(surah, ayah)` order so the value is
+    // independent of the manifest's passage order (QC-08, D-12, T-02-25).
+    let mut ordered: Vec<&TranslationPassage> = manifest.passages.iter().collect();
+    ordered.sort_by_key(|passage| (passage.surah, passage.ayah));
+    let texts: Vec<&str> = ordered.iter().map(|passage| passage.text.as_str()).collect();
+    let text_hash = quran_corpus::tagged(&quran_corpus::translation_text_hash(
+        &manifest.translation.slug,
+        &manifest.translation.version,
+        &texts,
+    ));
     let license_json = serde_json::json!({
         "status": "Unknown",
         "spdx_id": manifest.translation.spdx_id,
@@ -943,7 +955,7 @@ pub async fn import_translations(
             license_json,
             trust_level: "ImportedUnverified".to_string(),
             source_version_id: source_version_id.to_string(),
-            text_hash: String::new(),
+            text_hash,
             status: "Staged".to_string(),
             imported_at: at.to_string(),
         })

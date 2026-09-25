@@ -46,6 +46,7 @@ pub use format::{
 };
 pub use hashing::{
     AyahLayout, TokenOrder, sha256_hex, structure_hash, tagged, text_hash, token_order_hash,
+    translation_text_hash,
 };
 pub use import::{
     ImportCheckpoint, ImportInput, ImportOptions, ImportOutcome, ImportProgress, ImportSuccess,
