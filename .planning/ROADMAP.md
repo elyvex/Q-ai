@@ -7,6 +7,7 @@ From an empty workspace to a trustworthy local-first Quran research platform: fo
 ## Phases
 
 **Phase Numbering:**
+
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
@@ -28,18 +29,22 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Foundations
+
 **Goal**: A developer can build the workspace, configure it, and run `qai` with provenance-safe storage and background jobs.
 **Depends on**: Nothing (first phase)
 **Requirements**: REQ-product-vision, REQ-product-principles, REQ-goals-non-goals, REQ-engineering-baseline, REQ-storage-architecture, REQ-cli-api, REQ-architecture-principles-quality
 **Success Criteria** (what must be TRUE):
+
   1. Developer can build the workspace and run `qai --help` showing the stable command tree
   2. Operator can configure via CLI > env > file > defaults with validation errors that name the remedy
   3. System records provenance and append-only audit events for every state-changing operation
   4. Background jobs enqueue, lease, checkpoint, and cancel without an external broker
   5. `xtask arch-check` passes and CI fails on any forbidden crate dependency
+
 **Plans**: 5 plans
 
 Plans:
+
 - [ ] 01-01-PLAN.md — Fresh-workspace operator readiness tracer: config origins, explicit migration, read-only doctor, and persisted audit verification
 - [ ] 01-02-PLAN.md — Audited durable mutations with same-UnitOfWork provenance/audit/outbox coverage and rollback proof
 - [ ] 01-03-PLAN.md — Durable job checkpoints, per-kind retry, cooperative cancellation, and lifecycle audit controls
@@ -47,138 +52,186 @@ Plans:
 - [ ] 01-05-PLAN.md — Registry/git architecture enforcement, final evidence gates, and TASK-001 repository closure
 
 ### Phase 2: Canonical Quran Core
+
 **Goal**: One validated Quran edition is importable, addressable, and provably immutable.
 **Depends on**: Phase 1
 **Requirements**: REQ-quran-corpus, REQ-data-separation-layers, REQ-ingestion-validation-eval
 **Success Criteria** (what must be TRUE):
+
   1. Operator can import a Quran edition through staging → validation → atomic activation with rollback
   2. User can look up any surah:ayah and receive byte-exact canonical Arabic with pinned edition reference
   3. Corpus integrity checks (counts, addressing, Unicode, checksums, round-trip, reference comparison) pass
   4. Canonical tables reject all non-approved writes; importer has no code path to canonical tables
   5. Every quotation verifies via `verify_quotation` with mismatch as a hard failure
-**Plans**: 6 plans
+
+**Plans**: 7 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 02-01-PLAN.md — TRACER: edition upstream identity, declared license, and primary/default designation persisted from manifest to operator surface
-- [ ] 02-02-PLAN.md — Operator integrity evidence: `qai quran verify` six-family surface, state-derived reference check, stored hash on lookup, richer synthetic fixture, and the reference-comparison operator path
-- [ ] 02-03-PLAN.md — Canonical-write fence completion: append-only trigger set, non-forgeable ApprovalToken + real CanonicalWriter, importer code-path audit, rollback rejection and cache-invalidation coverage
-- [ ] 02-04-PLAN.md — Quotation hard-failure wiring: shared verdict mapping, `qai quran verify-quotation`, and HTTP answer-path enforcement
-- [ ] 02-05-PLAN.md — Translation-layer completion: additive translation hash recipe, verbatim declared license, and a layer-separation negative test
-- [ ] 02-06-PLAN.md — Owner gates OD-01/OD-02/OD-03 recorded as blocked, coverage-gate reconciliation, and committed evidence of record
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 02-02-PLAN.md — Richer synthetic fixture, companion synthetic reference, and the identity/primary/license fixture
+- [ ] 02-04-PLAN.md — Canonical-write fence completion: append-only trigger set, non-forgeable ApprovalToken + real CanonicalWriter, importer code-path audit, rollback rejection and cache-invalidation coverage
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 02-03-PLAN.md — Operator integrity evidence: `qai quran verify` six-family surface, state-derived reference check, stored hash on lookup, reference-comparison operator path, and the identity/primary operator snapshot
+- [ ] 02-06-PLAN.md — Translation-layer completion: additive translation hash recipe, verbatim declared license, and a layer-separation negative test
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 02-05-PLAN.md — Quotation hard-failure wiring: shared verdict mapping, `qai quran verify-quotation`, and HTTP answer-path enforcement
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 02-07-PLAN.md — Owner gates OD-01/OD-02/OD-03 recorded as blocked, the owner-ratifiable D-15 read-path item, spec-less edge-probe disposition, coverage-gate reconciliation, TASK-002 closure, and committed evidence of record
 
 ### Phase 3: Quran Search & Linguistics
+
 **Goal**: Users can find and analyze Quranic words across orthographic variation without ever seeing altered display text.
 **Depends on**: Phase 2
 **Requirements**: REQ-quran-normalization, REQ-quran-linguistics
 **Success Criteria** (what must be TRUE):
+
   1. User can search an Arabic phrase without diacritics and get exact-location hits
   2. User can search a concatenated (spaceless) phrase and get exact-location hits
   3. User can select a word and inspect its lemma, root, morphological analyses, and word family
   4. User can view frequency, distribution, and co-occurrence for any root or lemma
   5. Displayed canonical text is never modified by normalization in any result
+
 **Plans**: TBD
 
 ### Phase 4: Quran Graph
+
 **Goal**: Users can explore structural and linguistic relationships of the Quran as a navigable graph.
 **Depends on**: Phase 3
 **Requirements**: REQ-quran-graph
 **Success Criteria** (what must be TRUE):
+
   1. User can open a neighbor view around any verse, word, root, or concept
   2. User can find paths between two graph nodes with each edge's provenance shown
   3. User can export a subgraph with edge provenance intact
   4. Graph queries explain why each result was returned
+
 **Plans**: TBD
 
 ### Phase 5: Rich Quran Experience
+
 **Goal**: Users can read, research, and cite the Quran from the Web GUI, TUI, and CLI with typed tools.
 **Depends on**: Phase 4
 **Requirements**: REQ-quran-display, REQ-quran-research-tools, REQ-quran-result-contract, REQ-tui-cli
 **Success Criteria** (what must be TRUE):
+
   1. User can read Arabic with RTL layout, translation panels, word inspector, and deep links
   2. User can copy a citation that re-verifies at the exact source location when opened
   3. User can drive every research tool from the UI, API, and CLI with identical results + research checksum
   4. Operator can use the TUI cockpit (command palette, RAG debug view) for daily operations
   5. Canonical text, translations, and annotations are visually unmistakable in every view
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 6: Hadith & Tafsir
+
 **Goal**: Users can research structured hadith and tafsir linked to exact Quran locations with attributed gradings.
 **Depends on**: Phase 5
 **Requirements**: REQ-hadith-corpus, REQ-tafsir-comparative
 **Success Criteria** (what must be TRUE):
+
   1. User can search hadith (exact + normalized) with collection, edition, and source numbering shown
   2. User can read matn/isnad separation where supported, with every grading attributed to its scholar
   3. User can navigate from any verse to linked hadith and tafsir passages
   4. Scholarly disagreement is shown side-by-side, never silently merged
   5. Computational identity matches are labeled as uncertain, never as certainty
+
 **Plans**: TBD
 
 ### Phase 7: Isnad & Narrator Research
+
 **Goal**: Users can trace narration chains and judge narrator identity with explicit uncertainty.
 **Depends on**: Phase 6
 **Requirements**: REQ-isnad-narrator-graph
 **Success Criteria** (what must be TRUE):
+
   1. User can view a narrator record with name variants and rijal sources
   2. User can trace chain paths between narrators with uncertainty marked on each link
   3. Reviewer can approve or reject a narrator-identity proposal in a recorded workflow
+
 **Plans**: TBD
 
 ### Phase 8: Multi-RAG Platform
+
 **Goal**: Users can build, configure, and debug multiple independent RAG systems over any corpus.
 **Depends on**: Phase 7
 **Requirements**: REQ-multi-rag, REQ-generic-rag-platform
 **Success Criteria** (what must be TRUE):
+
   1. User can create a portable RAG project from a declarative config and import documents into it
   2. User gets hybrid (full-text + vector) retrieval with reranking and metadata filters
   3. User can see which router, tools, and sources were chosen for any query
   4. Operator can debug any retrieval in the RAG view and reproduce the same result set
   5. Tombstoned or deactivated sources disappear from results immediately
+
 **Plans**: TBD
 
 ### Phase 9: Comparative Scripture
+
 **Goal**: Users can research Torah, Tanakh, and New Testament passages alongside the Quran with honest labeling.
 **Depends on**: Phase 8
 **Requirements**: REQ-knowledge-domains
 **Success Criteria** (what must be TRUE):
+
   1. User can browse scripture editions with chapter/verse addressing and translation comparison
   2. User can run parallel-passage research with computational suggestions explicitly labeled as such
   3. User can include or exclude any knowledge domain (Quran, hadith, tafsir, scripture, books) per query
+
 **Plans**: TBD
 
 ### Phase 10: Agentic Research & Tool Creation
+
 **Goal**: Users can delegate research to controlled agents and create sandboxed tools; MVP acceptance passes.
 **Depends on**: Phase 9
 **Requirements**: REQ-agents-tools-runtime, REQ-models-routing, REQ-answer-contract, REQ-phases-mvp
 **Success Criteria** (what must be TRUE):
+
   1. User can ask a research question, inspect selected tools and evidence, and receive an answer with claim-level citations that all re-verify
   2. User can cancel a running research query and see bounded resource usage in the run trace
   3. Tool author can describe → review → generate → isolated-test → security-review → approve → publish a tool, and revoke it instantly
   4. The full MVP acceptance workflow (§44.3: install → read → search → inspect → graph → ask → verify citations → export) succeeds end to end
   5. Retrieved content is treated as untrusted data on every agent path (prompt-injection tests pass)
+
 **Plans**: TBD
 
 ### Phase 11: Server & Management
+
 **Goal**: Operators can serve Q-ai remotely and manage sources, agents, tools, and audit from the dashboard.
 **Depends on**: Phase 10
 **Requirements**: REQ-source-catalog-trust, REQ-ux-web, REQ-retrieval-governance
 **Success Criteria** (what must be TRUE):
+
   1. Operator can run the versioned HTTP API with auth/RBAC and stream research progress
   2. Curator can discover, quarantine, license-review, stage, diff, approve, and roll back a source update
   3. Manager can inspect budgets, run events, audit trail, and conversation sessions from the dashboard
   4. Access-control-aware retrieval enforces authorization before results on every path
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 12: Production Hardening
+
 **Goal**: Q-ai is deployable, recoverable, and clean: all gates green, diagnostics trusted, open decisions closed.
 **Depends on**: Phase 11
 **Requirements**: REQ-security-licensing-observability, REQ-open-decisions-status
 **Success Criteria** (what must be TRUE):
+
   1. Operator can deploy via Docker with TLS, PostgreSQL/Qdrant adapters, backups, and disaster recovery
   2. `qai doctor` reports corpus, index, and cross-store health with explicit repair actions
   3. Performance and security test suites pass with licensing gates enforced before activation
   4. Every open technical decision is resolved in an ADR or explicitly deferred with rationale
+
 **Plans**: TBD
 
 ## Progress
