@@ -17,6 +17,9 @@ use async_trait::async_trait;
 use audit::{Actor, AuditAction, AuditEvent, AuditOutcome};
 use domain::{AuditEventId, Language, PrincipalId, SubjectRef, Timestamp};
 use jobs::{JobContext, JobError, JobHandler, JobKind, JobOutcome};
+use provenance::{
+    ApprovalGate, ApprovalToken, CanonicalChangeRequest, CanonicalWriter, DifferenceReport,
+};
 use quran_corpus::error::QuranDiagnostic as _;
 use quran_corpus::import::{ImportInput, ImportOptions, ImportOutcome, ImportProgress, run_import};
 use storage::Database as _;
@@ -185,6 +188,9 @@ pub enum ActivationError {
     /// Audit failure.
     #[error("audit failed: {0}")]
     Audit(String),
+    /// The canonical-write approval gate rejected the change.
+    #[error("approval gate rejected the canonical change: {0}")]
+    Provenance(String),
 }
 
 impl ActivationError {
@@ -204,6 +210,7 @@ impl storage::error::Diagnostic for ActivationError {
             Self::EmptyReviewer => 306,
             Self::Storage(_) => 304,
             Self::Audit(_) => 305,
+            Self::Provenance(_) => 307,
         };
         storage::error::DiagnosticCode::new("QAI-QUR", number)
     }
@@ -225,6 +232,7 @@ impl storage::error::Diagnostic for ActivationError {
                 Self::EmptyReviewer => "Pass --reviewer with the reviewer's name (OD-02).",
                 Self::Storage(_) => "Check the database and retry.",
                 Self::Audit(_) => "Check the audit chain and retry.",
+                Self::Provenance(_) => "Record a granted approval for the exact edition URN.",
             }
             .to_string(),
         )
@@ -239,7 +247,7 @@ async fn check_approval(
     uow: &mut dyn storage::UnitOfWork,
     approval_id: &str,
     expected_subject: &str,
-) -> Result<(), ActivationError> {
+) -> Result<(storage::repository::ApprovalRow, ApprovalToken), ActivationError> {
     let approval = uow
         .sources()
         .get_approval(approval_id)
@@ -252,11 +260,79 @@ async fn check_approval(
     if approval.subject_urn != expected_subject {
         return Err(ActivationError::ApprovalSubjectMismatch {
             id: approval_id.to_string(),
-            actual: approval.subject_urn,
+            actual: approval.subject_urn.clone(),
             expected: expected_subject.to_string(),
         });
     }
-    Ok(())
+    // Mint the token from the same persisted row that was just checked, so the
+    // URN test and the type-level gate can never diverge.
+    let token = ApprovalToken::from_approval_row(&approval)
+        .map_err(|err| ActivationError::Provenance(err.to_string()))?;
+    Ok((approval, token))
+}
+
+/// Parse a `sha256:<hex>` (or `blake3:<hex>`) tagged hash into a typed hash.
+fn parse_content_hash(tagged: &str) -> Result<domain::ContentHash, ActivationError> {
+    let (algorithm, hex) = tagged
+        .split_once(':')
+        .ok_or_else(|| ActivationError::Provenance(format!("bad hash `{tagged}`")))?;
+    let algorithm = match algorithm {
+        "sha256" => domain::HashAlgorithm::Sha256,
+        "blake3" => domain::HashAlgorithm::Blake3,
+        _ => {
+            return Err(ActivationError::Provenance(format!(
+                "unknown hash algorithm in `{tagged}`"
+            )));
+        }
+    };
+    domain::ContentHash::try_new(algorithm, hex.to_string())
+        .map_err(|err| ActivationError::Provenance(format!("bad hash `{tagged}`: {err}")))
+}
+
+/// Build the [`CanonicalChangeRequest`] that the gate binds to the approval token.
+fn canonical_change_request(
+    subject_urn: &str,
+    edition: &storage::quran::QuranEditionRow,
+    structural_validation_report: String,
+    approval: &storage::repository::ApprovalRow,
+    invoked_by: &PrincipalId,
+) -> Result<CanonicalChangeRequest, ActivationError> {
+    Ok(CanonicalChangeRequest {
+        subject_urn: subject_urn.to_string(),
+        new_source_version_id: edition.source_version_id.clone(),
+        content_hash: parse_content_hash(&edition.text_hash)?,
+        structural_validation_report,
+        difference_report: DifferenceReport::default(),
+        approver_identity: approval
+            .decided_by
+            .clone()
+            .filter(|identity| !identity.trim().is_empty())
+            .unwrap_or_else(|| invoked_by.to_string()),
+    })
+}
+
+/// Open a canonical-change session, failing before any storage mutator if the
+/// token does not authorise the change's subject.
+fn begin_change(
+    token: &ApprovalToken,
+    change: CanonicalChangeRequest,
+) -> Result<provenance::CanonicalChangeSession, ActivationError> {
+    ApprovalGate
+        .begin_canonical_change(token, change)
+        .map_err(|err| ActivationError::Provenance(err.to_string()))
+}
+
+async fn commit_change(
+    session: &mut provenance::CanonicalChangeSession,
+) -> Result<(), ActivationError> {
+    ApprovalGate
+        .commit_canonical_change(session)
+        .await
+        .map_err(|err| ActivationError::Provenance(err.to_string()))
+}
+
+async fn abort_change(session: &mut provenance::CanonicalChangeSession) {
+    let _ = ApprovalGate.abort_canonical_change(session).await;
 }
 
 async fn audit_activation(
@@ -308,7 +384,7 @@ pub async fn activate_edition(
 ) -> Result<i64, ActivationError> {
     let expected_subject = edition_urn(slug, version);
     let mut uow = db.write().await.map_err(ActivationError::storage)?;
-    check_approval(&mut *uow, approval_id, &expected_subject).await?;
+    let (approval, token) = check_approval(&mut *uow, approval_id, &expected_subject).await?;
     let staged = uow
         .quran()
         .find_staged_edition(slug, version)
@@ -318,7 +394,33 @@ pub async fn activate_edition(
             slug: slug.to_string(),
             version: version.to_string(),
         })?;
-    let generation = uow
+    let staged_edition = uow
+        .quran()
+        .get_stg_edition(&staged.run_id, &staged.edition_id)
+        .await
+        .map_err(ActivationError::storage)?
+        .ok_or_else(|| ActivationError::NotStaged {
+            slug: slug.to_string(),
+            version: version.to_string(),
+        })?;
+    // The persisted validation report id is the import run id (see
+    // quran_corpus::import); its findings are the structural report for the change.
+    let structural_report = uow
+        .quran()
+        .get_validation_report(&staged.run_id)
+        .await
+        .map_err(ActivationError::storage)?
+        .map(|row| row.findings_json)
+        .unwrap_or_else(|| staged_edition.statistics_json.clone());
+    let change = canonical_change_request(
+        &expected_subject,
+        &staged_edition,
+        structural_report,
+        &approval,
+        invoked_by,
+    )?;
+    let mut session = begin_change(&token, change)?;
+    let generation = match uow
         .quran()
         .activate_edition(
             &staged.run_id,
@@ -328,7 +430,14 @@ pub async fn activate_edition(
             &at.to_string(),
         )
         .await
-        .map_err(ActivationError::storage)?;
+    {
+        Ok(generation) => generation,
+        Err(err) => {
+            abort_change(&mut session).await;
+            return Err(ActivationError::storage(err));
+        }
+    };
+    commit_change(&mut session).await?;
     audit_activation(
         &mut *uow,
         AuditAction::SourceActivated,
@@ -379,7 +488,7 @@ pub async fn record_edition_verification(
     }
     let expected_subject = edition_urn(slug, version);
     let mut uow = db.write().await.map_err(ActivationError::storage)?;
-    check_approval(&mut *uow, approval_id, &expected_subject).await?;
+    let (approval, token) = check_approval(&mut *uow, approval_id, &expected_subject).await?;
     let edition = uow
         .quran()
         .get_edition_by_slug_version(slug, version)
@@ -389,7 +498,16 @@ pub async fn record_edition_verification(
             slug: slug.to_string(),
             version: version.to_string(),
         })?;
-    uow.quran()
+    let change = canonical_change_request(
+        &expected_subject,
+        &edition,
+        edition.statistics_json.clone(),
+        &approval,
+        invoked_by,
+    )?;
+    let mut session = begin_change(&token, change)?;
+    if let Err(err) = uow
+        .quran()
         .set_edition_verification(
             &edition.id,
             verification.reviewer,
@@ -397,7 +515,11 @@ pub async fn record_edition_verification(
             verification.method,
         )
         .await
-        .map_err(ActivationError::storage)?;
+    {
+        abort_change(&mut session).await;
+        return Err(ActivationError::storage(err));
+    }
+    commit_change(&mut session).await?;
     append_audit_event(
         &mut *uow,
         AuditEvent {
@@ -437,29 +559,48 @@ pub async fn rollback_edition(
 ) -> Result<i64, ActivationError> {
     let expected_subject = edition_urn(slug, version);
     let mut uow = db.write().await.map_err(ActivationError::storage)?;
-    check_approval(&mut *uow, approval_id, &expected_subject).await?;
-    let generation = uow
-        .quran()
-        .rollback_edition(slug, version, &invoked_by.to_string(), approval_id, &at.to_string())
-        .await
-        .map_err(|err| match err {
-            StorageError::Conflict => ActivationError::AlreadyActive {
-                slug: slug.to_string(),
-                version: version.to_string(),
-            },
-            other => ActivationError::storage(other),
-        })?;
+    let (approval, token) = check_approval(&mut *uow, approval_id, &expected_subject).await?;
     let edition = uow
         .quran()
         .get_edition_by_slug_version(slug, version)
         .await
-        .map_err(ActivationError::storage)?;
+        .map_err(ActivationError::storage)?
+        .ok_or_else(|| ActivationError::NotStaged {
+            slug: slug.to_string(),
+            version: version.to_string(),
+        })?;
+    let change = canonical_change_request(
+        &expected_subject,
+        &edition,
+        edition.statistics_json.clone(),
+        &approval,
+        invoked_by,
+    )?;
+    let mut session = begin_change(&token, change)?;
+    let generation = match uow
+        .quran()
+        .rollback_edition(slug, version, &invoked_by.to_string(), approval_id, &at.to_string())
+        .await
+    {
+        Ok(generation) => generation,
+        Err(err) => {
+            abort_change(&mut session).await;
+            return Err(match err {
+                StorageError::Conflict => ActivationError::AlreadyActive {
+                    slug: slug.to_string(),
+                    version: version.to_string(),
+                },
+                other => ActivationError::storage(other),
+            });
+        }
+    };
+    commit_change(&mut session).await?;
     audit_activation(
         &mut *uow,
         AuditAction::SourceRolledBack,
         &expected_subject,
         invoked_by,
-        &edition.map(|row| row.id).unwrap_or_default(),
+        &edition.id,
         generation,
     )
     .await?;
@@ -1093,7 +1234,7 @@ pub async fn deprecate_edition(
 ) -> Result<(), ActivationError> {
     let expected_subject = edition_urn(slug, version);
     let mut uow = db.write().await.map_err(ActivationError::storage)?;
-    check_approval(&mut *uow, approval_id, &expected_subject).await?;
+    let (approval, token) = check_approval(&mut *uow, approval_id, &expected_subject).await?;
     let edition = uow
         .quran()
         .get_edition_by_slug_version(slug, version)
@@ -1103,10 +1244,19 @@ pub async fn deprecate_edition(
             slug: slug.to_string(),
             version: version.to_string(),
         })?;
-    uow.quran()
-        .set_edition_status(&edition.id, "Deprecated")
-        .await
-        .map_err(ActivationError::storage)?;
+    let change = canonical_change_request(
+        &expected_subject,
+        &edition,
+        edition.statistics_json.clone(),
+        &approval,
+        invoked_by,
+    )?;
+    let mut session = begin_change(&token, change)?;
+    if let Err(err) = uow.quran().set_edition_status(&edition.id, "Deprecated").await {
+        abort_change(&mut session).await;
+        return Err(ActivationError::storage(err));
+    }
+    commit_change(&mut session).await?;
     audit_activation(
         &mut *uow,
         AuditAction::SourceRolledBack,
