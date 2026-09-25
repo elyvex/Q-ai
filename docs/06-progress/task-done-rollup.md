@@ -2,6 +2,21 @@
 
 > Completed tasks across all phases. Newest first.
 
+## Phase 2 — P2-T105 index/linguistics doctor checks, 2026-09-24
+
+- `qai doctor --indexes` runs 19 read-only checks (normalization catalog,
+  idempotency, span-map sanity, forms currency/coverage, MV-018, FTS ayah/token,
+  trigram consistency, drift, orphans, morphology, lexicon, 12-probe
+  data-driven search smoke). Missing subsystems `Skip`, stale state `Warn`s,
+  only corruption/dangling/failed-tripwires `Fail`.
+- Evidence: `application --test doctor_indexes` 5/5 (stable ids, remedy/next on
+  every non-pass, green-on-built incl. 12/12 smoke, byte-identical read-only,
+  missing-generation mutation probes, JSON `checks` shape); `index_lifecycle`
+  12/12; clippy/fmt clean. Board 59/114 (52%).
+- Out of scope here: `search.trycmd`/`normalize.trycmd` manifest-hash drift
+  from the concurrent manifest-content change — belongs to the index-build
+  owner, not this task.
+
 ## Phase 2 — P2-T35 single-step index rollback, 2026-09-24
 
 - `rollback_index_single_step` flips the serving pointer back to the newest
