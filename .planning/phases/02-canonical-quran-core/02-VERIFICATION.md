@@ -40,7 +40,7 @@ covered_files:
   - docs/06-progress/phase-02-evidence.md
   - docs/05-followups/phase-02-owner-gates.md
   - docs/07-technical/quran-canonical-core-decisions.md
-covered_digest: "v1:sha256:f3618480fbce75dd2d46a7481aea83c82cc92468fba6f26c2b3a646b343654572026"
+covered_digest: "v1:sha256:f3618480fbce75dd2d46a7481aea83c82cc92468fba6f26c2b3a646b34365457"
 behavior_unverified: 0
 overrides_applied: 0
 ---
