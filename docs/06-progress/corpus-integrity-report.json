@@ -1,0 +1,75 @@
+{
+  "edition": {
+    "slug": "test-edition-rich",
+    "version": "0.1.0"
+  },
+  "families": {
+    "addressing": {
+      "checks": [
+        "quran.edition_active",
+        "quran.ayah_identifiers",
+        "quran.division_coverage",
+        "quran.basmala_policy"
+      ],
+      "gate": "exit::OK",
+      "status": "pass",
+      "summary": "4 checks pass"
+    },
+    "checksums": {
+      "checks": [
+        "quran.edition_checksum",
+        "quran.structure_hash",
+        "quran.token_order_hash"
+      ],
+      "gate": "exit::OK",
+      "status": "pass",
+      "summary": "3 checks pass"
+    },
+    "counts": {
+      "checks": [
+        "quran.surah_count",
+        "quran.ayah_count"
+      ],
+      "gate": "exit::OK",
+      "status": "pass",
+      "summary": "2 checks pass"
+    },
+    "reference_comparison": {
+      "checks": [
+        "quran.reference_corpus"
+      ],
+      "evidence": {
+        "classification_vocabulary": "ADR-0114-v1",
+        "comparison_kind": "reference",
+        "differences": [],
+        "method": "exact-ayah-bytes-v1",
+        "normalization_applied": [],
+        "outcome": "pass",
+        "reference_corpus_id": "synthetic-rich-reference",
+        "reference_snapshot_hash": "sha256:3354978e91f2b82608766fa07ab090744c86af063da7e24f6bf1a8f3a77a7f13",
+        "reference_text_hash": "sha256:6c9e6916a7a04850805f4205bd0993042d338af1a82ddd37972745f3e409bb3a",
+        "reference_version": "0.1.0"
+      },
+      "gate": "exit::OK",
+      "status": "pass",
+      "summary": "1 checks pass"
+    },
+    "roundtrip": {
+      "checks": [
+        "quran.token_roundtrip"
+      ],
+      "gate": "exit::OK",
+      "status": "pass",
+      "summary": "1 checks pass"
+    },
+    "unicode": {
+      "checks": [
+        "quran.unicode_form"
+      ],
+      "gate": "exit::OK",
+      "status": "pass",
+      "summary": "1 checks pass"
+    }
+  },
+  "schema": "qai.corpus-integrity.v1"
+}

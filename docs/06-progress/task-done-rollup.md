@@ -2,6 +2,26 @@
 
 > Completed tasks across all phases. Newest first.
 
+## Phase 2 — TASK-002 Canonical Quran Core closure (GSD plans 02-01…02-07), 2026-09-25
+
+- Closed the repository task record for the canonical core: plans 02-01…02-07 map to the
+  five roadmap Phase 2 success criteria (C1 import → activate → rollback; C2 byte-exact
+  lookup + pinned reference; C3 six integrity families; C4 canonical-write fence +
+  importer audit; C5 quotation hard-failure), with a committed evidence ledger and a
+  committed six-family integrity artifact.
+- Evidence of record: `docs/06-progress/phase-02-evidence.md` (criterion → command →
+  observed result; all six spec-less edge-probe rows dispositioned; the D-15 read-path
+  exemption recorded as owner-ratifiable) and `docs/06-progress/corpus-integrity-report.json`
+  (six families; guarded by `cargo test -p cli --test corpus_integrity`).
+- Gate outcomes: application Quran suites 54/54, storage-sqlite quran 10/10, server api
+  18/18, cli quran 7 passed / 2 failed (documented legacy `search.trycmd` /
+  `normalize.trycmd` baseline — not Phase 2), `coverage-gate` OK (quran-core 91.67% ≥ 90,
+  quran-corpus 92.55% ≥ 90, citations 79.27% with the 85% floor shortfall recorded),
+  `arch-check` OK, `migrate-check` OK (21 migrations).
+- Not claimed: real canonical activation. OD-01 (dataset + license), OD-02 (reviewer),
+  and OD-03 (reference corpus) remain 🔴 and are recorded in
+  `docs/05-followups/phase-02-owner-gates.md` with their closing actions and commands.
+
 ## Phase 2 — P2-T105 index/linguistics doctor checks, 2026-09-24
 
 - `qai doctor --indexes` runs 19 read-only checks (normalization catalog,
