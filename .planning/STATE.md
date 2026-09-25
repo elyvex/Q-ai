@@ -3,11 +3,11 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Canonical Quran Core
 status: executing
-stopped_at: Completed 02-06-PLAN.md
-last_updated: "2026-09-25T15:53:35.506Z"
+stopped_at: Completed 02-05-PLAN.md
+last_updated: "2026-09-25T16:17:37.557Z"
 last_activity: 2026-09-25
 last_activity_desc: Phase 02 execution started
-state_head: cb21a61a561d1a3f076d99701038f38609066b11
+state_head: 1768044fe0b7307bb3742008d7a8ad9d4582f780
 progress:
   total_phases: 12
   completed_phases: 0
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-23)
 ## Current Position
 
 Phase: 02 (Canonical Quran Core) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Ready to execute
 Last activity: 2026-09-25 — Phase 02 execution started
 
@@ -63,6 +63,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 02 P04 | 30 min | 3 tasks | 11 files |
 | Phase 02 P03 | 19 min | 3 tasks | 26 files |
 | Phase 02 P06 | 12 min | 2 tasks | 4 files |
+| Phase 02 P05 | 11 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,11 @@ Recent decisions affecting current work:
 - [Phase 02]: Translation content hash uses an additive, domain-separated qai-translation-hash-v1 recipe over passages sorted ascending by (surah, ayah); the frozen qai-text-hash-v1/structure_hash/token_order_hash recipes and domain strings are untouched (D-12, ADR-0108), and the digest is independent of manifest passage order (T-02-25).
 - [Phase 02]: A declared translation license stores the manifest SPDX identifier character-for-character (status OpenLicense); an undeclared license stays explicit Unknown and no redistribution/export permission is invented (T-02-24, OD-01 remains the owner gate).
 - [Phase 02]: Translation layer separation is proven at table, type, and test level: canonical and translation rows live in quran_* versus translation_* tables, AyahView.canonical is a QuranQuotation, and a source scan asserts no canonical view constructor takes a translator/language pair (D-04, ADR-0112, T-02-22).
+- [Phase 02]: The shared verdict-to-hard-failure mapping lives in the citations domain crate (QuotationVerdict::is_hard_failure + citations::require_exact); exit-code and HTTP-status concerns stay in the callers so citations stays free of CLI concerns (D-15, ADR-0010 code separation).
+- [Phase 02]: The shared application verifier (verify_canonical_quotation) calls the resolver's resolve path directly because it returns the resolved canonical hash in a single fetch; verify_quotation delegates to the same resolve, so the verdict is identical and the hash is never computed from the supplied text (T-02-19).
+- [Phase 02]: The HTTP citation handler is the single enforcement point for stored verdicts, so any backend's hard-failing verdict returns a typed error instead of a 200 envelope; no new route, stored-citation field, or error-code map was added (T-02-18).
+- [Phase 02]: The direct-read answer paths (tool quran.get_ayah/get_context, CLI direct reads, HTTP direct reads) are structurally exempt from verify_quotation because they serve canonical text and cannot mismatch by construction; wrapping them would compare canonical text to itself (Pitfall 4).
+- [Phase 02]: MatchAfterDeclaredNormalization is unreachable in v1 (the resolver has no normalization-rules parameter); the tests assert the reachable verdict set excludes it rather than claiming behaviour for it.
 
 ### Pending Todos
 
@@ -109,6 +115,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-25T15:53:35.450Z
-Stopped at: Completed 02-06-PLAN.md
+Last session: 2026-09-25T16:17:23.221Z
+Stopped at: Completed 02-05-PLAN.md
 Resume file: None
