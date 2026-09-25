@@ -280,7 +280,7 @@ approval.
 | P2-T102 | `quran.near_duplicate_passages` (MinHash + exact verify + aligned spans) | D2.9 | T27 | 3.0 | SRCH | ◐ (MinHash + exact Jaccard verification exists; aligned-span output remains) |
 | P2-T103 | `quran.missing_expected_form` + mandatory disclaimer | D2.9 | T85 | 2.0 | BE | ☑ (zero-result proof and verbatim disclaimer are tested) |
 | P2-T104 | Counting/discovery API endpoints + CLI commands | D2.11 | T95–T103 | 3.0 | BE | ◐ (CLI commands landed; HTTP endpoints remain absent) |
-| P2-T105 | `doctor` Phase-2 checks (19 checks) incl. `quran.search.smoke` | D2.13 | T34,T67 | 3.5 | BE | ☐ |
+| P2-T105 | `doctor` Phase-2 checks (19 checks) incl. `quran.search.smoke` | D2.13 | T34,T67 | 3.5 | BE | ☑ (`quran_doctor_indexes`, `qai doctor --indexes`, `doctor_indexes` 5/5; `done.md` §2 entry 2026-09-24) |
 | P2-T106 | Index-drift reporting with precise input diff + `QAI-IDX-0101` warnings | D2.10 | T105 | 2.0 | BE | ☐ |
 | P2-T107 | Nightly reconciliation job (`quran.index.verify`, 1 % sample, MV-018) | D2.10 | T105 | 2.5 | BE | ☐ |
 | P2-T108 | Evaluation harness: metric definitions, versioned datasets, gates | D2.13 | T53,T91 | 3.5 | QA | ☐ |
@@ -327,8 +327,8 @@ approval.
 | 2.3 — Search Tools | 17 | 42.0 ⚠️ | 14 | ◐ In Progress |
 | 2.4 — Morphology Import & Lexicons | 18 | 45.0 ⚠️ | 10 | ◐ In Progress |
 | 2.5 — Morphology & Family Tools | 19 | 47.5 ⚠️ | 6 | ◐ In Progress |
-| 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 51.0 ⚠️ | 5 | ◐ In Progress |
-| **Total** | **114 + 5** | **278.0** | **58** | **51%** |
+| 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 51.0 ⚠️ | 6 | ◐ In Progress |
+| **Total** | **114 + 5** | **278.0** | **59** | **52%** |
 
 By role: **BE ≈ 141.0 ed** · **SRCH ≈ 40.0 ed** · **QA ≈ 40.5 ed** · **DATA ≈ 17.0 ed** ·
 **DOC ≈ 13.0 ed** · **LING ≈ 10.5 ed** · **LING+BE ≈ 3.5 ed** · **LING+QA ≈ 10.5 ed** ·
