@@ -51,8 +51,8 @@ with what evidence.
 | 2.3 — Search Tools | 17 | 14 | 42.0 | — | ◐ |
 | 2.4 — Morphology Import & Lexicons | 18 | 10 | 45.0 | — | ◐ |
 | 2.5 — Morphology & Family Tools | 19 | 6 | 47.5 | — | ◐ |
-| 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 5 | 51.0 | — | ◐ |
-| **Total** | **114 + 5** | **58** | **278.0** | **—** | **51%** |
+| 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 6 | 51.0 | — | ◐ |
+| **Total** | **114 + 5** | **59** | **278.0** | **—** | **52%** |
 
 | Artifact class | Complete | Total |
 |---|---|---|
@@ -441,6 +441,15 @@ this close-out. It is separate work, not evidence for any task flipped above.
 
 ### Sprint 2.6 — Counting, Discovery, Doctor, Evaluation
 
+### P2-T105 — `doctor` Phase-2 checks (19 checks) incl. `quran.search.smoke`
+- **Deliverable:** D2.13
+- **Completed:** 2026-09-24
+- **Owner:** agent (BE)
+- **PR / commit:** working tree; landed via owner commits (see `git log -- crates/application/src/quran_doctor_indexes.rs`)
+- **Evidence:** `application::quran_doctor_indexes::run_index_checks` (19 checks in plan §12 order, `INDEX_CHECK_IDS`); `cmd_doctor_indexes` + `qai doctor --indexes [--json]` (standalone surface; default `doctor` output unchanged, schema-safe); `crates/application/tests/doctor_indexes.rs` 5/5 (stable ids + remedy/next-command on every non-pass, green-on-built incl. 12/12 data-driven smoke, byte-identical read-only incl. index dirs, missing-generation mutation probes fail loudly, JSON `checks` shape); `quran.token.v1` + morphology-gated checks report `Skipped` without data (never silent-pass, never false-fail); `count_ayah_forms` repository counter (trait + SQLite, read-only)
+- **DoD:** ✅ all items / read-only by construction (rolled-back UoWs, read-only opens); stale-but-servable is Warn, only corruption/dangling/failed-tripwires Fail; unbuilt database reports Skipped, never Fail
+- **Notes:** token-level FTS (`quran.token.v1`) has no backend — the check documents that instead of passing silently. Licensed/linguist goldens, API parity, and the exit ritual remain open (AC-P2-41 stays ☐). `search.trycmd`/`normalize.trycmd` manifest-hash drift (concurrent manifest-content change) is out of scope here and belongs to the index-build owner.
+
 ---
 
 ## 3. Verified Acceptance Criteria
@@ -744,7 +753,7 @@ counting dispatch, including the new `morphology diff` command, is covered by
 T37–T39, T53, T55–T56, T59, T62, T64–T65, T67–T68, T72, T74, T78–T81, T82, T84–T85,
 T87–T88, T90, T95–T97, T101–T102, T104, T109, and T112 have implementation evidence
 but still miss a required surface, owner decision, licensed data, linguist review,
-full-corpus gate, or process-kill/API requirement. T89, T91–T92, T105–T108,
+full-corpus gate, or process-kill/API requirement. T89, T91–T92, T106–T108,
 T110–T111, and T113–T114 remain ☐.
 
 **Evidence run during reconciliation:** `cargo test -p quran-search` (36/36),
