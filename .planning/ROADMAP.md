@@ -64,7 +64,7 @@ Plans:
   4. Canonical tables reject all non-approved writes; importer has no code path to canonical tables
   5. Every quotation verifies via `verify_quotation` with mismatch as a hard failure
 
-**Plans**: 6/7 plans executed
+**Plans**: 7/7 plans executed
 
 Plans:
 **Wave 1**
@@ -87,7 +87,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 02-07-PLAN.md — Owner gates OD-01/OD-02/OD-03 recorded as blocked, the owner-ratifiable D-15 read-path item, spec-less edge-probe disposition, coverage-gate reconciliation, TASK-002 closure, and committed evidence of record
+- [x] 02-07-PLAN.md — Owner gates OD-01/OD-02/OD-03 recorded as blocked, the owner-ratifiable D-15 read-path item, spec-less edge-probe disposition, coverage-gate reconciliation, TASK-002 closure, and committed evidence of record
 
 ### Phase 3: Quran Search & Linguistics
 
@@ -242,7 +242,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundations | 0/5 | Not started | - |
-| 2. Canonical Quran Core | 6/7 | In Progress|  |
+| 2. Canonical Quran Core | 7/7 | In Progress|  |
 | 3. Quran Search & Linguistics | 0/TBD | Not started | - |
 | 4. Quran Graph | 0/TBD | Not started | - |
 | 5. Rich Quran Experience | 0/TBD | Not started | - |

@@ -16,9 +16,9 @@
 
 ### Data & Quran Corpus
 
-- [ ] **REQ-data-separation-layers**: Explicit trust layers A (canonical) / B (publisher metadata) / C (scholarly) / D (computational) / E (user+AI notes) (PRD §6)
-- [ ] **REQ-quran-corpus**: Validated canonical representation: required hierarchy, edition model, immutable text, stable addressing (PRD §7)
-- [ ] **REQ-ingestion-validation-eval**: Discover→stage ingestion pipeline; Quran/hadith/citation validation; Quran/hadith/RAG/agent/tool evaluation (PRD §34, §35, §36, §86)
+- [x] **REQ-data-separation-layers**: Explicit trust layers A (canonical) / B (publisher metadata) / C (scholarly) / D (computational) / E (user+AI notes) (PRD §6)
+- [x] **REQ-quran-corpus**: Validated canonical representation: required hierarchy, edition model, immutable text, stable addressing (PRD §7)
+- [x] **REQ-ingestion-validation-eval**: Discover→stage ingestion pipeline; Quran/hadith/citation validation; Quran/hadith/RAG/agent/tool evaluation (PRD §34, §35, §36, §86)
   - Acceptance: a Quran feature is complete only when it cannot modify canonical text accidentally, has corpus-integrity + Unicode/Arabic tests, preserves exact addressing, outputs source versions, labels generated analysis, works without an LLM where deterministic suffices, has performance limits, and has API/UI/domain tests (PRD §46)
 
 ### Quran Search, Linguistics & Tools
@@ -98,9 +98,9 @@ Deferred post-MVP extensions (from PRD §44.2 excludes — acknowledged, not in 
 | REQ-storage-architecture | Phase 1 | Pending |
 | REQ-cli-api | Phase 1 | Pending |
 | REQ-architecture-principles-quality | Phase 1 | Pending |
-| REQ-quran-corpus | Phase 2 | Pending |
-| REQ-data-separation-layers | Phase 2 | Pending |
-| REQ-ingestion-validation-eval | Phase 2 | Pending |
+| REQ-quran-corpus | Phase 2 | Complete |
+| REQ-data-separation-layers | Phase 2 | Complete |
+| REQ-ingestion-validation-eval | Phase 2 | Complete |
 | REQ-quran-normalization | Phase 3 | Pending |
 | REQ-quran-linguistics | Phase 3 | Pending |
 | REQ-quran-graph | Phase 4 | Pending |
@@ -125,6 +125,7 @@ Deferred post-MVP extensions (from PRD §44.2 excludes — acknowledged, not in 
 | REQ-open-decisions-status | Phase 12 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 32 total
 - Mapped to phases: 32
 - Unmapped: 0 ✓
