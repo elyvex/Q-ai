@@ -703,32 +703,39 @@ Any D-10 compliance report must classify this as **skipped**, not passed. [VERIF
 | A8 | No registry publish-date or version-compatibility probe was performed this session; no dependency upgrade is proposed. | Standard Stack | A separately-approved upgrade would need its own compatibility and supply-chain review. |
 | A9 | ASVS is used only as review vocabulary; exact ASVS control identifiers are not treated as locked requirements. | Security Domain | Security acceptance must still be checked against the locked ADRs and the implementation's tests. |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+_All five questions were resolved during planning; the plans carry the resolutions below. This section is retained as the record of what was open and how it was closed, not as outstanding work._
 
 1. **Does D-15 require a new operator surface, or only a shared hard-failure mapping?**
    - What we know: `verify_quotation` is implemented and unit-tested; no production caller exists; the read paths read canonical rows directly and cannot mismatch.
    - What's unclear: whether the owner wants a user-visible `qai quran verify-quotation`-style verb now, or only the guarantee that no future path may ignore the verdict.
    - Recommendation: implement the shared mapping **and** one minimal verifying surface so the contract is exercised; record the read-path exemption explicitly for the owner to ratify. [ASSUMED]
+   - **RESOLVED:** Both — plan 02-05 delivers the shared `is_hard_failure`/`require_exact` mapping, a production `qai quran verify-quotation` verb with an exit-code snapshot, and HTTP enforcement on the stored-verdict path, with the direct-read paths recorded as a **structurally exempt owner-ratifiable item** (plan 02-07 Task 1, `docs/05-followups/phase-02-owner-gates.md`). See A6.
 
 2. **Wire or retire the `CanonicalWriter`/`ApprovalToken` layer?**
    - What we know: `.agent/coding-rules.md` states it as an invariant; ADR-0000 describes type-level immutability; the trait has no implementor and the token is publicly constructible.
    - What's unclear: whether the owner treats the type gate as a required enforcement layer or as a reserved design for a later phase.
    - Recommendation: present both options with cost/benefit in the plan and take an explicit decision; do not silently leave it unused. [ASSUMED]
+   - **RESOLVED:** Wire it. Plan 02-04 makes `ApprovalToken` mintable only from a persisted granted approval row (`from_approval_row`), gives `CanonicalWriter` a real `ApprovalGate` implementor, and calls it on `activate_edition`/`rollback_edition`/`record_edition_verification` inside the existing `UnitOfWork`. A5 is answered: retirement was rejected because ADR-0000 is locked and `.agent/coding-rules.md` states the invariant; the rationale is recorded in `docs/07-technical/quran-canonical-core-decisions.md`.
 
 3. **What exactly is the independent reference corpus (D-09)?**
    - What we know: the mechanism exists (Tier-1 exact diff + hash pin); a hash-only candidate (`spqrxi/quranchecksum`) and two text-bearing-but-license-unknown candidates exist; ADR-0114 §4 defines the procedure.
    - What's unclear: identity, scope, license, and signer.
    - Recommendation: record OD-03 as a blocked gate; implement the *mechanism* (operator-supplied reference + typed comparison wiring) and leave identity to the owner. [VERIFIED: docs/05-followups/decisions-needed.md:63-72]
+   - **RESOLVED:** Implement the mechanism, gate the identity. Plan 02-03 adds `qai quran import --reference <path>` so QV-015 is actually evaluated from an operator-supplied pinned document, while plan 02-07 records OD-03 as a blocked owner gate and notes the hash-only limitation of the `spqrxi/quranchecksum` candidate (A7) in `docs/05-followups/phase-02-owner-gates.md`.
 
 4. **Should QV-015 v1 stay byte-only, or adopt the typed difference classification now?**
    - What we know: `diff_ayahs_typed` / `DifferenceClass` exist and are unit-tested; `compared()` only embeds the vocabulary name as a string.
    - What's unclear: whether classification belongs to QV-015's pass/fail or to a separate typed report (ADR-0114 §4 says a readings comparison "runs as a separate, typed report and never feeds QV-015's pass/fail").
    - Recommendation: follow ADR-0114 §4 — keep QV-015 byte-only for *matching* and record the classification vocabulary as report metadata; do not let classification soften a byte mismatch. [VERIFIED: docs/02-architecture/decisions/ADR-0114-reference-corpus-comparison.md:88-96]
+   - **RESOLVED:** Byte-only pass/fail with typed metadata. Plan 02-03 keeps any byte difference / missing row / incompatible policy Fatal and attaches one existing `DifferenceClass` per difference as report metadata only; classification can never soften a mismatch.
 
 5. **Is the `quran_segments` table intended to stay empty?**
    - What we know: canonical `quran_segments` and staging `quran_stg_segments` both exist; activation never copies segments; nothing writes either.
    - What's unclear: whether segments are reserved for the morphology phase or are an unfinished canonical-core artifact.
    - Recommendation: ask explicitly; if reserved, record it (do not add a trigger that a future phase must then amend). [VERIFIED: migrations/sqlite/0008_quran_structure.up.sql:75-86] [VERIFIED: crates/storage-sqlite/src/quran.rs:676-707]
+   - **RESOLVED:** Reserved for the morphology phase; stays empty in Phase 2. Plan 02-04 records the scope decision (no canonical-segments copy, no trigger that a future phase must amend) in `docs/07-technical/quran-canonical-core-decisions.md`; a future phase adds a forward migration plus a copy step.
 
 ## Environment Availability
 
