@@ -81,6 +81,12 @@ pub struct EditionMeta {
     /// (`upstream_edition_slug -> qai_edition_id`).
     #[serde(default)]
     pub qai_edition_id: Option<String>,
+    /// Explicit primary/default designation (D-07): the edition an operator
+    /// wants `EditionSelector::Primary` to resolve. "Primary default" is not
+    /// "only edition" — it never redefines the active-edition pointer and an
+    /// undeclared manifest leaves it `false`.
+    #[serde(default)]
+    pub is_primary: bool,
     /// Per-edition license record. A repository being open source never
     /// implies its contained text is redistributable (OD-01, A3).
     #[serde(default)]
@@ -270,6 +276,7 @@ pub(crate) mod tests {
                 synthetic: true,
                 upstream_edition_slug: None,
                 qai_edition_id: None,
+                is_primary: false,
                 license: None,
                 verified_by: None,
                 source: None,

@@ -28,6 +28,7 @@
         "synthetic": { "type": "boolean" },
         "upstream_edition_slug": { "type": ["string", "null"] },
         "qai_edition_id": { "type": ["string", "null"] },
+        "is_primary": { "type": "boolean" },
         "license": {
           "type": ["object", "null"],
           "required": ["status"],

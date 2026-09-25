@@ -187,6 +187,9 @@ fn map_edition(row: &QuranEditionRow) -> Result<QuranEdition, ReaderError> {
         qiraah: row.qiraah.clone(),
         publisher: row.publisher.clone(),
         source_url: row.source_url.clone(),
+        upstream_edition_slug: row.upstream_edition_slug.clone(),
+        qai_edition_id: row.qai_edition_id.clone(),
+        is_primary: row.is_primary,
         license: serde_json::from_str(&row.license_json)
             .map_err(|err| storage_broken(format!("bad license record: {err}")))?,
         language: row

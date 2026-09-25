@@ -23,5 +23,6 @@
   "0016_quran_search_cache.up.sql": "sha256:870c11bad93bfa7097cee0b1356551f6bf0d3a5e657c43a76f0cb5b1568caa3e",
   "0017_quran_lexicon.up.sql": "sha256:babf8c49530cd20afc297b12769ba34b1ae48729ceae69d20cebf5e19d4afba1",
   "0018_morphology_staging.up.sql": "sha256:6959fca6027f872baa1968e5b1f2cab8aefd0e14fb3fa194e170e354ed86d262",
-  "0019_quran_graph.up.sql": "sha256:e924c5037f10ac2570a292594a4f7972bd53208bbd63f710151b1a953b85bb1d"
+  "0019_quran_graph.up.sql": "sha256:e924c5037f10ac2570a292594a4f7972bd53208bbd63f710151b1a953b85bb1d",
+  "0020_quran_edition_identity.up.sql": "sha256:9c4821e814f1e4d3402508cbc83ccf101f98ff76c1a60ef67e309a7e69389521"
 }

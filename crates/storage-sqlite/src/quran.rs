@@ -42,6 +42,9 @@ fn decode_edition(row: &sqlx::sqlite::SqliteRow) -> QuranEditionRow {
         qiraah: row.get("qiraah"),
         publisher: row.get("publisher"),
         source_url: row.get("source_url"),
+        upstream_edition_slug: row.get("upstream_edition_slug"),
+        qai_edition_id: row.get("qai_edition_id"),
+        is_primary: row.get("is_primary"),
         language: row.get("language"),
         verse_numbering_scheme: row.get("verse_numbering_scheme"),
         basmala_policy: row.get("basmala_policy"),
@@ -355,11 +358,12 @@ impl QuranRepository for SqliteQuranRepository {
         sqlx::query(
             "INSERT INTO quran_stg_editions
                 (import_run_id, id, slug, version, name, script, riwayah, qiraah,
-                 publisher, source_url, language, verse_numbering_scheme, basmala_policy,
+                 publisher, source_url, upstream_edition_slug, qai_edition_id, is_primary,
+                 language, verse_numbering_scheme, basmala_policy,
                  unicode_normalization, license_json, text_hash, structure_hash,
                  token_order_hash, manifest_hash, source_version_id, statistics_json,
                  status, imported_at)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         )
         .bind(run_id)
         .bind(&row.id)
@@ -371,6 +375,9 @@ impl QuranRepository for SqliteQuranRepository {
         .bind(&row.qiraah)
         .bind(&row.publisher)
         .bind(&row.source_url)
+        .bind(&row.upstream_edition_slug)
+        .bind(&row.qai_edition_id)
+        .bind(row.is_primary)
         .bind(&row.language)
         .bind(&row.verse_numbering_scheme)
         .bind(&row.basmala_policy)
@@ -657,10 +664,12 @@ impl QuranRepository for SqliteQuranRepository {
         sqlx::query(
             "INSERT INTO quran_editions
                 (id, slug, version, name, script, riwayah, qiraah, publisher, source_url,
+                 upstream_edition_slug, qai_edition_id, is_primary,
                  language, verse_numbering_scheme, basmala_policy, unicode_normalization,
                  license_json, text_hash, structure_hash, token_order_hash, manifest_hash,
                  source_version_id, statistics_json, status, imported_at, activated_at)
              SELECT id, slug, version, name, script, riwayah, qiraah, publisher, source_url,
+                 upstream_edition_slug, qai_edition_id, is_primary,
                  language, verse_numbering_scheme, basmala_policy, unicode_normalization,
                  license_json, text_hash, structure_hash, token_order_hash, manifest_hash,
                  source_version_id, statistics_json, 'Active', imported_at, ?

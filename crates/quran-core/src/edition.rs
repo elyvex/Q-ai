@@ -52,6 +52,13 @@ pub struct QuranEdition {
     pub publisher: Option<String>,
     /// Source URL, if any.
     pub source_url: Option<String>,
+    /// Exact upstream identifier, preserved verbatim (ADR-0101, OD-01).
+    pub upstream_edition_slug: Option<String>,
+    /// Q-ai-internal stable id mapped from the upstream slug.
+    pub qai_edition_id: Option<String>,
+    /// Explicit primary/default designation (D-07); "primary default" is not
+    /// "only edition" and never redefines the active-edition pointer.
+    pub is_primary: bool,
     /// Licensing record (PRD §38).
     pub license: LicenseRecord,
     /// Content language (always `ar` for the canonical text).
@@ -114,6 +121,9 @@ mod tests {
             qiraah: Some("Asim".to_string()),
             publisher: None,
             source_url: None,
+            upstream_edition_slug: None,
+            qai_edition_id: None,
+            is_primary: false,
             license: LicenseRecord {
                 status: LicenseStatus::PublicDomain,
                 spdx_id: None,

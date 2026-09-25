@@ -33,6 +33,13 @@ pub struct QuranEditionRow {
     pub qiraah: Option<String>,
     pub publisher: Option<String>,
     pub source_url: Option<String>,
+    /// Exact upstream identifier, preserved verbatim (ADR-0101, OD-01).
+    pub upstream_edition_slug: Option<String>,
+    /// Q-ai-internal stable id mapped from the upstream slug.
+    pub qai_edition_id: Option<String>,
+    /// Explicit primary/default designation (D-07); never redefines the
+    /// active-edition pointer.
+    pub is_primary: bool,
     pub language: String,
     pub verse_numbering_scheme: String,
     pub basmala_policy: String,

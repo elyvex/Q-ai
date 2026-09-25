@@ -389,6 +389,17 @@ pub async fn cmd_edition_show(
         edition.name,
         edition_status(&edition)
     );
+    // Declared upstream identity and primary/default designation, printed only
+    // when present so the line stays deterministic for undeclared editions.
+    if let Some(upstream) = &edition.upstream_edition_slug {
+        human.push_str(&format!("upstream: {upstream}\n"));
+    }
+    if let Some(qai_id) = &edition.qai_edition_id {
+        human.push_str(&format!("qai-id: {qai_id}\n"));
+    }
+    if edition.is_primary {
+        human.push_str("primary: true\n");
+    }
     if statistics {
         human.push_str(&format!(
             "surahs={} ayahs={} tokens={}\n",
