@@ -1,0 +1,73 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": null,
+  "phases": [
+    {
+      "number": "1",
+      "name": "Foundations",
+      "status": "pending"
+    },
+    {
+      "number": "2",
+      "name": "Canonical Quran Core",
+      "status": "pending"
+    },
+    {
+      "number": "3",
+      "name": "Quran Search & Linguistics",
+      "status": "pending"
+    },
+    {
+      "number": "4",
+      "name": "Quran Graph",
+      "status": "pending"
+    },
+    {
+      "number": "5",
+      "name": "Rich Quran Experience",
+      "status": "pending"
+    },
+    {
+      "number": "6",
+      "name": "Hadith & Tafsir",
+      "status": "pending"
+    },
+    {
+      "number": "7",
+      "name": "Isnad & Narrator Research",
+      "status": "pending"
+    },
+    {
+      "number": "8",
+      "name": "Multi-RAG Platform",
+      "status": "pending"
+    },
+    {
+      "number": "9",
+      "name": "Comparative Scripture",
+      "status": "pending"
+    },
+    {
+      "number": "10",
+      "name": "Agentic Research & Tool Creation",
+      "status": "pending"
+    },
+    {
+      "number": "11",
+      "name": "Server & Management",
+      "status": "pending"
+    },
+    {
+      "number": "12",
+      "name": "Production Hardening",
+      "status": "pending"
+    }
+  ],
+  "next": {
+    "command": "/gsd:progress --next",
+    "label": "Advance to the next step",
+    "reason": "Phase 02 of 12 · 0% · executing"
+  },
+  "updated_at": "2026-09-25T05:45:29.260Z"
+}
