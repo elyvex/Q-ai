@@ -55,6 +55,12 @@ fn quran_reference_snapshots() {
     run_cases("tests/quran/reference.trycmd");
 }
 
+/// Phase 2 edition identity/primary/license operator surface (D-07).
+#[test]
+fn edition_identity_snapshots() {
+    run_cases("tests/quran/edition_identity.trycmd");
+}
+
 /// Upstream catalog ingestion (metadata-only, no database).
 #[test]
 fn quran_catalog_snapshots() {

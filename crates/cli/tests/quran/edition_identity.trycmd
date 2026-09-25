@@ -1,0 +1,104 @@
+# Phase 2 CLI acceptance — edition identity/primary/license surface (D-07)
+
+`QAI_DATA_DIR` points the real `qai` binary at a fresh temp database (set by the
+harness); the synthetic identity fixture declares a non-null upstream identity,
+`is_primary: true`, and a concrete license, so `edition show` can report all
+three on the human line and in `--json`.
+
+```console
+$ qai db migrate
+migrations applied; schema version 21
+
+```
+
+```console
+$ qai quran import ../../fixtures/quran/test-edition-identity/manifest.json
+imported test-edition-identity@0.1.0 to Staged
+note: synthetic test data — non-canonical (ADR-0101 fallback)
+
+```
+
+```console
+$ qai quran activate test-edition-identity@0.1.0 --yes
+activated test-edition-identity@0.1.0 (generation 1)
+
+```
+
+The human line carries the declared upstream identity, the Q-ai edition id, the
+primary marker, and the declared license status. It stays free of volatile ids.
+
+```console
+$ qai quran edition show test-edition-identity@0.1.0
+test-edition-identity@0.1.0 — Synthetic identity/primary fixture (non-canonical)
+status: active
+upstream: synthetic-identity-upstream
+qai-id: qai:synthetic-identity
+primary: true
+license: verified
+
+```
+
+```console
+$ qai quran edition show test-edition-identity@0.1.0 --json
+{
+  "basmala_policy": "per_surah",
+  "declared_license_status": "verified",
+  "id": "[..]",
+  "imported_at": "[..]",
+  "is_primary": true,
+  "language": "ar",
+  "license": {
+    "attribution_required": false,
+    "export_allowed": false,
+    "name": null,
+    "notes": "declared at import; preserved verbatim (OD-01)",
+    "redistribution_allowed": false,
+    "spdx_id": "LicenseRef-Synthetic-Test-Only",
+    "status": "Unknown",
+    "url": null
+  },
+  "manifest_hash": {
+    "algorithm": "Sha256",
+    "hex": "5ba0f795347291da21f84a53fa3f1894731514b0c9850b19b406613b2a22fb77"
+  },
+  "name": "Synthetic identity/primary fixture (non-canonical)",
+  "publisher": null,
+  "qai_edition_id": "qai:synthetic-identity",
+  "qiraah": null,
+  "riwayah": null,
+  "script": "uthmani",
+  "slug": "test-edition-identity",
+  "source_url": null,
+  "source_version_id": "[..]",
+  "statistics": {
+    "ayah_count": 2,
+    "distinct_surface_forms": 8,
+    "juz_count": 1,
+    "page_count": 1,
+    "sajdah_count": 0,
+    "surah_count": 1,
+    "token_count": 8
+  },
+  "status": "active",
+  "structure_hash": {
+    "algorithm": "Sha256",
+    "hex": "6c9f0d32511d371fc3c5a8d4d5df81cf02354fb7e1e2adcf87dc6bec6d2fe650"
+  },
+  "text_hash": {
+    "algorithm": "Sha256",
+    "hex": "25c3bf767e3ef498f5b8a1f92decf6d699d3fb053dc09470705a25fe8b57c5b4"
+  },
+  "token_order_hash": {
+    "algorithm": "Sha256",
+    "hex": "2a2392be602584c4bfdb29a55054ca7cd84bc979eb0acc7e4c9d6619a0c7f37f"
+  },
+  "unicode_normalization": "nfc",
+  "upstream_edition_slug": "synthetic-identity-upstream",
+  "verification_method": null,
+  "verified_at": null,
+  "verified_by": null,
+  "verse_numbering_scheme": "hafs",
+  "version": "0.1.0"
+}
+
+```

@@ -412,6 +412,34 @@ pub async fn cmd_edition_show(
     if edition.is_primary {
         human.push_str("primary: true\n");
     }
+    // Declared license status is read verbatim from the canonical row, not
+    // inferred: the typed reader maps unmodelled statuses (e.g. a manifest's
+    // `verified`) to `Unknown`, so the raw declared string is surfaced here and
+    // never invented (T-02-36, OD-01). Printed only when a license was
+    // declared, so undeclared editions stay byte-identical.
+    let declared_license_status = {
+        let mut uow = match db.write().await {
+            Ok(uow) => uow,
+            Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        };
+        let row = uow
+            .quran()
+            .get_edition_by_slug_version(&edition.slug, &edition.version.to_string())
+            .await
+            .ok()
+            .flatten();
+        let _ = uow.rollback().await;
+        row.and_then(|row| serde_json::from_str::<serde_json::Value>(&row.license_json).ok())
+            .and_then(|value| {
+                value.get("status").and_then(|status| status.as_str()).map(str::to_string)
+            })
+    };
+    let declared_license = declared_license_status
+        .as_deref()
+        .filter(|status| !status.is_empty() && *status != "Unknown");
+    if let Some(status) = declared_license {
+        human.push_str(&format!("license: {status}\n"));
+    }
     if statistics {
         human.push_str(&format!(
             "surahs={} ayahs={} tokens={}\n",
@@ -426,7 +454,14 @@ pub async fn cmd_edition_show(
             edition.text_hash.hex, edition.structure_hash.hex, edition.token_order_hash.hex
         ));
     }
-    CommandOutput::ok(human, serde_json::to_value(&edition).unwrap_or_default())
+    let mut json = serde_json::to_value(&edition).unwrap_or_default();
+    if let (Some(object), Some(status)) = (json.as_object_mut(), declared_license) {
+        object.insert(
+            "declared_license_status".to_string(),
+            serde_json::Value::String(status.to_string()),
+        );
+    }
+    CommandOutput::ok(human, json)
 }
 
 /// `quran edition verify`: record editorial verification under approval.
