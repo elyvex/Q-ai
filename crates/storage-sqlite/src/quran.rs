@@ -238,7 +238,8 @@ impl QuranRepository for SqliteQuranRepository {
         let mut tx = self.tx.lock().await;
         let row = sqlx::query(
             "SELECT id, slug, version, name, script, riwayah, qiraah, publisher,
-                    source_url, language, verse_numbering_scheme, basmala_policy,
+                    source_url, upstream_edition_slug, qai_edition_id, is_primary,
+                    language, verse_numbering_scheme, basmala_policy,
                     unicode_normalization, license_json, text_hash, structure_hash,
                     token_order_hash, manifest_hash, source_version_id, statistics_json,
                     status, imported_at,
