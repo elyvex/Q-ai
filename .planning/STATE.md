@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Canonical Quran Core
 status: executing
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-09-25T06:25:39.248Z"
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-09-25T13:28:09.883Z"
 last_activity: 2026-09-25
 last_activity_desc: Phase 02 execution started
-state_head: 2d831e45216692681e6c8d70a16794f878dfe9c0
+state_head: 3e93af529b1edd7c8bf2a7c8e882d9d56b5c9d9f
 progress:
   total_phases: 12
   completed_phases: 0
   total_plans: 12
-  completed_plans: 0
+  completed_plans: 2
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-23)
 ## Current Position
 
 Phase: 02 (Canonical Quran Core) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Ready to execute
 Last activity: 2026-09-25 — Phase 02 execution started
 
@@ -59,6 +59,7 @@ Progress: [░░░░░░░░░░] 0%
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 02 P01 | 22 min | 3 tasks | 14 files |
+| Phase 02 P02 | 40 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,9 @@ Recent decisions affecting current work:
 - [Phase 02]: Edition identity (upstream_edition_slug, qai_edition_id, is_primary) is stored verbatim from the manifest; absent values stay NULL/None/false (OD-01).
 - [Phase 02]: Canonical license_json stores the manifest-declared license object verbatim; the reader maps unmodelled statuses to LicenseStatus::Unknown and never invents redistribution permission.
 - [Phase 02]: EditionSelector::Primary resolves the single flagged edition and returns typed errors when zero or more than one is flagged; it never falls back to the active pointer (D-07).
+- [Phase 02]: Renumbered the rich fixture to surahs 1..=6 (identity to 1) so Fatal QV-002 passes and plan 02-03 can import/activate both fixtures.
+- [Phase 02]: Golden rows are edition-scoped by an EDITION field because multiple synthetic editions are each numbered 1..=N.
+- [Phase 02]: The reference_text_hash pin reuses the existing text_hash recipe verbatim; no new recipe was invented and renumbering does not change it.
 
 ### Pending Todos
 
@@ -94,6 +98,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-25T06:25:39.193Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-09-25T13:28:09.786Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None
