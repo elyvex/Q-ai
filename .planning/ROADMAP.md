@@ -64,12 +64,12 @@ Plans:
   4. Canonical tables reject all non-approved writes; importer has no code path to canonical tables
   5. Every quotation verifies via `verify_quotation` with mismatch as a hard failure
 
-**Plans**: 7 plans
+**Plans**: 1/7 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — TRACER: edition upstream identity, declared license, and primary/default designation persisted from manifest to operator surface
+- [x] 02-01-PLAN.md — TRACER: edition upstream identity, declared license, and primary/default designation persisted from manifest to operator surface
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -242,7 +242,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundations | 0/5 | Not started | - |
-| 2. Canonical Quran Core | 0/6 | Not started | - |
+| 2. Canonical Quran Core | 1/7 | In Progress|  |
 | 3. Quran Search & Linguistics | 0/TBD | Not started | - |
 | 4. Quran Graph | 0/TBD | Not started | - |
 | 5. Rich Quran Experience | 0/TBD | Not started | - |
