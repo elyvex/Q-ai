@@ -8,11 +8,20 @@
 #[path = "common/mod.rs"]
 mod common;
 
+use application::quran_cli::cmd_quran_verify;
 use application::quran_doctor::{CheckLevel, run_quran_checks};
 use application::quran_reader::QuranReader;
 use common::{BASE_MANIFEST, SLUG, VERSION, active_reader};
 use quran_core::AyahOptions;
 use quran_corpus::format::EditionSource;
+use storage::Database as _;
+
+async fn active_generation(db: &storage_sqlite::SqliteDatabase) -> i64 {
+    let mut uow = db.write().await.unwrap();
+    let active = uow.quran().get_active().await.unwrap().expect("active edition");
+    uow.rollback().await.unwrap();
+    active.corpus_generation
+}
 
 #[tokio::test]
 async fn fixture_soak_ten_thousand_lookups_preserves_corpus_integrity() {
@@ -116,4 +125,35 @@ async fn deep_scan_of_the_fixture_has_no_failures() {
         );
         assert!(check.remedy.is_some(), "{} must carry a remedy", check.id);
     }
+}
+
+/// Plan 02-03 Task 1 — `qai quran verify` classifies the six integrity families
+/// from persisted state, reports the reference family as `skipped` (never
+/// `pass`) for a reference-less edition, and performs no write (T-02-07).
+#[tokio::test]
+async fn verify_reports_the_six_families_and_does_not_write() {
+    let (_dir, db, _reader, path) = active_reader().await;
+    let before = active_generation(&db).await;
+    let out = cmd_quran_verify(&path, "active", false).await;
+    assert_eq!(out.exit, 0, "{}", out.human);
+
+    let object = out.json.as_object().expect("verify --json must be an object");
+    let mut keys: Vec<&str> = object.keys().map(String::as_str).collect();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        ["addressing", "checksums", "counts", "reference_comparison", "roundtrip", "unicode"],
+        "exactly the six integrity families"
+    );
+    assert_eq!(
+        out.json["reference_comparison"]["status"], "skipped",
+        "a reference-less edition must report the recorded skip, never pass"
+    );
+    assert_eq!(
+        out.json["reference_comparison"]["gate"], "exit::OK",
+        "a skipped family exits OK but is never counted as pass"
+    );
+
+    let after = active_generation(&db).await;
+    assert_eq!(before, after, "verify must leave corpus_generation unchanged");
 }

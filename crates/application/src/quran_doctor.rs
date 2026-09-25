@@ -76,6 +76,16 @@ fn warn(id: &'static str, summary: String, remedy: &str) -> QuranDoctorCheck {
     }
 }
 
+fn skipped(id: &'static str, summary: String, remedy: &str) -> QuranDoctorCheck {
+    QuranDoctorCheck {
+        id,
+        status: CheckLevel::Skipped,
+        summary,
+        remedy: Some(remedy.to_string()),
+        next_command: Some("qai quran verify".to_string()),
+    }
+}
+
 fn tagged_hex(hash: &domain::ContentHash) -> String {
     format!("sha256:{}", hash.hex)
 }
@@ -109,6 +119,12 @@ pub async fn run_quran_checks(
         }]);
     };
     let edition_id = edition.id.clone();
+    // The active canonical edition id equals its import run id, which is also
+    // the id of the persisted validation report that carries the QV-015
+    // reference-comparison finding (D-10). Read it here, inside the same
+    // read-only unit of work, so the reference check is state-derived rather
+    // than hardcoded.
+    let validation_report = uow.quran().get_validation_report(&edition_id).await?;
     let surahs = uow.quran().list_surahs(&edition_id).await?;
     let ayahs = uow.quran().list_ayahs_range(&edition_id, 1, i64::MAX).await?;
     let mut tokens_by_ayah: BTreeMap<(i64, i64), Vec<storage::quran::TokenRow>> = BTreeMap::new();
@@ -435,10 +451,8 @@ pub async fn run_quran_checks(
         "quran.corpus_generation",
         format!("current generation is {}", active.corpus_generation),
     ));
-    checks.push(warn(
-        "quran.reference_corpus",
-        "no reference corpus configured; QV-015 skips (ADR-0114 pending)".to_string(),
-        "configure a reference corpus and sign-off procedure",
+    checks.push(reference_corpus_check(
+        validation_report.as_ref().map(|report| report.findings_json.as_str()),
     ));
     let license_status = serde_json::from_str::<serde_json::Value>(&edition.license_json)
         .ok()
@@ -457,6 +471,50 @@ pub async fn run_quran_checks(
     });
 
     Ok(checks)
+}
+
+/// State-derived `quran.reference_corpus` check (D-10, ADR-0114 §4).
+///
+/// The reference-comparison family is never fabricated and never silently
+/// passed: its status comes only from the persisted QV-015 finding.
+/// - a `Fatal` QV-015 finding → `Fail`;
+/// - the recorded `Info` skip (no reference configured) → `Skipped` with the
+///   ADR-0114 rationale, never `Pass`;
+/// - a comparison finding whose `outcome` is `pass` → `Pass`.
+fn reference_corpus_check(findings_json: Option<&str>) -> QuranDoctorCheck {
+    let Some(raw) = findings_json else {
+        return skipped(
+            "quran.reference_corpus",
+            "no persisted validation report; reference comparison not evaluated".to_string(),
+            "re-import the edition so a QV-015 outcome is recorded",
+        );
+    };
+    let findings: Vec<quran_corpus::validation::Finding> =
+        serde_json::from_str(raw).unwrap_or_default();
+    let qv15: Vec<&quran_corpus::validation::Finding> =
+        findings.iter().filter(|finding| finding.rule_id == "QV-015").collect();
+    if qv15.iter().any(|finding| finding.severity == quran_corpus::validation::Severity::Fatal) {
+        return fail(
+            "quran.reference_corpus",
+            "reference comparison failed (QV-015 fatal)".to_string(),
+            "review the QV-015 finding and re-import against a compatible reference",
+        );
+    }
+    if qv15.iter().any(|finding| {
+        finding.severity == quran_corpus::validation::Severity::Info
+            && finding.message.contains("\"outcome\":\"pass\"")
+    }) {
+        return pass(
+            "quran.reference_corpus",
+            "reference comparison passed (byte-exact, ADR-0114)".to_string(),
+        );
+    }
+    skipped(
+        "quran.reference_corpus",
+        "reference comparison skipped: no reference corpus configured (ADR-0114; OD-03 owner gate)"
+            .to_string(),
+        "configure a reference corpus and sign-off procedure (OD-03)",
+    )
 }
 
 fn short(hash: &str) -> String {

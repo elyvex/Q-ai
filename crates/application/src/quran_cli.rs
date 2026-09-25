@@ -175,6 +175,11 @@ pub async fn cmd_get(
         }
     };
     let mut human = format!("{}\n— {}", view.canonical.arabic_text(), view.canonical.reference());
+    // Criterion 2 on the operator surface: the pinned edition reference (above)
+    // together with the STORED per-ayah canonical hash carried on the served
+    // view. The hash is read from `AyahView`, never recomputed from the printed
+    // text (QC-02), so a lookup can be verified against the stored bytes.
+    human.push_str(&format!("\n  text_hash: sha256:{}", view.canonical.text_hash().hex));
     for translation in &view.translations {
         human.push_str(&format!("\n[{}] {}", translation.translator(), translation.text()));
     }
@@ -1494,6 +1499,121 @@ pub async fn cmd_doctor_quran(db_path: &str, deep: bool) -> CommandOutput {
         exit::OK
     };
     CommandOutput { exit, human, json }
+}
+
+/// The six corpus-integrity families (D-10) and the doctor checks each covers.
+///
+/// Every family is derived from the existing 19-check doctor engine — no second
+/// integrity engine is introduced.
+const VERIFY_FAMILIES: [(&str, &[&str]); 6] = [
+    ("counts", &["quran.surah_count", "quran.ayah_count"]),
+    (
+        "addressing",
+        &[
+            "quran.edition_active",
+            "quran.ayah_identifiers",
+            "quran.division_coverage",
+            "quran.basmala_policy",
+        ],
+    ),
+    ("unicode", &["quran.unicode_form"]),
+    (
+        "checksums",
+        &["quran.edition_checksum", "quran.structure_hash", "quran.token_order_hash"],
+    ),
+    ("roundtrip", &["quran.token_roundtrip"]),
+    ("reference_comparison", &["quran.reference_corpus"]),
+];
+
+/// `quran verify` (D-10/D-11): classify the six integrity families from
+/// persisted state.
+///
+/// Read-only by construction (T-02-07): it opens the database read-only, reuses
+/// `quran_doctor::run_quran_checks`, reads the persisted QV-015 finding through
+/// that engine, and is never wrapped in `confirm`. A `skipped` family is
+/// serialized as `skipped` and never as `pass` (D-10).
+pub async fn cmd_quran_verify(db_path: &str, edition: &str, deep: bool) -> CommandOutput {
+    use super::quran_doctor::CheckLevel;
+    if !edition.is_empty() && edition != "active" {
+        return CommandOutput::err(
+            exit::USAGE,
+            format!("`quran verify` evaluates the active edition; got `{edition}`"),
+        );
+    }
+    let db = match storage_sqlite::SqliteDatabase::open_read_only(db_path).await {
+        Ok(db) => db,
+        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+    };
+    let checks = match super::quran_doctor::run_quran_checks(&db, deep).await {
+        Ok(checks) => checks,
+        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+    };
+
+    let mut human = String::from("QURAN VERIFY\n");
+    let mut json = serde_json::Map::new();
+    let mut gate: Option<&str> = None;
+    let mut any_fail = false;
+    for (family, ids) in VERIFY_FAMILIES {
+        let members: Vec<&super::quran_doctor::QuranDoctorCheck> =
+            checks.iter().filter(|check| ids.contains(&check.id)).collect();
+        let (status, summary) = if members.is_empty() {
+            ("skipped", "not evaluable for this edition".to_string())
+        } else if members.iter().any(|check| check.status == CheckLevel::Fail) {
+            let failed: Vec<String> = members
+                .iter()
+                .filter(|check| check.status == CheckLevel::Fail)
+                .map(|check| check.summary.clone())
+                .collect();
+            ("fail", failed.join("; "))
+        } else if members.iter().any(|check| check.status == CheckLevel::Skipped) {
+            let skipped: Vec<String> = members
+                .iter()
+                .filter(|check| check.status == CheckLevel::Skipped)
+                .map(|check| check.summary.clone())
+                .collect();
+            ("skipped", skipped.join("; "))
+        } else {
+            ("pass", format!("{} checks pass", members.len()))
+        };
+        if status == "fail" {
+            any_fail = true;
+            if gate.is_none() {
+                gate = Some(family);
+            }
+        }
+        human.push_str(&format!("{family}: {status} — {summary}\n"));
+
+        let mut entry = serde_json::Map::new();
+        entry.insert("status".to_string(), serde_json::json!(status));
+        entry.insert(
+            "checks".to_string(),
+            serde_json::json!(members.iter().map(|check| check.id).collect::<Vec<_>>()),
+        );
+        entry.insert("summary".to_string(), serde_json::json!(summary));
+        // Name the exit gate: a skipped family exits OK but is never `pass`; a
+        // failed family is what makes the command exit non-zero (D-10).
+        entry.insert(
+            "gate".to_string(),
+            serde_json::json!(if status == "fail" { "exit::VALIDATION" } else { "exit::OK" }),
+        );
+        if status != "pass" {
+            entry.insert(
+                "reason".to_string(),
+                serde_json::json!(if status == "skipped" {
+                    "not evaluated; skipped is never counted as pass (D-10)"
+                } else {
+                    "one or more integrity checks failed"
+                }),
+            );
+        }
+        json.insert(family.to_string(), serde_json::Value::Object(entry));
+    }
+    let code = if any_fail { exit::VALIDATION } else { exit::OK };
+    if let Some(family) = gate {
+        human.push_str(&format!("gate: {family}\n"));
+    }
+    human.push_str(&format!("exit: {code}\n"));
+    CommandOutput { exit: code, human, json: serde_json::Value::Object(json) }
 }
 
 /// `doctor --indexes`: the 19 Phase-2 index/linguistics checks (P2-T105).

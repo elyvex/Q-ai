@@ -43,6 +43,12 @@ fn quran_counting_graph_snapshots() {
     run_cases("tests/quran/counting_graph.trycmd");
 }
 
+/// Phase 2 six-family integrity surface (D-10/D-11).
+#[test]
+fn quran_verify_snapshots() {
+    run_cases("tests/quran/verify.trycmd");
+}
+
 /// Upstream catalog ingestion (metadata-only, no database).
 #[test]
 fn quran_catalog_snapshots() {

@@ -137,6 +137,16 @@ pub enum QuranAction {
         /// `slug@version`.
         edition: String,
     },
+    /// Report the six corpus-integrity families for the active edition
+    /// (read-only; a skipped family is never reported as `pass`).
+    Verify {
+        /// Edition selector; only the active edition is evaluable today.
+        #[arg(long, default_value = "active")]
+        edition: String,
+        /// Full-corpus token round-trip instead of a sampled one.
+        #[arg(long, default_value_t = false)]
+        deep: bool,
+    },
     /// Translation management.
     Translation {
         #[command(subcommand)]
@@ -752,6 +762,9 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
         }
         QuranAction::Hashes { edition } => {
             application::quran_cli::cmd_hashes(db_path, &edition).await
+        }
+        QuranAction::Verify { edition, deep } => {
+            application::quran_cli::cmd_quran_verify(db_path, &edition, deep).await
         }
         QuranAction::Translation { action } => match action {
             TranslationAction::List => application::quran_cli::cmd_translation_list(db_path).await,

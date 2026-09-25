@@ -1,0 +1,121 @@
+# Phase 2 CLI acceptance — six-family corpus-integrity surface (D-10/D-11)
+
+`QAI_DATA_DIR` points the real `qai` binary at a fresh temp database (set by the
+harness); each `console` block runs in order against that one database, so
+`db migrate` must come first and `test-edition-min@0.1.0` is activated before
+any verify.
+
+A reference-less import records the QV-015 skip: `reference_comparison` must
+report `skipped`, never `pass`, and the overall exit stays 0.
+
+```console
+$ qai db migrate
+migrations applied; schema version 21
+
+```
+
+```console
+$ qai quran import ../../fixtures/quran/test-edition-min/manifest.json
+imported test-edition-min@0.1.0 to Staged
+note: synthetic test data — non-canonical (ADR-0101 fallback)
+
+```
+
+```console
+$ qai quran activate test-edition-min@0.1.0 --yes
+activated test-edition-min@0.1.0 (generation 1)
+
+```
+
+The human surface names all six families and the exit gate.
+
+```console
+$ qai quran verify
+QURAN VERIFY
+counts: pass — 2 checks pass
+addressing: pass — 4 checks pass
+unicode: pass — 1 checks pass
+checksums: pass — 3 checks pass
+roundtrip: pass — 1 checks pass
+reference_comparison: skipped — reference comparison skipped: no reference corpus configured (ADR-0114; OD-03 owner gate)
+exit: 0
+
+```
+
+```console
+$ qai quran verify --json
+{
+  "addressing": {
+    "checks": [
+      "quran.edition_active",
+      "quran.ayah_identifiers",
+      "quran.division_coverage",
+      "quran.basmala_policy"
+    ],
+    "gate": "exit::OK",
+    "status": "pass",
+    "summary": "4 checks pass"
+  },
+  "checksums": {
+    "checks": [
+      "quran.edition_checksum",
+      "quran.structure_hash",
+      "quran.token_order_hash"
+    ],
+    "gate": "exit::OK",
+    "status": "pass",
+    "summary": "3 checks pass"
+  },
+  "counts": {
+    "checks": [
+      "quran.surah_count",
+      "quran.ayah_count"
+    ],
+    "gate": "exit::OK",
+    "status": "pass",
+    "summary": "2 checks pass"
+  },
+  "reference_comparison": {
+    "checks": [
+      "quran.reference_corpus"
+    ],
+    "gate": "exit::OK",
+    "reason": "not evaluated; skipped is never counted as pass (D-10)",
+    "status": "skipped",
+    "summary": "reference comparison skipped: no reference corpus configured (ADR-0114; OD-03 owner gate)"
+  },
+  "roundtrip": {
+    "checks": [
+      "quran.token_roundtrip"
+    ],
+    "gate": "exit::OK",
+    "status": "pass",
+    "summary": "1 checks pass"
+  },
+  "unicode": {
+    "checks": [
+      "quran.unicode_form"
+    ],
+    "gate": "exit::OK",
+    "status": "pass",
+    "summary": "1 checks pass"
+  }
+}
+
+```
+
+`--deep` upgrades the sampled round-trip to a full-corpus scan; the family
+classification is otherwise identical.
+
+```console
+$ qai quran verify --deep
+QURAN VERIFY
+counts: pass — 2 checks pass
+addressing: pass — 4 checks pass
+unicode: pass — 1 checks pass
+checksums: pass — 3 checks pass
+roundtrip: pass — 1 checks pass
+reference_comparison: skipped — reference comparison skipped: no reference corpus configured (ADR-0114; OD-03 owner gate)
+exit: 0
+
+```

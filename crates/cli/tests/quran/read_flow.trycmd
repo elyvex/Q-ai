@@ -34,6 +34,7 @@ first line and a provenance citation on the second.
 $ qai quran get 1:1
 أوَيت تَساكُن كن لهُم ثُشأوَ
 — quran:test-edition-min@0.1.0:1:1
+  text_hash: sha256:2c656d34d59038eed42464f08e753d2d6d16f702f09b8b05789abcaae792ba31
 
 ```
 
@@ -158,6 +159,7 @@ en-test@1.0.0 — Test Translator [en]
 $ qai quran get 1:1 --translations en-test
 أوَيت تَساكُن كن لهُم ثُشأوَ
 — quran:test-edition-min@0.1.0:1:1
+  text_hash: sha256:2c656d34d59038eed42464f08e753d2d6d16f702f09b8b05789abcaae792ba31
 [Test Translator] test words one one
 
 ```
@@ -177,6 +179,7 @@ imported 3 glosses
 $ qai quran get 1:1 --glosses
 أوَيت تَساكُن كن لهُم ثُشأوَ
 — quran:test-edition-min@0.1.0:1:1
+  text_hash: sha256:2c656d34d59038eed42464f08e753d2d6d16f702f09b8b05789abcaae792ba31
 [gloss-en-test] test gloss one one
 [gloss-en-test] test gloss one two
 
