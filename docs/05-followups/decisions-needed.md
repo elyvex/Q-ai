@@ -49,6 +49,8 @@
   choice (A/B/C). Status stays 🔴 until those land.
 - **Recorded in:** `docs/02-architecture/decisions/ADR-0101-initial-quran-dataset.md`
   (Draft), `tasks.md` §1/`§2`, `acceptance.md` §1.1.
+- **Phase 2 record (2026-09-25, plan 02-07):** `docs/05-followups/phase-02-owner-gates.md` §OD-01.
+  Blocked and agent-uncloseable; closing action + import command recorded there. **Status stays 🔴.**
 
 ## OD-02 — Named editorial reviewer + `verified_by` sign-off
 
@@ -59,6 +61,9 @@
   edition's `verified_by` field.
 - **Blocks:** `P1-X02`, `P1-T55`, `AC-P1-01` (with OD-01).
 - **Recorded in:** ADR-0101, `tasks.md` §1/`§7`.
+- **Phase 2 record (2026-09-25, plan 02-07):** `docs/05-followups/phase-02-owner-gates.md` §OD-02.
+  Blocked and agent-uncloseable; reviewer/sample/method and the `qai quran edition verify` command are recorded
+  there; any in-tree reviewer string is a test-only placeholder. **Status stays 🔴.**
 
 ## OD-03 — Reference corpus + comparison procedure + sign-off
 
@@ -70,6 +75,9 @@
 - **Blocks:** `P1-X03`, `P1-T03`, `P1-T26◐`, QV-015.
 - **Recorded in:** `docs/02-architecture/decisions/ADR-0114-reference-corpus-comparison.md`
   (Draft), `tasks.md` §1/`§4.2`.
+- **Phase 2 record (2026-09-25, plan 02-07):** `docs/05-followups/phase-02-owner-gates.md` §OD-03.
+  Blocked and agent-uncloseable; corpus/procedure/signer and the `qai quran import --reference` command are
+  recorded there, including the hash-only limitation of the `spqrxi/quranchecksum` candidate. **Status stays 🔴.**
 
 ## OD-04 — Debug-reader web font: name + license (blocks T54 / AC-P1-18)
 
