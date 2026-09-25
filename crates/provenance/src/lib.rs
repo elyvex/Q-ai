@@ -267,6 +267,12 @@ pub trait CanonicalWriter: Send + Sync {
 /// `subject_urn`. The persisted-approval check itself lives in the token's
 /// `from_approval_row` constructor, so no canonical publication can begin
 /// without a granted approval row naming the exact edition URN.
+///
+/// The alternative — retiring the trait as dead code — was rejected: ADR-0000
+/// locks canonical immutability as a **type-level** property and
+/// `.agent/coding-rules.md` states "canonical rows are written only through a
+/// `CanonicalWriter` that requires an `ApprovalToken`", so the invariant is
+/// wired rather than documented away.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ApprovalGate;
 
