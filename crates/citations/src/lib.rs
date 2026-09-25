@@ -76,6 +76,39 @@ pub enum QuotationVerdict {
     AccessDenied,
 }
 
+impl QuotationVerdict {
+    /// Whether this verdict is a hard failure on an answer path (§35.3).
+    ///
+    /// `Mismatch`, `LocationNotFound`, `EditionNotFound`, and `AccessDenied`
+    /// must never be downgraded to a warning or softened into a success. The
+    /// success verdicts are `ExactMatch` and
+    /// `MatchAfterWhitespaceNormalization`. `MatchAfterDeclaredNormalization`
+    /// is a declared match but is unreachable in v1 — the resolver carries no
+    /// normalization-rules parameter — so it is not claimed as reachable here.
+    pub fn is_hard_failure(&self) -> bool {
+        matches!(
+            self,
+            Self::Mismatch { .. }
+                | Self::LocationNotFound
+                | Self::EditionNotFound
+                | Self::AccessDenied
+        )
+    }
+
+    /// The stable verdict label matching the persisted/serialized string.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::ExactMatch => "ExactMatch",
+            Self::MatchAfterWhitespaceNormalization => "MatchAfterWhitespaceNormalization",
+            Self::MatchAfterDeclaredNormalization { .. } => "MatchAfterDeclaredNormalization",
+            Self::Mismatch { .. } => "Mismatch",
+            Self::LocationNotFound => "LocationNotFound",
+            Self::EditionNotFound => "EditionNotFound",
+            Self::AccessDenied => "AccessDenied",
+        }
+    }
+}
+
 /// A resolved citation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResolvedCitation {
@@ -104,6 +137,25 @@ pub enum CitationError {
         /// What was wrong.
         detail: String,
     },
+    /// The quotation does not match the canonical text (hard failure).
+    #[error(
+        "quotation does not match canonical text (first difference at {first_difference_at}, expected {expected_hash})"
+    )]
+    QuotationMismatch {
+        /// First differing character index.
+        first_difference_at: u32,
+        /// SHA-256 hex of the canonical text.
+        expected_hash: String,
+    },
+    /// The cited location does not resolve (hard failure).
+    #[error("citation location not found")]
+    LocationNotFound,
+    /// The cited edition does not exist (hard failure).
+    #[error("citation edition not found")]
+    EditionNotFound,
+    /// Access to the cited location was denied (hard failure).
+    #[error("citation access denied")]
+    AccessDenied,
 }
 
 impl CitationError {
@@ -112,7 +164,36 @@ impl CitationError {
         match self {
             Self::InvalidReference { .. } => "QAI-QUR-0321",
             Self::Backend { .. } => "QAI-QUR-0322",
+            Self::QuotationMismatch { .. } => "QAI-QUR-0323",
+            Self::LocationNotFound => "QAI-QUR-0324",
+            Self::EditionNotFound => "QAI-QUR-0325",
+            Self::AccessDenied => "QAI-QUR-0326",
         }
+    }
+}
+
+/// Map a verdict to a hard failure: `Ok(())` for a match, a typed
+/// [`CitationError`] for every hard-failure verdict.
+///
+/// This is the single shared mapping the CLI, HTTP, and tool answer paths use,
+/// so a mismatch can never be softened into a warning on one surface while it
+/// fails on another (§35.3, ADR-0111). The returned error carries a stable
+/// `QAI-QUR-*` code via [`CitationError::code`]; exit-code/HTTP concerns belong
+/// to the caller, not to this domain crate.
+pub fn require_exact(verdict: &QuotationVerdict) -> Result<(), CitationError> {
+    match verdict {
+        QuotationVerdict::Mismatch { first_difference_at, expected_hash } => {
+            Err(CitationError::QuotationMismatch {
+                first_difference_at: *first_difference_at,
+                expected_hash: expected_hash.clone(),
+            })
+        }
+        QuotationVerdict::LocationNotFound => Err(CitationError::LocationNotFound),
+        QuotationVerdict::EditionNotFound => Err(CitationError::EditionNotFound),
+        QuotationVerdict::AccessDenied => Err(CitationError::AccessDenied),
+        QuotationVerdict::ExactMatch
+        | QuotationVerdict::MatchAfterWhitespaceNormalization
+        | QuotationVerdict::MatchAfterDeclaredNormalization { .. } => Ok(()),
     }
 }
 
@@ -423,5 +504,94 @@ mod tests {
     fn links_render() {
         assert_eq!(deep_link("s", "1.0.0", 2, 255), "/read/s@1.0.0/2:255");
         assert_eq!(citation_urn("s", "1.0.0", 2, 255), "qai://quran/s@1.0.0/2:255");
+    }
+
+    #[test]
+    fn require_exact_maps_every_hard_failure_to_a_distinct_code() {
+        let success =
+            [QuotationVerdict::ExactMatch, QuotationVerdict::MatchAfterWhitespaceNormalization];
+        let failures = [
+            (
+                QuotationVerdict::Mismatch { first_difference_at: 2, expected_hash: "ab".into() },
+                "QAI-QUR-0323",
+            ),
+            (QuotationVerdict::LocationNotFound, "QAI-QUR-0324"),
+            (QuotationVerdict::EditionNotFound, "QAI-QUR-0325"),
+            (QuotationVerdict::AccessDenied, "QAI-QUR-0326"),
+        ];
+
+        let mut codes = Vec::new();
+        for verdict in &success {
+            assert!(!verdict.is_hard_failure(), "{} is a success verdict", verdict.label());
+            assert!(require_exact(verdict).is_ok(), "{} must map to Ok", verdict.label());
+        }
+        for (verdict, expected_code) in &failures {
+            assert!(verdict.is_hard_failure(), "{} is a hard failure", verdict.label());
+            let error = require_exact(verdict).expect_err("hard failures map to Err");
+            assert_eq!(error.code(), *expected_code);
+            assert_ne!(error.code(), "QAI-QUR-0321");
+            assert_ne!(error.code(), "QAI-QUR-0322");
+            codes.push(error.code());
+        }
+        // Stability + distinctness: no two hard-failure verdicts share a code.
+        let mut unique = codes.clone();
+        unique.sort_unstable();
+        unique.dedup();
+        assert_eq!(unique.len(), codes.len(), "hard-failure codes must be distinct: {codes:?}");
+    }
+
+    #[tokio::test]
+    async fn tampered_text_against_a_real_citation_is_a_hard_failure() {
+        let exact = resolver().resolve(&citation("ب ت")).await.unwrap();
+        assert_eq!(exact.verdict, QuotationVerdict::ExactMatch);
+        require_exact(&exact.verdict).expect("an exact match must not fail");
+
+        let tampered = resolver().resolve(&citation("ب ث")).await.unwrap();
+        assert!(matches!(tampered.verdict, QuotationVerdict::Mismatch { .. }));
+        let error = require_exact(&tampered.verdict).expect_err("a mismatch is a hard failure");
+        assert_eq!(error.code(), "QAI-QUR-0323");
+    }
+
+    #[tokio::test]
+    async fn reachable_verdict_set_excludes_declared_normalization() {
+        // Exercise every outcome the resolver can actually produce in v1 and
+        // collect the labels. MatchAfterDeclaredNormalization has no producer
+        // (the resolver takes no normalization-rules parameter), so it must not
+        // appear; this asserts the reachable set instead of claiming behaviour
+        // for an unreachable verdict.
+        let mut reachable = Vec::new();
+        for probe in [
+            citation("ب ت"),  // ExactMatch
+            citation("ب  ت"), // whitespace-normalized match
+            citation("ب ث"),  // Mismatch
+        ] {
+            reachable.push(resolver().resolve(&probe).await.unwrap().verdict.label());
+        }
+        let mut missing_edition = citation("ب ت");
+        missing_edition.edition_slug = "nope".into();
+        reachable.push(resolver().resolve(&missing_edition).await.unwrap().verdict.label());
+        let mut missing_ayah = citation("ب ت");
+        missing_ayah.canonical_reference = "quran:test@0.1.0:9:9".into();
+        reachable.push(resolver().resolve(&missing_ayah).await.unwrap().verdict.label());
+        let mut range = citation("ب ت");
+        range.canonical_reference = "quran:test@0.1.0:1:1-1:2".into();
+        reachable.push(resolver().resolve(&range).await.unwrap().verdict.label());
+
+        reachable.sort_unstable();
+        reachable.dedup();
+        assert_eq!(
+            reachable,
+            vec![
+                "EditionNotFound",
+                "ExactMatch",
+                "LocationNotFound",
+                "MatchAfterWhitespaceNormalization",
+                "Mismatch",
+            ]
+        );
+        assert!(
+            !reachable.contains(&"MatchAfterDeclaredNormalization"),
+            "declared normalization is unreachable in v1"
+        );
     }
 }
