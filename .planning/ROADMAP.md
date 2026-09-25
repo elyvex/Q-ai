@@ -14,7 +14,7 @@ From an empty workspace to a trustworthy local-first Quran research platform: fo
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Foundations** - Workspace, config, SQLite, jobs, provenance, audit, CLI skeleton
-- [ ] **Phase 2: Canonical Quran Core** - Validated import, addressing, tokens, exact lookup, integrity
+- [x] **Phase 2: Canonical Quran Core** - Validated import, addressing, tokens, exact lookup, integrity (completed 2026-09-25)
 - [ ] **Phase 3: Quran Search & Linguistics** - Normalization, roots/lemmas, morphology, frequency tools
 - [ ] **Phase 4: Quran Graph** - Graph store, traversal, annotations, visualization
 - [ ] **Phase 5: Rich Quran Experience** - Web GUI, TUI cockpit, research tools, result contract
@@ -242,7 +242,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundations | 0/5 | Not started | - |
-| 2. Canonical Quran Core | 7/7 | In Progress|  |
+| 2. Canonical Quran Core | 7/7 | Complete    | 2026-09-25 |
 | 3. Quran Search & Linguistics | 0/TBD | Not started | - |
 | 4. Quran Graph | 0/TBD | Not started | - |
 | 5. Rich Quran Experience | 0/TBD | Not started | - |
