@@ -4,6 +4,12 @@ All notable changes to Q-ai are documented here.
 
 ## [Unreleased]
 
+### Added — Index/linguistics doctor checks (P2-T105, 2026-09-24)
+
+- `qai doctor --indexes [--json]` runs 19 read-only Phase-2 checks
+  (normalization, forms, MV-018, FTS, trigram, drift, orphans, morphology,
+  lexicon, 12-probe search smoke). Board 59/114 (52%).
+
 ### Added — Single-step index rollback (P2-T35, 2026-09-24)
 
 - `qai quran index rollback` restores the previous serving index generation
