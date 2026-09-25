@@ -3,11 +3,11 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Canonical Quran Core
 status: executing
-stopped_at: Completed 02-04-PLAN.md
-last_updated: "2026-09-25T14:13:53.315Z"
+stopped_at: Completed 02-03-PLAN.md
+last_updated: "2026-09-25T15:32:55.101Z"
 last_activity: 2026-09-25
 last_activity_desc: Phase 02 execution started
-state_head: 6e1eea617d948410337fff501cb556437fffa145
+state_head: 0e2d1198796460fc60a73c09489bdebaef3306b4
 progress:
   total_phases: 12
   completed_phases: 0
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-23)
 ## Current Position
 
 Phase: 02 (Canonical Quran Core) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Status: Ready to execute
 Last activity: 2026-09-25 — Phase 02 execution started
 
@@ -61,6 +61,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 02 P01 | 22 min | 3 tasks | 14 files |
 | Phase 02 P02 | 40 min | 2 tasks | 6 files |
 | Phase 02 P04 | 30 min | 3 tasks | 11 files |
+| Phase 02 P03 | 19 min | 3 tasks | 26 files |
 
 ## Accumulated Context
 
@@ -80,6 +81,9 @@ Recent decisions affecting current work:
 - [Phase 02]: The reference_text_hash pin reuses the existing text_hash recipe verbatim; no new recipe was invented and renumbering does not change it.
 - [Phase 02]: The CanonicalWriter/ApprovalToken gate is wired, not retired: ADR-0000 locks canonical immutability as a type-level property and .agent/coding-rules.md states the invariant, so ApprovalGate implements CanonicalWriter and ApprovalToken is only mintable from a persisted granted approval row (from_approval_row).
 - [Phase 02]: Canonical quran_segments stays empty in Phase 2 (reserved for the morphology phase); the frozen activation copy list is unchanged and a future phase adds a forward migration plus a copy step.
+- [Phase 02]: qai quran verify classifies the six integrity families from persisted state; a skipped family is serialized as skipped and never as pass (D-10), and the command is read-only (T-02-07).
+- [Phase 02]: The independent reference corpus reaches run_import through the import payload (ImportInput.reference_manifest_text); identity/pins come verbatim from the operator document and QV-015 stays byte-only fail-closed, with ADR-0114 DifferenceClass as report metadata only (OD-03 open).
+- [Phase 02]: qai quran edition show surfaces the manifest-declared license status verbatim from the canonical row (never inferred) alongside upstream identity and the primary marker (T-02-36).
 
 ### Pending Todos
 
@@ -101,6 +105,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-25T14:13:53.252Z
-Stopped at: Completed 02-04-PLAN.md
+Last session: 2026-09-25T15:32:55.048Z
+Stopped at: Completed 02-03-PLAN.md
 Resume file: None
