@@ -9,7 +9,9 @@
 mod common;
 
 use application::quran::import_translations;
+use application::quran_reader::QuranReader as _;
 use common::{active_reader, principal, timestamp};
+use quran_core::AyahOptions;
 use storage::Database as _;
 
 /// True when `value` is the tagged SHA-256 storage form `sha256:<64 lowercase hex>`.
@@ -21,6 +23,16 @@ fn is_tagged_sha256(value: &str) -> bool {
 }
 
 fn manifest(aligned: &str, translator: &str, passages: &[(u16, u32, &str)]) -> String {
+    manifest_with_license(aligned, translator, None, passages)
+}
+
+/// Build a translation manifest, optionally declaring an SPDX license id.
+fn manifest_with_license(
+    aligned: &str,
+    translator: &str,
+    spdx_id: Option<&str>,
+    passages: &[(u16, u32, &str)],
+) -> String {
     let passages = passages
         .iter()
         .map(|(surah, ayah, text)| {
@@ -31,10 +43,14 @@ fn manifest(aligned: &str, translator: &str, passages: &[(u16, u32, &str)]) -> S
         })
         .collect::<Vec<_>>()
         .join(",");
+    let spdx = match spdx_id {
+        Some(id) => serde_json::to_string(id).unwrap(),
+        None => "null".to_string(),
+    };
     format!(
         "{{\"translation\":{{\"slug\":\"en-test\",\"version\":\"1.0.0\",\"name\":\"Test English\",\
          \"translator\":\"{translator}\",\"language\":\"en\",\"aligned_edition\":\"{aligned}\",\
-         \"numbering_scheme\":\"hafs\",\"spdx_id\":null}},\"passages\":[{passages}]}}"
+         \"numbering_scheme\":\"hafs\",\"spdx_id\":{spdx}}},\"passages\":[{passages}]}}"
     )
 }
 
@@ -117,7 +133,8 @@ async fn translation_hash_is_independent_of_manifest_passage_order() {
     .await
     .expect("ascending manifest imports");
     let mut uow = db_a.write().await.unwrap();
-    let hash_ascending = uow.quran().list_translation_editions().await.unwrap()[0].text_hash.clone();
+    let hash_ascending =
+        uow.quran().list_translation_editions().await.unwrap()[0].text_hash.clone();
     drop(uow);
 
     let (_dir_b, db_b, _reader_b, _path_b) = active_reader().await;
@@ -273,4 +290,176 @@ async fn import_translations_is_atomic_on_rejection() {
     let mut uow = db.write().await.unwrap();
     let editions = uow.quran().list_translation_editions().await.unwrap();
     assert!(editions.is_empty(), "rejected import must not leave a partial edition");
+}
+
+/// A declared translation license is persisted verbatim: the SPDX identifier is
+/// preserved character-for-character, never synthesized and never inferred from
+/// the translator, publisher, or repository (QC-09 tail, D-04, T-02-24).
+#[tokio::test]
+async fn import_translations_persists_the_declared_license_verbatim() {
+    let (_dir, db, _reader, _path) = active_reader().await;
+    let text = manifest_with_license(
+        "test-edition-min@0.1.0",
+        "Test Translator",
+        Some("CC-BY-4.0"),
+        &[(1, 1, "licensed one one")],
+    );
+    import_translations(
+        &*db,
+        &text,
+        "12345678-1234-1234-1234-123456789abc",
+        &principal(),
+        &timestamp(),
+    )
+    .await
+    .expect("declared-license manifest imports");
+
+    let mut uow = db.write().await.unwrap();
+    let editions = uow.quran().list_translation_editions().await.unwrap();
+    assert_eq!(editions.len(), 1);
+    let license: serde_json::Value =
+        serde_json::from_str(&editions[0].license_json).expect("license_json is JSON");
+    assert_eq!(
+        license["spdx_id"].as_str(),
+        Some("CC-BY-4.0"),
+        "the declared identifier must be stored character-for-character"
+    );
+    assert_ne!(
+        license["status"].as_str(),
+        Some("Unknown"),
+        "a declared license must not read back as undeclared"
+    );
+    assert_eq!(license["redistribution_allowed"].as_bool(), Some(false));
+    assert_eq!(license["export_allowed"].as_bool(), Some(false));
+}
+
+/// An undeclared translation license stays explicitly `Unknown` with no invented
+/// permission flags (QC-09 tail, D-04, T-02-24).
+#[tokio::test]
+async fn import_translations_keeps_an_undeclared_license_unknown() {
+    let (_dir, db, _reader, _path) = active_reader().await;
+    let text = manifest_with_license(
+        "test-edition-min@0.1.0",
+        "Test Translator",
+        None,
+        &[(1, 1, "unlicensed one one")],
+    );
+    import_translations(
+        &*db,
+        &text,
+        "12345678-1234-1234-1234-123456789abc",
+        &principal(),
+        &timestamp(),
+    )
+    .await
+    .expect("undeclared-license manifest imports");
+
+    let mut uow = db.write().await.unwrap();
+    let editions = uow.quran().list_translation_editions().await.unwrap();
+    let license: serde_json::Value =
+        serde_json::from_str(&editions[0].license_json).expect("license_json is JSON");
+    assert_eq!(
+        license["status"].as_str(),
+        Some("Unknown"),
+        "an undeclared license must stay explicitly unknown"
+    );
+    assert!(license["spdx_id"].is_null());
+    assert_eq!(
+        license["redistribution_allowed"].as_bool(),
+        Some(false),
+        "no redistribution permission may be invented"
+    );
+    assert_eq!(license["export_allowed"].as_bool(), Some(false));
+}
+
+/// Layer separation is enforced by construction and proven here: canonical and
+/// translation rows live in **separate tables** (`quran_*` canonical rows versus
+/// `translation_*` rows), are carried by **different types** (`QuranQuotation`
+/// versus `AttributedTranslation`), and meet only in `AyahView` — where the
+/// canonical slot holds the canonical quotation (canonical Arabic + canonical
+/// hash) and a translation can only ride alongside it as an attributed sidecar.
+///
+/// This negative test proves the boundary on a real imported translation at the
+/// read surface and scans `quran-core`'s view module for any canonical
+/// constructor that accepts a translator/language pair (D-04, ADR-0112, T-02-22).
+#[tokio::test]
+async fn translation_cannot_reach_a_canonical_slot() {
+    let (_dir, db, reader, _path) = active_reader().await;
+    let translation_text = "translated words one one";
+    let text = manifest("test-edition-min@0.1.0", "Test Translator", &[(1, 1, translation_text)]);
+    import_translations(
+        &*db,
+        &text,
+        "12345678-1234-1234-1234-123456789abc",
+        &principal(),
+        &timestamp(),
+    )
+    .await
+    .expect("translation imports");
+
+    // Serve the canonical ayah with the translation attached.
+    let options =
+        AyahOptions { translations: vec!["en-test".to_string()], glosses: false, tokens: false };
+    let view = reader.get_ayah(&quran_core::parse("1:1").unwrap(), &options).await.unwrap();
+
+    // The canonical slot is the canonical quotation: canonical Arabic and the
+    // stored canonical per-ayah hash — never the translation text.
+    let mut uow = db.write().await.unwrap();
+    let edition = uow
+        .quran()
+        .get_edition_by_slug_version("test-edition-min", "0.1.0")
+        .await
+        .unwrap()
+        .unwrap();
+    let canonical_row = uow.quran().get_ayah(&edition.id, 1, 1).await.unwrap().unwrap();
+    assert_eq!(view.canonical.arabic_text(), canonical_row.text);
+    assert_ne!(view.canonical.arabic_text(), translation_text);
+    assert_eq!(quran_corpus::tagged(view.canonical.text_hash()), canonical_row.text_hash);
+    assert_eq!(view.canonical.edition().slug, "test-edition-min");
+    // The canonical quotation's only translation channel is an identity
+    // reference (`TranslationRef`), which carries no text at all.
+    assert!(view.canonical.translation().is_none());
+
+    // The translation text appears only in the attributed sidecar, with its
+    // translator and edition reference.
+    assert_eq!(view.translations.len(), 1);
+    let sidecar = &view.translations[0];
+    assert_eq!(sidecar.text(), translation_text);
+    assert_eq!(sidecar.translator(), "Test Translator");
+    assert_eq!(sidecar.edition_ref(), "en-test@1.0.0");
+
+    // Serialized, the layers stay distinct: the canonical object has no field
+    // that can hold the translation text, and the translation is a sibling.
+    let json = serde_json::to_value(&view).unwrap();
+    assert_eq!(json["canonical"]["arabic_text"].as_str(), Some(canonical_row.text.as_str()));
+    assert_eq!(json["translations"][0]["text"].as_str(), Some(translation_text));
+    assert!(json["canonical"].get("text").is_none());
+    assert_ne!(json["canonical"]["arabic_text"], json["translations"][0]["text"]);
+
+    // The type boundary is not a comment: scan the canonical view module for a
+    // public constructor that takes a translator/language pair and could return
+    // a canonical quotation. The translation's own guarded constructor is the
+    // only such signature today, and it returns a translation.
+    assert_no_canonical_constructor_takes_translation(include_str!("../../quran-core/src/view.rs"));
+}
+
+/// Scan `quran-core`'s view module for a public constructor that takes a
+/// translator/language pair and could return a canonical quotation.
+fn assert_no_canonical_constructor_takes_translation(src: &str) {
+    for chunk in src.split("pub fn ").skip(1) {
+        let signature_end = chunk.find('{').unwrap_or(chunk.len());
+        let signature = &chunk[..signature_end];
+        if signature.contains("translator")
+            && (signature.contains("language") || signature.contains("Language"))
+        {
+            assert!(
+                !signature.contains("QuranQuotation"),
+                "a canonical constructor accepts a translator/language pair: {signature}"
+            );
+        }
+    }
+    assert!(
+        !src.contains("QuranQuotation::new"),
+        "the canonical view module must not build a QuranQuotation from anything"
+    );
 }

@@ -933,15 +933,33 @@ pub async fn import_translations(
         &manifest.translation.version,
         &texts,
     ));
-    let license_json = serde_json::json!({
-        "status": "Unknown",
-        "spdx_id": manifest.translation.spdx_id,
-        "attribution_required": true,
-        "redistribution_allowed": false,
-        "export_allowed": false,
-        "notes": "declared at import; verify before activation use",
-    })
-    .to_string();
+    // The translation's declared license is persisted verbatim: the manifest's
+    // SPDX identifier is preserved character-for-character and is never inferred
+    // from the translator, publisher, or repository. A declared SPDX identifier
+    // names a concrete license (status `OpenLicense`); an undeclared license
+    // stays explicit `Unknown`. No redistribution/export permission is ever
+    // invented either way (T-02-24; dataset/license identity stays owner gate
+    // OD-01).
+    let license_json = match manifest.translation.spdx_id.as_deref() {
+        Some(spdx_id) => serde_json::json!({
+            "status": "OpenLicense",
+            "spdx_id": spdx_id,
+            "attribution_required": false,
+            "redistribution_allowed": false,
+            "export_allowed": false,
+            "notes": "declared at import; identifier preserved verbatim (OD-01)",
+        })
+        .to_string(),
+        None => serde_json::json!({
+            "status": "Unknown",
+            "spdx_id": serde_json::Value::Null,
+            "attribution_required": false,
+            "redistribution_allowed": false,
+            "export_allowed": false,
+            "notes": "no license declared in the manifest; owner gate OD-01",
+        })
+        .to_string(),
+    };
     uow.quran()
         .insert_translation_edition(storage::quran::TranslationEditionRow {
             id: id.clone(),
