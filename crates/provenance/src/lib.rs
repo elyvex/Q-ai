@@ -1,8 +1,8 @@
 //! Phase 0 — Provenance model (D0.11).
 
 use domain::{
-    ApprovalId, ContentHash, DerivationVersions, PrincipalId, ProvenanceId, SubjectRef, Timestamp,
-    TrustLevel, VerificationStatus,
+    ContentHash, DerivationVersions, PrincipalId, ProvenanceId, SubjectRef, Timestamp, TrustLevel,
+    VerificationStatus,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -145,15 +145,18 @@ mod approval {
     use super::*;
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct ApprovalTokenInner {
-        pub approval_id: ApprovalId,
+        pub approval_id: String,
         pub subject_urn: String,
-        pub approved_by: PrincipalId,
+        pub approved_by: String,
         pub approved_at: Timestamp,
     }
 }
 
 impl ApprovalToken {
-    pub fn new(approval_id: ApprovalId, subject_urn: String, approved_by: PrincipalId) -> Self {
+    /// Crate-private raw constructor. The only public mint path is
+    /// [`ApprovalToken::from_approval_row`], which requires a persisted granted
+    /// approval row, so no caller can forge a token out of thin air.
+    pub(crate) fn new(approval_id: String, subject_urn: String, approved_by: String) -> Self {
         Self {
             inner: approval::ApprovalTokenInner {
                 approval_id,
@@ -163,24 +166,66 @@ impl ApprovalToken {
             },
         }
     }
-    pub fn approval_id(&self) -> &ApprovalId {
+
+    /// Mint a token from a persisted approval row.
+    ///
+    /// Succeeds only when the row's `decision` is exactly `"approved"` and its
+    /// `subject_urn` is non-empty. A not-granted row and a subject-less row
+    /// each yield a distinct typed error (`ApprovalNotGranted` /
+    /// `ApprovalSubjectMissing`).
+    pub fn from_approval_row(
+        row: &storage::repository::ApprovalRow,
+    ) -> Result<ApprovalToken, ProvenanceError> {
+        if row.decision.as_deref() != Some("approved") {
+            return Err(ProvenanceError::ApprovalNotGranted { approval_id: row.id.clone() });
+        }
+        if row.subject_urn.trim().is_empty() {
+            return Err(ProvenanceError::ApprovalSubjectMissing { approval_id: row.id.clone() });
+        }
+        Ok(ApprovalToken::new(
+            row.id.clone(),
+            row.subject_urn.clone(),
+            row.decided_by.clone().unwrap_or_default(),
+        ))
+    }
+
+    /// The approval row id this token was minted from.
+    pub fn approval_id(&self) -> &str {
         &self.inner.approval_id
     }
+
+    /// The exact canonical subject URN the approval names.
     pub fn subject_urn(&self) -> &str {
         &self.inner.subject_urn
     }
-    pub fn approved_by(&self) -> &PrincipalId {
+
+    /// The principal recorded as having granted the approval (may be empty).
+    pub fn approved_by(&self) -> &str {
         &self.inner.approved_by
+    }
+
+    /// Whether this token authorises a change to exactly `subject_urn`.
+    pub fn authorises(&self, subject_urn: &str) -> bool {
+        self.inner.subject_urn == subject_urn
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CanonicalChangeRequest {
-    pub new_source_version_id: domain::SourceVersionId,
+    /// The exact canonical subject this change applies to
+    /// (`quran-edition:{slug}@{version}`). Must equal the token's subject.
+    pub subject_urn: String,
+    /// Source-version id the change derives from (verbatim storage id).
+    pub new_source_version_id: String,
+    /// The edition's canonical `text_hash` as a typed content hash.
     pub content_hash: ContentHash,
+    /// Persisted structural validation report for the change.
     pub structural_validation_report: String,
+    /// Difference report for the change (canonical differences live in the
+    /// `difference_reports` table; this is the provenance-level summary).
     pub difference_report: DifferenceReport,
-    pub approver_identity: PrincipalId,
+    /// Principal recorded as approving the change.
+    pub approver_identity: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -191,7 +236,7 @@ pub struct CanonicalChangeSession {
     pub status: SessionStatus,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionStatus {
     Open,
     Committed,
@@ -207,12 +252,66 @@ pub trait CanonicalWriter: Send + Sync {
     ) -> Result<CanonicalChangeSession, ProvenanceError>;
     async fn commit_canonical_change(
         &self,
-        session: &CanonicalChangeSession,
+        session: &mut CanonicalChangeSession,
     ) -> Result<(), ProvenanceError>;
     async fn abort_canonical_change(
         &self,
-        session: &CanonicalChangeSession,
+        session: &mut CanonicalChangeSession,
     ) -> Result<(), ProvenanceError>;
+}
+
+/// The only in-tree [`CanonicalWriter`].
+///
+/// It enforces the type-level half of the canonical-write fence: a change
+/// session opens only when the [`ApprovalToken`] is bound to the change's exact
+/// `subject_urn`. The persisted-approval check itself lives in the token's
+/// `from_approval_row` constructor, so no canonical publication can begin
+/// without a granted approval row naming the exact edition URN.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ApprovalGate;
+
+#[async_trait::async_trait]
+impl CanonicalWriter for ApprovalGate {
+    fn begin_canonical_change(
+        &self,
+        token: &ApprovalToken,
+        change: CanonicalChangeRequest,
+    ) -> Result<CanonicalChangeSession, ProvenanceError> {
+        if !token.authorises(&change.subject_urn) {
+            return Err(ProvenanceError::ApprovalSubjectMismatch {
+                expected: token.subject_urn().to_string(),
+                actual: change.subject_urn.clone(),
+            });
+        }
+        Ok(CanonicalChangeSession {
+            id: change.subject_urn.clone(),
+            request: change,
+            opened_at: Timestamp::now(),
+            status: SessionStatus::Open,
+        })
+    }
+
+    async fn commit_canonical_change(
+        &self,
+        session: &mut CanonicalChangeSession,
+    ) -> Result<(), ProvenanceError> {
+        if session.status != SessionStatus::Open {
+            return Err(ProvenanceError::InvalidSessionState {
+                id: session.id.clone(),
+                state: format!("{:?}", session.status),
+            });
+        }
+        session.status = SessionStatus::Committed;
+        Ok(())
+    }
+
+    async fn abort_canonical_change(
+        &self,
+        session: &mut CanonicalChangeSession,
+    ) -> Result<(), ProvenanceError> {
+        session.status = SessionStatus::Aborted;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -243,6 +342,30 @@ pub enum ProvenanceError {
     ComputationalNeedsReview,
     #[error("invalid subject reference: {0}")]
     InvalidSubjectRef(String),
+    #[error("approval {approval_id} is not granted")]
+    ApprovalNotGranted {
+        /// The approval row id.
+        approval_id: String,
+    },
+    #[error("approval {approval_id} names no subject")]
+    ApprovalSubjectMissing {
+        /// The approval row id.
+        approval_id: String,
+    },
+    #[error("approval token subject {actual} does not authorise {expected}")]
+    ApprovalSubjectMismatch {
+        /// The subject the token authorises.
+        expected: String,
+        /// The subject the change requests.
+        actual: String,
+    },
+    #[error("canonical change session {id} is not open (state {state})")]
+    InvalidSessionState {
+        /// The session id.
+        id: String,
+        /// The session's current state.
+        state: String,
+    },
     #[error("storage error: {0}")]
     Storage(#[from] storage::StorageError),
 }
@@ -259,6 +382,10 @@ impl ProvenanceError {
             Self::InvalidApprovalToken => "QAI-PROV-0006",
             Self::ComputationalNeedsReview => "QAI-PROV-0007",
             Self::InvalidSubjectRef(_) => "QAI-PROV-0008",
+            Self::ApprovalNotGranted { .. } => "QAI-PROV-0010",
+            Self::ApprovalSubjectMissing { .. } => "QAI-PROV-0011",
+            Self::ApprovalSubjectMismatch { .. } => "QAI-PROV-0012",
+            Self::InvalidSessionState { .. } => "QAI-PROV-0013",
             Self::Storage(_) => "QAI-PROV-0009",
         }
     }
@@ -293,13 +420,82 @@ mod tests {
     }
 
     #[test]
-    fn approval_token_cannot_be_constructed_directly() {
-        let token = ApprovalToken::new(
-            ApprovalId::new(),
-            "urn:qai:source:test".to_string(),
-            PrincipalId::new(),
-        );
-        assert_eq!(token.approval_id().to_string(), token.approval_id().to_string());
+    fn denied_approval_row_yields_the_not_granted_error() {
+        let row = approval_row("appr-1", Some("denied"), "quran-edition:min@0.1.0");
+        let err = ApprovalToken::from_approval_row(&row).unwrap_err();
+        assert!(matches!(err, ProvenanceError::ApprovalNotGranted { .. }));
+        assert_eq!(err.code(), "QAI-PROV-0010");
+    }
+
+    #[test]
+    fn subject_less_approval_row_yields_the_missing_subject_error() {
+        let row = approval_row("appr-2", Some("approved"), "   ");
+        let err = ApprovalToken::from_approval_row(&row).unwrap_err();
+        assert!(matches!(err, ProvenanceError::ApprovalSubjectMissing { .. }));
+        assert_eq!(err.code(), "QAI-PROV-0011");
+    }
+
+    #[test]
+    fn approved_row_mints_a_token_bound_to_its_subject() {
+        let row = approval_row("appr-3", Some("approved"), "quran-edition:min@0.1.0");
+        let token = ApprovalToken::from_approval_row(&row).unwrap();
+        assert_eq!(token.approval_id(), "appr-3");
+        assert_eq!(token.subject_urn(), "quran-edition:min@0.1.0");
+        assert_eq!(token.approved_by(), "approver");
+        assert!(token.authorises("quran-edition:min@0.1.0"));
+        assert!(!token.authorises("quran-edition:other@9.9.9"));
+    }
+
+    #[test]
+    fn no_public_constructor_bypasses_the_row_check() {
+        // Audit the `impl ApprovalToken` block: the only public constructor is
+        // the row-derived one, and the raw constructor is crate-private.
+        let src = include_str!("lib.rs");
+        let rest = &src[src.find("impl ApprovalToken {").expect("impl block")..];
+        let block = &rest[..rest.find("\n}").expect("impl end")];
+        assert!(block.contains("pub(crate) fn new("), "raw constructor must be crate-private");
+        assert!(!block.contains("pub fn new("), "no public raw constructor may exist");
+        for line in block.lines() {
+            if let Some(rest) = line.trim_start().strip_prefix("pub fn ") {
+                let name = rest.split('(').next().unwrap_or("");
+                assert!(
+                    matches!(
+                        name,
+                        "from_approval_row" | "approval_id" | "subject_urn" | "approved_by"
+                            | "authorises"
+                    ),
+                    "unexpected public fn on ApprovalToken: {name}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn approval_gate_rejects_a_mismatched_subject_before_any_write() {
+        let row = approval_row("appr-4", Some("approved"), "quran-edition:min@0.1.0");
+        let token = ApprovalToken::from_approval_row(&row).unwrap();
+        let err = ApprovalGate
+            .begin_canonical_change(&token, change_request("quran-edition:other@9.9.9"))
+            .unwrap_err();
+        assert!(matches!(err, ProvenanceError::ApprovalSubjectMismatch { .. }));
+        assert_eq!(err.code(), "QAI-PROV-0012");
+    }
+
+    #[test]
+    fn approval_gate_tracks_open_committed_and_aborted_sessions() {
+        let row = approval_row("appr-5", Some("approved"), "quran-edition:min@0.1.0");
+        let token = ApprovalToken::from_approval_row(&row).unwrap();
+        let mut session =
+            ApprovalGate.begin_canonical_change(&token, change_request(token.subject_urn())).unwrap();
+        assert_eq!(session.status, SessionStatus::Open);
+        block_on(ApprovalGate.commit_canonical_change(&mut session)).unwrap();
+        assert_eq!(session.status, SessionStatus::Committed);
+        let err = block_on(ApprovalGate.commit_canonical_change(&mut session)).unwrap_err();
+        assert!(matches!(err, ProvenanceError::InvalidSessionState { .. }));
+        let mut aborted =
+            ApprovalGate.begin_canonical_change(&token, change_request(token.subject_urn())).unwrap();
+        block_on(ApprovalGate.abort_canonical_change(&mut aborted)).unwrap();
+        assert_eq!(aborted.status, SessionStatus::Aborted);
     }
 
     #[test]
@@ -311,18 +507,58 @@ mod tests {
     }
 
     #[test]
-    fn canonical_change_request_requires_all_fields() {
-        let req = CanonicalChangeRequest {
-            new_source_version_id: domain::SourceVersionId::new(),
+    fn canonical_change_request_carries_the_subject_and_source_identity() {
+        let req = change_request("quran-edition:min@0.1.0");
+        assert_eq!(req.subject_urn, "quran-edition:min@0.1.0");
+        assert_eq!(req.new_source_version_id, "sv-1");
+        assert_eq!(req.approver_identity, "approver");
+    }
+
+    fn approval_row(
+        id: &str,
+        decision: Option<&str>,
+        subject: &str,
+    ) -> storage::repository::ApprovalRow {
+        storage::repository::ApprovalRow {
+            id: id.to_string(),
+            subject_urn: subject.to_string(),
+            kind: "CanonicalChange".to_string(),
+            requested_by: Some("requester".to_string()),
+            decided_by: Some("approver".to_string()),
+            decision: decision.map(str::to_string),
+            request_payload: "{}".to_string(),
+            decision_note: None,
+            requested_at: "2026-09-14T00:00:00Z".to_string(),
+            decided_at: Some("2026-09-14T00:00:00Z".to_string()),
+        }
+    }
+
+    fn change_request(subject: &str) -> CanonicalChangeRequest {
+        CanonicalChangeRequest {
+            subject_urn: subject.to_string(),
+            new_source_version_id: "sv-1".to_string(),
             content_hash: ContentHash {
                 algorithm: domain::HashAlgorithm::Sha256,
                 hex: "00".to_string(),
             },
             structural_validation_report: "valid".to_string(),
             difference_report: DifferenceReport::default(),
-            approver_identity: PrincipalId::new(),
-        };
-        assert_eq!(req.new_source_version_id.to_string(), req.new_source_version_id.to_string());
+            approver_identity: "approver".to_string(),
+        }
+    }
+
+    /// Minimal executor for the gate's always-ready futures (no tokio dep).
+    fn block_on<F: std::future::Future>(fut: F) -> F::Output {
+        use std::task::{Context, Poll, Waker};
+        let mut fut = std::pin::pin!(fut);
+        let waker = Waker::noop();
+        let mut cx = Context::from_waker(waker);
+        loop {
+            if let Poll::Ready(value) = fut.as_mut().poll(&mut cx) {
+                return value;
+            }
+            std::thread::yield_now();
+        }
     }
 
     fn make_canonical_record() -> ProvenanceRecord {
