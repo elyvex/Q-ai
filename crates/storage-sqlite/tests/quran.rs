@@ -1,7 +1,7 @@
 //! Phase 1 — persistence acceptance: AC-P1-08/09 (P1-T12–T14, T24).
 //!
 //! Against real SQLite in a tempdir, never a mock:
-//! - insert-only triggers abort raw `UPDATE`/`DELETE` with `QAI-QUR-0001…0005`;
+//! - insert-only triggers abort raw `UPDATE`/`DELETE` with `QAI-QUR-0001…0021`;
 //! - staging tables stay writable and cascade on run deletion;
 //! - activation moves staging → canonical, flips the pointer, and bumps
 //!   `corpus_generation` atomically; rollback restores a prior version.
@@ -248,12 +248,65 @@ async fn canonical_triggers_abort_raw_writes_with_codes() {
         .connect_with(SqliteConnectOptions::new().filename(&path).foreign_keys(true))
         .await
         .unwrap();
+    // Canonical rows the move list does not create (segments have no writer;
+    // division-less fixtures; translations/glosses are a separate layer). They
+    // are insert-allowed — only UPDATE/DELETE must abort — so seed one row each
+    // for the trigger to fire per-row.
+    for sql in [
+        "INSERT INTO quran_segments
+            (edition_id, surah, ayah, seg_index, kind, token_start, token_end, provenance_id)
+         VALUES ('ed-1', 1, 1, 0, 'word', 1, 2, 'prov-1')",
+        "INSERT INTO quran_divisions
+            (edition_id, kind, number, start_surah, start_ayah, end_surah, end_ayah,
+             start_global, end_global, label, provenance_id)
+         VALUES ('ed-1', 'juz', 1, 1, 1, 1, 1, 1, 1, NULL, 'prov-1')",
+        "INSERT INTO translation_editions
+            (id, slug, version, name, translator, language, aligned_edition_id,
+             numbering_scheme, license_json, trust_level, source_version_id, text_hash,
+             status, imported_at)
+         VALUES ('tr-1', 'tr', '1.0.0', 'Tr', 'X', 'en', 'ed-1', 'hafs', '{}',
+                 'ImportedUnverified', 'sv-1', 'sha256:aa', 'Staged', '2026-09-14T00:00:00Z')",
+        "INSERT INTO translation_passages
+            (translation_edition_id, surah, ayah, text, footnotes_json, provenance_id)
+         VALUES ('tr-1', 1, 1, 'x', '[]', 'prov-1')",
+        "INSERT INTO word_glosses
+            (gloss_dataset_id, edition_id, surah, ayah, position, language, gloss, provenance_id)
+         VALUES ('src-1', 'ed-1', 1, 1, 1, 'en', 'g', 'prov-1')",
+    ] {
+        sqlx::query(sql).execute(&pool).await.unwrap();
+    }
     for (sql, code) in [
         ("UPDATE quran_ayahs SET text = 'x' WHERE edition_id = 'ed-1'", "QAI-QUR-0001"),
         ("DELETE FROM quran_ayahs WHERE edition_id = 'ed-1'", "QAI-QUR-0003"),
         ("UPDATE quran_tokens SET surface = 'x' WHERE edition_id = 'ed-1'", "QAI-QUR-0004"),
         ("DELETE FROM quran_tokens WHERE edition_id = 'ed-1'", "QAI-QUR-0005"),
         ("UPDATE quran_editions SET text_hash = 'x' WHERE id = 'ed-1'", "QAI-QUR-0002"),
+        ("UPDATE quran_surahs SET name_arabic = 'x' WHERE edition_id = 'ed-1'", "QAI-QUR-0006"),
+        ("DELETE FROM quran_surahs WHERE edition_id = 'ed-1'", "QAI-QUR-0007"),
+        (
+            "UPDATE quran_token_separators SET separator = 'x' WHERE edition_id = 'ed-1'",
+            "QAI-QUR-0008",
+        ),
+        ("DELETE FROM quran_token_separators WHERE edition_id = 'ed-1'", "QAI-QUR-0009"),
+        ("UPDATE quran_segments SET kind = 'x' WHERE edition_id = 'ed-1'", "QAI-QUR-0010"),
+        ("DELETE FROM quran_segments WHERE edition_id = 'ed-1'", "QAI-QUR-0011"),
+        ("UPDATE quran_divisions SET label = 'x' WHERE edition_id = 'ed-1'", "QAI-QUR-0012"),
+        ("DELETE FROM quran_divisions WHERE edition_id = 'ed-1'", "QAI-QUR-0013"),
+        ("UPDATE translation_editions SET name = 'x' WHERE id = 'tr-1'", "QAI-QUR-0014"),
+        ("DELETE FROM translation_editions WHERE id = 'tr-1'", "QAI-QUR-0015"),
+        (
+            "UPDATE translation_passages SET text = 'x' WHERE translation_edition_id = 'tr-1'",
+            "QAI-QUR-0016",
+        ),
+        ("DELETE FROM translation_passages WHERE translation_edition_id = 'tr-1'", "QAI-QUR-0017"),
+        ("UPDATE word_glosses SET gloss = 'x' WHERE gloss_dataset_id = 'src-1'", "QAI-QUR-0018"),
+        ("DELETE FROM word_glosses WHERE gloss_dataset_id = 'src-1'", "QAI-QUR-0019"),
+        ("DELETE FROM quran_editions WHERE id = 'ed-1'", "QAI-QUR-0020"),
+        (
+            "UPDATE quran_editions SET upstream_edition_slug = 'x' WHERE id = 'ed-1'",
+            "QAI-QUR-0021",
+        ),
+        ("UPDATE quran_editions SET is_primary = 1 WHERE id = 'ed-1'", "QAI-QUR-0021"),
     ] {
         let err = sqlx::query(sql).execute(&pool).await.unwrap_err();
         let message = err.to_string();
@@ -281,6 +334,22 @@ async fn canonical_tables_declare_the_trigger_set() {
         "trg_token_no_update",
         "trg_token_no_delete",
         "trg_edition_immutable_hashes",
+        "trg_edition_identity_no_update",
+        "trg_edition_no_delete",
+        "trg_surah_no_update",
+        "trg_surah_no_delete",
+        "trg_separator_no_update",
+        "trg_separator_no_delete",
+        "trg_segment_no_update",
+        "trg_segment_no_delete",
+        "trg_division_no_update",
+        "trg_division_no_delete",
+        "trg_translation_edition_no_update",
+        "trg_translation_edition_no_delete",
+        "trg_translation_passage_no_update",
+        "trg_translation_passage_no_delete",
+        "trg_gloss_no_update",
+        "trg_gloss_no_delete",
     ] {
         assert!(names.iter().any(|n| n == expected), "missing trigger {expected}");
     }
