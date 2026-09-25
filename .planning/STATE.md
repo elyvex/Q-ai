@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Canonical Quran Core
 status: executing
-stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-09-25T15:32:55.101Z"
+stopped_at: Completed 02-06-PLAN.md
+last_updated: "2026-09-25T15:53:35.506Z"
 last_activity: 2026-09-25
 last_activity_desc: Phase 02 execution started
-state_head: 0e2d1198796460fc60a73c09489bdebaef3306b4
+state_head: cb21a61a561d1a3f076d99701038f38609066b11
 progress:
   total_phases: 12
   completed_phases: 0
   total_plans: 12
-  completed_plans: 3
+  completed_plans: 5
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-23)
 ## Current Position
 
 Phase: 02 (Canonical Quran Core) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 Status: Ready to execute
 Last activity: 2026-09-25 — Phase 02 execution started
 
@@ -62,6 +62,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 02 P02 | 40 min | 2 tasks | 6 files |
 | Phase 02 P04 | 30 min | 3 tasks | 11 files |
 | Phase 02 P03 | 19 min | 3 tasks | 26 files |
+| Phase 02 P06 | 12 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,9 @@ Recent decisions affecting current work:
 - [Phase 02]: qai quran verify classifies the six integrity families from persisted state; a skipped family is serialized as skipped and never as pass (D-10), and the command is read-only (T-02-07).
 - [Phase 02]: The independent reference corpus reaches run_import through the import payload (ImportInput.reference_manifest_text); identity/pins come verbatim from the operator document and QV-015 stays byte-only fail-closed, with ADR-0114 DifferenceClass as report metadata only (OD-03 open).
 - [Phase 02]: qai quran edition show surfaces the manifest-declared license status verbatim from the canonical row (never inferred) alongside upstream identity and the primary marker (T-02-36).
+- [Phase 02]: Translation content hash uses an additive, domain-separated qai-translation-hash-v1 recipe over passages sorted ascending by (surah, ayah); the frozen qai-text-hash-v1/structure_hash/token_order_hash recipes and domain strings are untouched (D-12, ADR-0108), and the digest is independent of manifest passage order (T-02-25).
+- [Phase 02]: A declared translation license stores the manifest SPDX identifier character-for-character (status OpenLicense); an undeclared license stays explicit Unknown and no redistribution/export permission is invented (T-02-24, OD-01 remains the owner gate).
+- [Phase 02]: Translation layer separation is proven at table, type, and test level: canonical and translation rows live in quran_* versus translation_* tables, AyahView.canonical is a QuranQuotation, and a source scan asserts no canonical view constructor takes a translator/language pair (D-04, ADR-0112, T-02-22).
 
 ### Pending Todos
 
@@ -105,6 +109,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-25T15:32:55.048Z
-Stopped at: Completed 02-03-PLAN.md
+Last session: 2026-09-25T15:53:35.450Z
+Stopped at: Completed 02-06-PLAN.md
 Resume file: None
