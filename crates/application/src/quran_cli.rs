@@ -595,6 +595,7 @@ pub async fn cmd_import(
     manifest: &str,
     adapter: &str,
     dry_run: bool,
+    reference: Option<&str>,
 ) -> CommandOutput {
     let text = match read_manifest(manifest) {
         Ok(text) => text,
@@ -685,6 +686,17 @@ pub async fn cmd_import(
             .to_string(),
         ),
     };
+    // The independent reference corpus is operator-supplied (D-09): its bytes
+    // travel on the import payload and are compared byte-exact, fail-closed.
+    // Identity/license/pins come verbatim from the document; nothing is
+    // inferred (OD-03 stays an open owner gate).
+    let reference_text = match reference {
+        Some(path) => match read_manifest(path) {
+            Ok(text) => Some(text),
+            Err(output) => return output,
+        },
+        None => None,
+    };
     let input = quran_corpus::import::ImportInput {
         run_id: uuid::Uuid::new_v4().to_string(),
         job_id: None,
@@ -696,7 +708,9 @@ pub async fn cmd_import(
         license_status,
         license_json,
         created_at: at,
+        reference_manifest_text: reference_text,
     };
+    let run_id = input.run_id.clone();
     match super::quran::run_import_job(&db, input).await {
         Ok(_) => {
             // OD-01 B-track: synthetic pipeline-exercise data is never
@@ -711,7 +725,41 @@ pub async fn cmd_import(
                 serde_json::json!({"slug": doc.edition.slug, "version": doc.edition.version.to_string()}),
             )
         }
-        Err(err) => CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => {
+            // A QV-015 reference-comparison failure is a validation failure,
+            // not an internal error: surface the durable report and exit 3 so
+            // the operator sees a fail-closed corpus-integrity result.
+            let mut uow = match db.write().await {
+                Ok(uow) => uow,
+                Err(_) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+            };
+            let report = uow.quran().get_validation_report(&run_id).await.ok().flatten();
+            let _ = uow.rollback().await;
+            let reference_failed = report
+                .as_ref()
+                .and_then(|report| {
+                    serde_json::from_str::<Vec<quran_corpus::validation::Finding>>(
+                        &report.findings_json,
+                    )
+                    .ok()
+                })
+                .is_some_and(|findings| {
+                    findings.iter().any(|finding| {
+                        finding.rule_id == "QV-015"
+                            && finding.severity == quran_corpus::validation::Severity::Fatal
+                    })
+                });
+            if reference_failed {
+                CommandOutput::err(
+                    exit::VALIDATION,
+                    format!(
+                        "QV-015 reference comparison failed for {run_id}; see the validation report"
+                    ),
+                )
+            } else {
+                CommandOutput::err(exit::INTERNAL, err.to_string())
+            }
+        }
     }
 }
 

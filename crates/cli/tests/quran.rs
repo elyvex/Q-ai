@@ -49,6 +49,12 @@ fn quran_verify_snapshots() {
     run_cases("tests/quran/verify.trycmd");
 }
 
+/// Phase 2 operator reference-corpus path (QV-015, ADR-0114).
+#[test]
+fn quran_reference_snapshots() {
+    run_cases("tests/quran/reference.trycmd");
+}
+
 /// Upstream catalog ingestion (metadata-only, no database).
 #[test]
 fn quran_catalog_snapshots() {

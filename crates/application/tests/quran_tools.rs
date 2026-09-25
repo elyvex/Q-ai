@@ -181,6 +181,7 @@ async fn tools_read_the_active_edition_after_activation() {
             license_status: "PublicDomain".into(),
             license_json: common::LICENSE_JSON.into(),
             created_at: common::CREATED_AT.into(),
+            reference_manifest_text: None,
         },
         &ImportOptions::default(),
         &AtomicBool::new(false),

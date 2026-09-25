@@ -44,6 +44,7 @@ pub fn input(run_id: &str, manifest: &str) -> ImportInput {
         license_status: "PublicDomain".into(),
         license_json: LICENSE_JSON.into(),
         created_at: CREATED_AT.into(),
+        reference_manifest_text: None,
     }
 }
 

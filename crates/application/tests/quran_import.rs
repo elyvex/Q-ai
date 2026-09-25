@@ -111,6 +111,7 @@ fn input(run_id: &str, manifest: &str, declared: Option<String>) -> ImportInput 
         license_status: "PublicDomain".into(),
         license_json: "{}".into(),
         created_at: CREATED_AT.into(),
+        reference_manifest_text: None,
     }
 }
 

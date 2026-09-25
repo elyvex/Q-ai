@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::adapters::{EditionAdapter, JsonAdapter};
-use crate::differ::{DIFFER_NAME, DIFFER_VERSION, diff_ayahs};
+use crate::differ::{ComparisonKind, DIFFER_NAME, DIFFER_VERSION, diff_ayahs, diff_ayahs_typed};
 use crate::error::CorpusError;
 use crate::format::EditionSource;
 use crate::hashing::{AyahLayout, TokenOrder, structure_hash, tagged, text_hash, token_order_hash};
@@ -136,6 +136,14 @@ pub struct ImportInput {
     pub license_json: String,
     /// RFC 3339 timestamp used for every row this run writes.
     pub created_at: String,
+    /// Operator-supplied independent reference corpus manifest text (the
+    /// ADR-0114 D-09 configuration path). `None` records the explicit QV-015
+    /// skip; `Some` is parsed by the existing JSON adapter in [`run_import`]
+    /// into [`ImportOptions::reference`]. Identity, license, and pins come
+    /// verbatim from the supplied document — never invented (OD-03 stays an
+    /// open owner gate).
+    #[serde(default)]
+    pub reference_manifest_text: Option<String>,
 }
 
 /// Import options.
@@ -982,6 +990,35 @@ impl<'a> Driver<'a> {
                 ));
             }
             findings.extend(compare_reference(doc, Some(&reference)));
+            // ADR-0114 report metadata: exactly one `DifferenceClass` per
+            // difference, computed through the existing typed vocabulary. The
+            // classification is metadata only — it never softens a byte-only
+            // QV-015 Fatal (ADR-0114 §4).
+            let source_list: Vec<(u16, u32, String)> =
+                doc.ayahs.iter().map(|ayah| (ayah.surah, ayah.ayah, ayah.text.clone())).collect();
+            let reference_list: Vec<(u16, u32, String)> = reference
+                .ayahs
+                .iter()
+                .map(|ayah| (ayah.surah, ayah.ayah, ayah.text.clone()))
+                .collect();
+            let typed = diff_ayahs_typed(
+                &source_list,
+                &reference_list,
+                false,
+                ComparisonKind::Reference,
+                Vec::new(),
+            );
+            let differences: Vec<serde_json::Value> = typed
+                .changes
+                .iter()
+                .map(|change| {
+                    serde_json::json!({
+                        "surah": change.surah,
+                        "ayah": change.ayah,
+                        "class": change.classification,
+                    })
+                })
+                .collect();
             findings.push(Finding::new(
                 "QV-015",
                 Severity::Info,
@@ -995,6 +1032,7 @@ impl<'a> Driver<'a> {
                     "reference_version": version,
                     "reference_text_hash": hash,
                     "reference_snapshot_hash": snapshot_hash,
+                    "differences": differences,
                     "outcome": if findings.iter().any(|f| f.severity == Severity::Fatal) {
                         "fail"
                     } else {
@@ -1025,6 +1063,10 @@ impl<'a> Driver<'a> {
             if let Some(existing) = existing {
                 if existing.findings_json != row.findings_json {
                     uow.quran()
+                        .clear_staging(self.run_id())
+                        .await
+                        .map_err(storage_err)?;
+                    uow.quran()
                         .set_import_run_state(self.run_id(), "Failed")
                         .await
                         .map_err(storage_err)?;
@@ -1037,6 +1079,10 @@ impl<'a> Driver<'a> {
             } else {
                 uow.quran().insert_validation_report(row).await.map_err(storage_err)?;
             }
+            // Fail closed and leave the stage untouched: a failed reference
+            // comparison must not persist staging rows (T-02-08). The durable
+            // validation report above keeps the QV-015 evidence of record.
+            uow.quran().clear_staging(self.run_id()).await.map_err(storage_err)?;
             uow.quran().set_import_run_state(self.run_id(), "Failed").await.map_err(storage_err)?;
             uow.commit().await.map_err(storage_err)?;
             return Err(CorpusError::ImportFailed {
@@ -1312,7 +1358,17 @@ pub async fn run_import(
     progress: ImportProgress,
 ) -> Result<ImportOutcome, CorpusError> {
     use ImportCheckpoint as C;
-    let mut driver = Driver::new(db, input, options, cancel, progress);
+    // The reference corpus travels on the job payload (operator `--reference`),
+    // not through a second import path. Resolve it here so every caller of
+    // `run_import` — CLI or job worker — gets the same fail-closed behavior;
+    // callers that pass an explicit `ImportOptions::reference` keep it.
+    let mut effective = options.clone();
+    if effective.reference.is_none()
+        && let Some(reference_text) = input.reference_manifest_text.as_deref()
+    {
+        effective.reference = Some(JsonAdapter.parse(reference_text)?);
+    }
+    let mut driver = Driver::new(db, input, &effective, cancel, progress);
 
     driver.check_cancel().await?;
     driver.claimed().await?;

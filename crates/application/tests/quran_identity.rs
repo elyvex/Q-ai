@@ -65,6 +65,7 @@ fn input(run_id: &str, manifest: &str) -> ImportInput {
         license_status: "PublicDomain".into(),
         license_json: LICENSE_JSON.into(),
         created_at: CREATED_AT.into(),
+        reference_manifest_text: None,
     }
 }
 
@@ -236,7 +237,7 @@ async fn declared_license_is_persisted_verbatim() {
     let manifest_path = dir.path().join("declared-license.json");
     std::fs::write(&manifest_path, &manifest).unwrap();
 
-    let out = cmd_import(&path, manifest_path.to_str().unwrap(), "json", false).await;
+    let out = cmd_import(&path, manifest_path.to_str().unwrap(), "json", false, None).await;
     assert_eq!(out.exit, 0, "import must succeed: {}", out.human);
     activate_edition(&*db, SLUG, VERSION, &principal(), "appr-1", &timestamp()).await.unwrap();
 
@@ -268,7 +269,7 @@ async fn undeclared_license_is_unknown_without_invented_permissions() {
     let manifest_path = dir.path().join("undeclared-license.json");
     std::fs::write(&manifest_path, BASE_MANIFEST).unwrap();
 
-    let out = cmd_import(&path, manifest_path.to_str().unwrap(), "json", false).await;
+    let out = cmd_import(&path, manifest_path.to_str().unwrap(), "json", false, None).await;
     assert_eq!(out.exit, 0, "import must succeed: {}", out.human);
     activate_edition(&*db, SLUG, VERSION, &principal(), "appr-1", &timestamp()).await.unwrap();
 

@@ -1,0 +1,142 @@
+# Phase 2 CLI acceptance — operator reference-corpus path (QV-015, ADR-0114)
+
+`QAI_DATA_DIR` points the real `qai` binary at a fresh temp database (set by the
+harness); each `console` block runs in order against that one database.
+
+A reference-less import records the QV-015 skip (`reference_comparison:
+skipped`). Supplying `--reference` makes the family evaluable: the operator
+sees `reference_comparison: pass`, and a mismatch fails closed with a non-zero
+exit and no edition staged.
+
+```console
+$ qai db migrate
+migrations applied; schema version 21
+
+```
+
+```console
+$ qai quran import ../../fixtures/quran/test-edition-min/manifest.json
+imported test-edition-min@0.1.0 to Staged
+note: synthetic test data — non-canonical (ADR-0101 fallback)
+
+```
+
+```console
+$ qai quran activate test-edition-min@0.1.0 --yes
+activated test-edition-min@0.1.0 (generation 1)
+
+```
+
+```console
+$ qai quran verify
+QURAN VERIFY
+counts: pass — 2 checks pass
+addressing: pass — 4 checks pass
+unicode: pass — 1 checks pass
+checksums: pass — 3 checks pass
+roundtrip: pass — 1 checks pass
+reference_comparison: skipped — reference comparison skipped: no reference corpus configured (ADR-0114; OD-03 owner gate)
+exit: 0
+
+```
+
+The companion synthetic reference is byte-identical to the rich fixture and its
+declared pins match, so the comparison is evaluated and passes.
+
+```console
+$ qai quran import ../../fixtures/quran/test-edition-rich/manifest.json --reference ../../fixtures/quran/test-edition-rich/reference.json
+imported test-edition-rich@0.1.0 to Staged
+note: synthetic test data — non-canonical (ADR-0101 fallback)
+
+```
+
+```console
+$ qai quran activate test-edition-rich@0.1.0 --yes
+activated test-edition-rich@0.1.0 (generation 2)
+
+```
+
+```console
+$ qai quran verify
+QURAN VERIFY
+counts: pass — 2 checks pass
+addressing: pass — 4 checks pass
+unicode: pass — 1 checks pass
+checksums: pass — 3 checks pass
+roundtrip: pass — 1 checks pass
+reference_comparison: pass — 1 checks pass
+exit: 0
+
+```
+
+```console
+$ qai quran verify --json
+{
+  "addressing": {
+    "checks": [
+      "quran.edition_active",
+      "quran.ayah_identifiers",
+      "quran.division_coverage",
+      "quran.basmala_policy"
+    ],
+    "gate": "exit::OK",
+    "status": "pass",
+    "summary": "4 checks pass"
+  },
+  "checksums": {
+    "checks": [
+      "quran.edition_checksum",
+      "quran.structure_hash",
+      "quran.token_order_hash"
+    ],
+    "gate": "exit::OK",
+    "status": "pass",
+    "summary": "3 checks pass"
+  },
+  "counts": {
+    "checks": [
+      "quran.surah_count",
+      "quran.ayah_count"
+    ],
+    "gate": "exit::OK",
+    "status": "pass",
+    "summary": "2 checks pass"
+  },
+  "reference_comparison": {
+    "checks": [
+      "quran.reference_corpus"
+    ],
+    "gate": "exit::OK",
+    "status": "pass",
+    "summary": "1 checks pass"
+  },
+  "roundtrip": {
+    "checks": [
+      "quran.token_roundtrip"
+    ],
+    "gate": "exit::OK",
+    "status": "pass",
+    "summary": "1 checks pass"
+  },
+  "unicode": {
+    "checks": [
+      "quran.unicode_form"
+    ],
+    "gate": "exit::OK",
+    "status": "pass",
+    "summary": "1 checks pass"
+  }
+}
+
+```
+
+An incompatible reference fails the run closed with exit 3 and leaves no
+edition staged (the identity fixture is never imported elsewhere, so the
+operator sees only the reference-comparison failure).
+
+```console
+$ qai quran import ../../fixtures/quran/test-edition-identity/manifest.json --reference ../../fixtures/quran/test-edition-rich/reference.json
+? 3
+error: QV-015 reference comparison failed for [..]; see the validation report
+
+```

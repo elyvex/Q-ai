@@ -75,6 +75,10 @@ pub enum QuranAction {
         /// Validate only; write nothing.
         #[arg(long, default_value_t = false)]
         dry_run: bool,
+        /// Independent reference corpus manifest to compare against (QV-015,
+        /// ADR-0114); absent records the explicit skip.
+        #[arg(long)]
+        reference: Option<String>,
     },
     /// Validate a manifest file or a staged `slug@version`.
     Validate {
@@ -715,8 +719,15 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
                 .await
             }
         },
-        QuranAction::Import { manifest, adapter, dry_run } => {
-            application::quran_cli::cmd_import(db_path, &manifest, &adapter, dry_run).await
+        QuranAction::Import { manifest, adapter, dry_run, reference } => {
+            application::quran_cli::cmd_import(
+                db_path,
+                &manifest,
+                &adapter,
+                dry_run,
+                reference.as_deref(),
+            )
+            .await
         }
         QuranAction::Validate { target, report } => {
             application::quran_cli::cmd_validate(db_path, &target, report.as_deref()).await

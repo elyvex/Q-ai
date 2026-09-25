@@ -97,6 +97,7 @@ async fn ready_db() -> (tempfile::TempDir, SqliteDatabase) {
             license_status: "PublicDomain".into(),
             license_json: "{}".into(),
             created_at: CREATED_AT.into(),
+            reference_manifest_text: None,
         },
         &ImportOptions::default(),
         &AtomicBool::new(false),
