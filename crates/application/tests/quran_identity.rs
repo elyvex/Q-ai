@@ -14,7 +14,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use application::quran::activate_edition;
-use application::quran_cli::cmd_edition_show;
+use application::quran_cli::{cmd_edition_show, cmd_import};
 use application::quran_reader::{QuranReader, QuranReaderService};
 use domain::{PrincipalId, SemVer, Timestamp};
 use quran_core::EditionSelector;
@@ -217,4 +217,70 @@ async fn undeclared_identity_stays_absent() {
     assert!(show.json["upstream_edition_slug"].is_null());
     assert!(show.json["qai_edition_id"].is_null());
     assert_eq!(show.json["is_primary"], false);
+}
+
+#[tokio::test]
+async fn declared_license_is_persisted_verbatim() {
+    let (dir, db, path) = migrated_db().await;
+    let mut source: EditionSource = serde_json::from_str(BASE_MANIFEST).unwrap();
+    source.edition.license = Some(quran_corpus::format::EditionLicense {
+        status: "verified".to_string(),
+        expression: Some("CC-BY-4.0".to_string()),
+        source_url: Some("https://example.test/license".to_string()),
+    });
+    let manifest = serde_json::to_string(&source).unwrap();
+    let manifest_path = dir.path().join("declared-license.json");
+    std::fs::write(&manifest_path, &manifest).unwrap();
+
+    let out = cmd_import(&path, manifest_path.to_str().unwrap(), "json", false).await;
+    assert_eq!(out.exit, 0, "import must succeed: {}", out.human);
+    activate_edition(&*db, SLUG, VERSION, &principal(), "appr-1", &timestamp())
+        .await
+        .unwrap();
+
+    // Canonical row: the declared status and identifier are stored verbatim.
+    let mut uow = db.write().await.unwrap();
+    let row = uow
+        .quran()
+        .get_edition_by_slug_version(SLUG, VERSION)
+        .await
+        .unwrap()
+        .expect("canonical edition row");
+    uow.rollback().await.unwrap();
+    let license: serde_json::Value = serde_json::from_str(&row.license_json).unwrap();
+    assert_eq!(license["status"], "verified");
+    assert_eq!(license["expression"], "CC-BY-4.0");
+    assert_eq!(license["source_url"], "https://example.test/license");
+    assert_ne!(license["redistribution_allowed"], true, "no permission invented");
+
+    // The reader interprets the declared license without inventing permission.
+    let reader = QuranReaderService::new(db.clone());
+    let edition = reader.get_edition(&pinned()).await.unwrap();
+    assert_eq!(edition.license.spdx_id.as_deref(), Some("CC-BY-4.0"));
+    assert!(!edition.license.redistribution_allowed);
+}
+
+#[tokio::test]
+async fn undeclared_license_is_unknown_without_invented_permissions() {
+    let (dir, db, path) = migrated_db().await;
+    let manifest_path = dir.path().join("undeclared-license.json");
+    std::fs::write(&manifest_path, BASE_MANIFEST).unwrap();
+
+    let out = cmd_import(&path, manifest_path.to_str().unwrap(), "json", false).await;
+    assert_eq!(out.exit, 0, "import must succeed: {}", out.human);
+    activate_edition(&*db, SLUG, VERSION, &principal(), "appr-1", &timestamp())
+        .await
+        .unwrap();
+
+    let mut uow = db.write().await.unwrap();
+    let row = uow
+        .quran()
+        .get_edition_by_slug_version(SLUG, VERSION)
+        .await
+        .unwrap()
+        .expect("canonical edition row");
+    uow.rollback().await.unwrap();
+    let license: serde_json::Value = serde_json::from_str(&row.license_json).unwrap();
+    assert_eq!(license["status"], "Unknown");
+    assert_ne!(license["redistribution_allowed"], true, "no permission invented");
 }

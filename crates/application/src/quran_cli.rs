@@ -641,6 +641,38 @@ pub async fn cmd_import(
             Ok(id) => id,
             Err(output) => return output,
         };
+    // License identity comes from the manifest's declared license, verbatim.
+    // A repository being open source never implies its text is
+    // redistributable (A3); an undeclared license stays explicit `Unknown`
+    // and is recorded as owner gate OD-01. Nothing is inferred from the
+    // publisher or repository, and no redistribution permission is invented.
+    let (license_status, license_json) = match &doc.edition.license {
+        Some(license) => (
+            license.status.clone(),
+            serde_json::json!({
+                "status": license.status.clone(),
+                "expression": license.expression.clone(),
+                "source_url": license.source_url.clone(),
+                "spdx_id": license.expression.clone(),
+                "attribution_required": false,
+                "redistribution_allowed": false,
+                "export_allowed": false,
+                "notes": "declared at import; preserved verbatim (OD-01)",
+            })
+            .to_string(),
+        ),
+        None => (
+            "Unknown".to_string(),
+            serde_json::json!({
+                "status": "Unknown",
+                "attribution_required": false,
+                "redistribution_allowed": false,
+                "export_allowed": false,
+                "notes": "no license declared in the manifest; owner gate OD-01",
+            })
+            .to_string(),
+        ),
+    };
     let input = quran_corpus::import::ImportInput {
         run_id: uuid::Uuid::new_v4().to_string(),
         job_id: None,
@@ -649,18 +681,8 @@ pub async fn cmd_import(
         manifest_text: text,
         declared_manifest_hash: None,
         invoked_by: LOCAL_PRINCIPAL.to_string(),
-        license_status: "Unknown".to_string(),
-        license_json: serde_json::json!({
-            "status": "Unknown",
-            "spdx_id": null,
-            "name": null,
-            "url": null,
-            "attribution_required": false,
-            "redistribution_allowed": false,
-            "export_allowed": false,
-            "notes": "user-supplied edition; verify rights before activation (ADR-0101 fallback)",
-        })
-        .to_string(),
+        license_status,
+        license_json,
         created_at: at,
     };
     match super::quran::run_import_job(&db, input).await {

@@ -17,7 +17,7 @@ use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use domain::{Language, SemVer};
+use domain::{Language, LicenseRecord, LicenseStatus, SemVer};
 use lru::LruCache;
 use quran_core::{
     AttributedGloss, AttributedTranslation, AyahLocation, AyahNumber, AyahOptions, AyahView,
@@ -177,6 +177,40 @@ fn parse_place(raw: &str) -> Result<RevelationPlace, ReaderError> {
     }
 }
 
+/// Parse the canonical edition's `license_json` into a typed `LicenseRecord`.
+///
+/// The canonical row stores the manifest-declared license verbatim, whose
+/// `status` vocabulary (`verified` / `unknown` / `restricted` /
+/// `metadata_only`) is not the domain `LicenseStatus` enum. Any status outside
+/// the domain vocabulary reads as `LicenseStatus::Unknown` — the reader never
+/// invents permissiveness — while the verbatim status stays on the row for the
+/// operator surface (doctor / edition show).
+fn parse_license_record(raw: &str) -> Result<LicenseRecord, ReaderError> {
+    let value: serde_json::Value = serde_json::from_str(raw)
+        .map_err(|err| storage_broken(format!("bad license record: {err}")))?;
+    let status = match value.get("status").and_then(|status| status.as_str()) {
+        Some("PublicDomain") => LicenseStatus::PublicDomain,
+        Some("OpenLicense") => LicenseStatus::OpenLicense,
+        Some("PermissionGranted") => LicenseStatus::PermissionGranted,
+        Some("UserOwned") => LicenseStatus::UserOwned,
+        Some("MetadataOnly") => LicenseStatus::MetadataOnly,
+        Some("Restricted") => LicenseStatus::Restricted,
+        _ => LicenseStatus::Unknown,
+    };
+    let text = |key: &str| value.get(key).and_then(|v| v.as_str()).map(str::to_string);
+    let flag = |key: &str| value.get(key).and_then(|v| v.as_bool()).unwrap_or(false);
+    Ok(LicenseRecord {
+        status,
+        spdx_id: text("spdx_id").or_else(|| text("expression")),
+        name: text("name"),
+        url: text("url").or_else(|| text("source_url")),
+        attribution_required: flag("attribution_required"),
+        redistribution_allowed: flag("redistribution_allowed"),
+        export_allowed: flag("export_allowed"),
+        notes: text("notes"),
+    })
+}
+
 fn map_edition(row: &QuranEditionRow) -> Result<QuranEdition, ReaderError> {
     Ok(QuranEdition {
         id: parse_edition_id(&row.id)?,
@@ -190,8 +224,7 @@ fn map_edition(row: &QuranEditionRow) -> Result<QuranEdition, ReaderError> {
         upstream_edition_slug: row.upstream_edition_slug.clone(),
         qai_edition_id: row.qai_edition_id.clone(),
         is_primary: row.is_primary,
-        license: serde_json::from_str(&row.license_json)
-            .map_err(|err| storage_broken(format!("bad license record: {err}")))?,
+        license: parse_license_record(&row.license_json)?,
         language: row
             .language
             .parse::<Language>()
