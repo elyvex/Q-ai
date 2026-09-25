@@ -164,11 +164,22 @@ pub async fn run_index_checks(
             &snapshot,
             "quran.fts.ayah_index",
             super::quran_index::QURAN_AYAH_INDEX_ID,
+            format!("index {} not built", super::quran_index::QURAN_AYAH_INDEX_ID),
+            "build an index generation",
         )
         .await,
     );
     checks.push(
-        check_fts_pointer(db, data_dir, &snapshot, "quran.fts.token_index", "quran.token.v1").await,
+        check_fts_pointer(
+            db,
+            data_dir,
+            &snapshot,
+            "quran.fts.token_index",
+            "quran.token.v1",
+            "token-level index quran.token.v1 has no backend yet".to_string(),
+            "track the token-index follow-up; the ayah index is the serving index",
+        )
+        .await,
     );
     checks.push(check_skeleton_index(data_dir, &snapshot).await);
     checks.push(check_index_drift(&snapshot));
@@ -520,6 +531,8 @@ async fn check_fts_pointer(
     _snapshot: &Snapshot,
     id: &'static str,
     index_id: &str,
+    absent_summary: String,
+    absent_remedy: &str,
 ) -> QuranDoctorCheck {
     const NEXT: &str = "qai quran index rebuild";
     let mut uow = match db.write().await {
@@ -547,12 +560,7 @@ async fn check_fts_pointer(
     };
     let _ = uow.rollback().await;
     let Some(pointer) = pointer else {
-        return skipped(
-            id,
-            format!("index {index_id} not built"),
-            "build an index generation",
-            NEXT,
-        );
+        return skipped(id, absent_summary, absent_remedy, NEXT);
     };
     let generation = pointer.generation as u64;
     if !data_dir.join(format!("gen-{generation}")).exists() {
