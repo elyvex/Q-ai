@@ -64,7 +64,7 @@ Plans:
   4. Canonical tables reject all non-approved writes; importer has no code path to canonical tables
   5. Every quotation verifies via `verify_quotation` with mismatch as a hard failure
 
-**Plans**: 2/7 plans executed
+**Plans**: 3/7 plans executed
 
 Plans:
 **Wave 1**
@@ -74,7 +74,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 02-02-PLAN.md — Richer synthetic fixture, companion synthetic reference, and the identity/primary/license fixture
-- [ ] 02-04-PLAN.md — Canonical-write fence completion: append-only trigger set, non-forgeable ApprovalToken + real CanonicalWriter, importer code-path audit, rollback rejection and cache-invalidation coverage
+- [x] 02-04-PLAN.md — Canonical-write fence completion: append-only trigger set, non-forgeable ApprovalToken + real CanonicalWriter, importer code-path audit, rollback rejection and cache-invalidation coverage
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -242,7 +242,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundations | 0/5 | Not started | - |
-| 2. Canonical Quran Core | 2/7 | In Progress|  |
+| 2. Canonical Quran Core | 3/7 | In Progress|  |
 | 3. Quran Search & Linguistics | 0/TBD | Not started | - |
 | 4. Quran Graph | 0/TBD | Not started | - |
 | 5. Rich Quran Experience | 0/TBD | Not started | - |

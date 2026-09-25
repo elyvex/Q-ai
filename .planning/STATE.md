@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Canonical Quran Core
 status: executing
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-09-25T13:28:09.883Z"
+stopped_at: Completed 02-04-PLAN.md
+last_updated: "2026-09-25T14:13:53.315Z"
 last_activity: 2026-09-25
 last_activity_desc: Phase 02 execution started
-state_head: 3e93af529b1edd7c8bf2a7c8e882d9d56b5c9d9f
+state_head: 6e1eea617d948410337fff501cb556437fffa145
 progress:
   total_phases: 12
   completed_phases: 0
   total_plans: 12
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-23)
 ## Current Position
 
 Phase: 02 (Canonical Quran Core) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
 Last activity: 2026-09-25 — Phase 02 execution started
 
@@ -60,6 +60,7 @@ Progress: [░░░░░░░░░░] 0%
 |------|----------|-------|-------|
 | Phase 02 P01 | 22 min | 3 tasks | 14 files |
 | Phase 02 P02 | 40 min | 2 tasks | 6 files |
+| Phase 02 P04 | 30 min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,8 @@ Recent decisions affecting current work:
 - [Phase 02]: Renumbered the rich fixture to surahs 1..=6 (identity to 1) so Fatal QV-002 passes and plan 02-03 can import/activate both fixtures.
 - [Phase 02]: Golden rows are edition-scoped by an EDITION field because multiple synthetic editions are each numbered 1..=N.
 - [Phase 02]: The reference_text_hash pin reuses the existing text_hash recipe verbatim; no new recipe was invented and renumbering does not change it.
+- [Phase 02]: The CanonicalWriter/ApprovalToken gate is wired, not retired: ADR-0000 locks canonical immutability as a type-level property and .agent/coding-rules.md states the invariant, so ApprovalGate implements CanonicalWriter and ApprovalToken is only mintable from a persisted granted approval row (from_approval_row).
+- [Phase 02]: Canonical quran_segments stays empty in Phase 2 (reserved for the morphology phase); the frozen activation copy list is unchanged and a future phase adds a forward migration plus a copy step.
 
 ### Pending Todos
 
@@ -98,6 +101,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-25T13:28:09.786Z
-Stopped at: Completed 02-02-PLAN.md
+Last session: 2026-09-25T14:13:53.252Z
+Stopped at: Completed 02-04-PLAN.md
 Resume file: None
