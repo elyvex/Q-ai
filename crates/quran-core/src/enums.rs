@@ -117,6 +117,13 @@ pub enum SegmentKind {
 pub enum EditionSelector {
     /// Resolve via the active-edition pointer.
     Active,
+    /// Resolve the explicitly flagged primary/default edition (D-07).
+    ///
+    /// "Primary default" is not "only edition": this never falls back to the
+    /// active-edition pointer. A store with no flagged edition — or with more
+    /// than one — is a typed error, so a caller cannot believe it read "the
+    /// default" when none is uniquely declared.
+    Primary,
     /// Resolve a specific slug at its active version.
     Slug(String),
     /// Resolve an exact, pinned slug@version for reproducible research (§12.1).

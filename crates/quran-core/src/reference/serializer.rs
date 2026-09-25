@@ -11,7 +11,12 @@ use crate::reference::QuranRef;
 
 fn push_edition_prefix(out: &mut String, edition: &EditionSelector) {
     match edition {
-        EditionSelector::Active => {}
+        // `Active` and the programmatic-only `Primary` both take the short form
+        // (no edition prefix). `Primary` is not part of the frozen reference
+        // grammar (ADR-0102) — like a bare `QuranRef::Edition` it is
+        // programmatic-only and excluded from the round-trip property; it
+        // resolves to a concrete edition before any reference is emitted.
+        EditionSelector::Active | EditionSelector::Primary => {}
         EditionSelector::Slug(slug) => {
             out.push_str("quran:");
             out.push_str(slug);

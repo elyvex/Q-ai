@@ -15,7 +15,7 @@ use std::sync::atomic::AtomicBool;
 
 use application::quran::activate_edition;
 use application::quran_cli::{cmd_edition_show, cmd_import};
-use application::quran_reader::{QuranReader, QuranReaderService};
+use application::quran_reader::{QuranReader, QuranReaderService, ReaderError};
 use domain::{PrincipalId, SemVer, Timestamp};
 use quran_core::EditionSelector;
 use quran_corpus::EditionSource;
@@ -27,6 +27,7 @@ use tempfile::tempdir;
 
 const BASE_MANIFEST: &str = include_str!("../../../fixtures/quran/test-edition-min/manifest.json");
 const RUN_ID: &str = "11111111-2222-4333-8444-555555555555";
+const RUN_ID_V2: &str = "22222222-3333-4444-8555-666666666666";
 const PRINCIPAL: &str = "00000000-0000-0000-0000-000000000001";
 const CREATED_AT: &str = "2026-09-14T00:00:00Z";
 const SLUG: &str = "test-edition-min";
@@ -49,10 +50,7 @@ fn timestamp() -> Timestamp {
 }
 
 fn pinned() -> EditionSelector {
-    EditionSelector::Pinned {
-        slug: SLUG.to_string(),
-        version: VERSION.parse::<SemVer>().unwrap(),
-    }
+    EditionSelector::Pinned { slug: SLUG.to_string(), version: VERSION.parse::<SemVer>().unwrap() }
 }
 
 fn input(run_id: &str, manifest: &str) -> ImportInput {
@@ -131,8 +129,14 @@ async fn migrated_db() -> (tempfile::TempDir, Arc<SqliteDatabase>, String) {
     (dir, db, path_str)
 }
 
-/// Import `manifest` under `run_id` and activate it.
-async fn import_and_activate(db: &SqliteDatabase, run_id: &str, manifest: &str, approval: &str) {
+/// Import `manifest` under `run_id` and activate the edition `version`.
+async fn import_and_activate(
+    db: &SqliteDatabase,
+    run_id: &str,
+    version: &str,
+    manifest: &str,
+    approval: &str,
+) {
     let outcome = run_import(
         db,
         &input(run_id, manifest),
@@ -143,7 +147,7 @@ async fn import_and_activate(db: &SqliteDatabase, run_id: &str, manifest: &str, 
     .await
     .expect("import completes");
     assert!(matches!(outcome, ImportOutcome::Completed(_)));
-    activate_edition(db, SLUG, VERSION, &principal(), approval, &timestamp())
+    activate_edition(db, SLUG, version, &principal(), approval, &timestamp())
         .await
         .expect("activation completes");
 }
@@ -152,7 +156,7 @@ async fn import_and_activate(db: &SqliteDatabase, run_id: &str, manifest: &str, 
 async fn declared_identity_and_primary_survive_to_the_operator_surface() {
     let (_dir, db, path) = migrated_db().await;
     let manifest = identity_manifest(Some(DECLARED_UPSTREAM), Some(DECLARED_QAI_ID), true);
-    import_and_activate(&db, RUN_ID, &manifest, "appr-1").await;
+    import_and_activate(&db, RUN_ID, VERSION, &manifest, "appr-1").await;
 
     // Canonical row: the declared values are carried byte-for-byte (no trim,
     // case fold, or normalization of the identity string).
@@ -189,7 +193,7 @@ async fn declared_identity_and_primary_survive_to_the_operator_surface() {
 #[tokio::test]
 async fn undeclared_identity_stays_absent() {
     let (_dir, db, path) = migrated_db().await;
-    import_and_activate(&db, RUN_ID, BASE_MANIFEST, "appr-1").await;
+    import_and_activate(&db, RUN_ID, VERSION, BASE_MANIFEST, "appr-1").await;
 
     let mut uow = db.write().await.unwrap();
     let row = uow
@@ -234,9 +238,7 @@ async fn declared_license_is_persisted_verbatim() {
 
     let out = cmd_import(&path, manifest_path.to_str().unwrap(), "json", false).await;
     assert_eq!(out.exit, 0, "import must succeed: {}", out.human);
-    activate_edition(&*db, SLUG, VERSION, &principal(), "appr-1", &timestamp())
-        .await
-        .unwrap();
+    activate_edition(&*db, SLUG, VERSION, &principal(), "appr-1", &timestamp()).await.unwrap();
 
     // Canonical row: the declared status and identifier are stored verbatim.
     let mut uow = db.write().await.unwrap();
@@ -268,9 +270,7 @@ async fn undeclared_license_is_unknown_without_invented_permissions() {
 
     let out = cmd_import(&path, manifest_path.to_str().unwrap(), "json", false).await;
     assert_eq!(out.exit, 0, "import must succeed: {}", out.human);
-    activate_edition(&*db, SLUG, VERSION, &principal(), "appr-1", &timestamp())
-        .await
-        .unwrap();
+    activate_edition(&*db, SLUG, VERSION, &principal(), "appr-1", &timestamp()).await.unwrap();
 
     let mut uow = db.write().await.unwrap();
     let row = uow
@@ -283,4 +283,48 @@ async fn undeclared_license_is_unknown_without_invented_permissions() {
     let license: serde_json::Value = serde_json::from_str(&row.license_json).unwrap();
     assert_eq!(license["status"], "Unknown");
     assert_ne!(license["redistribution_allowed"], true, "no permission invented");
+}
+
+#[tokio::test]
+async fn primary_selector_resolves_the_flagged_edition() {
+    let (_dir, db, _path) = migrated_db().await;
+    let manifest = identity_manifest(Some(DECLARED_UPSTREAM), Some(DECLARED_QAI_ID), true);
+    import_and_activate(&db, RUN_ID, VERSION, &manifest, "appr-1").await;
+
+    let reader = QuranReaderService::new(db.clone());
+    let primary = reader.get_edition(&EditionSelector::Primary).await.unwrap();
+    assert_eq!(primary.slug, SLUG);
+    assert_eq!(primary.version.to_string(), VERSION);
+    assert!(primary.is_primary);
+    // Active and Primary happen to agree here; the unflagged case below proves
+    // Primary never falls back to the active pointer.
+    let active = reader.get_edition(&EditionSelector::Active).await.unwrap();
+    assert_eq!(active.id, primary.id);
+}
+
+#[tokio::test]
+async fn primary_selector_errors_when_none_is_declared() {
+    let (_dir, db, _path) = migrated_db().await;
+    import_and_activate(&db, RUN_ID, VERSION, BASE_MANIFEST, "appr-1").await;
+
+    let reader = QuranReaderService::new(db.clone());
+    // The active edition exists, but no edition declares is_primary: the
+    // selector must error rather than silently reading the active pointer.
+    assert!(reader.get_edition(&EditionSelector::Active).await.is_ok());
+    let err = reader.get_edition(&EditionSelector::Primary).await.unwrap_err();
+    assert!(matches!(err, ReaderError::PrimaryNotDeclared), "got {err:?}");
+}
+
+#[tokio::test]
+async fn primary_selector_errors_when_more_than_one_is_declared() {
+    let (_dir, db, _path) = migrated_db().await;
+    let v1 = identity_manifest(Some(DECLARED_UPSTREAM), Some(DECLARED_QAI_ID), true);
+    let v2 = v1.replace("\"version\":\"0.1.0\"", "\"version\":\"0.2.0\"");
+    assert_ne!(v2, v1, "v2 manifest must differ");
+    import_and_activate(&db, RUN_ID, VERSION, &v1, "appr-1").await;
+    import_and_activate(&db, RUN_ID_V2, "0.2.0", &v2, "appr-2").await;
+
+    let reader = QuranReaderService::new(db.clone());
+    let err = reader.get_edition(&EditionSelector::Primary).await.unwrap_err();
+    assert!(matches!(err, ReaderError::PrimaryAmbiguous), "got {err:?}");
 }

@@ -30,7 +30,7 @@ use storage::error::StorageError;
 use storage::quran::{QuranEditionRow, SurahRow, TokenRow};
 use storage_sqlite::SqliteDatabase;
 
-/// Reader errors (`QAI-QUR-0306…0310`; reference errors keep their `01xx` codes).
+/// Reader errors (`QAI-QUR-0306…0312`; reference errors keep their `01xx` codes).
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ReaderError {
     /// The reference string failed to parse (code delegated to the grammar error).
@@ -39,6 +39,13 @@ pub enum ReaderError {
     /// No such edition (or no active edition for `Active`/bare-slug selectors).
     #[error("edition not found: {0}")]
     EditionNotFound(String),
+    /// No canonical edition carries the primary/default flag (D-07). The
+    /// caller must not fall back to the active pointer.
+    #[error("no edition is flagged primary; import an edition declaring is_primary")]
+    PrimaryNotDeclared,
+    /// More than one canonical edition carries the primary/default flag.
+    #[error("more than one edition is flagged primary; exactly one is required")]
+    PrimaryAmbiguous,
     /// The location is outside the edition.
     #[error("ayah not found: {0}")]
     AyahNotFound(String),
@@ -63,6 +70,8 @@ impl storage::error::Diagnostic for ReaderError {
                 storage::error::DiagnosticCode::new("QAI-QUR", number)
             }
             Self::EditionNotFound(_) => storage::error::DiagnosticCode::new("QAI-QUR", 306),
+            Self::PrimaryNotDeclared => storage::error::DiagnosticCode::new("QAI-QUR", 311),
+            Self::PrimaryAmbiguous => storage::error::DiagnosticCode::new("QAI-QUR", 312),
             Self::AyahNotFound(_) => storage::error::DiagnosticCode::new("QAI-QUR", 307),
             Self::TranslationNotFound(_) => storage::error::DiagnosticCode::new("QAI-QUR", 308),
             Self::DivisionNotFound(_) => storage::error::DiagnosticCode::new("QAI-QUR", 309),
@@ -79,6 +88,12 @@ impl storage::error::Diagnostic for ReaderError {
             match self {
                 Self::InvalidReference(_) => "Rewrite the reference (e.g. `quran:2:255`).",
                 Self::EditionNotFound(_) => "Import and activate the edition first.",
+                Self::PrimaryNotDeclared => {
+                    "Import an edition whose manifest declares is_primary (D-07)."
+                }
+                Self::PrimaryAmbiguous => {
+                    "Exactly one edition may declare is_primary; correct the manifests."
+                }
                 Self::AyahNotFound(_) => "Check the surah and ayah numbers for this edition.",
                 Self::TranslationNotFound(_) => "Import an aligned, attributed translation first.",
                 Self::DivisionNotFound(_) => "Check the division kind and number.",
@@ -413,6 +428,21 @@ impl QuranReaderService {
                     .ok_or_else(|| ReaderError::EditionNotFound("active".to_string()))?,
                 None => return Err(ReaderError::EditionNotFound("active".to_string())),
             },
+            // D-07: the explicit primary/default designation. `Active` keeps
+            // its existing pointer meaning; "primary default" is not "only
+            // edition". Resolution reads canonical editions where `is_primary`
+            // is set and never falls back to the active pointer — zero or
+            // multiple flagged editions is a typed error, so a caller cannot
+            // believe it read "the default" when none is uniquely declared.
+            EditionSelector::Primary => {
+                let rows = uow.quran().list_editions().await.map_err(ReaderError::from)?;
+                let mut flagged = rows.into_iter().filter(|row| row.is_primary);
+                let first = flagged.next().ok_or(ReaderError::PrimaryNotDeclared)?;
+                if flagged.next().is_some() {
+                    return Err(ReaderError::PrimaryAmbiguous);
+                }
+                first
+            }
             EditionSelector::Slug(slug) => {
                 let active_id = pointer.map(|row| row.edition_id);
                 let mut found = None;

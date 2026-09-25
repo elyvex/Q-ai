@@ -79,7 +79,9 @@ fn map_reader_error(error: crate::quran_reader::ReaderError) -> (i32, String) {
         E::EditionNotFound(_)
         | E::AyahNotFound(_)
         | E::TranslationNotFound(_)
-        | E::DivisionNotFound(_) => (exit::NOT_FOUND, error.to_string()),
+        | E::DivisionNotFound(_)
+        | E::PrimaryNotDeclared => (exit::NOT_FOUND, error.to_string()),
+        E::PrimaryAmbiguous => (exit::CONFLICT, error.to_string()),
         E::Storage(_) => (exit::INTERNAL, error.to_string()),
     }
 }
@@ -114,6 +116,10 @@ fn reader(db: &Arc<SqliteDatabase>) -> crate::quran_reader::QuranReaderService {
 fn parse_selector(raw: &str) -> Result<EditionSelector, CommandOutput> {
     if raw.is_empty() {
         return Ok(EditionSelector::Active);
+    }
+    // Reserved selector keyword (D-07): the explicitly flagged primary edition.
+    if raw == "primary" {
+        return Ok(EditionSelector::Primary);
     }
     match raw.split_once('@') {
         Some((slug, version)) => match version.parse() {
