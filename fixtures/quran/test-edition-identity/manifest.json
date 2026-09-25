@@ -1,0 +1,74 @@
+{
+  "format": "qai.quran.edition",
+  "format_version": 1,
+  "edition": {
+    "slug": "test-edition-identity",
+    "name": "Synthetic identity/primary fixture (non-canonical)",
+    "script": "uthmani",
+    "riwayah": null,
+    "qiraah": null,
+    "language": "ar",
+    "verse_numbering_scheme": "hafs",
+    "unicode_normalization": "nfc",
+    "basmala_policy": "per_surah",
+    "publisher": null,
+    "version": "0.1.0",
+    "synthetic": true,
+    "upstream_edition_slug": "synthetic-identity-upstream",
+    "qai_edition_id": "qai:synthetic-identity",
+    "is_primary": true,
+    "license": {
+      "status": "verified",
+      "expression": "LicenseRef-Synthetic-Test-Only",
+      "source_url": null
+    }
+  },
+  "expected": {
+    "surah_count": 1,
+    "ayah_count": 2,
+    "reference_corpus_id": null,
+    "reference_text_hash": null
+  },
+  "surahs": [
+    {
+      "number": 1,
+      "name_arabic": "سورة اختبار الهوية",
+      "name_transliteration": "Test-Identity-1",
+      "ayah_count": 2,
+      "revelation_place": "makki",
+      "revelation_order": 1,
+      "basmala": "per_surah",
+      "ruku_count": 1
+    }
+  ],
+  "ayahs": [
+    {
+      "surah": 1,
+      "ayah": 1,
+      "text": "أوَيت تَساكُن كن لهُم",
+      "juz": 1,
+      "hizb": 1,
+      "rub": 1,
+      "manzil": 1,
+      "ruku": 1,
+      "page": 1,
+      "sajdah": null
+    },
+    {
+      "surah": 1,
+      "ayah": 2,
+      "text": "شُأويَت يت اكَن بَلهمُ",
+      "juz": 1,
+      "hizb": 1,
+      "rub": 1,
+      "manzil": 1,
+      "ruku": 1,
+      "page": 1,
+      "sajdah": null
+    }
+  ],
+  "tokenization": {
+    "strategy": "whitespace_preserving",
+    "separator_policy": "record_exact"
+  }
+}
