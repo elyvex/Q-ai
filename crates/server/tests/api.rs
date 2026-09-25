@@ -162,6 +162,18 @@ impl QuranApiBackend for FakeApi {
                 text_hash: Some("sha256:ab".into()),
                 deep_link: Some("/read/test@0.1.0/1:1".into()),
             })
+        } else if id == "cit-mismatch" {
+            // A persisted citation whose stored verdict is a hard failure: the
+            // live canonical hash no longer matches the stored baseline.
+            Ok(citations::ResolvedCitation {
+                citation_id: id.into(),
+                verdict: citations::QuotationVerdict::Mismatch {
+                    first_difference_at: 0,
+                    expected_hash: "ab".repeat(32),
+                },
+                text_hash: Some("sha256:ab".into()),
+                deep_link: Some("/read/test@0.1.0/1:1".into()),
+            })
         } else {
             Err(ToolError::Backend {
                 code: "QAI-QUR-0322".into(),
@@ -543,6 +555,20 @@ async fn listings_divisions_tokens_resolve_citations() {
 
     let (status, _, _) = get(&addr, "/api/v1/quran/citations/missing", &[]).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
+    handle.abort();
+}
+
+#[tokio::test]
+async fn stored_citation_hard_failure_is_not_a_success_envelope() {
+    let (addr, handle) = serve_once().await;
+    // A persisted citation whose stored verdict is a hard failure must return a
+    // typed error, never a 200 envelope that re-serves an untrusted verdict
+    // (T-02-18).
+    let (status, _, body) = get(&addr, "/api/v1/quran/citations/cit-mismatch", &[]).await;
+    assert_ne!(status, StatusCode::OK, "a hard-failing stored verdict must not be 200");
+    let value = body_json(&body);
+    assert_eq!(value["error"]["code"], "QAI-QUR-0323");
+    assert!(value.get("data").is_none(), "no success envelope for a failed verdict");
     handle.abort();
 }
 

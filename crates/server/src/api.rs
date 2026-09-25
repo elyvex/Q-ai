@@ -587,6 +587,16 @@ async fn citation_handler(State(state): State<AppState>, Path(id): Path<String>)
         Ok(resolved) => resolved,
         Err(error) => return tool_error_response(error),
     };
+    // A stored verdict that is a hard failure must never be served as a 200
+    // success (T-02-18). This is the same shared mapping the CLI uses
+    // (`citations::require_exact`), so a mismatch cannot fail on one surface
+    // while being softened into a success on another.
+    if let Err(error) = citations::require_exact(&resolved.verdict) {
+        return tool_error_response(ToolError::Backend {
+            code: error.code().to_string(),
+            detail: error.to_string(),
+        });
+    }
     let mut meta = empty_meta();
     meta.execution_time_ms = started.elapsed().as_secs_f64() * 1000.0;
     json_response(

@@ -108,6 +108,26 @@ impl QuranBackend for ReaderToolBackend {
 }
 
 /// The citation source: [`QuranReaderService`] behind the resolver trait.
+///
+/// # Verification scope (D-15, Pitfall 4)
+///
+/// `verify_quotation` is meaningful only for an *externally supplied*
+/// quotation. The direct-read answer paths are **structurally exempt** because
+/// they serve canonical text straight from the source of truth and therefore
+/// cannot mismatch by construction — wrapping them would compare canonical text
+/// against itself and prove nothing:
+///
+/// - tool-result reads: `quran.get_ayah` / `quran.get_context`
+///   ([`ReaderToolBackend`], this file);
+/// - CLI direct reads: `cmd_get` / `cmd_context` / `cmd_surah` / `cmd_division`
+///   (`crates/application/src/quran_cli.rs`);
+/// - HTTP direct reads: the ayah/context/token handlers backed by
+///   `ReaderBackend` (`crates/server/src/api.rs`).
+///
+/// The verifying surfaces that do apply this mapping are
+/// [`verify_canonical_quotation`] (used by `qai quran verify-quotation`) and the
+/// HTTP stored-verdict path (`GET /api/v1/quran/citations/{id}`, which resolves
+/// a persisted citation and enforces [`citations::require_exact`]).
 pub struct ReaderCitationSource {
     reader: Arc<QuranReaderService>,
 }
@@ -119,6 +139,10 @@ impl ReaderCitationSource {
     }
 
     /// A resolver wired to the reader.
+    ///
+    /// The resolver verifies an externally supplied quotation; see the
+    /// [`ReaderCitationSource`] doc for the list of direct-read paths that are
+    /// structurally exempt from `verify_quotation`.
     pub fn resolver(reader: Arc<QuranReaderService>) -> citations::CitationResolver {
         citations::CitationResolver::new(Arc::new(Self::new(reader)))
     }
