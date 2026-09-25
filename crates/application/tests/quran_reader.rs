@@ -322,6 +322,98 @@ async fn cache_serves_no_stale_text_after_activation() {
     assert!(after.canonical.reference().contains("@0.2.0"));
 }
 
+/// QC-01 (cache half): after a v1 → v2 → rollback sequence the generation
+/// strictly increases at each transition and the reader serves v1 text again —
+/// no stale v2 result survives the rollback (ADR-0113).
+#[tokio::test]
+async fn cache_serves_no_stale_text_after_rollback() {
+    let (_dir, db, reader, path) = active_reader().await;
+    let reference = quran_core::parse("1:1").unwrap();
+    let v1 = reader.get_ayah(&reference, &plain()).await.unwrap();
+
+    // Import a corrected v2 (first ayah extended by one token) and activate it.
+    let mut v2_doc: serde_json::Value = serde_json::from_str(BASE_MANIFEST).unwrap();
+    v2_doc["edition"]["version"] = serde_json::json!("0.2.0");
+    let first = v2_doc["ayahs"][0]["text"].as_str().unwrap().to_string();
+    v2_doc["ayahs"][0]["text"] = serde_json::json!(format!("{first} ب"));
+    let v2_manifest = serde_json::to_string(&v2_doc).unwrap();
+    let run_id = "22222222-3333-4444-8555-777777777777";
+    run_import(
+        &*db,
+        &ImportInput {
+            run_id: run_id.into(),
+            job_id: None,
+            source_version_id: SOURCE_VERSION_ID.into(),
+            adapter: "json".into(),
+            manifest_text: v2_manifest,
+            declared_manifest_hash: None,
+            invoked_by: PRINCIPAL.into(),
+            license_status: "PublicDomain".into(),
+            license_json: LICENSE_JSON.into(),
+            created_at: CREATED_AT.into(),
+        },
+        &ImportOptions::default(),
+        &AtomicBool::new(false),
+        ImportProgress::new(),
+    )
+    .await
+    .expect("v2 imports");
+    {
+        let seed = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(
+                sqlx::sqlite::SqliteConnectOptions::new().filename(&path).foreign_keys(true),
+            )
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO approvals
+                (id, subject_urn, kind, requested_by, decided_by, decision,
+                 request_payload, requested_at, decided_at)
+             VALUES ('appr-2', 'quran-edition:test-edition-min@0.2.0', 'CanonicalChange',
+                     '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
+                     'approved', '{}', '2026-09-14T00:00:00Z', '2026-09-14T00:00:00Z')",
+        )
+        .execute(&seed)
+        .await
+        .unwrap();
+        seed.close().await;
+    }
+    let activated = application::quran::activate_edition(
+        &*db,
+        SLUG,
+        "0.2.0",
+        &principal(),
+        "appr-2",
+        &timestamp(),
+    )
+    .await
+    .expect("v2 activates");
+    assert_eq!(activated, 2, "generation strictly increases on activation");
+    let v2 = reader.get_ayah(&reference, &plain()).await.unwrap();
+    assert_ne!(v1.canonical.arabic_text(), v2.canonical.arabic_text());
+
+    let rolled_back = application::quran::rollback_edition(
+        &*db,
+        SLUG,
+        "0.1.0",
+        &principal(),
+        "appr-1",
+        &timestamp(),
+    )
+    .await
+    .expect("v1 rollback");
+    assert_eq!(rolled_back, 3, "generation strictly increases on rollback");
+
+    let after = reader.get_ayah(&reference, &plain()).await.unwrap();
+    assert_eq!(
+        after.canonical.arabic_text(),
+        v1.canonical.arabic_text(),
+        "rollback must serve v1 text, never stale v2 text"
+    );
+    assert!(after.canonical.reference().contains("@0.1.0"));
+}
+
 #[tokio::test]
 async fn get_ayah_with_glosses_serves_aligned_dataset() {
     let (_dir, db, reader, _path) = active_reader().await;

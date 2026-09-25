@@ -817,3 +817,150 @@ async fn rollback_service_restores_the_prior_version() {
     assert_eq!(edition.version, "0.1.0");
     uow.rollback().await.unwrap();
 }
+
+/// A snapshot of the canonical public state used to prove a rejected rollback
+/// changed nothing: the active pointer row (edition id + generation) and the
+/// canonical ayah count for the active edition.
+#[derive(Debug, PartialEq, Eq)]
+struct CanonicalSnapshot {
+    active_edition_id: String,
+    generation: i64,
+    active_ayahs: i64,
+}
+
+async fn canonical_snapshot(db: &SqliteDatabase) -> CanonicalSnapshot {
+    let mut uow = db.write().await.unwrap();
+    let active = uow.quran().get_active().await.unwrap().expect("active pointer");
+    let active_ayahs = uow.quran().count_ayahs(&active.edition_id).await.unwrap();
+    uow.rollback().await.unwrap();
+    CanonicalSnapshot {
+        active_edition_id: active.edition_id,
+        generation: active.corpus_generation,
+        active_ayahs,
+    }
+}
+
+/// QC-01 (rollback half): a missing, denied, or subject-mismatched approval
+/// leaves the active pointer, the canonical rows, and `corpus_generation`
+/// unchanged, and a rollback to the already-active version is a conflict.
+#[tokio::test]
+async fn rejected_rollbacks_leave_canonical_state_untouched() {
+    let (_dir, db) = migrated_db().await;
+    run_import(
+        &db,
+        &input("run-1", BASE_MANIFEST, None),
+        &ImportOptions::default(),
+        &AtomicBool::new(false),
+        ImportProgress::new(),
+    )
+    .await
+    .unwrap();
+    let v2_manifest = BASE_MANIFEST.replace("\"version\": \"0.1.0\"", "\"version\": \"0.2.0\"");
+    run_import(
+        &db,
+        &input("run-2", &v2_manifest, None),
+        &ImportOptions::default(),
+        &AtomicBool::new(false),
+        ImportProgress::new(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        activate_edition(&db, "test-edition-min", "0.1.0", &principal(), "appr-1", &timestamp())
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        activate_edition(&db, "test-edition-min", "0.2.0", &principal(), "appr-2", &timestamp())
+            .await
+            .unwrap(),
+        2
+    );
+
+    let baseline = canonical_snapshot(&db).await;
+    assert_eq!(baseline.generation, 2);
+    assert_eq!(baseline.active_ayahs, 14);
+
+    // Missing approval.
+    let err =
+        rollback_edition(&db, "test-edition-min", "0.1.0", &principal(), "missing", &timestamp())
+            .await
+            .unwrap_err();
+    assert!(matches!(err, application::quran::ActivationError::ApprovalMissing { .. }));
+    assert_eq!(canonical_snapshot(&db).await, baseline);
+
+    // Denied and subject-mismatched approvals.
+    let mut uow = db.write().await.unwrap();
+    for (id, decision, subject) in
+        [("appr-denied", "denied", V1_URN), ("appr-other", "approved", "quran-edition:other@9.9.9")]
+    {
+        uow.sources()
+            .insert_approval(storage::repository::ApprovalRow {
+                id: id.into(),
+                subject_urn: subject.into(),
+                kind: "CanonicalChange".into(),
+                requested_by: Some(PRINCIPAL.into()),
+                decided_by: Some(PRINCIPAL.into()),
+                decision: Some(decision.into()),
+                request_payload: "{}".into(),
+                decision_note: None,
+                requested_at: CREATED_AT.into(),
+                decided_at: Some(CREATED_AT.into()),
+            })
+            .await
+            .unwrap();
+    }
+    uow.commit().await.unwrap();
+
+    let err = rollback_edition(
+        &db,
+        "test-edition-min",
+        "0.1.0",
+        &principal(),
+        "appr-denied",
+        &timestamp(),
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(err, application::quran::ActivationError::ApprovalNotGranted { .. }));
+    assert_eq!(canonical_snapshot(&db).await, baseline);
+
+    let err = rollback_edition(
+        &db,
+        "test-edition-min",
+        "0.1.0",
+        &principal(),
+        "appr-other",
+        &timestamp(),
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(err, application::quran::ActivationError::ApprovalSubjectMismatch { .. }));
+    assert_eq!(canonical_snapshot(&db).await, baseline);
+
+    // Rolling back to the already-active version is a conflict, not a move.
+    let err =
+        rollback_edition(&db, "test-edition-min", "0.2.0", &principal(), "appr-2", &timestamp())
+            .await
+            .unwrap_err();
+    assert!(matches!(err, application::quran::ActivationError::AlreadyActive { .. }));
+    assert_eq!(canonical_snapshot(&db).await, baseline);
+
+    // Positive control: a granted approval for the exact target URN moves the
+    // pointer and bumps the generation.
+    assert_eq!(
+        rollback_edition(&db, "test-edition-min", "0.1.0", &principal(), "appr-1", &timestamp())
+            .await
+            .unwrap(),
+        3
+    );
+    let after = canonical_snapshot(&db).await;
+    assert_eq!(after.generation, 3);
+    assert_ne!(after.active_edition_id, baseline.active_edition_id);
+    let mut uow = db.write().await.unwrap();
+    let active = uow.quran().get_active().await.unwrap().unwrap();
+    let edition = uow.quran().get_edition(&active.edition_id).await.unwrap().unwrap();
+    assert_eq!(edition.version, "0.1.0");
+    uow.rollback().await.unwrap();
+}
