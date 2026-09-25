@@ -61,6 +61,12 @@ fn edition_identity_snapshots() {
     run_cases("tests/quran/edition_identity.trycmd");
 }
 
+/// Phase 2 quotation hard-failure surface (D-15, QC-07).
+#[test]
+fn quran_verify_quotation_snapshots() {
+    run_cases("tests/quran/verify_quotation.trycmd");
+}
+
 /// Upstream catalog ingestion (metadata-only, no database).
 #[test]
 fn quran_catalog_snapshots() {

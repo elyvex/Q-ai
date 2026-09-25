@@ -204,3 +204,65 @@ async fn tools_read_the_active_edition_after_activation() {
     // No approval seeded for v2 here: tools keep serving v1 until activation.
     assert!(before.results[0].canonical.reference().contains("@0.1.0"));
 }
+
+#[tokio::test]
+async fn verify_canonical_quotation_succeeds_on_exact_and_hard_fails_on_mismatch() {
+    let (_dir, _db, reader, _path) = active_reader().await;
+    let reader = Arc::new(reader);
+    let view = reader.get_ayah(&quran_core::parse("1:2").unwrap(), &plain()).await.unwrap();
+    let text = view.canonical.arabic_text().to_string();
+
+    // The real fixture text verifies exactly and returns the resolved canonical
+    // hash read from the row (never computed from the supplied text).
+    let (verdict, hash) = application::quran_tools::verify_canonical_quotation(
+        &reader,
+        "test-edition-min",
+        "0.1.0",
+        1,
+        2,
+        &text,
+    )
+    .await
+    .unwrap();
+    assert_eq!(verdict, citations::QuotationVerdict::ExactMatch);
+    assert_eq!(hash, format!("sha256:{}", view.canonical.text_hash().hex));
+    assert!(verdict.label() == "ExactMatch");
+
+    // A tampered string is a hard failure with a typed, stable code — never a
+    // success and never a synthesized hash.
+    let err = application::quran_tools::verify_canonical_quotation(
+        &reader,
+        "test-edition-min",
+        "0.1.0",
+        1,
+        2,
+        "tampered text",
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(err.code(), "QAI-QUR-0323");
+
+    // A missing location and a missing edition are hard not-found failures.
+    let err = application::quran_tools::verify_canonical_quotation(
+        &reader,
+        "test-edition-min",
+        "0.1.0",
+        99,
+        9,
+        &text,
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(err.code(), "QAI-QUR-0324");
+    let err = application::quran_tools::verify_canonical_quotation(
+        &reader,
+        "no-such-edition",
+        "0.1.0",
+        1,
+        2,
+        &text,
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(err.code(), "QAI-QUR-0325");
+}

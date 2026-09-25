@@ -141,6 +141,22 @@ pub enum QuranAction {
         /// `slug@version`.
         edition: String,
     },
+    /// Verify an externally supplied quotation against the canonical text
+    /// (read-only; a mismatch is a hard failure).
+    VerifyQuotation {
+        /// Edition to verify against (`slug@version`); never inferred.
+        #[arg(long)]
+        edition: String,
+        /// Surah number.
+        #[arg(long)]
+        surah: u16,
+        /// Ayah number.
+        #[arg(long)]
+        ayah: u32,
+        /// Quoted text to verify.
+        #[arg(long)]
+        text: String,
+    },
     /// Report the six corpus-integrity families for the active edition
     /// (read-only; a skipped family is never reported as `pass`).
     Verify {
@@ -773,6 +789,11 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
         }
         QuranAction::Hashes { edition } => {
             application::quran_cli::cmd_hashes(db_path, &edition).await
+        }
+        QuranAction::VerifyQuotation { edition, surah, ayah, text } => {
+            // Read-only: no `confirm` wrapper, no write.
+            application::quran_cli::cmd_verify_quotation(db_path, &edition, surah, ayah, &text)
+                .await
         }
         QuranAction::Verify { edition, deep } => {
             application::quran_cli::cmd_quran_verify(db_path, &edition, deep).await

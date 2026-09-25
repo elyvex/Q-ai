@@ -110,6 +110,23 @@ fn map_corpus_error(error: quran_corpus::CorpusError) -> (i32, String) {
     }
 }
 
+/// Map a `citations` hard-failure error to a CLI exit code (D-15, criterion 5).
+///
+/// `Mismatch` is a validation failure (3), a missing location/edition is
+/// not-found (5), access denial is a policy failure (4), and an unparseable
+/// reference is usage (2). Codes are delegated to
+/// [`citations::CitationError::code`].
+fn map_citation_error(error: &citations::CitationError) -> (i32, String) {
+    use citations::CitationError as E;
+    match error {
+        E::QuotationMismatch { .. } => (exit::VALIDATION, error.to_string()),
+        E::LocationNotFound | E::EditionNotFound => (exit::NOT_FOUND, error.to_string()),
+        E::AccessDenied => (exit::POLICY, error.to_string()),
+        E::InvalidReference { .. } => (exit::USAGE, error.to_string()),
+        E::Backend { .. } => (exit::INTERNAL, error.to_string()),
+    }
+}
+
 fn reader(db: &Arc<SqliteDatabase>) -> crate::quran_reader::QuranReaderService {
     crate::quran_reader::QuranReaderService::new(db.clone())
 }
@@ -329,6 +346,59 @@ pub async fn cmd_resolve(db_path: &str, reference: &str) -> CommandOutput {
         }
         Err(err) => {
             let (exit, message) = map_reader_error(err);
+            CommandOutput::err(exit, message)
+        }
+    }
+}
+
+/// `quran verify-quotation` — verify an externally supplied quotation against
+/// the canonical source of truth (read-only; D-15, criterion 5).
+///
+/// The pinned `slug@version` governs the edition; it is never inferred from the
+/// supplied text. On success the verdict and the RESOLVED canonical text hash
+/// are printed (the hash is read from the canonical row, never computed from
+/// the supplied text). A mismatch exits [`exit::VALIDATION`] (3) with a typed
+/// `QAI-QUR-*` code; a missing location/edition exits [`exit::NOT_FOUND`] (5).
+pub async fn cmd_verify_quotation(
+    db_path: &str,
+    edition: &str,
+    surah: u16,
+    ayah: u32,
+    text: &str,
+) -> CommandOutput {
+    let (slug, version) = match edition.split_once('@') {
+        Some((slug, version)) if !slug.is_empty() && !version.is_empty() => (slug, version),
+        _ => {
+            return CommandOutput::err(
+                exit::USAGE,
+                format!("bad edition `{edition}` (expected slug@version)"),
+            );
+        }
+    };
+    let db = match open_db(db_path).await {
+        Ok(db) => Arc::new(db),
+        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+    };
+    let reader = Arc::new(reader(&db));
+    match crate::quran_tools::verify_canonical_quotation(&reader, slug, version, surah, ayah, text)
+        .await
+    {
+        Ok((verdict, text_hash)) => CommandOutput::ok(
+            format!(
+                "verdict: {}\n  text_hash: {}\n  reference: quran:{slug}@{version}:{surah}:{ayah}",
+                verdict.label(),
+                text_hash
+            ),
+            serde_json::json!({
+                "edition": format!("{slug}@{version}"),
+                "surah": surah,
+                "ayah": ayah,
+                "verdict": verdict.label(),
+                "text_hash": text_hash,
+            }),
+        ),
+        Err(err) => {
+            let (exit, message) = map_citation_error(&err);
             CommandOutput::err(exit, message)
         }
     }
@@ -1600,10 +1670,7 @@ const VERIFY_FAMILIES: [(&str, &[&str]); 6] = [
         ],
     ),
     ("unicode", &["quran.unicode_form"]),
-    (
-        "checksums",
-        &["quran.edition_checksum", "quran.structure_hash", "quran.token_order_hash"],
-    ),
+    ("checksums", &["quran.edition_checksum", "quran.structure_hash", "quran.token_order_hash"]),
     ("roundtrip", &["quran.token_roundtrip"]),
     ("reference_comparison", &["quran.reference_corpus"]),
 ];

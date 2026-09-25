@@ -1,0 +1,56 @@
+# Phase 2 quotation hard-failure surface (D-15, QC-07)
+
+`QAI_DATA_DIR` points the real `qai` binary at a fresh temp database (set by the
+harness). `qai quran verify-quotation` is read-only: it verifies an externally
+supplied quotation against the pinned `slug@version` and reports the verdict
+together with the RESOLVED canonical hash. A mismatch is a hard failure — a
+non-zero exit with a typed `QAI-QUR-*` code — never a success.
+
+```console
+$ qai db migrate
+migrations applied; schema version [..]
+
+```
+
+```console
+$ qai quran import ../../fixtures/quran/test-edition-min/manifest.json
+imported test-edition-min@0.1.0 to Staged
+note: synthetic test data — non-canonical (ADR-0101 fallback)
+
+```
+
+```console
+$ qai quran activate test-edition-min@0.1.0 --yes
+activated test-edition-min@0.1.0 (generation 1)
+
+```
+
+An exact quotation verifies (exit 0) with the stored canonical hash on the
+pinned reference.
+
+```console
+$ qai quran verify-quotation --edition test-edition-min@0.1.0 --surah 1 --ayah 1 --text 'أوَيت تَساكُن كن لهُم ثُشأوَ'
+verdict: ExactMatch
+  text_hash: sha256:2c656d34d59038eed42464f08e753d2d6d16f702f09b8b05789abcaae792ba31
+  reference: quran:test-edition-min@0.1.0:1:1
+
+```
+
+A tampered quotation is a hard failure: exit 3 with a typed code and the first
+difference, never a success envelope or a synthesized hash.
+
+```console
+$ qai quran verify-quotation --edition test-edition-min@0.1.0 --surah 1 --ayah 1 --text 'tampered text'
+? 3
+error: quotation does not match canonical text (first difference at 0, expected 2c656d34d59038eed42464f08e753d2d6d16f702f09b8b05789abcaae792ba31)
+
+```
+
+A pinned edition that is not active is not-found (exit 5).
+
+```console
+$ qai quran verify-quotation --edition nope@0.1.0 --surah 1 --ayah 1 --text 'x'
+? 5
+error: citation edition not found
+
+```

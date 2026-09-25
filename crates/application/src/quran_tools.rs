@@ -11,7 +11,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use quran_core::{AyahOptions, AyahView, ContextSpec, ContextView, QuranRef};
+use quran_core::{
+    AyahNumber, AyahOptions, AyahView, ContextSpec, ContextView, QuranRef, SurahNumber,
+};
 use storage::Database as _;
 use tool_registry::{BackendMeta, GetAyahParams, GetContextParams, QuranBackend, ToolRegistry};
 use tools::{ToolError, ToolResult};
@@ -205,19 +207,54 @@ pub async fn persist_citation(
 }
 
 fn verdict_str(verdict: &citations::QuotationVerdict) -> String {
-    match verdict {
-        citations::QuotationVerdict::ExactMatch => "ExactMatch".to_string(),
-        citations::QuotationVerdict::MatchAfterWhitespaceNormalization => {
-            "MatchAfterWhitespaceNormalization".to_string()
-        }
-        citations::QuotationVerdict::MatchAfterDeclaredNormalization { .. } => {
-            "MatchAfterDeclaredNormalization".to_string()
-        }
-        citations::QuotationVerdict::Mismatch { .. } => "Mismatch".to_string(),
-        citations::QuotationVerdict::LocationNotFound => "LocationNotFound".to_string(),
-        citations::QuotationVerdict::EditionNotFound => "EditionNotFound".to_string(),
-        citations::QuotationVerdict::AccessDenied => "AccessDenied".to_string(),
-    }
+    verdict.label().to_string()
+}
+
+/// Verify an externally supplied quotation against the canonical source of
+/// truth, returning the verdict and the RESOLVED canonical text hash.
+///
+/// This is the one shared verifying implementation behind every quoted-text
+/// answer path (the `qai quran verify-quotation` CLI verb and the HTTP path).
+/// The citation is built with the pinned `slug@version`, so the edition is
+/// never inferred from the supplied text (ADR-0111). The returned hash is the
+/// one read from the canonical row by the reader-backed resolver — it is never
+/// recomputed from the supplied text, so a caller can never present a hash it
+/// synthesized (T-02-19). A hard-failure verdict is mapped through
+/// [`citations::require_exact`], so `Mismatch`/`LocationNotFound`/
+/// `EditionNotFound`/`AccessDenied` return a typed error instead of a success.
+///
+/// `verify_quotation` delegates to the same `resolve` path used here; `resolve`
+/// is called directly because it also yields the resolved canonical hash in a
+/// single fetch.
+pub async fn verify_canonical_quotation(
+    reader: &Arc<QuranReaderService>,
+    edition_slug: &str,
+    edition_version: &str,
+    surah: u16,
+    ayah: u32,
+    text: &str,
+) -> Result<(citations::QuotationVerdict, String), citations::CitationError> {
+    let citation = citations::Citation {
+        id: "verify-quotation".to_string(),
+        kind: citations::CitationKind::Quran,
+        canonical_reference: format!("quran:{edition_slug}@{edition_version}:{surah}:{ayah}"),
+        quoted_text: text.to_string(),
+        edition_slug: edition_slug.to_string(),
+        edition_version: edition_version.to_string(),
+        surah: SurahNumber::new(surah).map_err(|_| citations::CitationError::Backend {
+            detail: format!("bad surah {surah}"),
+        })?,
+        ayah: AyahNumber::new(ayah).map_err(|_| citations::CitationError::Backend {
+            detail: format!("bad ayah {ayah}"),
+        })?,
+    };
+    let resolver = ReaderCitationSource::resolver(reader.clone());
+    let resolved = resolver.resolve(&citation).await?;
+    citations::require_exact(&resolved.verdict)?;
+    let text_hash = resolved.text_hash.ok_or_else(|| citations::CitationError::Backend {
+        detail: "resolved citation carried no canonical hash".to_string(),
+    })?;
+    Ok((resolved.verdict, text_hash))
 }
 
 /// Convenience: run `quran.get_ayah` against a reader.
