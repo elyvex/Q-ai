@@ -53,7 +53,7 @@ D-15 bounded per-kind retry · D-16 cooperative cancellation outcomes.
 | Plan/task | Gap | Command | Observed |
 |---|---|---|---|
 | 01-01-01 | FND-01/FND-02/FND-03 tracer | `cargo test -p cli --test foundation -- --nocapture && sh scripts/verify-phase1-preservation.sh check --task 01-01-01` | _pending_ |
-| 01-01-02 | FND-01 effective config | `cargo test -p testkit --test config_precedence && cargo test -p cli --test foundation -- --nocapture` | _pending_ |
+| 01-01-02 | FND-01 effective config | `cargo test -p testkit --test config_precedence && cargo test -p cli --test foundation -- --nocapture` | 10/10 + 12/12 green 2026-09-26: CLI>env>file>defaults with `ValueOrigin` per leaf (`config_precedence`: defaults/file/CLI/missing/malformed/origin-totality/redaction; `foundation`: get/validate/explain/`--data-dir` CLI-origin adjacency); `config show --json` carries dotted-key origins; secrets redacted pre-emission; every non-passing validation emits the same stable code, non-empty remedy, and runnable `next_command` in human and JSON (D-07) |
 | 01-01-03 | FND-02/FND-03 doctor + readiness + audit | `cargo test -p cli --test foundation -- --nocapture && cargo test -p application --lib db` | _pending_ |
 | 01-02-01 | FND-04 same-UoW | `cargo test -p application --test phase1_foundation audited_mutation -- --nocapture` | _pending_ |
 | 01-02-02 | FND-04 failure matrix | `cargo test -p application --test phase1_foundation && cargo test -p storage-sqlite --test commit_bounds_outbox --test integrity_audit` | _pending_ |
