@@ -38,6 +38,11 @@ pub struct DbProbe {
     pub outbox_oldest_pending_seconds: i64,
     pub tombstones_unpropagated: i64,
     pub audit_events: i64,
+    /// Persisted hash-chain verification result (D-12): `true` only when the
+    /// shared verifier reports no gaps and no tampered sequences.
+    pub audit_verified: bool,
+    pub audit_gaps: Vec<u64>,
+    pub audit_tampered_sequences: Vec<u64>,
     pub license_unknown_count: i64,
     pub multiple_active_versions: i64,
 }
@@ -195,6 +200,18 @@ pub async fn probe_database(cfg: &Config) -> DbProbe {
     }
     if db.count(&table_exists("audit_events")).await.unwrap_or(0) > 0 {
         probe.audit_events = db.count("SELECT COUNT(*) FROM audit_events").await.unwrap_or(0);
+    }
+    // The persisted verifier is the single audit-readiness authority (D-12):
+    // doctor must never infer validity from row count or structural presence.
+    match crate::audit_bridge::verify_persisted_audit(&cfg.storage.sqlite.path).await {
+        Ok(report) => {
+            probe.audit_verified = report.valid;
+            probe.audit_gaps = report.gaps;
+            probe.audit_tampered_sequences = report.tampered_sequences;
+        }
+        Err(_) => {
+            probe.audit_verified = false;
+        }
     }
     probe
 }

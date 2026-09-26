@@ -234,21 +234,41 @@ fn configuration_file_permissions(cfg: &Config) -> CheckResult {
     )
 }
 
+/// Read-only data-directory check (D-06, T-01-DOCTOR).
+///
+/// Inspects existence, type, and permission bits only. A missing directory is a
+/// non-fatal warning naming the explicit `qai db migrate` creation path; doctor
+/// must never `create_dir_all`, write a probe file, or otherwise mutate the
+/// filesystem.
 fn data_dir_writable(cfg: &Config) -> CheckResult {
     let dir = std::path::PathBuf::from(&cfg.app.data_dir);
-    match std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(dir.join(".qai-probe"), b"q")) {
-        Ok(()) => {
-            let _ = std::fs::remove_file(dir.join(".qai-probe"));
-            CheckResult::pass(
-                "data_dir.writable",
-                format!("data dir is writable ({})", dir.display()),
-            )
+    match std::fs::metadata(&dir) {
+        Ok(meta) if meta.is_dir() => {
+            if meta.permissions().readonly() {
+                CheckResult::warn(
+                    "data_dir.writable",
+                    format!("data dir {} exists but is read-only", dir.display()),
+                    "choose a writable data directory; doctor does not modify permissions",
+                    "qai --data-dir <path> doctor",
+                )
+            } else {
+                CheckResult::pass(
+                    "data_dir.writable",
+                    format!("data dir exists and is writable ({})", dir.display()),
+                )
+            }
         }
-        Err(e) => CheckResult::fail(
+        Ok(_) => CheckResult::fail(
             "data_dir.writable",
-            format!("cannot write to data dir {}: {e}", dir.display()),
-            "choose a writable directory",
+            format!("data dir {} is not a directory", dir.display()),
+            "choose a directory path for the data dir",
             "qai --data-dir <path> doctor",
+        ),
+        Err(_) => CheckResult::warn(
+            "data_dir.writable",
+            format!("data dir {} does not exist yet", dir.display()),
+            "create it explicitly with `qai db migrate` (doctor never creates paths)",
+            "qai db migrate",
         ),
     }
 }
@@ -438,6 +458,11 @@ fn jobs_dead_letter_count(probe: &DbProbe) -> CheckResult {
     }
 }
 
+/// Audit readiness from the persisted hash-chain verifier (D-12, T-01-AUDIT).
+///
+/// The row count is never treated as validity: `probe.audit_verified` is set by
+/// `application::audit_bridge::verify_persisted_audit`, the same authority used
+/// by `qai audit verify`.
 fn audit_chain_valid(probe: &DbProbe) -> CheckResult {
     if !probe.reachable {
         return CheckResult::skipped(
@@ -447,12 +472,27 @@ fn audit_chain_valid(probe: &DbProbe) -> CheckResult {
             "qai db migrate",
         );
     }
-    if probe.audit_events == 0 {
-        CheckResult::pass("audit.chain_valid", "no audit events yet")
+    if probe.audit_verified
+        && probe.audit_gaps.is_empty()
+        && probe.audit_tampered_sequences.is_empty()
+    {
+        if probe.audit_events == 0 {
+            CheckResult::pass("audit.chain_valid", "no audit events yet (chain is trivially valid)")
+        } else {
+            CheckResult::pass(
+                "audit.chain_valid",
+                format!("{} audit event(s); persisted hash chain verifies", probe.audit_events),
+            )
+        }
     } else {
-        CheckResult::pass(
+        CheckResult::fail(
             "audit.chain_valid",
-            format!("{} audit event(s); structural chain present", probe.audit_events),
+            format!(
+                "persisted audit chain is NOT valid; gaps: {:?}; tampered sequences: {:?}",
+                probe.audit_gaps, probe.audit_tampered_sequences
+            ),
+            "run the authoritative verifier and recover the affected sequences",
+            "qai audit verify",
         )
     }
 }
@@ -527,20 +567,33 @@ fn sources_multiple_active_versions(probe: &DbProbe) -> CheckResult {
 
 fn filesystem_object_store_writable(cfg: &Config) -> CheckResult {
     let root = std::path::PathBuf::from(&cfg.storage.objects.root);
-    match std::fs::create_dir_all(&root).and_then(|_| std::fs::write(root.join(".qai-probe"), b"q"))
-    {
-        Ok(()) => {
-            let _ = std::fs::remove_file(root.join(".qai-probe"));
-            CheckResult::pass(
-                "filesystem.object_store_writable",
-                format!("object store root writable ({})", root.display()),
-            )
+    match std::fs::metadata(&root) {
+        Ok(meta) if meta.is_dir() => {
+            if meta.permissions().readonly() {
+                CheckResult::warn(
+                    "filesystem.object_store_writable",
+                    format!("object store root {} exists but is read-only", root.display()),
+                    "choose a writable object store root; doctor does not modify permissions",
+                    "qai config validate",
+                )
+            } else {
+                CheckResult::pass(
+                    "filesystem.object_store_writable",
+                    format!("object store root exists and is writable ({})", root.display()),
+                )
+            }
         }
-        Err(e) => CheckResult::fail(
+        Ok(_) => CheckResult::fail(
             "filesystem.object_store_writable",
-            format!("object store root not writable: {e}"),
-            "choose a writable object store root",
+            format!("object store root {} is not a directory", root.display()),
+            "choose a directory path for the object store root",
             "qai config validate",
+        ),
+        Err(_) => CheckResult::warn(
+            "filesystem.object_store_writable",
+            format!("object store root {} does not exist yet", root.display()),
+            "create it explicitly; doctor never creates paths",
+            "qai db migrate",
         ),
     }
 }
@@ -783,6 +836,7 @@ mod tests {
             integrity_ok: true,
             foreign_keys_on: true,
             schema_version: 12,
+            audit_verified: true,
             ..Default::default()
         }
     }
