@@ -237,13 +237,13 @@ fn configuration_file_permissions(cfg: &Config) -> CheckResult {
 
 /// Read-only data-directory check (D-06, T-01-DOCTOR).
 ///
-/// Inspects existence, type, and permission bits only. A missing directory is a
-/// non-fatal warning naming the explicit `qai db migrate` creation path; doctor
-/// must never `create_dir_all`, write a probe file, or otherwise mutate the
-/// filesystem.
+/// Inspects existence, type, and permission bits only via `symlink_metadata`.
+/// A missing directory is a non-fatal warning naming the explicit
+/// `qai db migrate` creation path; doctor must never `create_dir_all`, write
+/// a probe file, or otherwise mutate the filesystem.
 fn data_dir_writable(cfg: &Config) -> CheckResult {
     let dir = std::path::PathBuf::from(&cfg.app.data_dir);
-    match std::fs::metadata(&dir) {
+    match std::fs::symlink_metadata(&dir) {
         Ok(meta) if meta.is_dir() => {
             if meta.permissions().readonly() {
                 CheckResult::warn(
@@ -613,7 +613,7 @@ fn sources_multiple_active_versions(probe: &DbProbe) -> CheckResult {
 
 fn filesystem_object_store_writable(cfg: &Config) -> CheckResult {
     let root = std::path::PathBuf::from(&cfg.storage.objects.root);
-    match std::fs::metadata(&root) {
+    match std::fs::symlink_metadata(&root) {
         Ok(meta) if meta.is_dir() => {
             if meta.permissions().readonly() {
                 CheckResult::warn(
