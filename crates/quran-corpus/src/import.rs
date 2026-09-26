@@ -30,7 +30,7 @@ use sha2::{Digest, Sha256};
 use crate::adapters::{EditionAdapter, JsonAdapter};
 use crate::differ::{ComparisonKind, DIFFER_NAME, DIFFER_VERSION, diff_ayahs, diff_ayahs_typed};
 use crate::error::CorpusError;
-use crate::format::EditionSource;
+use crate::format::{AyahSource, EditionSource};
 use crate::hashing::{AyahLayout, TokenOrder, structure_hash, tagged, text_hash, token_order_hash};
 use crate::tokenize::{TokenizedAyah, reconstruct, tokenize};
 use crate::unicode::{find_forbidden, normalization_form};
@@ -561,27 +561,37 @@ impl<'a> Driver<'a> {
         let doc = self.doc.as_ref().expect("parsed before hashing").clone();
         let slug = doc.edition.slug.clone();
         let version = doc.edition.version.to_string();
-        let texts: Vec<&str> = doc.ayahs.iter().map(|ayah| ayah.text.as_str()).collect();
+        // Canonical content hashes are computed over ayahs in ascending
+        // `(surah, ayah)` order, never in manifest order, so an unsorted
+        // manifest hashes identically to its sorted permutation (QC-08
+        // mirrors the translation-path fix; QV-014/QV-024 roundtrip reads
+        // staged rows back in `ORDER BY surah, ayah`).
+        let order = canonical_order(&doc.ayahs);
+        let texts: Vec<&str> = order.iter().map(|&index| doc.ayahs[index].text.as_str()).collect();
         let text_hash = text_hash(&slug, &version, &texts);
         let surahs: Vec<(u16, u16)> = doc.surahs.iter().map(|s| (s.number, s.ayah_count)).collect();
-        let layouts: Vec<AyahLayout> = doc
-            .ayahs
+        let layouts: Vec<AyahLayout> = order
             .iter()
-            .map(|ayah| AyahLayout {
-                surah: ayah.surah,
-                ayah: ayah.ayah,
-                juz: ayah.juz,
-                hizb: ayah.hizb,
-                rub: ayah.rub,
-                manzil: ayah.manzil,
-                ruku: ayah.ruku,
-                page: ayah.page,
-                sajdah: ayah.sajdah,
+            .map(|&index| {
+                let ayah = &doc.ayahs[index];
+                AyahLayout {
+                    surah: ayah.surah,
+                    ayah: ayah.ayah,
+                    juz: ayah.juz,
+                    hizb: ayah.hizb,
+                    rub: ayah.rub,
+                    manzil: ayah.manzil,
+                    ruku: ayah.ruku,
+                    page: ayah.page,
+                    sajdah: ayah.sajdah,
+                }
             })
             .collect();
         let structure_hash = structure_hash(&slug, &version, &surahs, &layouts);
         let mut orders = Vec::new();
-        for (ayah, computed) in doc.ayahs.iter().zip(self.tokenized.iter()) {
+        for &index in &order {
+            let ayah = &doc.ayahs[index];
+            let computed = &self.tokenized[index];
             for token in &computed.tokens {
                 orders.push(TokenOrder {
                     surah: ayah.surah,
@@ -760,7 +770,13 @@ impl<'a> Driver<'a> {
 
         let mut global_ayah = 0_u32;
         let mut global_token = 0_u64;
-        for (ayah, computed) in doc.ayahs.iter().zip(self.tokenized.iter()) {
+        // Staging follows the same canonical `(surah, ayah)` order as the
+        // content hashes, so `global_ayah_index`/`global_token_index` count in
+        // canonical order even for an unsorted manifest (WR-02).
+        let order = canonical_order(&doc.ayahs);
+        for &index in &order {
+            let ayah = &doc.ayahs[index];
+            let computed = &self.tokenized[index];
             global_ayah += 1;
             let mut ayah_hasher = Sha256::new();
             ayah_hasher.update(ayah.text.as_bytes());
@@ -835,7 +851,11 @@ impl<'a> Driver<'a> {
                     .map_err(storage_err)?;
             }
         }
-        for division in build_divisions(&doc, &edition_id, &provenance_id) {
+        // Divisions run-length-encode the same canonical order, so
+        // `start_global`/`end_global` agree with `global_ayah_index` (WR-02).
+        let ordered: Vec<AyahSource> =
+            order.iter().map(|&index| doc.ayahs[index].clone()).collect();
+        for division in build_divisions(&ordered, &edition_id, &provenance_id) {
             uow.quran().insert_stg_division(&run_id, division).await.map_err(storage_err)?;
         }
         uow.commit().await.map_err(storage_err)?;
@@ -1062,10 +1082,7 @@ impl<'a> Driver<'a> {
                 uow.quran().get_validation_report(self.run_id()).await.map_err(storage_err)?;
             if let Some(existing) = existing {
                 if existing.findings_json != row.findings_json {
-                    uow.quran()
-                        .clear_staging(self.run_id())
-                        .await
-                        .map_err(storage_err)?;
+                    uow.quran().clear_staging(self.run_id()).await.map_err(storage_err)?;
                     uow.quran()
                         .set_import_run_state(self.run_id(), "Failed")
                         .await
@@ -1232,25 +1249,43 @@ impl<'a> Driver<'a> {
     }
 }
 
+/// Canonical ayah order: indices into the manifest's ayah list sorted by
+/// ascending `(surah, ayah)`.
+///
+/// Content hashes, staging inserts, and division ranges all consume this one
+/// order, so an unsorted-but-otherwise-valid manifest imports identically to
+/// its sorted permutation instead of failing late at the QV-014 roundtrip
+/// guard (WR-02). For an already-sorted manifest this is the identity
+/// permutation: stored hashes and indices are unchanged.
+fn canonical_order(ayahs: &[AyahSource]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..ayahs.len()).collect();
+    order.sort_by_key(|&index| (ayahs[index].surah, ayahs[index].ayah));
+    order
+}
+
 /// Build division rows by run-length encoding per-ayah metadata.
 ///
 /// Range kinds (`juz`…`page`) become one row per contiguous run; `sajdah`
 /// markers become one row per occurrence (number = occurrence index). Ruku
 /// numbers must already be globally unique (see DEV-03): per-surah ruku would
 /// collide on `(edition, kind, number)`.
-fn build_divisions(doc: &EditionSource, edition_id: &str, provenance_id: &str) -> Vec<DivisionRow> {
+fn build_divisions(
+    ayahs: &[AyahSource],
+    edition_id: &str,
+    provenance_id: &str,
+) -> Vec<DivisionRow> {
     let mut divisions = Vec::new();
     let mut global = 0_i64;
-    let mut globals: Vec<i64> = Vec::with_capacity(doc.ayahs.len());
-    for _ in &doc.ayahs {
+    let mut globals: Vec<i64> = Vec::with_capacity(ayahs.len());
+    for _ in ayahs {
         global += 1;
         globals.push(global);
     }
     let mut run: Option<(String, i64, usize)>;
     let flush =
         |divisions: &mut Vec<DivisionRow>, kind: &str, number: i64, start: usize, end: usize| {
-            let first = &doc.ayahs[start];
-            let last = &doc.ayahs[end];
+            let first = &ayahs[start];
+            let last = &ayahs[end];
             divisions.push(DivisionRow {
                 edition_id: edition_id.to_string(),
                 kind: kind.to_string(),
@@ -1266,12 +1301,12 @@ fn build_divisions(doc: &EditionSource, edition_id: &str, provenance_id: &str) -
             });
         };
     for (kind, values) in [
-        ("juz", doc.ayahs.iter().map(|a| a.juz.map(i64::from)).collect::<Vec<_>>()),
-        ("hizb", doc.ayahs.iter().map(|a| a.hizb.map(i64::from)).collect::<Vec<_>>()),
-        ("rub", doc.ayahs.iter().map(|a| a.rub.map(i64::from)).collect::<Vec<_>>()),
-        ("manzil", doc.ayahs.iter().map(|a| a.manzil.map(i64::from)).collect::<Vec<_>>()),
-        ("ruku", doc.ayahs.iter().map(|a| a.ruku.map(i64::from)).collect::<Vec<_>>()),
-        ("page", doc.ayahs.iter().map(|a| a.page.map(i64::from)).collect::<Vec<_>>()),
+        ("juz", ayahs.iter().map(|a| a.juz.map(i64::from)).collect::<Vec<_>>()),
+        ("hizb", ayahs.iter().map(|a| a.hizb.map(i64::from)).collect::<Vec<_>>()),
+        ("rub", ayahs.iter().map(|a| a.rub.map(i64::from)).collect::<Vec<_>>()),
+        ("manzil", ayahs.iter().map(|a| a.manzil.map(i64::from)).collect::<Vec<_>>()),
+        ("ruku", ayahs.iter().map(|a| a.ruku.map(i64::from)).collect::<Vec<_>>()),
+        ("page", ayahs.iter().map(|a| a.page.map(i64::from)).collect::<Vec<_>>()),
     ] {
         run = None;
         for (index, value) in values.iter().enumerate() {
@@ -1295,11 +1330,11 @@ fn build_divisions(doc: &EditionSource, edition_id: &str, provenance_id: &str) -
             }
         }
         if let Some((open_kind, open_number, start)) = run.take() {
-            flush(&mut divisions, &open_kind, open_number, start, doc.ayahs.len() - 1);
+            flush(&mut divisions, &open_kind, open_number, start, ayahs.len() - 1);
         }
     }
     let mut occurrence = 0_i64;
-    for (index, ayah) in doc.ayahs.iter().enumerate() {
+    for (index, ayah) in ayahs.iter().enumerate() {
         if ayah.sajdah.is_some() {
             occurrence += 1;
             divisions.push(DivisionRow {
@@ -1455,5 +1490,38 @@ impl Driver<'_> {
             }),
             stopped_at: self.last,
         }
+    }
+}
+
+#[cfg(test)]
+mod canonical_order_tests {
+    use super::*;
+
+    fn ayah(surah: u16, ayah: u32) -> AyahSource {
+        AyahSource {
+            surah,
+            ayah,
+            text: String::new(),
+            juz: None,
+            hizb: None,
+            rub: None,
+            manzil: None,
+            ruku: None,
+            page: None,
+            sajdah: None,
+            tokens: None,
+        }
+    }
+
+    #[test]
+    fn sorted_manifest_is_identity() {
+        let ayahs = vec![ayah(1, 1), ayah(1, 2), ayah(2, 1)];
+        assert_eq!(canonical_order(&ayahs), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn unsorted_manifest_sorts_by_surah_then_ayah() {
+        let ayahs = vec![ayah(2, 1), ayah(1, 2), ayah(1, 1)];
+        assert_eq!(canonical_order(&ayahs), vec![2, 1, 0]);
     }
 }
