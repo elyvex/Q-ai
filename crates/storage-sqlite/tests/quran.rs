@@ -536,13 +536,19 @@ async fn rollback_rejects_non_deprecated_targets() {
     // though it is not Active (WR-09).
     let mut uow = db.write().await.unwrap();
     uow.quran().set_edition_status("ed-1", "Quarantined").await.unwrap();
-    let err =
-        uow.quran().rollback_edition("test", "0.1.0", "principal", "appr-1", &now()).await.unwrap_err();
+    let err = uow
+        .quran()
+        .rollback_edition("test", "0.1.0", "principal", "appr-1", &now())
+        .await
+        .unwrap_err();
     assert!(matches!(err, storage::StorageError::ConstraintViolation { .. }));
     // An approved-but-never-served edition is not a rollback source either.
     uow.quran().set_edition_status("ed-1", "Approved").await.unwrap();
-    let err =
-        uow.quran().rollback_edition("test", "0.1.0", "principal", "appr-1", &now()).await.unwrap_err();
+    let err = uow
+        .quran()
+        .rollback_edition("test", "0.1.0", "principal", "appr-1", &now())
+        .await
+        .unwrap_err();
     assert!(matches!(err, storage::StorageError::ConstraintViolation { .. }));
     uow.rollback().await.unwrap();
 }
