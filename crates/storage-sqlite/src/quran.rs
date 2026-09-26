@@ -783,6 +783,19 @@ impl QuranRepository for SqliteQuranRepository {
         if target_status == "Active" {
             return Err(StorageError::Conflict);
         }
+        // Rollback reactivates a superseded version. Only `Deprecated`
+        // editions are eligible: reactivating a `Quarantined` edition would
+        // return quarantined content to service, and `Approved` (or any other
+        // non-served state) was never the served corpus (WR-09). The
+        // URN-bound human approval is still required upstream; this is the
+        // storage-layer backstop.
+        if target_status != "Deprecated" {
+            return Err(StorageError::ConstraintViolation {
+                message: format!(
+                    "rollback target {slug}@{version} is {target_status}, not Deprecated"
+                ),
+            });
+        }
         sqlx::query(
             "UPDATE quran_editions SET status = 'Deprecated', deprecated_at = ?
              WHERE status = 'Active'",

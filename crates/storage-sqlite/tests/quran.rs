@@ -302,10 +302,7 @@ async fn canonical_triggers_abort_raw_writes_with_codes() {
         ("UPDATE word_glosses SET gloss = 'x' WHERE gloss_dataset_id = 'src-1'", "QAI-QUR-0018"),
         ("DELETE FROM word_glosses WHERE gloss_dataset_id = 'src-1'", "QAI-QUR-0019"),
         ("DELETE FROM quran_editions WHERE id = 'ed-1'", "QAI-QUR-0020"),
-        (
-            "UPDATE quran_editions SET upstream_edition_slug = 'x' WHERE id = 'ed-1'",
-            "QAI-QUR-0021",
-        ),
+        ("UPDATE quran_editions SET upstream_edition_slug = 'x' WHERE id = 'ed-1'", "QAI-QUR-0021"),
         ("UPDATE quran_editions SET is_primary = 1 WHERE id = 'ed-1'", "QAI-QUR-0021"),
     ] {
         let err = sqlx::query(sql).execute(&pool).await.unwrap_err();
@@ -525,6 +522,29 @@ async fn rollback_restores_a_prior_version() {
         .unwrap_err();
     assert!(matches!(err, storage::StorageError::NotFound { .. }));
     uow.commit().await.unwrap();
+}
+
+#[tokio::test]
+async fn rollback_rejects_non_deprecated_targets() {
+    let (_dir, db, _path) = migrated_db().await;
+    stage_run(&db, "run-1", "ed-1", "test", "0.1.0").await;
+    let mut uow = db.write().await.unwrap();
+    uow.quran().activate_edition("run-1", "ed-1", "principal", "appr-1", &now()).await.unwrap();
+    uow.commit().await.unwrap();
+
+    // A quarantined edition must stay unserved: rollback refuses it even
+    // though it is not Active (WR-09).
+    let mut uow = db.write().await.unwrap();
+    uow.quran().set_edition_status("ed-1", "Quarantined").await.unwrap();
+    let err =
+        uow.quran().rollback_edition("test", "0.1.0", "principal", "appr-1", &now()).await.unwrap_err();
+    assert!(matches!(err, storage::StorageError::ConstraintViolation { .. }));
+    // An approved-but-never-served edition is not a rollback source either.
+    uow.quran().set_edition_status("ed-1", "Approved").await.unwrap();
+    let err =
+        uow.quran().rollback_edition("test", "0.1.0", "principal", "appr-1", &now()).await.unwrap_err();
+    assert!(matches!(err, storage::StorageError::ConstraintViolation { .. }));
+    uow.rollback().await.unwrap();
 }
 
 #[tokio::test]
