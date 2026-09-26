@@ -83,8 +83,10 @@ impl QuotationVerdict {
     /// must never be downgraded to a warning or softened into a success. The
     /// success verdicts are `ExactMatch` and
     /// `MatchAfterWhitespaceNormalization`. `MatchAfterDeclaredNormalization`
-    /// is a declared match but is unreachable in v1 — the resolver carries no
-    /// normalization-rules parameter — so it is not claimed as reachable here.
+    /// has no producer in v1 — the resolver carries no normalization-rules
+    /// parameter — so it defaults to a hard failure: if any future producer
+    /// emits it, every answer path fails closed until declared-normalization
+    /// verification exists.
     pub fn is_hard_failure(&self) -> bool {
         matches!(
             self,
@@ -92,6 +94,7 @@ impl QuotationVerdict {
                 | Self::LocationNotFound
                 | Self::EditionNotFound
                 | Self::AccessDenied
+                | Self::MatchAfterDeclaredNormalization { .. }
         )
     }
 
@@ -180,6 +183,10 @@ impl CitationError {
 /// fails on another (§35.3, ADR-0111). The returned error carries a stable
 /// `QAI-QUR-*` code via [`CitationError::code`]; exit-code/HTTP concerns belong
 /// to the caller, not to this domain crate.
+///
+/// `MatchAfterDeclaredNormalization` has no producer in v1 and fails closed
+/// here: without declared-normalization verification, treating it as a match
+/// would silently succeed on a non-exact match.
 pub fn require_exact(verdict: &QuotationVerdict) -> Result<(), CitationError> {
     match verdict {
         QuotationVerdict::Mismatch { first_difference_at, expected_hash } => {
@@ -191,9 +198,14 @@ pub fn require_exact(verdict: &QuotationVerdict) -> Result<(), CitationError> {
         QuotationVerdict::LocationNotFound => Err(CitationError::LocationNotFound),
         QuotationVerdict::EditionNotFound => Err(CitationError::EditionNotFound),
         QuotationVerdict::AccessDenied => Err(CitationError::AccessDenied),
-        QuotationVerdict::ExactMatch
-        | QuotationVerdict::MatchAfterWhitespaceNormalization
-        | QuotationVerdict::MatchAfterDeclaredNormalization { .. } => Ok(()),
+        QuotationVerdict::MatchAfterDeclaredNormalization { .. } => {
+            Err(CitationError::Backend {
+                detail: "declared-normalization matches are not supported in v1".to_string(),
+            })
+        }
+        QuotationVerdict::ExactMatch | QuotationVerdict::MatchAfterWhitespaceNormalization => {
+            Ok(())
+        }
     }
 }
 
