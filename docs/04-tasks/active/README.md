@@ -15,3 +15,8 @@ No orphan items. Phase-scoped work is tracked on the phase boards:
 Owner-gated: `docs/05-followups/decisions-needed.md` · Technical questions:
 `docs/05-followups/open-questions.md` · Actionable non-AC items:
 `docs/05-followups/followups.md`.
+
+## Active cross-phase tasks
+
+- `TASK-001-foundation-gap-closure` — Phase 1 foundation gap closure (GSD plans
+  01-01…01-05); active until plan 01-05-02 moves it to `completed/`.
