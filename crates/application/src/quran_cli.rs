@@ -493,12 +493,24 @@ pub async fn cmd_edition_show(
             Ok(uow) => uow,
             Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
         };
-        let row = uow
+        // A degraded database must error, never render a confidently
+        // incomplete record: a fetch failure is propagated instead of
+        // silently omitting the `license:` line (WR-08). The write handle is
+        // opened only because the typed edition reader lives on the unit of
+        // work (`ReadTx` exposes raw SQL only, which this layer must not
+        // interpolate); it is always rolled back, never committed — the same
+        // read-only discipline as every other read in this module.
+        let row = match uow
             .quran()
             .get_edition_by_slug_version(&edition.slug, &edition.version.to_string())
             .await
-            .ok()
-            .flatten();
+        {
+            Ok(row) => row,
+            Err(err) => {
+                let _ = uow.rollback().await;
+                return CommandOutput::err(exit::INTERNAL, err.to_string());
+            }
+        };
         let _ = uow.rollback().await;
         row.and_then(|row| serde_json::from_str::<serde_json::Value>(&row.license_json).ok())
             .and_then(|value| {
@@ -839,7 +851,16 @@ pub async fn cmd_import(
                 Ok(uow) => uow,
                 Err(_) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
             };
-            let report = uow.quran().get_validation_report(&run_id).await.ok().flatten();
+            // A fetch failure here is a storage failure, not evidence about
+            // the import: surface it distinctly instead of masking it behind
+            // the import error (WR-08).
+            let report = match uow.quran().get_validation_report(&run_id).await {
+                Ok(report) => report,
+                Err(fetch_err) => {
+                    let _ = uow.rollback().await;
+                    return CommandOutput::err(exit::INTERNAL, fetch_err.to_string());
+                }
+            };
             let _ = uow.rollback().await;
             let reference_failed = report
                 .as_ref()
