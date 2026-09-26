@@ -277,6 +277,29 @@ impl AuditError {
             Self::Storage(_) => "QAI-AUD-0007",
         }
     }
+
+    /// One non-empty stable recovery remedy per chain-integrity failure
+    /// (D-12). informational variants return `None`; every variant the
+    /// persisted verifier can raise carries an actionable remedy.
+    pub fn remedy(&self) -> Option<&'static str> {
+        match self {
+            Self::ChainVerificationFailed { .. } => Some(
+                "quarantine writes to the audit store, then identify the affected \
+                 sequences with `qai audit verify` and restore them from a \
+                 known-good backup",
+            ),
+            Self::SequenceGap { .. } => Some(
+                "audit rows must never be deleted; restore the missing sequences \
+                 from a known-good backup, then re-run `qai audit verify`",
+            ),
+            Self::HashMismatch { .. } => Some(
+                "a stored audit row no longer matches its chain hash; restore the \
+                 tampered sequences from a known-good backup, then re-run \
+                 `qai audit verify`",
+            ),
+            _ => None,
+        }
+    }
 }
 
 impl storage::error::Diagnostic for AuditError {
