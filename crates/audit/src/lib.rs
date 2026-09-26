@@ -409,6 +409,24 @@ mod tests {
         assert!(matches!(job, Actor::Job { .. }));
     }
 
+    /// Plan 01-01-03 (D-12): the persisted-verifier failures keep stable
+    /// codes, carry a non-empty remedy, and point at `qai audit verify`.
+    #[test]
+    fn chain_failures_carry_code_remedy_and_next_command() {
+        use storage::error::Diagnostic as _;
+        let cases = [
+            (AuditError::ChainVerificationFailed { sequence: 2 }, "QAI-AUD-0003"),
+            (AuditError::SequenceGap { sequence: 3 }, "QAI-AUD-0004"),
+            (AuditError::HashMismatch { sequence: 4 }, "QAI-AUD-0005"),
+        ];
+        for (err, code) in cases {
+            assert_eq!(err.code(), code);
+            let remedy = err.remedy().expect("chain failure must carry a remedy");
+            assert!(!remedy.is_empty(), "{code} remedy must be non-empty");
+            assert_eq!(err.next_command(), Some("qai audit verify".to_string()));
+        }
+    }
+
     // ─── In-memory repo for end-to-end chain tests ───
 
     #[derive(Clone, Default)]
