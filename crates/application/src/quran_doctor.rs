@@ -490,7 +490,20 @@ fn reference_corpus_check(findings_json: Option<&str>) -> QuranDoctorCheck {
         );
     };
     let findings: Vec<quran_corpus::validation::Finding> =
-        serde_json::from_str(raw).unwrap_or_default();
+        match serde_json::from_str(raw) {
+            Ok(findings) => findings,
+            Err(_) => {
+                // A persisted report that no longer parses is an integrity
+                // signal, never a benign skip: fail closed so a
+                // tampered/corrupt report cannot read as "no reference corpus
+                // configured".
+                return fail(
+                    "quran.reference_corpus",
+                    "persisted validation report is corrupt; integrity unknown".to_string(),
+                    "re-import the edition so a QV-015 outcome is recorded",
+                );
+            }
+        };
     let qv15: Vec<&quran_corpus::validation::Finding> =
         findings.iter().filter(|finding| finding.rule_id == "QV-015").collect();
     if qv15.iter().any(|finding| finding.severity == quran_corpus::validation::Severity::Fatal) {
@@ -500,9 +513,16 @@ fn reference_corpus_check(findings_json: Option<&str>) -> QuranDoctorCheck {
             "review the QV-015 finding and re-import against a compatible reference",
         );
     }
+    // The pass evidence is a structured `outcome` field inside the QV-015
+    // Info finding's message JSON — match the parsed value, never a raw
+    // substring of the serialized report.
     if qv15.iter().any(|finding| {
         finding.severity == quran_corpus::validation::Severity::Info
-            && finding.message.contains("\"outcome\":\"pass\"")
+            && serde_json::from_str::<serde_json::Value>(&finding.message)
+                .ok()
+                .and_then(|message| message.get("outcome").cloned())
+                .and_then(|outcome| outcome.as_str().map(str::to_string))
+                .is_some_and(|outcome| outcome == "pass")
     }) {
         return pass(
             "quran.reference_corpus",
