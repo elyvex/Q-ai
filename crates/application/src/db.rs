@@ -251,9 +251,13 @@ impl DatabaseReadiness {
     /// The exact operator remedy for this state.
     pub fn remedy(&self) -> &'static str {
         match self {
-            Self::Missing { .. } | Self::Pending { .. } => "run `qai db migrate` to create or update the database",
+            Self::Missing { .. } | Self::Pending { .. } => {
+                "run `qai db migrate` to create or update the database"
+            }
             Self::Unreadable { .. } => "check the database file permissions and path, then retry",
-            Self::ChecksumMismatch { .. } => "run `qai db verify` to inspect the mismatched versions",
+            Self::ChecksumMismatch { .. } => {
+                "run `qai db verify` to inspect the mismatched versions"
+            }
             Self::Current { .. } => "no action required",
         }
     }

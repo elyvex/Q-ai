@@ -251,8 +251,8 @@ fn data_dir_overrides_derive_storage_keys_with_cli_origin() {
 
 fn validate_shapes(out: &std::process::Output, expect_code: i32) -> (String, serde_json::Value) {
     assert_eq!(out.status.code(), Some(expect_code));
-    let human = String::from_utf8_lossy(&out.stderr).into_owned()
-        + &String::from_utf8_lossy(&out.stdout);
+    let human =
+        String::from_utf8_lossy(&out.stderr).into_owned() + &String::from_utf8_lossy(&out.stdout);
     (human, serde_json::Value::Null)
 }
 
@@ -303,6 +303,153 @@ fn config_validate_rejected_value_reports_same_fields_in_both_modes() {
     assert_eq!(doc["code"], "QAI-CFG-0003");
     assert!(!doc["remedy"].as_str().unwrap_or_default().is_empty());
     assert!(!doc["next_command"].as_str().unwrap_or_default().is_empty());
+}
+
+// ─── Plan 01-01-03: persisted audit verification (D-12) ───
+//
+// Both tests seed a real migrated SQLite database, corrupt the hash chain on
+// disk (tampered row vs sequence gap), then invoke the real `qai audit verify`
+// binary in human and `--json` modes. Human and JSON must carry the same
+// stable code, non-empty remedy, exact next command, and affected-sequence
+// fields; every invalid chain exits `exit_code::VALIDATION` (3); the JSON
+// form parses as one document.
+
+/// Append `count` hash-chained audit events to a migrated database through
+/// the same writer the application uses, so the chain verifies cleanly.
+/// Lives in `application` (not here) to respect the arch-check boundary:
+/// the CLI test target may not gain `audit`/`domain`/`storage-sqlite` edges.
+fn seed_audit_chain(db_path: &str, count: u64) {
+    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    rt.block_on(async {
+        application::audit_bridge::seed_synthetic_chain(db_path, count).await.unwrap();
+    });
+}
+
+/// Run one write statement against the database after dropping the
+/// append-only triggers (test-only bypass of the SQL guardrail).
+fn corrupt_audit_chain(db_path: &str, statement: &str) {
+    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    rt.block_on(async {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .connect_with(sqlx::sqlite::SqliteConnectOptions::new().filename(db_path))
+            .await
+            .unwrap();
+        for trigger in ["trg_audit_no_update", "trg_audit_no_delete"] {
+            sqlx::query(&format!("DROP TRIGGER IF EXISTS {trigger}")).execute(&pool).await.unwrap();
+        }
+        sqlx::query(statement).execute(&pool).await.unwrap();
+        pool.close().await;
+    });
+}
+
+/// Migrate a temp workspace and return its data-dir string.
+fn migrated_workspace() -> (tempfile::TempDir, String) {
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path().to_str().unwrap().to_string();
+    let out = run(&["--data-dir", data.as_str(), "db", "migrate"], &[]);
+    assert!(out.status.success(), "db migrate must succeed");
+    (dir, data)
+}
+
+/// Assert the human and JSON `audit verify` outputs carry the same stable
+/// failure contract for one corrupted chain.
+fn assert_verify_contract(data: &str, expect_code: &str, expect_sequences: &[u64]) {
+    // Human mode: validation exit plus the typed diagnostic on stderr.
+    let out = run(&["--data-dir", data, "audit", "verify"], &[]);
+    assert_eq!(out.status.code(), Some(3), "invalid chain is a validation failure");
+    let human =
+        format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    assert!(human.contains(expect_code), "stable code expected:\n{human}");
+    assert!(human.contains("remedy:"), "non-empty remedy expected:\n{human}");
+    assert!(human.contains("next: qai audit verify"), "exact next command expected:\n{human}");
+    for sequence in expect_sequences {
+        assert!(
+            human.contains(&sequence.to_string()),
+            "affected sequence {sequence} expected:\n{human}"
+        );
+    }
+
+    // JSON mode: one parseable document with the same fields.
+    let out = run(&["--data-dir", data, "--json", "audit", "verify"], &[]);
+    assert_eq!(out.status.code(), Some(3), "invalid chain is a validation failure");
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    let doc: serde_json::Value =
+        serde_json::from_str(&text).expect("audit verify JSON parses as one document");
+    assert_eq!(doc["valid"], false);
+    assert_eq!(doc["code"], expect_code);
+    let remedy = doc["remedy"].as_str().unwrap_or_default();
+    assert!(!remedy.is_empty(), "non-empty remedy expected: {doc}");
+    assert_eq!(doc["next_command"], "qai audit verify");
+    let affected = format!("{}{}", doc["gaps"], doc["tampered_sequences"]);
+    for sequence in expect_sequences {
+        assert!(
+            affected.contains(&sequence.to_string()),
+            "affected sequence {sequence} expected: {doc}"
+        );
+    }
+
+    // Both modes agree on the stable contract.
+    let human_remedy = human
+        .lines()
+        .find_map(|line| line.split_once("remedy:").map(|(_, rest)| rest.trim().to_string()))
+        .unwrap_or_default();
+    assert!(
+        !human_remedy.is_empty() && remedy.contains(&human_remedy[..human_remedy.len().min(24)]),
+        "human and JSON remedies must agree:\n{human}\n{doc}"
+    );
+}
+
+#[test]
+fn audit_verify_tampered_human_and_json() {
+    let (_dir, data) = migrated_workspace();
+    let db_path = format!("{data}/qai.db");
+    seed_audit_chain(&db_path, 2);
+    corrupt_audit_chain(&db_path, "UPDATE audit_events SET reason = 'tampered' WHERE sequence = 2");
+
+    assert_verify_contract(&data, "QAI-AUD-0005", &[2]);
+
+    // Doctor consumes the same persisted report: a tampered chain fails
+    // `audit.chain_valid` and points at the authoritative verifier.
+    let out = run(&["--data-dir", data.as_str(), "doctor", "--json"], &[]);
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).expect("doctor JSON");
+    let audit = check(&doc, "audit.chain_valid");
+    assert_eq!(audit["status"], "fail");
+    assert!(
+        audit["next_command"].as_str().unwrap_or_default().contains("qai audit verify"),
+        "doctor must point at the verifier: {audit}"
+    );
+}
+
+#[test]
+fn audit_verify_gap_human_and_json() {
+    let (_dir, data) = migrated_workspace();
+    let db_path = format!("{data}/qai.db");
+    seed_audit_chain(&db_path, 3);
+    corrupt_audit_chain(&db_path, "DELETE FROM audit_events WHERE sequence = 2");
+
+    assert_verify_contract(&data, "QAI-AUD-0004", &[3]);
+}
+
+#[test]
+fn ordinary_read_on_missing_database_names_migrate_without_creating_state() {
+    // D-05 / T-01-MIG: ordinary application reads go through the
+    // existing-database guard — no implicit creation, a typed
+    // migration-required diagnostic (exit 3) naming `qai db migrate`.
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path().join("nogdb").to_str().unwrap().to_string();
+
+    let out = run(&["--data-dir", data.as_str(), "quran", "get", "2:255"], &[]);
+    assert_eq!(out.status.code(), Some(3), "missing DB is a validation failure");
+    let combined =
+        format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    assert!(
+        combined.contains("qai db migrate"),
+        "ordinary read must name the migrate remedy:\n{combined}"
+    );
+    assert!(
+        !Path::new(&format!("{data}/qai.db")).exists(),
+        "ordinary read must not create a database"
+    );
 }
 
 #[test]

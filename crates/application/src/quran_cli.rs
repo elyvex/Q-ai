@@ -68,8 +68,43 @@ impl CommandOutput {
 /// Local operator identity (single-user interim; Phase 11 owns identity).
 pub const LOCAL_PRINCIPAL: &str = "00000000-0000-0000-0000-000000000000";
 
+/// Existing-database guard for ordinary commands (D-05, T-01-MIG).
+///
+/// Returns the typed [`StorageError::MigrationRequired`] diagnostic when no
+/// database file exists yet, instead of implicitly creating one through the
+/// creating constructor. Database creation and schema mutation stay confined
+/// to the explicit application migration function reached by `qai db migrate`;
+/// an existing file still opens through the read/write pool because mutation
+/// commands (import, activate, …) need writes.
 async fn open_db(db_path: &str) -> Result<SqliteDatabase, StorageError> {
+    if std::fs::symlink_metadata(db_path).is_err() {
+        return Err(StorageError::MigrationRequired { at_schema: 0, required: 0 });
+    }
     SqliteDatabase::new(db_path, 4, true).await
+}
+
+/// Map an `open_db` failure to the operator surface.
+///
+/// A missing database is a validation failure (exit 3, matching doctor's
+/// missing-database treatment) carrying the typed remedy and the runnable
+/// `qai db migrate` next command; every other open failure stays internal.
+fn map_open_error(error: StorageError) -> (i32, String) {
+    match &error {
+        StorageError::MigrationRequired { .. } => (
+            exit::VALIDATION,
+            format!(
+                "{error}; remedy: {}; next: qai db migrate",
+                error.remedy().unwrap_or("run `qai db migrate`")
+            ),
+        ),
+        _ => (exit::INTERNAL, error.to_string()),
+    }
+}
+
+/// Render an `open_db` failure as a [`CommandOutput`].
+fn open_error_output(error: StorageError) -> CommandOutput {
+    let (exit, message) = map_open_error(error);
+    CommandOutput::err(exit, message)
 }
 
 fn map_reader_error(error: crate::quran_reader::ReaderError) -> (i32, String) {
@@ -169,7 +204,7 @@ pub async fn cmd_get(
     use crate::quran_reader::QuranReader;
     let db = match open_db(db_path).await {
         Ok(db) => Arc::new(db),
-        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => return open_error_output(err),
     };
     let parsed = match quran_core::parse(reference) {
         Ok(parsed) => parsed,
@@ -230,7 +265,7 @@ pub async fn cmd_context(
     };
     let db = match open_db(db_path).await {
         Ok(db) => Arc::new(db),
-        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => return open_error_output(err),
     };
     let parsed = match quran_core::parse(reference) {
         Ok(parsed) => parsed,
@@ -257,7 +292,7 @@ pub async fn cmd_surah(db_path: &str, number: u16, metadata: bool) -> CommandOut
     use crate::quran_reader::QuranReader;
     let db = match open_db(db_path).await {
         Ok(db) => Arc::new(db),
-        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => return open_error_output(err),
     };
     let surah_number = match quran_core::SurahNumber::new(number) {
         Ok(number) => number,
@@ -302,7 +337,7 @@ pub async fn cmd_division(db_path: &str, kind: &str, number: u32) -> CommandOutp
     };
     let db = match open_db(db_path).await {
         Ok(db) => Arc::new(db),
-        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => return open_error_output(err),
     };
     let reference = QuranRef::Division { edition: EditionSelector::Active, kind: division, number };
     let views = match reader(&db).get_ayahs(&reference, &AyahOptions::default()).await {
@@ -328,7 +363,7 @@ pub async fn cmd_resolve(db_path: &str, reference: &str) -> CommandOutput {
     use crate::quran_reader::QuranReader;
     let db = match open_db(db_path).await {
         Ok(db) => Arc::new(db),
-        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => return open_error_output(err),
     };
     match reader(&db).resolve(reference).await {
         Ok(resolved) => {
@@ -378,7 +413,7 @@ pub async fn cmd_verify_quotation(
     };
     let db = match open_db(db_path).await {
         Ok(db) => Arc::new(db),
-        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => return open_error_output(err),
     };
     let reader = Arc::new(reader(&db));
     match crate::quran_tools::verify_canonical_quotation(&reader, slug, version, surah, ayah, text)
@@ -410,7 +445,7 @@ pub async fn cmd_edition_list(db_path: &str) -> CommandOutput {
     use crate::quran_reader::QuranReader;
     let db = match open_db(db_path).await {
         Ok(db) => Arc::new(db),
-        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => return open_error_output(err),
     };
     let editions =
         match reader(&db).list_editions(crate::quran_reader::EditionFilter::default()).await {
@@ -456,7 +491,7 @@ pub async fn cmd_edition_show(
     };
     let db = match open_db(db_path).await {
         Ok(db) => Arc::new(db),
-        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => return open_error_output(err),
     };
     let edition = match reader(&db).get_edition(&selector).await {
         Ok(edition) => edition,
@@ -631,7 +666,7 @@ pub async fn cmd_edition_active(db_path: &str) -> CommandOutput {
     use crate::quran_reader::QuranReader;
     let db = match open_db(db_path).await {
         Ok(db) => Arc::new(db),
-        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => return open_error_output(err),
     };
     match reader(&db).get_edition(&EditionSelector::Active).await {
         Ok(edition) => CommandOutput::ok(
@@ -753,7 +788,7 @@ pub async fn cmd_import(
     }
     let db = match open_db(db_path).await {
         Ok(db) => Arc::new(db),
-        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => return open_error_output(err),
     };
     let at = now_rfc3339();
     if let Err(output) = ensure_principal_or_err(&db, &at).await {
@@ -916,7 +951,7 @@ pub async fn cmd_validate(db_path: &str, target: &str, report_path: Option<&str>
         };
         let db = match open_db(db_path).await {
             Ok(db) => Arc::new(db),
-            Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+            Err(err) => return open_error_output(err),
         };
         match super::quran::validate_staged(&*db, slug, version).await {
             Ok(report) => report,
@@ -1132,11 +1167,11 @@ pub async fn cmd_diff(
     }
     let db = match open_db(db_path).await {
         Ok(db) => Arc::new(db),
-        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => return open_error_output(err),
     };
     let mut uow = match db.write().await {
         Ok(uow) => uow,
-        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => return open_error_output(err),
     };
     let mut load = async |version: &str| -> Result<Vec<(u16, u32, String)>, CommandOutput> {
         let edition = uow
@@ -1223,11 +1258,7 @@ pub async fn cmd_diff(
 async fn approval_flow(
     db_path: &str,
 ) -> Result<(Arc<SqliteDatabase>, String, String), CommandOutput> {
-    let db = Arc::new(
-        open_db(db_path)
-            .await
-            .map_err(|err| CommandOutput::err(exit::INTERNAL, err.to_string()))?,
-    );
+    let db = Arc::new(open_db(db_path).await.map_err(open_error_output)?);
     let at = now_rfc3339();
     super::quran::ensure_principal(&*db, LOCAL_PRINCIPAL, "local operator", &at)
         .await
@@ -1391,7 +1422,7 @@ pub async fn cmd_hashes(db_path: &str, edition: &str) -> CommandOutput {
     };
     let db = match open_db(db_path).await {
         Ok(db) => Arc::new(db),
-        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => return open_error_output(err),
     };
     let reader = reader(&db);
     let selector = match parse_selector(&format!("{slug}@{version}")) {
@@ -1432,11 +1463,11 @@ pub async fn cmd_hashes(db_path: &str, edition: &str) -> CommandOutput {
 pub async fn cmd_translation_list(db_path: &str) -> CommandOutput {
     let db = match open_db(db_path).await {
         Ok(db) => Arc::new(db),
-        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => return open_error_output(err),
     };
     let mut uow = match db.write().await {
         Ok(uow) => uow,
-        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => return open_error_output(err),
     };
     let rows = match uow.quran().list_translation_editions().await {
         Ok(rows) => rows,
@@ -1475,7 +1506,7 @@ pub async fn cmd_translation_import(db_path: &str, manifest: &str) -> CommandOut
     };
     let db = match open_db(db_path).await {
         Ok(db) => Arc::new(db),
-        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => return open_error_output(err),
     };
     let at = now_rfc3339();
     if let Err(output) = ensure_principal_or_err(&db, &at).await {
@@ -1527,11 +1558,11 @@ async fn ensure_translation_source(
 pub async fn cmd_translation_show(db_path: &str, slug: &str) -> CommandOutput {
     let db = match open_db(db_path).await {
         Ok(db) => Arc::new(db),
-        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => return open_error_output(err),
     };
     let mut uow = match db.write().await {
         Ok(uow) => uow,
-        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => return open_error_output(err),
     };
     let rows = match uow.quran().list_translation_editions().await {
         Ok(rows) => rows,
@@ -1562,7 +1593,7 @@ pub async fn cmd_gloss_import(db_path: &str, manifest: &str) -> CommandOutput {
     };
     let db = match open_db(db_path).await {
         Ok(db) => Arc::new(db),
-        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+        Err(err) => return open_error_output(err),
     };
     let at = now_rfc3339();
     if let Err(output) = ensure_principal_or_err(&db, &at).await {
@@ -1867,7 +1898,7 @@ pub async fn cmd_normalize(
 
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     let rows = match db.write().await {
         Ok(mut uow) => match uow.quran().list_normalization_profiles().await {
@@ -1966,7 +1997,7 @@ fn explain_human(preview: &crate::quran_normalize::Preview) -> String {
 pub async fn cmd_normalize_list_profiles(db_path: &str) -> CommandOutput {
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     let rows = match db.write().await {
         Ok(mut uow) => match uow.quran().list_normalization_profiles().await {
@@ -2019,7 +2050,7 @@ pub async fn cmd_normalize_show_rule(db_path: &str, rule: &str) -> CommandOutput
     }
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     let rows = match db.write().await {
         Ok(mut uow) => match uow.quran().list_normalization_rules().await {
@@ -2066,7 +2097,7 @@ pub async fn cmd_forms_rebuild(db_path: &str, edition: &str) -> CommandOutput {
     };
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     let params = RebuildParams {
         edition_slug: slug.to_string(),
@@ -2132,7 +2163,7 @@ pub async fn cmd_index_rebuild(
     let index_id = index.unwrap_or(QURAN_AYAH_INDEX_ID).to_string();
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     let (slug, version) = match edition {
         Some(spec) => match spec.split_once('@') {
@@ -2231,7 +2262,7 @@ pub async fn cmd_index_verify(db_path: &str, index: Option<&str>) -> CommandOutp
     let index_id = index.unwrap_or(QURAN_AYAH_INDEX_ID);
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     let pointer = {
         let mut uow = match db.write().await {
@@ -2298,7 +2329,7 @@ pub async fn cmd_index_gc(db_path: &str, index: Option<&str>, keep: usize) -> Co
     use super::quran_index::{GcParams, QURAN_AYAH_INDEX_ID, gc_index};
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     let params = GcParams {
         index_id: index.unwrap_or(QURAN_AYAH_INDEX_ID).to_string(),
@@ -2346,7 +2377,7 @@ pub async fn cmd_index_rollback(db_path: &str, index: Option<&str>) -> CommandOu
     use super::quran_index::{QURAN_AYAH_INDEX_ID, RollbackParams, rollback_index_single_step};
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     let params = RollbackParams {
         index_id: index.unwrap_or(QURAN_AYAH_INDEX_ID).to_string(),
@@ -2403,7 +2434,7 @@ pub async fn cmd_count_frequency(db_path: &str, target: &str, profile: &str) -> 
     use super::quran_counting::frequency;
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     match frequency(&db, target, profile).await {
         Ok(report) => json_or_err(
@@ -2422,7 +2453,7 @@ pub async fn cmd_count_distribution(db_path: &str, target: &str, profile: &str) 
     use super::quran_counting::distribution;
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     match distribution(&db, target, profile).await {
         Ok(report) => json_or_err(
@@ -2444,7 +2475,7 @@ pub async fn cmd_count_occurrences(db_path: &str, target: &str, profile: &str) -
     use super::quran_counting::first_last_occurrence;
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     match first_last_occurrence(&db, target, profile).await {
         Ok(report) => json_or_err(
@@ -2463,7 +2494,7 @@ pub async fn cmd_count_hapax(db_path: &str, profile: &str, limit: usize) -> Comm
     use super::quran_counting::hapax_search;
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     match hapax_search(&db, profile, limit).await {
         Ok(report) => json_or_err(
@@ -2485,7 +2516,7 @@ pub async fn cmd_count_cooccurrence(
     use super::quran_counting::cooccurrence;
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     match cooccurrence(&db, target, profile, window, limit).await {
         Ok((rules, hits)) => json_or_err(
@@ -2507,7 +2538,7 @@ pub async fn cmd_count_collocation(
     use super::quran_counting::collocation;
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     match collocation(&db, target, profile, window, limit).await {
         Ok((rules, hits)) => json_or_err(
@@ -2523,7 +2554,7 @@ pub async fn cmd_count_numeric_report(db_path: &str, target: &str, profile: &str
     use super::quran_counting::numeric_report;
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     match numeric_report(&db, target, profile).await {
         Ok(report) => json_or_err(
@@ -2539,7 +2570,7 @@ pub async fn cmd_count_missing_form(db_path: &str, target: &str, profile: &str) 
     use super::quran_counting::missing_expected_form;
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     match missing_expected_form(&db, target, profile).await {
         Ok(report) => json_or_err(
@@ -2562,7 +2593,7 @@ pub async fn cmd_count_near_duplicates(
     use super::quran_counting::near_duplicate_passages;
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     match near_duplicate_passages(&db, threshold, limit).await {
         Ok((rules, hits)) => json_or_err(
@@ -2613,7 +2644,7 @@ pub async fn cmd_morphology_import(
     use super::quran_morphology::{MorphologyImportParams, run_morphology_import};
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     let document_text = match std::fs::read_to_string(file) {
         Ok(text) => text,
@@ -2668,7 +2699,7 @@ pub async fn cmd_morphology_activate(db_path: &str, batch: &str, approval: &str)
     use super::quran_morphology::{MorphologyActivateParams, activate_morphology};
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     let principal: domain::PrincipalId = match LOCAL_PRINCIPAL.parse() {
         Ok(principal) => principal,
@@ -2707,11 +2738,11 @@ pub async fn cmd_morphology_datasets(db_path: &str) -> CommandOutput {
     use storage::Database as _;
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     let mut uow = match db.write().await {
         Ok(uow) => uow,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     let datasets = match uow.quran().list_datasets().await {
         Ok(datasets) => datasets,
@@ -2747,7 +2778,7 @@ pub async fn cmd_morphology_root_list(
 ) -> CommandOutput {
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     match super::quran_morphology::browse_roots(&db, prefix, limit).await {
         Ok((dataset, roots)) => {
@@ -2789,7 +2820,7 @@ pub async fn cmd_morphology_diff(
     };
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     match diff_datasets(&db, &from_slug, &from_version, &to_slug, &to_version).await {
         Ok(report) => {
@@ -2860,7 +2891,7 @@ pub async fn cmd_morphology_token(
     };
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     match morphology_for_token(&db, &slug, &version, surah, ayah, position).await {
         Ok((dataset, analyses)) => json_or_err(
@@ -2886,7 +2917,7 @@ pub async fn cmd_morphology_compare(
     };
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     match morphology_compare(&db, &slug, &version, surah, ayah, position).await {
         Ok(verdicts) => json_or_err(
@@ -2908,7 +2939,7 @@ pub async fn cmd_morphology_root(db_path: &str, root: &str) -> CommandOutput {
     use super::quran_morphology::root_search;
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     match root_search(&db, root).await {
         Ok((dataset, occurrences)) => json_or_err(
@@ -2924,7 +2955,7 @@ pub async fn cmd_morphology_lemma(db_path: &str, lemma: &str) -> CommandOutput {
     use super::quran_morphology::lemma_search;
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     match lemma_search(&db, lemma).await {
         Ok((dataset, occurrences)) => json_or_err(
@@ -2940,7 +2971,7 @@ pub async fn cmd_morphology_affix(db_path: &str, affix: &str, profile: &str) -> 
     use super::quran_morphology::affix_search;
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     match affix_search(&db, affix, profile).await {
         Ok(hits) => json_or_err(
@@ -3004,11 +3035,11 @@ pub async fn cmd_graph_build(db_path: &str, out: Option<&str>) -> CommandOutput 
     use storage::Database as _;
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     let mut uow = match db.write().await {
         Ok(uow) => uow,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     let active = match uow.quran().get_active().await {
         Ok(active) => active,
@@ -3190,7 +3221,7 @@ pub async fn cmd_graph_root_family(db_path: &str, root: &str, limit: usize) -> C
     use super::quran_morphology::root_search;
     let db = match open_db(db_path).await {
         Ok(db) => db,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+        Err(error) => return open_error_output(error),
     };
     match root_search(&db, root).await {
         Ok((dataset, mut occurrences)) => {

@@ -535,9 +535,10 @@ fn audit_chain_valid(probe: &DbProbe) -> CheckResult {
         CheckResult::fail(
             "audit.chain_valid",
             summary,
-            probe.audit_remedy.as_deref().unwrap_or(
-                "run the authoritative verifier and recover the affected sequences",
-            ),
+            probe
+                .audit_remedy
+                .as_deref()
+                .unwrap_or("run the authoritative verifier and recover the affected sequences"),
             "qai audit verify",
         )
     }

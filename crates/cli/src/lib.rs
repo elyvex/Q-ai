@@ -685,7 +685,9 @@ fn render_audit_verify(path: &str, json: bool) -> i32 {
                 }
                 exit_code::VALIDATION
             } else {
-                eprintln!("audit verification produced an inconsistent report; re-run `qai audit verify`");
+                eprintln!(
+                    "audit verification produced an inconsistent report; re-run `qai audit verify`"
+                );
                 exit_code::INTERNAL
             }
         }

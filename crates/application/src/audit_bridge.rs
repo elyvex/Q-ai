@@ -309,6 +309,42 @@ fn genesis_hash() -> ContentHash {
     ContentHash { algorithm: HashAlgorithm::Sha256, hex: "00".repeat(32) }
 }
 
+/// Append `count` synthetic hash-chained audit events to the database at
+/// `path` through the exact production writer ([`append_audit_event`]).
+///
+/// Test support for real-binary acceptance (`crates/cli/tests/foundation.rs`,
+/// 01-01-03): the CLI crate may not depend on `audit`, `domain`, or
+/// `storage-sqlite` (arch-check boundary), so the seeding helper lives here
+/// behind the existing `application` edge. Not part of the operator surface.
+pub async fn seed_synthetic_chain(path: &str, count: u64) -> Result<(), AuditError> {
+    use storage::Database as _;
+    let db = storage_sqlite::SqliteDatabase::new(path, 1, true).await?;
+    let mut tx = db.write().await?;
+    for index in 1..=count {
+        let event = AuditEvent {
+            id: format!("00000000-0000-4000-8000-{index:012}")
+                .parse()
+                .map_err(|_| storage_error("synthetic audit id".to_string()))?,
+            sequence: 0,
+            occurred_at: Timestamp::from_ymd_hms(2026, 1, 1, 0, 0, 0)
+                .map_err(|_| storage_error("synthetic audit timestamp".to_string()))?,
+            actor: Actor::System { name: "foundation-test".to_string() },
+            action: AuditAction::SourceStaged,
+            subject: SubjectRef(format!("urn:qai:test:foundation-{index}")),
+            outcome: AuditOutcome::Allowed,
+            reason: None,
+            before: None,
+            after: None,
+            request_id: None,
+            prev_chain_hash: ContentHash { algorithm: HashAlgorithm::Sha256, hex: String::new() },
+            chain_hash: ContentHash { algorithm: HashAlgorithm::Sha256, hex: String::new() },
+        };
+        append_audit_event(&mut *tx, event).await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
