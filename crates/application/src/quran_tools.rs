@@ -189,8 +189,10 @@ impl citations::CitationSource for ReaderCitationSource {
                     reference: format!("quran:{slug}@{version}:{surah}:{ayah}"),
                 }
             })?,
-            ayah: AyahNumber::new(ayah).map_err(|_| citations::CitationError::InvalidReference {
-                reference: format!("quran:{slug}@{version}:{surah}:{ayah}"),
+            ayah: AyahNumber::new(ayah).map_err(|_| {
+                citations::CitationError::InvalidReference {
+                    reference: format!("quran:{slug}@{version}:{surah}:{ayah}"),
+                }
             })?,
         };
         match self.reader.get_ayah(&reference, &AyahOptions::default()).await {
@@ -267,10 +269,8 @@ pub async fn verify_canonical_quotation(
         quoted_text: text.to_string(),
         edition_slug: edition_slug.to_string(),
         edition_version: edition_version.to_string(),
-        surah: SurahNumber::new(surah).map_err(|_| {
-            citations::CitationError::InvalidReference {
-                reference: format!("quran:{edition_slug}@{edition_version}:{surah}:{ayah}"),
-            }
+        surah: SurahNumber::new(surah).map_err(|_| citations::CitationError::InvalidReference {
+            reference: format!("quran:{edition_slug}@{edition_version}:{surah}:{ayah}"),
         })?,
         ayah: AyahNumber::new(ayah).map_err(|_| citations::CitationError::InvalidReference {
             reference: format!("quran:{edition_slug}@{edition_version}:{surah}:{ayah}"),
