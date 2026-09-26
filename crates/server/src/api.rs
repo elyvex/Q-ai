@@ -213,9 +213,9 @@ fn tool_status(error: &ToolError) -> StatusCode {
     match error {
         ToolError::InvalidInput { .. } => StatusCode::BAD_REQUEST,
         ToolError::Backend { code, .. } => match code.as_str() {
-            "QAI-QUR-0306" | "QAI-QUR-0307" | "QAI-QUR-0308" | "QAI-QUR-0309" | "QAI-QUR-0322" => {
-                StatusCode::NOT_FOUND
-            }
+            "QAI-QUR-0306" | "QAI-QUR-0307" | "QAI-QUR-0308" | "QAI-QUR-0309" | "QAI-QUR-0322"
+            | "QAI-QUR-0324" | "QAI-QUR-0325" => StatusCode::NOT_FOUND,
+            "QAI-QUR-0326" => StatusCode::FORBIDDEN,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         },
     }
