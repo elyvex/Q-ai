@@ -467,7 +467,10 @@ mod tests {
                 assert!(
                     matches!(
                         name,
-                        "from_approval_row" | "approval_id" | "subject_urn" | "approved_by"
+                        "from_approval_row"
+                            | "approval_id"
+                            | "subject_urn"
+                            | "approved_by"
                             | "authorises"
                     ),
                     "unexpected public fn on ApprovalToken: {name}"
@@ -491,15 +494,17 @@ mod tests {
     fn approval_gate_tracks_open_committed_and_aborted_sessions() {
         let row = approval_row("appr-5", Some("approved"), "quran-edition:min@0.1.0");
         let token = ApprovalToken::from_approval_row(&row).unwrap();
-        let mut session =
-            ApprovalGate.begin_canonical_change(&token, change_request(token.subject_urn())).unwrap();
+        let mut session = ApprovalGate
+            .begin_canonical_change(&token, change_request(token.subject_urn()))
+            .unwrap();
         assert_eq!(session.status, SessionStatus::Open);
         block_on(ApprovalGate.commit_canonical_change(&mut session)).unwrap();
         assert_eq!(session.status, SessionStatus::Committed);
         let err = block_on(ApprovalGate.commit_canonical_change(&mut session)).unwrap_err();
         assert!(matches!(err, ProvenanceError::InvalidSessionState { .. }));
-        let mut aborted =
-            ApprovalGate.begin_canonical_change(&token, change_request(token.subject_urn())).unwrap();
+        let mut aborted = ApprovalGate
+            .begin_canonical_change(&token, change_request(token.subject_urn()))
+            .unwrap();
         block_on(ApprovalGate.abort_canonical_change(&mut aborted)).unwrap();
         assert_eq!(aborted.status, SessionStatus::Aborted);
     }

@@ -10,8 +10,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 const MIN_MANIFEST: &str = include_str!("../../../fixtures/quran/test-edition-min/manifest.json");
 const MIN_CSV: &str = include_str!("../../../fixtures/quran/test-edition-min/ayahs.csv");
-const RICH_MANIFEST: &str =
-    include_str!("../../../fixtures/quran/test-edition-rich/manifest.json");
+const RICH_MANIFEST: &str = include_str!("../../../fixtures/quran/test-edition-rich/manifest.json");
 const RICH_CSV: &str = include_str!("../../../fixtures/quran/test-edition-rich/ayahs.csv");
 const RICH_REFERENCE: &str =
     include_str!("../../../fixtures/quran/test-edition-rich/reference.json");
@@ -25,8 +24,7 @@ const IDENTITY_MANIFEST: &str =
 /// numbered `1..=N` (both must satisfy QV-002 before the importer accepts
 /// them), so a bare `(surah, ayah)` key would collide across editions.
 fn load_golden(edition: &str) -> BTreeMap<(u16, u32), String> {
-    let path =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/quran/golden/ayah_texts.jsonl");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/quran/golden/ayah_texts.jsonl");
     let golden = std::fs::read_to_string(path).expect("golden ayah_texts.jsonl");
     let mut expected = BTreeMap::new();
     for line in golden.lines().filter(|line| !line.trim().is_empty()) {
@@ -242,11 +240,8 @@ fn test_edition_rich_parses_with_expected_shape_and_coverage() {
         "rich fixture must include a muqatta'at standalone token"
     );
     assert!(
-        source
-            .ayahs
-            .iter()
-            .any(|a| a.text.contains("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ")
-                && !a.text.trim_start().starts_with("بِسْمِ")),
+        source.ayahs.iter().any(|a| a.text.contains("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ")
+            && !a.text.trim_start().starts_with("بِسْمِ")),
         "rich fixture must include a basmala inside an ayah body"
     );
     assert!(
@@ -354,9 +349,7 @@ fn rich_reference_and_identity_fixtures_validate_without_blocking_findings() {
             .findings
             .iter()
             .filter(|finding| matches!(finding.severity, Severity::Fatal | Severity::Error))
-            .map(|finding| {
-                format!("{} {}: {}", finding.rule_id, finding.location, finding.message)
-            })
+            .map(|finding| format!("{} {}: {}", finding.rule_id, finding.location, finding.message))
             .collect();
         assert!(blocking.is_empty(), "{name} must import cleanly, found: {blocking:?}");
     }

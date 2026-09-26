@@ -32,12 +32,9 @@ fn importer_holds_no_approval_token_or_canonical_writer() {
 #[test]
 fn importer_never_calls_an_activation_or_rollback_mutator() {
     let src = importer_without_comments();
-    for forbidden in [
-        "activate_edition",
-        "rollback_edition",
-        "set_edition_status",
-        "set_edition_verification",
-    ] {
+    for forbidden in
+        ["activate_edition", "rollback_edition", "set_edition_status", "set_edition_verification"]
+    {
         assert!(!src.contains(forbidden), "the importer must never call {forbidden}");
     }
 }
