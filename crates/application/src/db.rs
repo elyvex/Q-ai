@@ -43,6 +43,11 @@ pub struct DbProbe {
     pub audit_verified: bool,
     pub audit_gaps: Vec<u64>,
     pub audit_tampered_sequences: Vec<u64>,
+    /// Stable typed diagnosis for an invalid chain, mapped through
+    /// `audit_bridge::diagnose_invalid_audit` so doctor renders the same
+    /// code/remedy as `qai audit verify` (`None` when the chain is valid).
+    pub audit_code: Option<String>,
+    pub audit_remedy: Option<String>,
     pub license_unknown_count: i64,
     pub multiple_active_versions: i64,
 }
@@ -205,6 +210,10 @@ pub async fn probe_database(cfg: &Config) -> DbProbe {
     // doctor must never infer validity from row count or structural presence.
     match crate::audit_bridge::verify_persisted_audit(&cfg.storage.sqlite.path).await {
         Ok(report) => {
+            if let Some(diagnosis) = crate::audit_bridge::diagnose_invalid_audit(&report) {
+                probe.audit_code = Some(diagnosis.code.to_string());
+                probe.audit_remedy = Some(diagnosis.remedy);
+            }
             probe.audit_verified = report.valid;
             probe.audit_gaps = report.gaps;
             probe.audit_tampered_sequences = report.tampered_sequences;

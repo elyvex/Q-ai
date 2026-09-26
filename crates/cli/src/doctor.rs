@@ -485,13 +485,25 @@ fn audit_chain_valid(probe: &DbProbe) -> CheckResult {
             )
         }
     } else {
-        CheckResult::fail(
-            "audit.chain_valid",
-            format!(
+        // Render the same typed diagnosis as `qai audit verify` (D-12): the
+        // probe carries the code/remedy mapped from the persisted report, so
+        // doctor never invents its own wording for an invalid chain.
+        let summary = match (&probe.audit_code, &probe.audit_remedy) {
+            (Some(code), Some(remedy)) => format!(
+                "persisted audit chain is NOT valid [{code}]; gaps: {:?}; tampered sequences: {:?}; remedy: {remedy}",
+                probe.audit_gaps, probe.audit_tampered_sequences
+            ),
+            _ => format!(
                 "persisted audit chain is NOT valid; gaps: {:?}; tampered sequences: {:?}",
                 probe.audit_gaps, probe.audit_tampered_sequences
             ),
-            "run the authoritative verifier and recover the affected sequences",
+        };
+        CheckResult::fail(
+            "audit.chain_valid",
+            summary,
+            probe.audit_remedy.as_deref().unwrap_or(
+                "run the authoritative verifier and recover the affected sequences",
+            ),
             "qai audit verify",
         )
     }
