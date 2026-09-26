@@ -452,6 +452,43 @@ fn value_at_dotted<'a>(value: &'a serde_json::Value, key: &str) -> Option<&'a se
     Some(current)
 }
 
+/// Flatten a serialized effective configuration into dotted-key leaves.
+fn flatten_effective(
+    value: &serde_json::Value,
+    prefix: String,
+    out: &mut BTreeMap<String, serde_json::Value>,
+) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, nested) in map {
+                let dotted =
+                    if prefix.is_empty() { key.clone() } else { format!("{prefix}.{key}") };
+                flatten_effective(nested, dotted, out);
+            }
+        }
+        _ => {
+            out.insert(prefix, value.clone());
+        }
+    }
+}
+
+/// Render the human `--explain` view: one `key = value (origin)` line per
+/// effective leaf in stable dotted-key order (D-07). Redaction runs over the
+/// serialized document before any line can reach stdout.
+fn render_config_explain(cfg: &Config, origins: &OriginMap) -> String {
+    let mut value = serde_json::to_value(cfg).unwrap_or(serde_json::Value::Null);
+    application::redaction::redact_json_value(&mut value);
+    let mut flat = BTreeMap::new();
+    flatten_effective(&value, String::new(), &mut flat);
+    let mut out = String::new();
+    for (key, leaf) in &flat {
+        let origin =
+            origins.get(key).map(ToString::to_string).unwrap_or_else(|| "unknown".to_string());
+        out.push_str(&format!("{key} = {leaf} ({origin})\n"));
+    }
+    out
+}
+
 // ── Config diagnostic contract (D-07) ──────────────────────────────────
 
 fn config_error_code(err: &config::ConfigError) -> &'static str {
@@ -478,11 +515,7 @@ fn config_error_remedy(err: &config::ConfigError) -> &'static str {
 
 /// Emit a config diagnostic with the same code, remedy, and runnable next
 /// command in human and JSON modes, and map to the centralized exit code.
-fn report_config_error(
-    err: &config::ConfigError,
-    file: Option<&Path>,
-    json: bool,
-) -> i32 {
+fn report_config_error(err: &config::ConfigError, file: Option<&Path>, json: bool) -> i32 {
     let code = config_error_code(err);
     let summary = err.to_string();
     let remedy = config_error_remedy(err);
@@ -540,7 +573,7 @@ fn handle_config_show(
                 .unwrap_or_else(|_| "null".to_string())
         );
     } else if explain {
-        print!("{}", application::redaction::redact_text(&origins.explain()));
+        print!("{}", render_config_explain(cfg, origins));
     } else {
         println!("config show: {}", render_config_show(cfg, false));
     }
@@ -551,12 +584,13 @@ fn handle_config_get(cfg: &Config, origins: &OriginMap, key: &str, json: bool) -
     let value = serde_json::to_value(cfg).unwrap_or(serde_json::Value::Null);
     match value_at_dotted(&value, key) {
         Some(found) => {
+            // Redact before emission: keyed lookups can address secret-shaped
+            // leaves (e.g. `logging.file`) directly (D-07, T-01-CFG).
+            let mut found = found.clone();
+            application::redaction::redact_json_value(&mut found);
             let origin = origins.get(key).map(ToString::to_string);
             if json {
-                println!(
-                    "{}",
-                    serde_json::json!({ "key": key, "value": found, "origin": origin })
-                );
+                println!("{}", serde_json::json!({ "key": key, "value": found, "origin": origin }));
             } else {
                 println!("{key} = {found}");
                 if let Some(origin) = origin {
