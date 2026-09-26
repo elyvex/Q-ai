@@ -198,11 +198,9 @@ pub fn require_exact(verdict: &QuotationVerdict) -> Result<(), CitationError> {
         QuotationVerdict::LocationNotFound => Err(CitationError::LocationNotFound),
         QuotationVerdict::EditionNotFound => Err(CitationError::EditionNotFound),
         QuotationVerdict::AccessDenied => Err(CitationError::AccessDenied),
-        QuotationVerdict::MatchAfterDeclaredNormalization { .. } => {
-            Err(CitationError::Backend {
-                detail: "declared-normalization matches are not supported in v1".to_string(),
-            })
-        }
+        QuotationVerdict::MatchAfterDeclaredNormalization { .. } => Err(CitationError::Backend {
+            detail: "declared-normalization matches are not supported in v1".to_string(),
+        }),
         QuotationVerdict::ExactMatch | QuotationVerdict::MatchAfterWhitespaceNormalization => {
             Ok(())
         }
