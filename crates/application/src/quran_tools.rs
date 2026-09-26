@@ -184,11 +184,13 @@ impl citations::CitationSource for ReaderCitationSource {
                     detail: format!("bad version `{version}`"),
                 })?,
             },
-            surah: SurahNumber::new(surah).map_err(|_| citations::CitationError::Backend {
-                detail: format!("bad surah {surah}"),
+            surah: SurahNumber::new(surah).map_err(|_| {
+                citations::CitationError::InvalidReference {
+                    reference: format!("quran:{slug}@{version}:{surah}:{ayah}"),
+                }
             })?,
-            ayah: AyahNumber::new(ayah).map_err(|_| citations::CitationError::Backend {
-                detail: format!("bad ayah {ayah}"),
+            ayah: AyahNumber::new(ayah).map_err(|_| citations::CitationError::InvalidReference {
+                reference: format!("quran:{slug}@{version}:{surah}:{ayah}"),
             })?,
         };
         match self.reader.get_ayah(&reference, &AyahOptions::default()).await {
@@ -265,11 +267,13 @@ pub async fn verify_canonical_quotation(
         quoted_text: text.to_string(),
         edition_slug: edition_slug.to_string(),
         edition_version: edition_version.to_string(),
-        surah: SurahNumber::new(surah).map_err(|_| citations::CitationError::Backend {
-            detail: format!("bad surah {surah}"),
+        surah: SurahNumber::new(surah).map_err(|_| {
+            citations::CitationError::InvalidReference {
+                reference: format!("quran:{edition_slug}@{edition_version}:{surah}:{ayah}"),
+            }
         })?,
-        ayah: AyahNumber::new(ayah).map_err(|_| citations::CitationError::Backend {
-            detail: format!("bad ayah {ayah}"),
+        ayah: AyahNumber::new(ayah).map_err(|_| citations::CitationError::InvalidReference {
+            reference: format!("quran:{edition_slug}@{edition_version}:{surah}:{ayah}"),
         })?,
     };
     let resolver = ReaderCitationSource::resolver(reader.clone());

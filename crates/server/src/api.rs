@@ -213,6 +213,12 @@ fn tool_status(error: &ToolError) -> StatusCode {
     match error {
         ToolError::InvalidInput { .. } => StatusCode::BAD_REQUEST,
         ToolError::Backend { code, .. } => match code.as_str() {
+            // `QAI-QUR-0321` is the citation crate's caller-error code
+            // (unparseable/out-of-range reference). The citations HTTP path
+            // wraps typed citation errors as `Backend { code }`, so the code
+            // — not the wrapper — decides the status: caller errors are 400
+            // even though they arrive in a `Backend` envelope (WR-07).
+            "QAI-QUR-0321" => StatusCode::BAD_REQUEST,
             "QAI-QUR-0306" | "QAI-QUR-0307" | "QAI-QUR-0308" | "QAI-QUR-0309" | "QAI-QUR-0322"
             | "QAI-QUR-0324" | "QAI-QUR-0325" => StatusCode::NOT_FOUND,
             "QAI-QUR-0326" => StatusCode::FORBIDDEN,
@@ -1588,6 +1594,22 @@ mod tests {
         assert_eq!(
             tool_status(&ToolError::Backend { code: "QAI-QUR-0310".into(), detail: "d".into() }),
             StatusCode::INTERNAL_SERVER_ERROR
+        );
+        assert_eq!(
+            tool_status(&ToolError::Backend { code: "QAI-QUR-0321".into(), detail: "d".into() }),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            tool_status(&ToolError::Backend { code: "QAI-QUR-0324".into(), detail: "d".into() }),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            tool_status(&ToolError::Backend { code: "QAI-QUR-0325".into(), detail: "d".into() }),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            tool_status(&ToolError::Backend { code: "QAI-QUR-0326".into(), detail: "d".into() }),
+            StatusCode::FORBIDDEN
         );
     }
 }
