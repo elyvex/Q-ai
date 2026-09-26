@@ -229,6 +229,71 @@ pub async fn probe_database(cfg: &Config) -> DbProbe {
     probe
 }
 
+/// Distinct read-only readiness states for a SQLite database (D-05).
+///
+/// Every ordinary command diagnoses through this before touching rows;
+/// only `DbAction::Migrate` may create or mutate schema.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DatabaseReadiness {
+    /// No database file exists yet.
+    Missing { path: String },
+    /// The file exists but cannot be opened read-only.
+    Unreadable { path: String, detail: String },
+    /// The file opens but pending migrations remain.
+    Pending { path: String, pending: Vec<u32> },
+    /// Applied checksums no longer match the on-disk migrations.
+    ChecksumMismatch { path: String, versions: Vec<u32> },
+    /// Schema is current and integrity checks pass.
+    Current { path: String, version: u32 },
+}
+
+impl DatabaseReadiness {
+    /// The exact operator remedy for this state.
+    pub fn remedy(&self) -> &'static str {
+        match self {
+            Self::Missing { .. } | Self::Pending { .. } => "run `qai db migrate` to create or update the database",
+            Self::Unreadable { .. } => "check the database file permissions and path, then retry",
+            Self::ChecksumMismatch { .. } => "run `qai db verify` to inspect the mismatched versions",
+            Self::Current { .. } => "no action required",
+        }
+    }
+
+    /// The runnable next command for this state.
+    pub fn next_command(&self) -> &'static str {
+        match self {
+            Self::Missing { .. } | Self::Pending { .. } => "qai db migrate",
+            Self::Unreadable { .. } => "qai doctor --json",
+            Self::ChecksumMismatch { .. } => "qai db verify",
+            Self::Current { .. } => "qai db status",
+        }
+    }
+}
+
+/// Compute the read-only readiness of the configured database without
+/// creating or mutating anything (D-05, T-01-MIG).
+pub async fn database_readiness(cfg: &Config, migrations_dir: &Path) -> DatabaseReadiness {
+    let path = cfg.storage.sqlite.path.clone();
+    if std::fs::symlink_metadata(&path).is_err() {
+        return DatabaseReadiness::Missing { path };
+    }
+    if let Err(e) = SqliteDatabase::open_read_only(&path).await {
+        return DatabaseReadiness::Unreadable { path, detail: format!("{e}") };
+    }
+    let checksum = migrate::verify_checksums(&path, migrations_dir).await;
+    if let Ok(report) = checksum
+        && !report.valid
+    {
+        return DatabaseReadiness::ChecksumMismatch { path, versions: report.mismatches };
+    }
+    match migration_status(cfg, migrations_dir).await {
+        Ok(status) if status.current => {
+            DatabaseReadiness::Current { path, version: status.applied_version }
+        }
+        Ok(status) => DatabaseReadiness::Pending { path, pending: status.pending },
+        Err(e) => DatabaseReadiness::Unreadable { path, detail: format!("{e}") },
+    }
+}
+
 // ─── Read-only catalog listings (P0-T50 / FU-10) ─────────────────────
 //
 // All helpers open the database read-only and never write. Rows are fetched
@@ -426,6 +491,94 @@ mod tests {
         let probe = probe_database(&cfg).await;
         assert!(!probe.reachable);
         assert!(probe.error.is_some());
+    }
+
+    /// Plan 01-01-03 (D-05): every readiness state is distinct, read-only,
+    /// and names its exact remedy and next command.
+    #[tokio::test]
+    async fn readiness_missing_names_migrate() {
+        let dir = tempdir().unwrap();
+        let mut cfg = Config::default();
+        cfg.storage.sqlite.path = dir.path().join("nope.db").display().to_string();
+        let readiness = database_readiness(&cfg, &migrations_dir()).await;
+        assert!(matches!(readiness, DatabaseReadiness::Missing { .. }));
+        assert!(readiness.remedy().contains("qai db migrate"));
+        assert_eq!(readiness.next_command(), "qai db migrate");
+        assert!(!dir.path().join("nope.db").exists(), "readiness must not create");
+    }
+
+    #[tokio::test]
+    async fn readiness_pending_names_migrate() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("empty.db");
+        std::fs::write(&path, b"").unwrap();
+        let mut cfg = Config::default();
+        cfg.storage.sqlite.path = path.display().to_string();
+        let readiness = database_readiness(&cfg, &migrations_dir()).await;
+        match readiness {
+            DatabaseReadiness::Pending { ref pending, .. } => assert!(!pending.is_empty()),
+            other => panic!("expected Pending, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn readiness_unreadable_for_a_directory_path() {
+        let dir = tempdir().unwrap();
+        let mut cfg = Config::default();
+        cfg.storage.sqlite.path = dir.path().display().to_string();
+        let readiness = database_readiness(&cfg, &migrations_dir()).await;
+        assert!(matches!(readiness, DatabaseReadiness::Unreadable { .. }));
+    }
+
+    #[tokio::test]
+    async fn readiness_current_after_explicit_migrate() {
+        let dir = tempdir().unwrap();
+        let mut cfg = Config::default();
+        cfg.storage.sqlite.path = dir.path().join("qai.db").display().to_string();
+        migrate_database(&cfg, &migrations_dir()).await.unwrap();
+        let readiness = database_readiness(&cfg, &migrations_dir()).await;
+        match readiness {
+            DatabaseReadiness::Current { version, .. } => {
+                assert_eq!(version, latest_migration_version());
+            }
+            other => panic!("expected Current, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn readiness_checksum_mismatch_names_verify() {
+        // Copy the migration set aside, migrate from the copy, then tamper
+        // the copy: recorded hashes no longer match without touching the repo.
+        let dir = tempdir().unwrap();
+        let mig = dir.path().join("migrations");
+        std::fs::create_dir(&mig).unwrap();
+        for entry in std::fs::read_dir(migrations_dir()).unwrap().flatten() {
+            let name = entry.file_name();
+            std::fs::copy(entry.path(), mig.join(name)).unwrap();
+        }
+        let mut cfg = Config::default();
+        cfg.storage.sqlite.path = dir.path().join("qai.db").display().to_string();
+        migrate_database(&cfg, &mig).await.unwrap();
+
+        let first: std::path::PathBuf = std::fs::read_dir(&mig)
+            .unwrap()
+            .flatten()
+            .map(|e| e.path())
+            .find(|p| p.file_name().is_some_and(|n| n.to_string_lossy().ends_with(".up.sql")))
+            .expect("migration up.sql present");
+        let mut contents = std::fs::read_to_string(&first).unwrap();
+        contents.push_str("\n-- tampered for readiness test\n");
+        std::fs::write(&first, contents).unwrap();
+
+        let readiness = database_readiness(&cfg, &mig).await;
+        match readiness {
+            DatabaseReadiness::ChecksumMismatch { ref versions, .. } => {
+                assert!(!versions.is_empty());
+            }
+            other => panic!("expected ChecksumMismatch, got {other:?}"),
+        }
+        assert!(readiness.remedy().contains("qai db verify"));
+        assert_eq!(readiness.next_command(), "qai db verify");
     }
 
     #[tokio::test]
