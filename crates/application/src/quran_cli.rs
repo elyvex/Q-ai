@@ -95,6 +95,7 @@ fn map_activation_error(error: super::quran::ActivationError) -> (i32, String) {
         | E::Provenance(_) => (exit::POLICY, error.to_string()),
         E::EmptyReviewer => (exit::USAGE, error.to_string()),
         E::NotStaged { .. } | E::AlreadyActive { .. } => (exit::CONFLICT, error.to_string()),
+        E::EditionNotFound { .. } => (exit::NOT_FOUND, error.to_string()),
         E::Storage(_) | E::Audit(_) => (exit::INTERNAL, error.to_string()),
     }
 }

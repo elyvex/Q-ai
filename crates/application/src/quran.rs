@@ -171,6 +171,16 @@ pub enum ActivationError {
         /// Edition version.
         version: String,
     },
+    /// No canonical edition for that slug and version (canonical-table
+    /// lookups; "Staged" is never a valid canonical state, so `NotStaged`
+    /// would misdirect the operator).
+    #[error("no canonical edition {slug}@{version}")]
+    EditionNotFound {
+        /// Edition slug.
+        slug: String,
+        /// Edition version.
+        version: String,
+    },
     /// That version is already active.
     #[error("{slug}@{version} is already active")]
     AlreadyActive {
@@ -206,6 +216,7 @@ impl storage::error::Diagnostic for ActivationError {
             Self::ApprovalNotGranted { .. } => 301,
             Self::ApprovalSubjectMismatch { .. } => 302,
             Self::NotStaged { .. } => 303,
+            Self::EditionNotFound { .. } => 314,
             Self::AlreadyActive { .. } => 313,
             Self::EmptyReviewer => 306,
             Self::Storage(_) => 304,
@@ -228,6 +239,7 @@ impl storage::error::Diagnostic for ActivationError {
                     "Approve the exact edition URN being activated."
                 }
                 Self::NotStaged { .. } => "Import the edition to Staged first.",
+                Self::EditionNotFound { .. } => "Import and activate the edition first.",
                 Self::AlreadyActive { .. } => "That edition version is already active.",
                 Self::EmptyReviewer => "Pass --reviewer with the reviewer's name (OD-02).",
                 Self::Storage(_) => "Check the database and retry.",
@@ -494,7 +506,7 @@ pub async fn record_edition_verification(
         .get_edition_by_slug_version(slug, version)
         .await
         .map_err(ActivationError::storage)?
-        .ok_or_else(|| ActivationError::NotStaged {
+        .ok_or_else(|| ActivationError::EditionNotFound {
             slug: slug.to_string(),
             version: version.to_string(),
         })?;
@@ -565,7 +577,7 @@ pub async fn rollback_edition(
         .get_edition_by_slug_version(slug, version)
         .await
         .map_err(ActivationError::storage)?
-        .ok_or_else(|| ActivationError::NotStaged {
+        .ok_or_else(|| ActivationError::EditionNotFound {
             slug: slug.to_string(),
             version: version.to_string(),
         })?;
@@ -1270,7 +1282,7 @@ pub async fn deprecate_edition(
         .get_edition_by_slug_version(slug, version)
         .await
         .map_err(ActivationError::storage)?
-        .ok_or_else(|| ActivationError::NotStaged {
+        .ok_or_else(|| ActivationError::EditionNotFound {
             slug: slug.to_string(),
             version: version.to_string(),
         })?;
