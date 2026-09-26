@@ -102,7 +102,31 @@ Plans:
   4. User can view frequency, distribution, and co-occurrence for any root or lemma
   5. Displayed canonical text is never modified by normalization in any result
 
-**Plans**: TBD
+**Plans**: 8 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 03-01-PLAN.md — TRACER: end-to-end normalize → index → search with explainability, the per-hit canonical-display (SC5) pin, and the normalization rule-doc correction (SC1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-02-PLAN.md — SC2 concatenated golden set: independent oracle + >= 120-case fixture + segmentation-tiling runner + CLI snapshot (G-03)
+- [ ] 03-03-PLAN.md — SC4 counting: storage aggregation + real root/lemma frequency + selectable multi-analysis modes + CLI `freq` (G-01/G-07/G-13)
+- [ ] 03-04-PLAN.md — SC3 family engine: all typed relation builders + typed affix error + 120-family golden set (G-05/G-09)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 03-05-PLAN.md — SC3/SC4 surfaces: `qai quran family`/`lemma` CLI + versioned HTTP family and root/lemma-frequency routes (G-02/G-10)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 03-06-PLAN.md — Licensing: machine-readable license matrix + fail-closed activation-rejection gate + CLI license plumbing (G-04/D-07)
+- [ ] 03-07-PLAN.md — Hardening: `doctor --indexes` end-to-end soak + performance budgets + attributed tool registry (G-08/G-06/G-11)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 03-08-PLAN.md — Owner gates OD-11/OD-12 recorded BLOCKED + deferral ledger + alpha end-to-end evidence (D-03/D-08)
 
 ### Phase 4: Quran Graph
 
@@ -243,7 +267,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 |-------|----------------|--------|-----------|
 | 1. Foundations | 0/5 | Not started | - |
 | 2. Canonical Quran Core | 7/7 | Complete    | 2026-09-25 |
-| 3. Quran Search & Linguistics | 0/TBD | Not started | - |
+| 3. Quran Search & Linguistics | 0/8 | Not started | - |
 | 4. Quran Graph | 0/TBD | Not started | - |
 | 5. Rich Quran Experience | 0/TBD | Not started | - |
 | 6. Hadith & Tafsir | 0/TBD | Not started | - |
