@@ -265,34 +265,7 @@ pub fn dispatch(cli: Cli) -> i32 {
         }
         Commands::Audit { action: AuditAction::Verify } => {
             let path = cfg.storage.sqlite.path.clone();
-            match block_on(application::audit_bridge::verify_persisted_audit(&path)) {
-                Ok(report) => {
-                    if cli.json {
-                        println!("{}", serde_json::to_string(&report).unwrap());
-                    } else {
-                        println!(
-                            "audit chain {}: {} events checked; gaps: {:?}; tampered sequences: {:?}",
-                            if report.valid { "valid" } else { "INVALID" },
-                            report.checked_events,
-                            report.gaps,
-                            report.tampered_sequences,
-                        );
-                    }
-                    if report.valid { exit_code::OK } else { exit_code::VALIDATION }
-                }
-                Err(_) => {
-                    if cli.json {
-                        println!(
-                            r#"{{"valid":false,"error":"audit verification could not complete","remedy":"check database availability, migrations, and audit record integrity"}}"#
-                        );
-                    } else {
-                        eprintln!(
-                            "audit verification could not complete; check database availability, migrations, and audit record integrity"
-                        );
-                    }
-                    exit_code::GENERIC
-                }
-            }
+            render_audit_verify(&path, cli.json)
         }
         Commands::Audit { action: AuditAction::List } => {
             let path = cfg.storage.sqlite.path.clone();
@@ -648,6 +621,77 @@ fn handle_config_validate(cfg: &Config, file: Option<&Path>, json: bool) -> i32 
 fn load_config_file(path: &Path) -> Result<Config, config::ConfigError> {
     let path_buf = path.to_path_buf();
     Config::load(Some(&path_buf), "QAI", &BTreeMap::new()).map(|(cfg, _)| cfg)
+}
+
+/// Render `qai audit verify` through one typed diagnostic contract (D-12).
+///
+/// The persisted [`application::audit_bridge::AuditVerificationReport`] is the
+/// single authority: no verifier logic is reimplemented here. Human and JSON
+/// carry the same `code`, `summary`, `remedy`, `next_command`, `gaps`, and
+/// `tampered_sequences`, and every invalid chain maps to the centralized
+/// `exit_code::VALIDATION`.
+fn render_audit_verify(path: &str, json: bool) -> i32 {
+    match block_on(application::audit_bridge::verify_persisted_audit(path)) {
+        Ok(report) => {
+            if report.valid {
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "valid": true,
+                            "checked_events": report.checked_events,
+                            "gaps": report.gaps,
+                            "tampered_sequences": report.tampered_sequences,
+                        })
+                    );
+                } else {
+                    println!("audit chain valid: {} events checked", report.checked_events);
+                }
+                exit_code::OK
+            } else if let Some(diagnosis) =
+                application::audit_bridge::diagnose_invalid_audit(&report)
+            {
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "valid": false,
+                            "code": diagnosis.code,
+                            "summary": diagnosis.summary,
+                            "remedy": diagnosis.remedy,
+                            "next_command": diagnosis.next_command,
+                            "gaps": report.gaps,
+                            "tampered_sequences": report.tampered_sequences,
+                        })
+                    );
+                } else {
+                    eprintln!("[{}] {}", diagnosis.code, diagnosis.summary);
+                    eprintln!("      remedy: {}", diagnosis.remedy);
+                    eprintln!("      next: {}", diagnosis.next_command);
+                    eprintln!(
+                        "      gaps: {:?}; tampered sequences: {:?}",
+                        report.gaps, report.tampered_sequences
+                    );
+                }
+                exit_code::VALIDATION
+            } else {
+                eprintln!("audit verification produced an inconsistent report; re-run `qai audit verify`");
+                exit_code::INTERNAL
+            }
+        }
+        Err(_) => {
+            if json {
+                println!(
+                    r#"{{"valid":false,"error":"audit verification could not complete","remedy":"check database availability, migrations, and audit record integrity"}}"#
+                );
+            } else {
+                eprintln!(
+                    "audit verification could not complete; check database availability, migrations, and audit record integrity"
+                );
+            }
+            exit_code::GENERIC
+        }
+    }
 }
 
 fn handle_db(action: DbAction, cfg: &Config, json: bool) -> i32 {
