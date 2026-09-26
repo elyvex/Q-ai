@@ -9,7 +9,9 @@ pub mod exit_code;
 pub mod quran;
 
 use clap::{Parser, Subcommand};
-use config::Config;
+use config::{Config, OriginMap, ValueOrigin};
+use std::collections::BTreeMap;
+use std::path::Path;
 
 #[derive(Parser)]
 #[command(name = "qai", about = "Q-ai research platform CLI", version)]
@@ -209,7 +211,10 @@ pub enum AuditAction {
 
 /// Dispatch a parsed command, returning the process exit code.
 pub fn dispatch(cli: Cli) -> i32 {
-    let cfg = loads_or_default(&cli);
+    let (cfg, origins) = match load_config(&cli) {
+        Ok(pair) => pair,
+        Err(err) => return report_config_error(&err, cli.config.as_deref(), cli.json),
+    };
     match cli.command {
         Commands::Status => {
             println!("Q-ai: ready (Phase 0)");
@@ -241,23 +246,25 @@ pub fn dispatch(cli: Cli) -> i32 {
         }
         Commands::Config { action } => match action {
             ConfigAction::Show { explain, defaults, json } => {
-                handle_config_show(explain, defaults, json)
+                handle_config_show(&cfg, &origins, explain, defaults, json || cli.json)
             }
-            ConfigAction::Get { key } => handle_config_get(&key),
-            ConfigAction::Validate { file } => handle_config_validate(file.as_deref()),
+            ConfigAction::Get { key } => handle_config_get(&cfg, &origins, &key, cli.json),
+            ConfigAction::Validate { file } => {
+                handle_config_validate(&cfg, file.as_deref(), cli.json)
+            }
         },
         Commands::Db { action } => handle_db(action, &cfg, cli.json),
         Commands::Secret { action } => handle_secret(action, cli.json),
         Commands::Source { action } => {
-            let path = db_path_for(&cfg, cli.data_dir.as_deref());
+            let path = cfg.storage.sqlite.path.clone();
             handle_source(action, &path, cli.json)
         }
         Commands::Job { action } => {
-            let path = db_path_for(&cfg, cli.data_dir.as_deref());
+            let path = cfg.storage.sqlite.path.clone();
             handle_job(action, &path, cli.json)
         }
         Commands::Audit { action: AuditAction::Verify } => {
-            let path = db_path_for(&cfg, cli.data_dir.as_deref());
+            let path = cfg.storage.sqlite.path.clone();
             match block_on(application::audit_bridge::verify_persisted_audit(&path)) {
                 Ok(report) => {
                     if cli.json {
@@ -288,7 +295,7 @@ pub fn dispatch(cli: Cli) -> i32 {
             }
         }
         Commands::Audit { action: AuditAction::List } => {
-            let path = db_path_for(&cfg, cli.data_dir.as_deref());
+            let path = cfg.storage.sqlite.path.clone();
             match block_on(application::db::list_audit_events(&path)) {
                 Ok(page) => {
                     print_catalog(&page, cli.json, "no audit events");
@@ -311,7 +318,7 @@ pub fn dispatch(cli: Cli) -> i32 {
             });
             match r {
                 Ok(rt) => {
-                    let db_path = db_path_for(&cfg, cli.data_dir.as_deref());
+                    let db_path = cfg.storage.sqlite.path.clone();
                     let result = rt.block_on(async {
                         let reader = std::sync::Arc::new(
                             application::quran_cli::open_reader(&db_path).await.map_err(|e| {
@@ -348,19 +355,9 @@ pub fn dispatch(cli: Cli) -> i32 {
         }
         Commands::Completions { shell } => handle_completions(&shell),
         Commands::Quran { action } => {
-            let db_path = db_path_for(&cfg, cli.data_dir.as_deref());
+            let db_path = cfg.storage.sqlite.path.clone();
             quran::handle_quran(action, &db_path, cli.json, cli.yes)
         }
-    }
-}
-
-fn db_path_for(cfg: &Config, data_dir: Option<&str>) -> String {
-    match data_dir {
-        Some(dir) => format!("{dir}/qai.db"),
-        None => match std::env::var("QAI_DATA_DIR") {
-            Ok(dir) if !dir.is_empty() => format!("{dir}/qai.db"),
-            _ => cfg.storage.sqlite.path.clone(),
-        },
     }
 }
 
@@ -380,30 +377,43 @@ fn migrations_dir() -> std::path::PathBuf {
     from_cwd
 }
 
-fn loads_or_default(cli: &Cli) -> Config {
-    let mut cfg = match cli.config.as_ref() {
-        Some(path) => {
-            let overrides = std::collections::BTreeMap::new();
-            config::Config::load(Some(path), "QAI", &overrides).map(|(c, _)| c).unwrap_or_default()
-        }
-        None => Config::default(),
-    };
-    // `--data-dir` wins; otherwise honor `QAI_DATA_DIR`; otherwise the config
-    // file's own `app.data_dir`/`storage.*` values. The three storage paths are
-    // kept in sync so the database, objects and secrets all live under it.
-    let data_dir = cli
-        .data_dir
-        .clone()
-        .or_else(|| std::env::var("QAI_DATA_DIR").ok().filter(|dir| !dir.is_empty()));
-    if let Some(dir) = data_dir {
+/// Build the complete global CLI override map (D-07): `--data-dir` updates the
+/// effective `app.data_dir`, `storage.sqlite.path`, and `storage.objects.root`
+/// (each recorded with a CLI origin), and `--log-level` updates `logging.level`.
+fn cli_overrides(cli: &Cli) -> BTreeMap<String, String> {
+    let mut overrides = BTreeMap::new();
+    if let Some(dir) = &cli.data_dir {
+        overrides.insert("app.data_dir".to_string(), dir.clone());
+        overrides.insert("storage.sqlite.path".to_string(), format!("{dir}/qai.db"));
+        overrides.insert("storage.objects.root".to_string(), format!("{dir}/objects"));
+    }
+    if let Some(level) = &cli.log_level {
+        overrides.insert("logging.level".to_string(), level.clone());
+    }
+    overrides
+}
+
+/// Load the effective `(Config, OriginMap)` exactly once (D-01, D-03, D-07).
+///
+/// Delegates the four-layer merge to `Config::load` (CLI > env > file >
+/// defaults); never reconstructs defaults in a handler. The legacy
+/// single-underscore `QAI_DATA_DIR` env is honored only when no `--data-dir`
+/// flag was supplied and is attributed to that env var.
+fn load_config(cli: &Cli) -> Result<(Config, OriginMap), config::ConfigError> {
+    let (mut cfg, mut origins) = Config::load(cli.config.as_ref(), "QAI", &cli_overrides(cli))?;
+    if cli.data_dir.is_none()
+        && let Ok(dir) = std::env::var("QAI_DATA_DIR")
+        && !dir.is_empty()
+    {
         cfg.app.data_dir = dir.clone();
         cfg.storage.sqlite.path = format!("{dir}/qai.db");
         cfg.storage.objects.root = format!("{dir}/objects");
+        let origin = ValueOrigin::Env("QAI_DATA_DIR".to_string());
+        origins.insert("app.data_dir", origin.clone());
+        origins.insert("storage.sqlite.path", origin.clone());
+        origins.insert("storage.objects.root", origin);
     }
-    if let Some(level) = &cli.log_level {
-        cfg.logging.level = level.clone();
-    }
-    cfg
+    Ok((cfg, origins))
 }
 
 /// Render `config show` output with secrets scrubbed (001-redaction-hardening,
@@ -420,35 +430,190 @@ fn render_config_show(cfg: &Config, json: bool) -> String {
     }
 }
 
-fn handle_config_show(explain: bool, defaults: bool, json: bool) -> i32 {
-    let cfg = Config::default();
+/// One redacted JSON envelope carrying the effective configuration and the
+/// dotted-key origin map (D-07). Redaction is applied to the whole document
+/// before it can reach stdout.
+fn config_envelope(cfg: &Config, origins: &OriginMap) -> serde_json::Value {
+    let value = serde_json::to_value(cfg).unwrap_or(serde_json::Value::Null);
+    let origin_obj: BTreeMap<String, String> =
+        origins.iter().map(|(key, origin)| (key.clone(), origin.to_string())).collect();
+    let mut envelope = serde_json::json!({ "config": value, "origins": origin_obj });
+    application::redaction::redact_json_value(&mut envelope);
+    envelope
+}
+
+/// Resolve a dotted config key (e.g. `server.port`) against an effective
+/// serialized configuration value.
+fn value_at_dotted<'a>(value: &'a serde_json::Value, key: &str) -> Option<&'a serde_json::Value> {
+    let mut current = value;
+    for segment in key.split('.') {
+        current = current.get(segment)?;
+    }
+    Some(current)
+}
+
+// ── Config diagnostic contract (D-07) ──────────────────────────────────
+
+fn config_error_code(err: &config::ConfigError) -> &'static str {
+    use config::ConfigError as E;
+    match err {
+        E::FileRead { .. } => "QAI-CFG-0001",
+        E::Parse(_) => "QAI-CFG-0002",
+        E::Validation(_) => "QAI-CFG-0003",
+        E::InterpolationCycle(_) => "QAI-CFG-0004",
+        E::MissingKey(_) => "QAI-CFG-0005",
+    }
+}
+
+fn config_error_remedy(err: &config::ConfigError) -> &'static str {
+    use config::ConfigError as E;
+    match err {
+        E::FileRead { .. } => "check the configuration file path and permissions, then retry",
+        E::Parse(_) => "fix the TOML syntax reported above, then re-run validation",
+        E::Validation(_) => "correct the reported configuration key, then re-run validation",
+        E::InterpolationCycle(_) => "remove the circular `${...}` interpolation reference",
+        E::MissingKey(_) => "supply the missing configuration key in the file, environment, or CLI",
+    }
+}
+
+/// Emit a config diagnostic with the same code, remedy, and runnable next
+/// command in human and JSON modes, and map to the centralized exit code.
+fn report_config_error(
+    err: &config::ConfigError,
+    file: Option<&Path>,
+    json: bool,
+) -> i32 {
+    let code = config_error_code(err);
+    let summary = err.to_string();
+    let remedy = config_error_remedy(err);
+    let next_command = match file {
+        Some(path) => match err {
+            config::ConfigError::Parse(_) | config::ConfigError::Validation(_) => {
+                format!("qai config show --file {} --json", path.display())
+            }
+            _ => format!("qai config validate --file {}", path.display()),
+        },
+        None => "qai config validate".to_string(),
+    };
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "code": code,
+                "summary": summary,
+                "remedy": remedy,
+                "next_command": next_command,
+            })
+        );
+    } else {
+        eprintln!("[{code}] {summary}");
+        eprintln!("      remedy: {remedy}");
+        eprintln!("      next: {next_command}");
+    }
+    exit_code::from_config_error(err)
+}
+
+fn handle_config_show(
+    cfg: &Config,
+    origins: &OriginMap,
+    explain: bool,
+    defaults: bool,
+    json: bool,
+) -> i32 {
     if defaults {
-        println!("{}", render_config_show(&cfg, json));
+        let cfg = Config::default();
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&config_envelope(&cfg, &OriginMap::new()))
+                    .unwrap_or_else(|_| "null".to_string())
+            );
+        } else {
+            println!("config::default show: {}", render_config_show(&cfg, false));
+        }
         return exit_code::OK;
     }
     if json {
-        println!("{}", render_config_show(&cfg, true));
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&config_envelope(cfg, origins))
+                .unwrap_or_else(|_| "null".to_string())
+        );
+    } else if explain {
+        print!("{}", application::redaction::redact_text(&origins.explain()));
     } else {
-        println!("config::default show: {}", render_config_show(&cfg, false));
+        println!("config show: {}", render_config_show(cfg, false));
     }
-    let _ = explain;
     exit_code::OK
 }
 
-fn handle_config_get(key: &str) -> i32 {
-    let cfg = Config::default();
-    println!("{cfg:?}");
-    let _ = key;
-    exit_code::OK
+fn handle_config_get(cfg: &Config, origins: &OriginMap, key: &str, json: bool) -> i32 {
+    let value = serde_json::to_value(cfg).unwrap_or(serde_json::Value::Null);
+    match value_at_dotted(&value, key) {
+        Some(found) => {
+            let origin = origins.get(key).map(ToString::to_string);
+            if json {
+                println!(
+                    "{}",
+                    serde_json::json!({ "key": key, "value": found, "origin": origin })
+                );
+            } else {
+                println!("{key} = {found}");
+                if let Some(origin) = origin {
+                    println!("  origin: {origin}");
+                }
+            }
+            exit_code::OK
+        }
+        None => {
+            let summary = format!("unknown effective configuration key `{key}`");
+            let remedy = "choose a valid dotted key; list the effective keys and origins";
+            let next_command = "qai config show --explain";
+            if json {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "code": "QAI-CFG-0006",
+                        "summary": summary,
+                        "remedy": remedy,
+                        "next_command": next_command,
+                    })
+                );
+            } else {
+                eprintln!("[QAI-CFG-0006] {summary}");
+                eprintln!("      remedy: {remedy}");
+                eprintln!("      next: {next_command}");
+            }
+            exit_code::NOT_FOUND
+        }
+    }
 }
 
-fn handle_config_validate(file: Option<&std::path::Path>) -> i32 {
-    let _ = file;
-    let cfg = Config::default();
-    match cfg.validate() {
-        Ok(()) => exit_code::OK,
-        Err(_) => exit_code::VALIDATION,
+fn handle_config_validate(cfg: &Config, file: Option<&Path>, json: bool) -> i32 {
+    let candidate = match file {
+        Some(path) => match load_config_file(path) {
+            Ok(cfg) => cfg,
+            Err(err) => return report_config_error(&err, Some(path), json),
+        },
+        None => cfg.clone(),
+    };
+    match candidate.validate() {
+        Ok(()) => {
+            if json {
+                println!("{}", serde_json::json!({ "valid": true }));
+            } else {
+                println!("configuration valid");
+            }
+            exit_code::OK
+        }
+        Err(err) => report_config_error(&err, file, json),
     }
+}
+
+/// Load a named config file through the single `Config::load` merge engine.
+fn load_config_file(path: &Path) -> Result<Config, config::ConfigError> {
+    let path_buf = path.to_path_buf();
+    Config::load(Some(&path_buf), "QAI", &BTreeMap::new()).map(|(cfg, _)| cfg)
 }
 
 fn handle_db(action: DbAction, cfg: &Config, json: bool) -> i32 {
