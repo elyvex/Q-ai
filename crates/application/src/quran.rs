@@ -951,12 +951,14 @@ pub async fn import_translations(
     // names a concrete license (status `OpenLicense`); an undeclared license
     // stays explicit `Unknown`. No redistribution/export permission is ever
     // invented either way (T-02-24; dataset/license identity stays owner gate
-    // OD-01).
+    // OD-01). Attribution is never relaxed by import: an undeclared license
+    // conservatively requires attribution (`true`), and a declared SPDX id
+    // carries no attribution signal of its own, so the field is omitted rather
+    // than persisted as a hardcoded `false` (WR-06).
     let license_json = match manifest.translation.spdx_id.as_deref() {
         Some(spdx_id) => serde_json::json!({
             "status": "OpenLicense",
             "spdx_id": spdx_id,
-            "attribution_required": false,
             "redistribution_allowed": false,
             "export_allowed": false,
             "notes": "declared at import; identifier preserved verbatim (OD-01)",
@@ -965,10 +967,10 @@ pub async fn import_translations(
         None => serde_json::json!({
             "status": "Unknown",
             "spdx_id": serde_json::Value::Null,
-            "attribution_required": false,
+            "attribution_required": true,
             "redistribution_allowed": false,
             "export_allowed": false,
-            "notes": "no license declared in the manifest; owner gate OD-01",
+            "notes": "no license declared in the manifest; attribution required by default (OD-01)",
         })
         .to_string(),
     };

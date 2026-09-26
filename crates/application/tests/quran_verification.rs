@@ -263,6 +263,6 @@ async fn verification_requires_a_granted_approval_for_the_exact_urn() {
     )
     .await
     .unwrap_err();
-    assert!(matches!(err, application::quran::ActivationError::NotStaged { .. }));
+    assert!(matches!(err, application::quran::ActivationError::EditionNotFound { .. }));
     assert_eq!(edition_row(&db).await.verified_by, None);
 }
