@@ -301,6 +301,9 @@ impl Config {
 // ── Origin tracking helpers ───────────────────────────────────────────
 
 fn mark_defaults(origins: &mut OriginMap) {
+    // Every scalar/array leaf of the serialized `Config` (D-07): the origin map
+    // must stay total over the effective document so `config show --explain`
+    // and the JSON `origins` envelope never report a leaf without a source.
     for key in [
         "app.mode",
         "app.data_dir",
@@ -308,19 +311,47 @@ fn mark_defaults(origins: &mut OriginMap) {
         "server.bind",
         "server.port",
         "server.tls",
+        "server.require_auth_outside_localhost",
+        "server.max_request_bytes",
+        "server.request_timeout_ms",
+        "server.concurrency_limit",
         "storage.backend",
         "storage.sqlite.path",
+        "storage.sqlite.journal_mode",
+        "storage.sqlite.synchronous",
+        "storage.sqlite.busy_timeout_ms",
+        "storage.sqlite.foreign_keys",
+        "storage.sqlite.max_connections",
+        "storage.sqlite.read_only_pool",
         "storage.objects.backend",
+        "storage.objects.root",
+        "storage.objects.max_file_bytes",
         "secrets.backend",
+        "secrets.encrypted_file_path",
         "jobs.workers",
+        "jobs.poll_interval_ms",
+        "jobs.lease_seconds",
+        "jobs.max_attempts",
+        "jobs.backoff_base_ms",
+        "jobs.backoff_max_ms",
+        "jobs.backoff_jitter",
         "logging.level",
         "logging.format",
+        "logging.file",
         "logging.redact_secrets",
         "telemetry.enabled",
+        "telemetry.otlp_endpoint",
         "telemetry.metrics_enabled",
         "security.allow_network_egress",
+        "security.domain_allowlist",
         "security.ssrf_block_private_ranges",
+        "security.max_download_bytes",
+        "security.max_archive_entries",
+        "security.max_archive_expansion_ratio",
+        "security.follow_symlinks",
         "policy.tool_execution_default",
+        "policy.command_execution_enabled",
+        "policy.canonical_write_requires_approval",
     ] {
         origins.insert(key, ValueOrigin::Default);
     }
@@ -346,10 +377,15 @@ fn mark_toml_origins_recursive(
         toml::Value::String(_)
         | toml::Value::Integer(_)
         | toml::Value::Float(_)
-        | toml::Value::Boolean(_) => {
+        | toml::Value::Boolean(_)
+        | toml::Value::Datetime(_) => {
             origins.insert(prefix, ValueOrigin::File { path: path.to_string(), line: None });
         }
-        _ => {}
+        toml::Value::Array(_) => {
+            // Whole-array leaves (e.g. `security.domain_allowlist`) merge
+            // atomically, so the array key itself carries the file origin.
+            origins.insert(prefix, ValueOrigin::File { path: path.to_string(), line: None });
+        }
     }
 }
 
