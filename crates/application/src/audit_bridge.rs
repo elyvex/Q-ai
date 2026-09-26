@@ -239,6 +239,41 @@ pub struct AuditVerificationReport {
     pub tampered_sequences: Vec<u64>,
 }
 
+/// Stable operator diagnostic for an invalid persisted chain (D-12).
+#[derive(Debug, Clone)]
+pub struct AuditInvalidDiagnostic {
+    pub code: &'static str,
+    pub summary: String,
+    pub remedy: String,
+    pub next_command: String,
+}
+
+/// Map an invalid [`AuditVerificationReport`] through the typed
+/// [`AuditError`] contract so every consumer renders the same fields:
+/// sequence gap → `SequenceGap` (`QAI-AUD-0004`), tampered row →
+/// `HashMismatch` (`QAI-AUD-0005`), otherwise `ChainVerificationFailed`
+/// (`QAI-AUD-0003`). Returns `None` for a valid report. This is the single
+/// mapping behind both `qai audit verify` and doctor's `audit.chain_valid`.
+pub fn diagnose_invalid_audit(report: &AuditVerificationReport) -> Option<AuditInvalidDiagnostic> {
+    use storage::error::Diagnostic as _;
+    if report.valid {
+        return None;
+    }
+    let err = if let Some(&sequence) = report.gaps.first() {
+        AuditError::SequenceGap { sequence }
+    } else if let Some(&sequence) = report.tampered_sequences.first() {
+        AuditError::HashMismatch { sequence }
+    } else {
+        AuditError::ChainVerificationFailed { sequence: 0 }
+    };
+    Some(AuditInvalidDiagnostic {
+        code: err.code(),
+        summary: err.to_string(),
+        remedy: err.remedy().unwrap_or("re-run `qai audit verify`").to_string(),
+        next_command: err.next_command().unwrap_or_else(|| "qai audit verify".to_string()),
+    })
+}
+
 pub async fn verify_persisted_audit(path: &str) -> Result<AuditVerificationReport, AuditError> {
     use storage::Database as _;
 
