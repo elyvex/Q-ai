@@ -183,6 +183,7 @@ pub fn checks(cfg: &Config, probe: &DbProbe) -> Vec<CheckResult> {
         data_dir_writable(cfg),
         database_reachable(probe),
         database_migration_current(cfg, probe),
+        database_checksum_current(probe),
         database_integrity_check(probe),
         database_foreign_keys_enabled(probe),
         secrets_backend_available(cfg),
@@ -316,6 +317,39 @@ fn database_migration_current(cfg: &Config, probe: &DbProbe) -> CheckResult {
             "apply pending migrations",
             "qai db migrate",
         )
+    }
+}
+
+/// Applied-migration checksum state from the read-only probe (D-05).
+///
+/// A mismatch names `qai db verify`; an unreachable database skips the check
+/// because reachability already fails with the `qai db migrate` remedy.
+fn database_checksum_current(probe: &DbProbe) -> CheckResult {
+    if !probe.reachable {
+        return CheckResult::skipped(
+            "database.checksum_current",
+            "database not reachable",
+            "create the database first",
+            "qai db migrate",
+        );
+    }
+    match probe.migration_checksum_ok {
+        Some(true) => CheckResult::pass(
+            "database.checksum_current",
+            "applied migration checksums match the on-disk set",
+        ),
+        Some(false) => CheckResult::fail(
+            "database.checksum_current",
+            "applied migration checksums do not match the on-disk set",
+            "inspect the mismatched versions without editing applied files",
+            "qai db verify",
+        ),
+        None => CheckResult::skipped(
+            "database.checksum_current",
+            "checksum state was not collected",
+            "re-run the full diagnostic",
+            "qai doctor --json",
+        ),
     }
 }
 

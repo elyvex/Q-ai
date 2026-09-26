@@ -229,7 +229,17 @@ pub fn dispatch(cli: Cli) -> i32 {
             exit_code::OK
         }
         Commands::Doctor { json, repair_preview, quran, deep, indexes, .. } => {
-            let probe = block_on(application::db::probe_database(&cfg));
+            let mut probe = block_on(application::db::probe_database(&cfg));
+            // Collect the applied-migration checksum state read-only so the
+            // `database.checksum_current` check can name `qai db verify` (D-05).
+            if probe.reachable {
+                let dir = migrations_dir();
+                probe.migration_checksum_ok =
+                    match block_on(application::db::verify_migrations(&cfg, &dir)) {
+                        Ok(report) => Some(report.valid),
+                        Err(_) => Some(false),
+                    };
+            }
             if repair_preview {
                 doctor::run_checks(&cfg, &probe, false, true)
             } else if indexes {

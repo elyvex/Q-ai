@@ -48,6 +48,10 @@ pub struct DbProbe {
     /// code/remedy as `qai audit verify` (`None` when the chain is valid).
     pub audit_code: Option<String>,
     pub audit_remedy: Option<String>,
+    /// Applied-migration checksum state (`None` when the database is
+    /// unreachable or the check was not run): `Some(true)` current,
+    /// `Some(false)` checksum-mismatched with `qai db verify` as the remedy.
+    pub migration_checksum_ok: Option<bool>,
     pub license_unknown_count: i64,
     pub multiple_active_versions: i64,
 }
