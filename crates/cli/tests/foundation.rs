@@ -95,11 +95,8 @@ fn effective_config_reports_file_and_env_origin_without_leaking_secrets() {
     assert!(origin.contains("env"), "env origin expected, got `{origin}`");
 
     // The secret sentinel never reaches stdout or stderr.
-    let combined = format!(
-        "{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
-    );
+    let combined =
+        format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
     assert!(!combined.contains(SENTINEL), "config show leaked the sentinel:\n{combined}");
 }
 
@@ -127,7 +124,11 @@ fn explicit_migration_creates_schema_then_empty_audit_chain_verifies() {
     let dir = tempfile::tempdir().unwrap();
 
     let out = qai(dir.path(), &["db", "migrate"], &[]);
-    assert!(out.status.success(), "db migrate must succeed: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "db migrate must succeed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(dir.path().join("qai.db").exists(), "db migrate must create the database");
 
     let out = qai(dir.path(), &["audit", "verify", "--json"], &[]);
@@ -148,4 +149,181 @@ fn doctor_after_migration_consumes_the_persisted_audit_verifier() {
     let doc: serde_json::Value = serde_json::from_slice(&out.stdout).expect("doctor JSON");
     let audit = check(&doc, "audit.chain_valid");
     assert_eq!(audit["status"], "pass");
+}
+
+// ─── Plan 01-01-02: effective configuration inspection (D-07, FND-01) ───
+
+#[test]
+fn config_get_returns_the_requested_value_with_its_origin() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path().to_str().unwrap();
+
+    let out = run(&["--data-dir", data, "--json", "config", "get", "server.port"], &[]);
+    assert!(out.status.success());
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).expect("get JSON");
+    assert_eq!(doc["key"], "server.port");
+    assert_eq!(doc["value"], 8737);
+    assert!(doc["origin"].is_string(), "keyed lookup must report its origin: {doc}");
+
+    // Human output carries the value, not the full debug dump.
+    let out = run(&["--data-dir", data, "config", "get", "server.port"], &[]);
+    assert!(out.status.success());
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(text.contains("server.port = 8737"), "unexpected get output:\n{text}");
+    assert!(!text.contains("SqliteConfig"), "get must not dump the whole config:\n{text}");
+
+    // Unknown keys use the typed not-found contract in both modes.
+    let out = run(&["--data-dir", data, "config", "get", "server.nope"], &[]);
+    assert_eq!(out.status.code(), Some(5), "unknown key is not-found");
+    let err = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(err.contains("QAI-CFG-0006"), "missing stable code:\n{err}");
+    assert!(err.contains("qai config show --explain"), "missing next command:\n{err}");
+
+    let out = run(&["--data-dir", data, "--json", "config", "get", "server.nope"], &[]);
+    assert_eq!(out.status.code(), Some(5));
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).expect("get JSON");
+    assert_eq!(doc["code"], "QAI-CFG-0006");
+    assert!(!doc["remedy"].as_str().unwrap_or_default().is_empty());
+    assert_eq!(doc["next_command"], "qai config show --explain");
+}
+
+#[test]
+fn config_get_redacts_secret_shaped_values() {
+    let dir = tempfile::tempdir().unwrap();
+    let cfg_path = dir.path().join("config.toml");
+    std::fs::write(
+        &cfg_path,
+        format!("[logging]\nfile = \"postgresql://admin:{SENTINEL}@localhost:5432/qai\"\n"),
+    )
+    .unwrap();
+    let cfg = cfg_path.to_str().unwrap();
+    let data = dir.path().join("data").to_str().unwrap().to_string();
+
+    for extra in [vec!["--json"], vec![]] {
+        let mut args = vec!["--config", cfg, "--data-dir", data.as_str()];
+        args.extend_from_slice(&extra);
+        args.extend_from_slice(&["config", "get", "logging.file"]);
+        let out = run(&args, &[]);
+        assert!(out.status.success());
+        let combined = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(!combined.contains(SENTINEL), "config get leaked the sentinel:\n{combined}");
+    }
+}
+
+#[test]
+fn config_show_explain_renders_values_with_origins() {
+    let dir = tempfile::tempdir().unwrap();
+    let cfg_path = dir.path().join("config.toml");
+    std::fs::write(&cfg_path, "[server]\nport = 4242\n").unwrap();
+    let cfg = cfg_path.to_str().unwrap();
+    let data = dir.path().join("data").to_str().unwrap().to_string();
+
+    let out = run(
+        &["--config", cfg, "--data-dir", data.as_str(), "config", "show", "--explain"],
+        &[("QAI__LOGGING__LEVEL", "debug")],
+    );
+    assert!(out.status.success());
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(text.contains("server.port = 4242 (file"), "file value+origin expected:\n{text}");
+    assert!(text.contains("logging.level = \"debug\" (env"), "env value+origin expected:\n{text}");
+}
+
+#[test]
+fn data_dir_overrides_derive_storage_keys_with_cli_origin() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path().join("custom").to_str().unwrap().to_string();
+
+    let out = run(&["--data-dir", data.as_str(), "config", "show", "--json"], &[]);
+    let doc = stdout_json(&out);
+    let sqlite = doc["config"]["storage"]["sqlite"]["path"].as_str().unwrap_or_default();
+    assert_eq!(sqlite, format!("{data}/qai.db"));
+    let objects = doc["config"]["storage"]["objects"]["root"].as_str().unwrap_or_default();
+    assert_eq!(objects, format!("{data}/objects"));
+    for key in ["app.data_dir", "storage.sqlite.path", "storage.objects.root"] {
+        let origin = doc["origins"][key].as_str().unwrap_or_default();
+        assert!(origin.contains("cli"), "CLI origin expected for `{key}`, got `{origin}`");
+    }
+}
+
+fn validate_shapes(out: &std::process::Output, expect_code: i32) -> (String, serde_json::Value) {
+    assert_eq!(out.status.code(), Some(expect_code));
+    let human = String::from_utf8_lossy(&out.stderr).into_owned()
+        + &String::from_utf8_lossy(&out.stdout);
+    (human, serde_json::Value::Null)
+}
+
+#[test]
+fn config_validate_malformed_file_reports_same_fields_in_both_modes() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad = dir.path().join("bad.toml");
+    std::fs::write(&bad, "[server\nport = \n").unwrap();
+    let bad = bad.to_str().unwrap();
+    let data = dir.path().join("data").to_str().unwrap().to_string();
+
+    let out = run(&["--data-dir", data.as_str(), "config", "validate", "--file", bad], &[]);
+    let (human, _) = validate_shapes(&out, 3);
+    assert!(human.contains("QAI-CFG-0002"), "stable parse code expected:\n{human}");
+    assert!(human.contains("remedy:"), "non-empty remedy expected:\n{human}");
+    assert!(
+        human.contains(&format!("qai config show --file {bad} --json")),
+        "malformed-file next command expected:\n{human}"
+    );
+
+    let out =
+        run(&["--data-dir", data.as_str(), "--json", "config", "validate", "--file", bad], &[]);
+    assert_eq!(out.status.code(), Some(3));
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).expect("validate JSON");
+    assert_eq!(doc["code"], "QAI-CFG-0002");
+    assert!(!doc["remedy"].as_str().unwrap_or_default().is_empty());
+    assert_eq!(doc["next_command"], format!("qai config show --file {bad} --json"));
+}
+
+#[test]
+fn config_validate_rejected_value_reports_same_fields_in_both_modes() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad = dir.path().join("unsafe.toml");
+    std::fs::write(&bad, "[server]\nbind = \"0.0.0.0\"\ntls = \"disabled\"\n").unwrap();
+    let bad = bad.to_str().unwrap();
+    let data = dir.path().join("data").to_str().unwrap().to_string();
+
+    let out = run(&["--data-dir", data.as_str(), "config", "validate", "--file", bad], &[]);
+    let (human, _) = validate_shapes(&out, 3);
+    assert!(human.contains("QAI-CFG-0003"), "stable validation code expected:\n{human}");
+    assert!(human.contains("remedy:"), "non-empty remedy expected:\n{human}");
+    assert!(human.contains("next:"), "runnable next command expected:\n{human}");
+
+    let out =
+        run(&["--data-dir", data.as_str(), "--json", "config", "validate", "--file", bad], &[]);
+    assert_eq!(out.status.code(), Some(3));
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).expect("validate JSON");
+    assert_eq!(doc["code"], "QAI-CFG-0003");
+    assert!(!doc["remedy"].as_str().unwrap_or_default().is_empty());
+    assert!(!doc["next_command"].as_str().unwrap_or_default().is_empty());
+}
+
+#[test]
+fn cli_data_dir_beats_env_storage_path_for_the_same_key() {
+    // Same-key adjacency at the real-binary boundary (D-07): the environment
+    // sets `storage.sqlite.path`, but `--data-dir` (CLI) wins deterministically
+    // and keeps its CLI origin. `unsafe_code = forbid` bars in-process
+    // `set_var` in test targets, so adjacency above file/env is proven here
+    // where the child process carries its own environment.
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path().join("cli-data").to_str().unwrap().to_string();
+
+    let out = run(
+        &["--data-dir", data.as_str(), "config", "show", "--json"],
+        &[("QAI__STORAGE__SQLITE__PATH", "/env-override/qai.db")],
+    );
+    let doc = stdout_json(&out);
+    assert_eq!(
+        doc["config"]["storage"]["sqlite"]["path"],
+        serde_json::Value::String(format!("{data}/qai.db"))
+    );
+    let origin = doc["origins"]["storage.sqlite.path"].as_str().unwrap_or_default();
+    assert!(origin.contains("cli"), "CLI origin expected, got `{origin}`");
 }
