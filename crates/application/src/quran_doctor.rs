@@ -489,21 +489,20 @@ fn reference_corpus_check(findings_json: Option<&str>) -> QuranDoctorCheck {
             "re-import the edition so a QV-015 outcome is recorded",
         );
     };
-    let findings: Vec<quran_corpus::validation::Finding> =
-        match serde_json::from_str(raw) {
-            Ok(findings) => findings,
-            Err(_) => {
-                // A persisted report that no longer parses is an integrity
-                // signal, never a benign skip: fail closed so a
-                // tampered/corrupt report cannot read as "no reference corpus
-                // configured".
-                return fail(
-                    "quran.reference_corpus",
-                    "persisted validation report is corrupt; integrity unknown".to_string(),
-                    "re-import the edition so a QV-015 outcome is recorded",
-                );
-            }
-        };
+    let findings: Vec<quran_corpus::validation::Finding> = match serde_json::from_str(raw) {
+        Ok(findings) => findings,
+        Err(_) => {
+            // A persisted report that no longer parses is an integrity
+            // signal, never a benign skip: fail closed so a
+            // tampered/corrupt report cannot read as "no reference corpus
+            // configured".
+            return fail(
+                "quran.reference_corpus",
+                "persisted validation report is corrupt; integrity unknown".to_string(),
+                "re-import the edition so a QV-015 outcome is recorded",
+            );
+        }
+    };
     let qv15: Vec<&quran_corpus::validation::Finding> =
         findings.iter().filter(|finding| finding.rule_id == "QV-015").collect();
     if qv15.iter().any(|finding| finding.severity == quran_corpus::validation::Severity::Fatal) {
