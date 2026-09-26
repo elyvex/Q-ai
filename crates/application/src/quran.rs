@@ -14,8 +14,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use audit::{Actor, AuditAction, AuditEvent, AuditOutcome};
-use domain::{AuditEventId, Language, PrincipalId, SubjectRef, Timestamp};
+use audit::{Actor, AuditAction};
+use domain::{Language, PrincipalId, SubjectRef, Timestamp};
 use jobs::{JobContext, JobError, JobHandler, JobKind, JobOutcome};
 use provenance::{
     ApprovalGate, ApprovalToken, CanonicalChangeRequest, CanonicalWriter, DifferenceReport,
@@ -26,7 +26,7 @@ use storage::Database as _;
 use storage::error::StorageError;
 use storage_sqlite::SqliteDatabase;
 
-use crate::audit_bridge::append_audit_event;
+use crate::audit_bridge::AuditedMutation;
 
 /// Job kind for canonical imports.
 pub const QURAN_IMPORT_KIND: &str = "quran.import";
@@ -93,30 +93,26 @@ impl JobHandler for QuranImportHandler {
                 let urn = edition_urn(&success.edition_slug, &success.edition_version);
                 let mut uow =
                     self.db.write().await.map_err(|err| JobError::Storage(err.to_string()))?;
-                append_audit_event(
-                    &mut *uow,
-                    AuditEvent {
-                        id: AuditEventId::new(),
-                        sequence: 0,
-                        occurred_at: Timestamp::from_ymd_hms(2026, 1, 1, 0, 0, 0)
-                            .unwrap_or_else(|_| Timestamp::now()),
-                        actor: Actor::Job { job_id: ctx.job.id.clone() },
-                        action: AuditAction::SourceStaged,
-                        subject: SubjectRef(urn),
-                        outcome: AuditOutcome::Allowed,
-                        reason: None,
-                        before: None,
-                        after: Some(serde_json::json!({
-                            "edition_id": success.edition_id,
-                            "validation_report": success.validation_report_id,
-                        })),
-                        request_id: Some(ctx.job.id.clone()),
-                        prev_chain_hash: audit_chain_genesis(),
-                        chain_hash: audit_chain_genesis(),
-                    },
-                )
-                .await
-                .map_err(|err| JobError::Storage(err.to_string()))?;
+                // Staging completion is an audited mutation (D-09, D-10): the
+                // `SourceStaged` event is staged through the shared
+                // `AuditedMutation` composition in this result transaction.
+                // The staged rows and their provenance record committed inside
+                // `run_import`; the importer still cannot activate canonical
+                // rows — activation stays behind `ApprovalToken`.
+                let mut mutation = AuditedMutation::new(
+                    Actor::Job { job_id: ctx.job.id.clone() },
+                    AuditAction::SourceStaged,
+                    SubjectRef(urn),
+                );
+                mutation.after = Some(serde_json::json!({
+                    "edition_id": success.edition_id,
+                    "validation_report": success.validation_report_id,
+                }));
+                mutation.request_id = Some(ctx.job.id.clone());
+                mutation
+                    .stage(&mut *uow)
+                    .await
+                    .map_err(|err| JobError::Storage(err.to_string()))?;
                 uow.commit().await.map_err(|err| JobError::Storage(err.to_string()))?;
                 Ok(JobOutcome {
                     success: true,
@@ -132,10 +128,6 @@ impl JobHandler for QuranImportHandler {
             Err(err) => Err(JobError::Storage(format!("{}: {}", err.code(), err.summary()))),
         }
     }
-}
-
-fn audit_chain_genesis() -> domain::ContentHash {
-    domain::ContentHash { algorithm: domain::HashAlgorithm::Sha256, hex: "00".repeat(32) }
 }
 
 /// Errors from the approval-gated Quran services.
@@ -355,29 +347,18 @@ async fn audit_activation(
     edition_id: &str,
     generation: i64,
 ) -> Result<(), ActivationError> {
-    append_audit_event(
-        uow,
-        AuditEvent {
-            id: AuditEventId::new(),
-            sequence: 0,
-            occurred_at: Timestamp::now(),
-            actor: Actor::Principal { principal_id: *invoked_by },
-            action,
-            subject: SubjectRef(subject.to_string()),
-            outcome: AuditOutcome::Allowed,
-            reason: None,
-            before: None,
-            after: Some(serde_json::json!({
-                "edition_id": edition_id,
-                "corpus_generation": generation,
-            })),
-            request_id: None,
-            prev_chain_hash: audit_chain_genesis(),
-            chain_hash: audit_chain_genesis(),
-        },
-    )
-    .await
-    .map_err(|err| ActivationError::Audit(err.to_string()))?;
+    // Same-UoW audit leg of the activation/rollback/deprecation mutation
+    // (D-09, D-10): staged after the canonical writes, before the commit.
+    let mut mutation = AuditedMutation::new(
+        Actor::Principal { principal_id: *invoked_by },
+        action,
+        SubjectRef(subject.to_string()),
+    );
+    mutation.after = Some(serde_json::json!({
+        "edition_id": edition_id,
+        "corpus_generation": generation,
+    }));
+    mutation.stage(uow).await.map_err(|err| ActivationError::Audit(err.to_string()))?;
     Ok(())
 }
 
@@ -532,30 +513,20 @@ pub async fn record_edition_verification(
         return Err(ActivationError::storage(err));
     }
     commit_change(&mut session).await?;
-    append_audit_event(
-        &mut *uow,
-        AuditEvent {
-            id: AuditEventId::new(),
-            sequence: 0,
-            occurred_at: Timestamp::now(),
-            actor: Actor::Principal { principal_id: *invoked_by },
-            action: AuditAction::SourceApproved,
-            subject: SubjectRef(expected_subject),
-            outcome: AuditOutcome::Allowed,
-            reason: None,
-            before: None,
-            after: Some(serde_json::json!({
-                "edition_id": edition.id,
-                "verified_by": verification.reviewer,
-                "verification_method": verification.method,
-            })),
-            request_id: None,
-            prev_chain_hash: audit_chain_genesis(),
-            chain_hash: audit_chain_genesis(),
-        },
-    )
-    .await
-    .map_err(|err| ActivationError::Audit(err.to_string()))?;
+    // Same-UoW audit leg of the verification mutation (D-09, D-10): the
+    // `SourceApproved` event is staged after the `verified_*` stamp and
+    // before the commit, through the shared composition.
+    let mut mutation = AuditedMutation::new(
+        Actor::Principal { principal_id: *invoked_by },
+        AuditAction::SourceApproved,
+        SubjectRef(expected_subject),
+    );
+    mutation.after = Some(serde_json::json!({
+        "edition_id": edition.id,
+        "verified_by": verification.reviewer,
+        "verification_method": verification.method,
+    }));
+    mutation.stage(&mut *uow).await.map_err(|err| ActivationError::Audit(err.to_string()))?;
     uow.commit().await.map_err(ActivationError::storage)?;
     Ok(())
 }
@@ -667,6 +638,13 @@ pub async fn ensure_principal(
 }
 
 /// Record a human approval decision and return its id.
+///
+/// An audited mutation (D-09, D-10): the approval row and its
+/// `ApprovalGranted` audit event are staged in the same `UnitOfWork` and
+/// become visible together on commit. The approval row itself is the human
+/// provenance for the later canonical change, so no separate provenance row
+/// or projection outbox event is required here — no consumer projects the
+/// approvals table.
 pub async fn record_approval(
     db: &dyn storage::Database,
     id: &str,
@@ -691,6 +669,20 @@ pub async fn record_approval(
             decided_at: Some(at.to_string()),
         })
         .await?;
+    let actor = decided_by
+        .parse::<PrincipalId>()
+        .map(|principal_id| Actor::Principal { principal_id })
+        .unwrap_or_else(|_| Actor::System { name: decided_by.to_string() });
+    let mut mutation = AuditedMutation::new(
+        actor,
+        AuditAction::ApprovalGranted,
+        SubjectRef(subject_urn.to_string()),
+    );
+    mutation.after = Some(serde_json::json!({ "approval_id": id }));
+    mutation
+        .stage(&mut *uow)
+        .await
+        .map_err(|err| StorageError::ConstraintViolation { message: err.to_string() })?;
     uow.commit().await
 }
 

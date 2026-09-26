@@ -231,6 +231,146 @@ pub async fn append_audit_event(
     Ok(event)
 }
 
+/// One ordered audited-mutation composition (D-09, D-10).
+///
+/// An audited durable mutation stages, in order, inside the caller's
+/// [`storage::UnitOfWork`]:
+/// 1. the authoritative repository write(s) — domain state first;
+/// 2. required provenance and outbox writes;
+/// 3. exactly one hash-chained audit event (sequenced by
+///    [`append_audit_event`], reusing the locked hash recipe unchanged).
+///
+/// The caller owns commit/rollback and must commit only after `stage`
+/// succeeds: every error path returns before commit, so a failed boundary
+/// leaves no partial row once the caller rolls back. There is no second
+/// transaction manager and no compensating delete — atomicity is the shared
+/// `UnitOfWork` (D-10).
+///
+/// Read-only diagnostics and derived-cache rebuilds stay outside this
+/// composition unless they alter authoritative state (D-09).
+#[derive(Debug, Clone)]
+pub struct AuditedMutation {
+    /// Who performed the mutation.
+    pub actor: Actor,
+    /// Which lifecycle transition this stages.
+    pub action: AuditAction,
+    /// The URN the mutation and its audit event describe.
+    pub subject: SubjectRef,
+    /// Allow/deny outcome of the mutation.
+    pub outcome: AuditOutcome,
+    /// Optional human-readable reason.
+    pub reason: Option<String>,
+    /// Optional state before the mutation.
+    pub before: Option<serde_json::Value>,
+    /// Optional state after the mutation.
+    pub after: Option<serde_json::Value>,
+    /// Optional correlation id (job id, request id).
+    pub request_id: Option<String>,
+}
+
+impl AuditedMutation {
+    /// Describe an allowed mutation; override `outcome`/`reason`/`before`/
+    /// `after`/`request_id` for denials and richer payloads.
+    pub fn new(actor: Actor, action: AuditAction, subject: SubjectRef) -> Self {
+        Self {
+            actor,
+            action,
+            subject,
+            outcome: AuditOutcome::Allowed,
+            reason: None,
+            before: None,
+            after: None,
+            request_id: None,
+        }
+    }
+
+    fn template(&self) -> AuditEvent {
+        AuditEvent {
+            // Fresh id per staged event; sequence, timestamp, and linkage are
+            // assigned by `append_audit_event` inside the same UnitOfWork.
+            id: AuditEventId::new(),
+            sequence: 0,
+            occurred_at: Timestamp::now(),
+            actor: self.actor.clone(),
+            action: self.action.clone(),
+            subject: self.subject.clone(),
+            outcome: self.outcome.clone(),
+            reason: self.reason.clone(),
+            before: self.before.clone(),
+            after: self.after.clone(),
+            request_id: self.request_id.clone(),
+            prev_chain_hash: genesis_hash(),
+            chain_hash: genesis_hash(),
+        }
+    }
+
+    /// Stage the chained audit event AFTER all domain/provenance/outbox
+    /// writes and BEFORE the caller's commit. Returns the sequenced event.
+    pub async fn stage(&self, uow: &mut dyn storage::UnitOfWork) -> Result<AuditEvent, AuditError> {
+        append_audit_event(uow, self.template()).await
+    }
+}
+
+fn audit_as_storage(err: AuditError) -> storage::StorageError {
+    storage::StorageError::ConstraintViolation { message: err.to_string() }
+}
+
+/// Audited source activation (D-09, D-10): the backend-neutral
+/// [`storage::workflows::record_source_activation`] writes plus the chained
+/// audit event, staged in the caller's `UnitOfWork`. Returns the generation
+/// id and the sequenced audit event; the caller commits.
+pub async fn audited_source_activation(
+    uow: &mut dyn storage::UnitOfWork,
+    source_version_id: &str,
+    scope: &str,
+    subject_urn: &str,
+    mutation: &AuditedMutation,
+) -> Result<(String, AuditEvent), storage::StorageError> {
+    let generation =
+        storage::workflows::record_source_activation(uow, source_version_id, scope, subject_urn)
+            .await?;
+    let event = mutation.stage(uow).await.map_err(audit_as_storage)?;
+    Ok((generation, event))
+}
+
+/// Audited source deactivation (D-09, D-10): tombstone-first workflow writes
+/// plus the chained audit event, staged in the caller's `UnitOfWork`.
+/// Returns the tombstone id and the sequenced audit event; the caller commits.
+pub async fn audited_source_deactivation(
+    uow: &mut dyn storage::UnitOfWork,
+    source_version_id: &str,
+    scope: &str,
+    subject_urn: &str,
+    reason: &str,
+    mutation: &AuditedMutation,
+) -> Result<(String, AuditEvent), storage::StorageError> {
+    let tombstone_id = storage::workflows::record_source_deactivation(
+        uow,
+        source_version_id,
+        scope,
+        subject_urn,
+        reason,
+    )
+    .await?;
+    let event = mutation.stage(uow).await.map_err(audit_as_storage)?;
+    Ok((tombstone_id, event))
+}
+
+/// Audited provenance write (D-09, D-10): the backend-neutral
+/// [`storage::workflows::record_provenance_write`] insert plus the chained
+/// audit event, staged in the caller's `UnitOfWork`. Returns the generation
+/// id and the sequenced audit event; the caller commits.
+pub async fn audited_provenance_write(
+    uow: &mut dyn storage::UnitOfWork,
+    record: storage::repository::ProvenanceRecord,
+    scope: &str,
+    mutation: &AuditedMutation,
+) -> Result<(String, AuditEvent), storage::StorageError> {
+    let generation = storage::workflows::record_provenance_write(uow, record, scope).await?;
+    let event = mutation.stage(uow).await.map_err(audit_as_storage)?;
+    Ok((generation, event))
+}
+
 #[derive(Debug, serde::Serialize)]
 pub struct AuditVerificationReport {
     pub valid: bool,

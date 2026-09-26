@@ -7,6 +7,20 @@
 //! once; the outbox row and the change live or die together in one SQLite
 //! transaction.
 //!
+//! # Audited-mutation contract (D-09, D-10)
+//!
+//! These helpers stay backend-neutral on purpose: they know nothing about the
+//! hash-chained audit recipe (owned by the `audit` crate) or its sequencing
+//! (owned by `application::audit_bridge`). Authoritative production callers
+//! MUST compose them through the application wrappers
+//! (`application::audit_bridge::{AuditedMutation, audited_source_activation,
+//! audited_source_deactivation, audited_provenance_write}`), which stage the
+//! required chained audit event in the *same* `UnitOfWork` before the caller
+//! commits. Calling a helper below and committing without that staged audit
+//! event is a D-10 violation: the domain mutation would be visible without
+//! its trust record. Direct use without the audited composition is reserved
+//! for tests proving the transaction boundary itself.
+//!
 //! # Ordering
 //!
 //! Deactivation writes the tombstone **before** the state transition, so the
@@ -26,6 +40,10 @@ fn now_rfc3339() -> String {
 
 /// Activate a source version: allocate a generation, enqueue the outbox event,
 /// then flip `Indexing → Active` — all in the caller's transaction.
+///
+/// D-09/D-10: authoritative production callers must stage the required
+/// chained audit event in the same `UnitOfWork` (via
+/// `application::audit_bridge::audited_source_activation`) before committing.
 pub async fn record_source_activation(
     uow: &mut dyn UnitOfWork,
     source_version_id: &str,
@@ -50,6 +68,10 @@ pub async fn record_source_activation(
 /// Deactivate a source version: write a tombstone, allocate a generation,
 /// enqueue the outbox event, then flip `Active → Deprecated` — all in the
 /// caller's transaction. Returns the tombstone id.
+///
+/// D-09/D-10: authoritative production callers must stage the required
+/// chained audit event in the same `UnitOfWork` (via
+/// `application::audit_bridge::audited_source_deactivation`) before committing.
 pub async fn record_source_deactivation(
     uow: &mut dyn UnitOfWork,
     source_version_id: &str,
@@ -88,6 +110,10 @@ pub async fn record_source_deactivation(
 
 /// Record a provenance write: insert the record, allocate a generation, and
 /// enqueue the outbox event — all in the caller's transaction.
+///
+/// D-09/D-10: authoritative production callers must stage the required
+/// chained audit event in the same `UnitOfWork` (via
+/// `application::audit_bridge::audited_provenance_write`) before committing.
 pub async fn record_provenance_write(
     uow: &mut dyn UnitOfWork,
     record: ProvenanceRecord,

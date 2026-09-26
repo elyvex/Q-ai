@@ -16,6 +16,8 @@ use storage::Database as _;
 use storage::error::StorageError;
 use storage_sqlite::SqliteDatabase;
 
+use crate::audit_bridge::AuditedMutation;
+
 /// Exit codes (mirrors `cli::exit_code` without depending on it).
 pub mod exit {
     /// Ok.
@@ -688,6 +690,13 @@ fn read_manifest(path: &str) -> Result<String, CommandOutput> {
 }
 
 /// Ensure the catalog source + version rows the importer FKs into.
+///
+/// An audited mutation (D-09, D-10): the source/version rows and the
+/// `SourceImported` audit event are staged in the same `UnitOfWork` and
+/// become visible together on commit. No provenance row or projection outbox
+/// event is required here — the dataset provenance and validation record
+/// land in the import pipeline's own staging transaction, and no consumer
+/// projects the catalog rows.
 async fn ensure_source_version(
     db: &Arc<SqliteDatabase>,
     slug: &str,
@@ -736,6 +745,23 @@ async fn ensure_source_version(
         })
         .await
         .map_err(|err: StorageError| CommandOutput::err(exit::INTERNAL, err.to_string()))?;
+    let principal: domain::PrincipalId = LOCAL_PRINCIPAL
+        .parse()
+        .map_err(|_| CommandOutput::err(exit::INTERNAL, "bad local principal".to_string()))?;
+    let mut mutation = AuditedMutation::new(
+        audit::Actor::Principal { principal_id: principal },
+        audit::AuditAction::SourceImported,
+        domain::SubjectRef(format!("quran-source:{source_id}")),
+    );
+    mutation.after = Some(serde_json::json!({
+        "source_id": source_id,
+        "source_version_id": version_id,
+        "version": version,
+    }));
+    mutation
+        .stage(&mut *uow)
+        .await
+        .map_err(|err| CommandOutput::err(exit::INTERNAL, err.to_string()))?;
     uow.commit()
         .await
         .map_err(|err: StorageError| CommandOutput::err(exit::INTERNAL, err.to_string()))?;
