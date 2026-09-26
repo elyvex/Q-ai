@@ -579,32 +579,37 @@ pub struct IndexManifest {
 | A6 | No new external packages are needed; all gaps close inside existing crates. | Standard Stack / Package Legitimacy | Low — if a gap needs a new crate, the package-legitimacy gate applies. |
 | A7 | The `fawazahmed0/quran-api` reference repo contains no morphology data and no per-edition license metadata, so it is a validation/alignment reference only (consistent with D-06). | Summary, OD-11 | Medium — if a downstream task expects morphology from this repo, it will find none. Observed by directory inspection this session. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Q1 — Is D-10's API list exhaustive or illustrative?**
    - What we know: D-10 lists CLI `search/root/lemma/morphology/family/freq` and API `search/*` + `normalization/*`. The codebase has search + normalization HTTP routes but no morphology/count/family routes; P2-T89 (morphology/family API) and P2-T104 (counting API) are legacy tasks (☐/◐).
    - What's unclear: whether "satisfy SC1–SC4 at the CLI + versioned HTTP API level" requires HTTP endpoints for SC3/SC4 or only CLI.
    - Recommendation: ask the planner/owner. Default (recommended): implement CLI for SC3/SC4 now and add HTTP for search + normalization only, recording the morphology/count/family API as a *documented deferral* unless the owner says otherwise. If HTTP is required, add `POST /api/v1/quran/{morphology,root,lemma,family,count/*}`.
+   - **RESOLVED (plan 03-05, D-10/D-13):** the lexicon HTTP routes ARE in scope. 03-05 adds `POST /api/v1/quran/family`, `/count/root-frequency`, and `/count/lemma-frequency` beside the existing `search/*` + `normalization/*` routes; D-10's list is treated as illustrative, not exhaustive.
 
 2. **Q2 — Can SC3/SC4 be marked satisfied on the synthetic lexicon (OD-11 BLOCKED)?**
    - What we know: The synthetic fixture activates end-to-end (`crates/application/tests/morphology_import.rs`); `synthetic_test_only` marks it non-scholarly; D-08 says conventions must not be treated as finalized without a linguist.
    - What's unclear: whether the owner accepts "criterion satisfied with synthetic dataset + explicit BLOCKED license gate" as Phase-3 exit, or requires a licensed dataset first.
    - Recommendation: get an explicit owner ruling. Proposed default: satisfy SC3/SC4 **behaviorally** on synthetic data with labels, keep ADR-0203/0210/0215 + goldens **not Accepted**, and record OD-11 BLOCKED as the remaining gate (mirrors Phase 2 D-03 posture).
+   - **RESOLVED (plans 03-04 + 03-08, D-08/D-02):** satisfied behaviorally on the synthetic lexicon with `synthetic_test_only` labels; ADR-0203/0210/0215 and the goldens stay not-Accepted; OD-11 and OD-12 are recorded BLOCKED with exact closing steps in `docs/05-followups/phase-03-owner-gates.md` (03-08 Task 1).
 
 3. **Q3 — Which QAC revision and adapter shape?**
    - What we know: D-05 names QAC as the documented default provider; owner-decisions recommends "QAC v0.4 gated candidate"; ADR-0203 §5 names candidate families but no chosen provider. The adapter interfaces (`parse_flat_csv`, `parse_array_shape`) and the intermediate schema already exist.
    - What's unclear: the exact QAC revision/URL, coverage/depth (POS/features/lemma/root/stem/pattern), and whether it supplies one or several analyses per token.
    - Recommendation: research the exact QAC revision **only if** the owner pursues Option A; otherwise ship Option B (user-supplied import) and record the exact URL/revision for the owner to ratify. Do not download data during planning.
+   - **RESOLVED (plan 03-06, D-05/D-07):** ship ADR-0203 Option B — `qai quran morphology import` with the fail-closed license gate; the QAC revision/URL is recorded for owner ratification in `fixtures/quran/morphology/license-matrix.json` (entry `pending_license_review`), not downloaded during planning.
 
 4. **Q4 — Performance budgets on the synthetic fixture vs full corpus?**
    - What we know: `search_latency.rs` uses `FIXTURE_BOUND = 2000 ms` and explicitly notes the p50/p99 targets gate full-corpus runs; ADR-0207 names `p99 ≤ 150 ms` for concatenated search.
    - What's unclear: whether Phase 3 is expected to run a full-corpus benchmark (no licensed corpus yet) or record budgets as harness shape only.
    - Recommendation: codify the budget table as a machine-readable artifact and gate the fixture harness; record full-corpus benchmark execution as OD-11-dependent.
+   - **RESOLVED (plan 03-07 Task 2, G-06):** budgets are codified in `fixtures/quran/performance/budgets.json`; the fixture harness gates against the fixture bound, and full-corpus p50/p99 execution is recorded as OD-11-dependent (not run).
 
 5. **Q5 — Exact "displayed text unchanged" criterion test shape for SC5.**
    - What we know: storage-level MV-018 exists and is re-run in every derived build; `SearchHit` carries a `QuranQuotation` from canonical.
    - What's unclear: whether the owner wants a new per-hit property test or accepts existing structural + storage evidence.
    - Recommendation: add one small per-hit test (slice canonical at `canonical_span`, assert byte-identity with the hit's quotation text) to pin the Phase-5 consumer contract; cheap and high-value.
+   - **RESOLVED (plan 03-01 Task 2, SC5):** a new per-hit test `crates/application/tests/canonical_display_identity.rs` slices canonical at `canonical_span` and asserts byte-identity with the hit quotation across all five search modes (concatenated additionally tiles its segmentation).
 
 ## Environment Availability
 
