@@ -8,11 +8,11 @@
 
 ### Product Foundation
 
-- [ ] **REQ-product-vision**: Platform covers Quran, vocabulary/morphology/roots/linguistic relations, hadith, Islamic literature, comparative scripture (PRD §1)
-- [ ] **REQ-product-principles**: All work obeys the 19 product principles (exact-text-first, traceability, layer separation, no fabrication, locality, deny-by-default, no false consensus) (PRD §2)
-- [ ] **REQ-goals-non-goals**: Complete validated Quran research system with exact Arabic search first; no from-scratch foundation model, no sectarian authority claims (PRD §3, §4, §25.14)
+- [x] **REQ-product-vision**: Platform covers Quran, vocabulary/morphology/roots/linguistic relations, hadith, Islamic literature, comparative scripture (PRD §1)
+- [x] **REQ-product-principles**: All work obeys the 19 product principles (exact-text-first, traceability, layer separation, no fabrication, locality, deny-by-default, no false consensus) (PRD §2)
+- [x] **REQ-goals-non-goals**: Complete validated Quran research system with exact Arabic search first; no from-scratch foundation model, no sectarian authority claims (PRD §3, §4, §25.14)
 - [ ] **REQ-knowledge-domains**: Knowledge domains modeled independently so users can include or exclude them (PRD §5)
-- [ ] **REQ-architecture-principles-quality**: Mandatory architecture principles, quality requirements (correctness, performance, reliability, maintainability, extensibility, UX), terminology (PRD §55, §56, §92, §96)
+- [x] **REQ-architecture-principles-quality**: Mandatory architecture principles, quality requirements (correctness, performance, reliability, maintainability, extensibility, UX), terminology (PRD §55, §56, §92, §96)
 
 ### Data & Quran Corpus
 
@@ -48,16 +48,16 @@
 
 - [ ] **REQ-ux-web**: Web navigation, search modes, research workspace, export; server dashboard; multi-mode research query interface; streaming (PRD §24, §51, §52, §53)
 - [ ] **REQ-tui-cli**: ratatui/crossterm TUI operational cockpit (screen inventory, palette, RAG debug), consistent `qai` CLI tree, model connection manager, agent screens (PRD §25–§25.4, §60, §78)
-- [ ] **REQ-cli-api**: Executable `qai`; versioned API (Quran, hadith, source, research/query surfaces); cancellable long-running operations (PRD §26, §27, §83, §54)
+- [x] **REQ-cli-api**: Executable `qai`; versioned API (Quran, hadith, source, research/query surfaces); cancellable long-running operations (PRD §26, §27, §83, §54)
 
 ### Agents, Models & Engineering
 
 - [ ] **REQ-agents-tools-runtime**: Controlled first-class agents (definitions, agencies, limits); typed tool manifests, WASM/WASI sandboxing, deny-by-default approvals, MCP, five memory types; AI-assisted tool creation; workflow engine (PRD §28, §29, §30, §63–§72, §79, §80)
   - Acceptance: agent features complete only with enforced permissions, schema-validated I/O, cancellation/timeouts/limits, recorded versions, validated citations, untrusted-content handling, inspectability (PRD §46); tool creation complete only via describe→review→generate→isolated-test→accuracy-test→security-review→approve→version→sandbox→telemetry→revocable flow, unpublished tools never reach production agents (PRD §90); plus full §93 checklist (redaction, audit, streaming, retry/failure tests, prompt-injection + unauthorized-access tests, reversibility, rebuildable indexes, no silent canonical modification)
 - [ ] **REQ-models-routing**: LLM/embedding abstractions, provider support, unified capability interface, routing with fallbacks (PRD §31, §61, §62)
-- [ ] **REQ-engineering-baseline**: Async architecture + perf targets, typed errors, secrets, validated config, observability, dependency principles, localhost/auth/TLS baseline, testing, DX, adapters, Docker, local-first (PRD §25.13)
+- [x] **REQ-engineering-baseline**: Async architecture + perf targets, typed errors, secrets, validated config, observability, dependency principles, localhost/auth/TLS baseline, testing, DX, adapters, Docker, local-first (PRD §25.13)
   - Acceptance: feature complete only when implemented, tested (unit+integration), typed errors, observability, docs, interface coverage, no layer coupling, validated config, cancellation/timeouts, redaction, provenance, versioning, access controls, recovery tests, clean fmt/clippy/test (PRD §58)
-- [ ] **REQ-storage-architecture**: Relational (SQLite now, PostgreSQL server), full-text, vector, graph, object/file stores behind abstractions; Rust workspace layout (PRD §32, §33, §87)
+- [x] **REQ-storage-architecture**: Relational (SQLite now, PostgreSQL server), full-text, vector, graph, object/file stores behind abstractions; Rust workspace layout (PRD §32, §33, §87)
 - [ ] **REQ-security-licensing-observability**: Localhost bind, remote auth, production TLS; licensing gates before activation; structured logging/tracing with provenance; performance, backups, auth/access control (PRD §37–§42, §84, §85)
 - [ ] **REQ-retrieval-governance**: Prompt-injection defense (retrieved content untrusted), access-control-aware retrieval, idempotent version-aware lifecycle, audit trail + provenance, budgets, sessions (PRD §74, §75, §76, §81, §82, §77)
 
@@ -91,13 +91,13 @@ Deferred post-MVP extensions (from PRD §44.2 excludes — acknowledged, not in 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REQ-product-vision | Phase 1 | Pending |
-| REQ-product-principles | Phase 1 | Pending |
-| REQ-goals-non-goals | Phase 1 | Pending |
-| REQ-engineering-baseline | Phase 1 | Pending |
-| REQ-storage-architecture | Phase 1 | Pending |
-| REQ-cli-api | Phase 1 | Pending |
-| REQ-architecture-principles-quality | Phase 1 | Pending |
+| REQ-product-vision | Phase 1 | Complete |
+| REQ-product-principles | Phase 1 | Complete |
+| REQ-goals-non-goals | Phase 1 | Complete |
+| REQ-engineering-baseline | Phase 1 | Complete |
+| REQ-storage-architecture | Phase 1 | Complete |
+| REQ-cli-api | Phase 1 | Complete |
+| REQ-architecture-principles-quality | Phase 1 | Complete |
 | REQ-quran-corpus | Phase 2 | Complete |
 | REQ-data-separation-layers | Phase 2 | Complete |
 | REQ-ingestion-validation-eval | Phase 2 | Complete |
