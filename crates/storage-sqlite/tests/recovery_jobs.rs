@@ -322,3 +322,147 @@ async fn non_owner_heartbeat_checkpoint_and_finish_affect_zero_rows() {
     uow.commit().await.unwrap();
     assert_eq!(common::job_state(&fx.path, "job-own").await.as_deref(), Some("Succeeded"));
 }
+
+// ─── 01-03-02: worker crash / retry / cancellation durable semantics ───
+
+#[tokio::test]
+async fn crash_with_pending_cancel_keeps_request_and_boundary() {
+    let fx = common::fixture().await;
+
+    let mut uow = fx.db.write().await.unwrap();
+    uow.jobs().enqueue(job("job-cc", "idem-cc")).await.unwrap();
+    uow.jobs().claim("job-cc", "worker-1").await.unwrap();
+    let stored = named_checkpoint("stage.one");
+    uow.jobs().checkpoint_owned("job-cc", "worker-1", None, Some(stored.clone())).await.unwrap();
+    // A cancellation request lands, then the worker crashes before observing it.
+    uow.jobs().request_cancel("job-cc").await.unwrap();
+    uow.commit().await.unwrap();
+    common::backdate_lease(&fx.path, "job-cc").await;
+
+    let mut uow = fx.db.write().await.unwrap();
+    assert_eq!(uow.jobs().reap_expired_leases().await.unwrap(), vec!["job-cc".to_string()]);
+    uow.commit().await.unwrap();
+
+    // Recovery preserves both the request and the boundary for the next worker.
+    assert_eq!(common::job_state(&fx.path, "job-cc").await.as_deref(), Some("Interrupted"));
+    assert!(common::job_cancel_requested(&fx.path, "job-cc").await);
+    assert_eq!(common::job_checkpoint(&fx.path, "job-cc").await.as_deref(), Some(stored.as_str()));
+}
+
+#[tokio::test]
+async fn per_kind_exhaustion_leaves_an_inspectable_state_with_explicit_retry() {
+    let fx = common::fixture().await;
+
+    // A kind stamped with max_attempts = 2 exhausts after two claims.
+    let mut uow = fx.db.write().await.unwrap();
+    let mut j = job("job-ex", "idem-ex");
+    j.max_attempts = 2;
+    uow.jobs().enqueue(j).await.unwrap();
+    uow.jobs().claim("job-ex", "worker-1").await.unwrap();
+    uow.jobs().reschedule("job-ex", 0, Some("retry".into())).await.unwrap();
+    // Backdate availability: reschedule(0) lands ~now; force due for determinism.
+    uow.commit().await.unwrap();
+    let pool = common::rw_pool(&fx.path).await;
+    sqlx::query("UPDATE jobs SET available_at = '2000-01-01T00:00:00Z' WHERE id = 'job-ex'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+
+    let mut uow = fx.db.write().await.unwrap();
+    let second = uow.jobs().claim("job-ex", "worker-1").await.unwrap().unwrap();
+    assert_eq!(second.attempts, 2);
+    uow.jobs()
+        .finish_owned("job-ex", "worker-1", "DeadLettered", Some("max attempts exceeded".into()))
+        .await
+        .unwrap();
+    uow.commit().await.unwrap();
+
+    // Inspectable: terminal state, spent attempts, recorded reason.
+    assert_eq!(common::job_state(&fx.path, "job-ex").await.as_deref(), Some("DeadLettered"));
+    assert_eq!(common::job_attempts(&fx.path, "job-ex").await, 2);
+    assert_eq!(
+        common::job_error_json(&fx.path, "job-ex").await.as_deref(),
+        Some("max attempts exceeded")
+    );
+
+    // Explicit operator retry reopens a fresh window from the same boundary.
+    let mut uow = fx.db.write().await.unwrap();
+    uow.jobs().retry("job-ex").await.unwrap();
+    uow.commit().await.unwrap();
+    assert_eq!(common::job_state(&fx.path, "job-ex").await.as_deref(), Some("Queued"));
+    assert_eq!(common::job_attempts(&fx.path, "job-ex").await, 0);
+}
+
+#[tokio::test]
+async fn cancellation_boundaries_record_truthful_terminal_states() {
+    let fx = common::fixture().await;
+
+    // Before start: the request persists on the queued job for the worker's
+    // pre-start observation.
+    let mut uow = fx.db.write().await.unwrap();
+    uow.jobs().enqueue(job("job-cb", "idem-cb")).await.unwrap();
+    uow.jobs().request_cancel("job-cb").await.unwrap();
+    uow.commit().await.unwrap();
+    assert!(common::job_cancel_requested(&fx.path, "job-cb").await);
+    assert_eq!(common::job_state(&fx.path, "job-cb").await.as_deref(), Some("Queued"));
+
+    // During a boundary: the worker finalizes Cancelled with the locked
+    // disposition instead of a bare state.
+    let mut uow = fx.db.write().await.unwrap();
+    uow.jobs().enqueue(job("job-cd", "idem-cd")).await.unwrap();
+    uow.jobs().claim("job-cd", "worker-1").await.unwrap();
+    uow.jobs().request_cancel("job-cd").await.unwrap();
+    let stored = named_checkpoint("stage.one");
+    uow.jobs().checkpoint_owned("job-cd", "worker-1", None, Some(stored)).await.unwrap();
+    let disposition = r#"{"disposition":"cancelled_at_checkpoint"}"#;
+    assert!(
+        uow.jobs()
+            .finish_owned("job-cd", "worker-1", "Cancelled", Some(disposition.into()))
+            .await
+            .unwrap()
+    );
+    uow.commit().await.unwrap();
+    assert_eq!(common::job_state(&fx.path, "job-cd").await.as_deref(), Some("Cancelled"));
+    assert_eq!(common::job_error_json(&fx.path, "job-cd").await.as_deref(), Some(disposition));
+
+    // A missed boundary never claims a cancellation it did not observe: the
+    // disposition names the miss explicitly.
+    let mut uow = fx.db.write().await.unwrap();
+    uow.jobs().enqueue(job("job-cm", "idem-cm")).await.unwrap();
+    uow.jobs().claim("job-cm", "worker-1").await.unwrap();
+    uow.jobs().request_cancel("job-cm").await.unwrap();
+    let missed = r#"{"disposition":"missed_boundary"}"#;
+    uow.jobs().finish_owned("job-cm", "worker-1", "Cancelled", Some(missed.into())).await.unwrap();
+    uow.commit().await.unwrap();
+    assert_eq!(common::job_error_json(&fx.path, "job-cm").await.as_deref(), Some(missed));
+}
+
+#[tokio::test]
+async fn stale_owner_cannot_finalize_after_lease_loss() {
+    let fx = common::fixture().await;
+
+    let mut uow = fx.db.write().await.unwrap();
+    uow.jobs().enqueue(job("job-st", "idem-st")).await.unwrap();
+    uow.jobs().claim("job-st", "worker-1").await.unwrap();
+    uow.commit().await.unwrap();
+
+    // worker-1's lease expires; worker-2 reaps and reclaims the job.
+    common::backdate_lease(&fx.path, "job-st").await;
+    let mut uow = fx.db.write().await.unwrap();
+    uow.jobs().reap_expired_leases().await.unwrap();
+    uow.jobs().claim("job-st", "worker-2").await.unwrap();
+    // The stale owner's terminal and checkpoint writes affect zero rows.
+    assert!(!uow.jobs().finish_owned("job-st", "worker-1", "Succeeded", None).await.unwrap());
+    assert!(
+        !uow.jobs()
+            .checkpoint_owned("job-st", "worker-1", None, Some("\"stale\"".into()))
+            .await
+            .unwrap()
+    );
+    uow.commit().await.unwrap();
+
+    assert_eq!(common::job_state(&fx.path, "job-st").await.as_deref(), Some("Running"));
+    assert_eq!(common::job_owner(&fx.path, "job-st").await.as_deref(), Some("worker-2"));
+    assert!(common::job_checkpoint(&fx.path, "job-st").await.is_none());
+}

@@ -4,7 +4,9 @@
 //! with cancellation + heartbeat + checkpointing, and applies the retry /
 //! backoff / dead-letter policy.
 
+use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -14,6 +16,7 @@ use tracing::{info, warn};
 use crate::queue::JobQueue;
 use crate::registry::HandlerRegistry;
 use crate::{JobContext, JobError, JobState};
+use storage::repository::JobRecord;
 
 /// Retry/backoff/lease policy for a worker.
 #[derive(Debug, Clone)]
@@ -56,10 +59,69 @@ pub enum WorkerOutcome {
     Retried { job_id: String, next_delay_ms: u64 },
     /// The job failed and exhausted its attempts.
     DeadLettered { job_id: String },
-    /// The job was cancelled.
-    Cancelled { job_id: String },
+    /// The job was cancelled, with the locked cooperative disposition.
+    Cancelled { job_id: String, disposition: CancellationDisposition },
     /// The job kind had no registered handler.
     UnknownKind { job_id: String, kind: String },
+}
+
+/// How a cooperative cancellation request resolved (D-16).
+///
+/// Exactly one of these is persisted into the job's result/error JSON and
+/// reported through [`WorkerOutcome::Cancelled`]; a cancellation is never
+/// reported without naming which boundary state applied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CancellationDisposition {
+    /// The request was observed at a named checkpoint boundary (including
+    /// the pre-start boundary) and the job stopped there.
+    CancelledAtCheckpoint,
+    /// The handler completed successfully before observing the request.
+    CompletedBeforeObservation,
+    /// The handler could not reach a safe boundary, so the job was
+    /// finalized without falsely claiming it stopped at one.
+    MissedBoundary,
+}
+
+impl std::fmt::Display for CancellationDisposition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::CancelledAtCheckpoint => write!(f, "cancelled_at_checkpoint"),
+            Self::CompletedBeforeObservation => write!(f, "completed_before_observation"),
+            Self::MissedBoundary => write!(f, "missed_boundary"),
+        }
+    }
+}
+
+impl FromStr for CancellationDisposition {
+    type Err = String;
+
+    fn from_str(raw: &str) -> Result<Self, Self::Err> {
+        match raw {
+            "cancelled_at_checkpoint" => Ok(Self::CancelledAtCheckpoint),
+            "completed_before_observation" => Ok(Self::CompletedBeforeObservation),
+            "missed_boundary" => Ok(Self::MissedBoundary),
+            other => Err(format!("unknown cancellation disposition `{other}`")),
+        }
+    }
+}
+
+/// Serialize a disposition into the existing job result/error JSON column.
+pub fn disposition_json(disposition: CancellationDisposition) -> String {
+    serde_json::json!({"disposition": disposition.to_string()}).to_string()
+}
+
+/// Parse a disposition back out of a stored result/error JSON value.
+/// Returns `None` when the payload carries no locked disposition.
+pub fn parse_disposition(raw: &str) -> Option<CancellationDisposition> {
+    serde_json::from_str::<Value>(raw).ok()?.get("disposition")?.as_str()?.parse().ok()
+}
+
+/// The resolved retry/backoff/lease rule for one claimed job.
+struct EffectivePolicy {
+    max_attempts: u32,
+    backoff_base: Duration,
+    backoff_max: Duration,
+    backoff_jitter: f64,
 }
 
 /// An in-process worker that drains a [`JobQueue`].
@@ -104,8 +166,14 @@ impl Worker {
 
         let Some(handler) = self.registry.get(&job.kind) else {
             warn!(job_id = %job.id, kind = %job.kind, "no handler registered; dead-lettering");
-            self.queue
-                .finish(&job.id, JobState::DeadLettered, Some("unknown job kind".into()))
+            let _ = self
+                .queue
+                .finish_owned(
+                    &job.id,
+                    &self.owner,
+                    JobState::DeadLettered,
+                    Some("unknown job kind".into()),
+                )
                 .await?;
             return Ok(WorkerOutcome::UnknownKind { job_id: job.id, kind: job.kind });
         };
@@ -113,19 +181,30 @@ impl Worker {
         // Payload schema validation (fail closed).
         let payload: Value = serde_json::from_str(&job.payload_json).unwrap_or(Value::Null);
         if !validate_payload(handler.payload_schema(), &payload) {
-            self.queue
-                .finish(&job.id, JobState::DeadLettered, Some("invalid payload".into()))
+            let _ = self
+                .queue
+                .finish_owned(
+                    &job.id,
+                    &self.owner,
+                    JobState::DeadLettered,
+                    Some("invalid payload".into()),
+                )
                 .await?;
             return Ok(WorkerOutcome::DeadLettered { job_id: job.id });
         }
 
-        // Already cancelled before we started.
+        // A request already pending observes the pre-start boundary: no stage
+        // ran, so the job stops at the start checkpoint.
         if self.queue.cancel_requested(&job.id).await? {
-            self.queue.finish(&job.id, JobState::Cancelled, None).await?;
-            return Ok(WorkerOutcome::Cancelled { job_id: job.id });
+            self.finish_cancelled(&job.id, CancellationDisposition::CancelledAtCheckpoint).await?;
+            return Ok(WorkerOutcome::Cancelled {
+                job_id: job.id,
+                disposition: CancellationDisposition::CancelledAtCheckpoint,
+            });
         }
 
-        // Watchdog: poll cancellation + renew the lease while the handler runs.
+        // Watchdog: poll cancellation + renew the lease + persist each named
+        // checkpoint immediately while the handler runs.
         let cancel = Arc::new(AtomicBool::new(false));
         let ctx = JobContext::with_cancel(job.clone(), cancel.clone());
         let checkpoint_sink = ctx.checkpoint_sink();
@@ -134,6 +213,7 @@ impl Worker {
             job.id.clone(),
             self.owner.clone(),
             cancel.clone(),
+            checkpoint_sink.clone(),
             self.config.lease,
             self.config.poll_interval,
         ));
@@ -141,38 +221,71 @@ impl Worker {
         let result = handler.run(ctx, payload).await;
         watchdog.abort();
 
+        // Flush any boundary the watchdog did not persist yet.
+        let pending = checkpoint_sink.lock().ok().and_then(|mut slot| slot.take());
+        if let Some(cp) = pending {
+            let _ = self.queue.checkpoint_owned(&job.id, &self.owner, None, Some(cp)).await?;
+        }
+
+        let cancel_seen =
+            cancel.load(Ordering::SeqCst) || self.queue.cancel_requested(&job.id).await?;
         match result {
             Ok(outcome) if outcome.success => {
-                self.queue.finish(&job.id, JobState::Succeeded, outcome.result).await?;
+                if cancel_seen {
+                    // The request arrived but the handler finished first: say
+                    // so instead of claiming a cancellation (D-16).
+                    self.finish_succeeded(
+                        &job.id,
+                        Some(disposition_json(CancellationDisposition::CompletedBeforeObservation)),
+                    )
+                    .await?;
+                } else {
+                    self.finish_succeeded(&job.id, outcome.result).await?;
+                }
                 Ok(WorkerOutcome::Succeeded { job_id: job.id })
             }
             Ok(_) | Err(_) => {
-                // Cooperative cancellation takes precedence over failure.
-                if cancel.load(Ordering::SeqCst) {
-                    self.queue.finish(&job.id, JobState::Cancelled, None).await?;
-                    return Ok(WorkerOutcome::Cancelled { job_id: job.id });
-                }
-                // Persist any checkpoint the handler recorded before failing.
-                let recorded = checkpoint_sink.lock().ok().and_then(|slot| slot.clone());
-                if let Some(cp) = recorded {
-                    self.queue.checkpoint(&job.id, None, Some(cp)).await?;
+                // Cooperative cancellation takes precedence over failure, but
+                // the disposition must name the true boundary state.
+                if cancel_seen {
+                    let at_boundary = self
+                        .queue
+                        .get(&job.id)
+                        .await?
+                        .and_then(|row| row.checkpoint_json)
+                        .is_some();
+                    let disposition = if at_boundary {
+                        CancellationDisposition::CancelledAtCheckpoint
+                    } else {
+                        CancellationDisposition::MissedBoundary
+                    };
+                    self.finish_cancelled(&job.id, disposition).await?;
+                    return Ok(WorkerOutcome::Cancelled { job_id: job.id, disposition });
                 }
                 if !handler.is_idempotent() {
-                    self.queue
-                        .finish(
+                    // Prohibition: a non-idempotent job is never retried
+                    // automatically, even when attempts remain.
+                    let _ = self
+                        .queue
+                        .finish_owned(
                             &job.id,
+                            &self.owner,
                             JobState::DeadLettered,
                             Some("non-idempotent job cannot be retried automatically".into()),
                         )
                         .await?;
                     return Ok(WorkerOutcome::DeadLettered { job_id: job.id });
                 }
-                self.handle_failure(&job).await
+                let policy = self.effective_policy(&job);
+                self.handle_failure(&job, &policy).await
             }
         }
     }
 
     /// Process jobs until the queue is empty. Returns the number processed.
+    ///
+    /// Long-lived hosts only (D-13). One-shot CLI paths must not call this;
+    /// host ownership lands in 01-04.
     pub async fn run_until_idle(&self) -> Result<u32, JobError> {
         let mut processed = 0;
         loop {
@@ -187,15 +300,28 @@ impl Worker {
     async fn handle_failure(
         &self,
         job: &storage::repository::JobRecord,
+        policy: &EffectivePolicy,
     ) -> Result<WorkerOutcome, JobError> {
         let attempts = job.attempts.max(1);
-        if attempts >= self.config.max_attempts {
-            self.queue
-                .finish(&job.id, JobState::DeadLettered, Some("max attempts exceeded".into()))
+        if attempts >= policy.max_attempts {
+            let _ = self
+                .queue
+                .finish_owned(
+                    &job.id,
+                    &self.owner,
+                    JobState::DeadLettered,
+                    Some("max attempts exceeded".into()),
+                )
                 .await?;
             Ok(WorkerOutcome::DeadLettered { job_id: job.id.clone() })
         } else {
-            let delay = self.backoff(attempts, &job.id);
+            let delay = Self::backoff_with(
+                policy.backoff_base,
+                policy.backoff_max,
+                policy.backoff_jitter,
+                attempts,
+                &job.id,
+            );
             self.queue.reschedule(&job.id, delay, Some("retry".into())).await?;
             Ok(WorkerOutcome::Retried {
                 job_id: job.id.clone(),
@@ -204,11 +330,72 @@ impl Worker {
         }
     }
 
-    /// Exponential backoff with deterministic jitter (no `rand` dependency).
-    fn backoff(&self, attempts: u32, job_id: &str) -> Duration {
+    /// Resolve the retry/backoff rule for a claimed job (D-15): an explicit
+    /// per-kind policy wins; otherwise the enqueue-time snapshot
+    /// (`JobRecord.max_attempts`) applies, bounded above by the host config.
+    fn effective_policy(&self, job: &JobRecord) -> EffectivePolicy {
+        if self.registry.has_policy(&job.kind) {
+            let policy = self.registry.policy_for(&job.kind);
+            EffectivePolicy {
+                max_attempts: policy.max_attempts.max(1),
+                backoff_base: Duration::from_millis(policy.backoff_base_ms),
+                backoff_max: Duration::from_millis(policy.backoff_max_ms),
+                backoff_jitter: policy.jitter.clamp(0.0, 1.0),
+            }
+        } else {
+            EffectivePolicy {
+                max_attempts: job.max_attempts.max(1).min(self.config.max_attempts.max(1)),
+                backoff_base: self.config.backoff_base,
+                backoff_max: self.config.backoff_max,
+                backoff_jitter: self.config.backoff_jitter,
+            }
+        }
+    }
+
+    /// Owner-checked success finish; warns (without misreporting the
+    /// outcome) when the lease was lost mid-run — the job will be reaped as
+    /// `Interrupted` and resume from its committed checkpoint.
+    async fn finish_succeeded(&self, job_id: &str, result: Option<String>) -> Result<(), JobError> {
+        let applied =
+            self.queue.finish_owned(job_id, &self.owner, JobState::Succeeded, result).await?;
+        if !applied {
+            warn!(job_id, owner = %self.owner, "lease lost before success finish");
+        }
+        Ok(())
+    }
+
+    /// Owner-checked cancellation finish carrying the locked disposition.
+    async fn finish_cancelled(
+        &self,
+        job_id: &str,
+        disposition: CancellationDisposition,
+    ) -> Result<(), JobError> {
+        let applied = self
+            .queue
+            .finish_owned(
+                job_id,
+                &self.owner,
+                JobState::Cancelled,
+                Some(disposition_json(disposition)),
+            )
+            .await?;
+        if !applied {
+            warn!(job_id, owner = %self.owner, "lease lost before cancel finish");
+        }
+        Ok(())
+    }
+
+    /// Exponential backoff with deterministic jitter (no `rand` dependency),
+    /// parameterized by the resolved policy.
+    fn backoff_with(
+        base: Duration,
+        max: Duration,
+        jitter: f64,
+        attempts: u32,
+        job_id: &str,
+    ) -> Duration {
         let shift = attempts.saturating_sub(1).min(16);
-        let exp =
-            self.config.backoff_base.saturating_mul(1u32 << shift).min(self.config.backoff_max);
+        let exp = base.saturating_mul(1u32 << shift).min(max);
         // Deterministic 0..1 fraction from the job id.
         let mut hash: u64 = 1469598103934665603;
         for b in job_id.bytes() {
@@ -216,8 +403,8 @@ impl Worker {
             hash = hash.wrapping_mul(1099511628211);
         }
         let frac = (hash % 1000) as f64 / 1000.0;
-        let factor = 1.0 + self.config.backoff_jitter * (frac * 2.0 - 1.0);
-        Duration::from_secs_f64((exp.as_secs_f64() * factor).max(0.0)).min(self.config.backoff_max)
+        let factor = 1.0 + jitter * (frac * 2.0 - 1.0);
+        Duration::from_secs_f64((exp.as_secs_f64() * factor).max(0.0)).min(max)
     }
 }
 
@@ -226,13 +413,34 @@ async fn watchdog(
     job_id: String,
     owner: String,
     cancel: Arc<AtomicBool>,
+    checkpoints: Arc<Mutex<Option<String>>>,
     lease: Duration,
     poll: Duration,
 ) {
+    let mut last_persisted: Option<String> = None;
     loop {
         tokio::time::sleep(poll).await;
         if queue.cancel_requested(&job_id).await.unwrap_or(false) {
             cancel.store(true, Ordering::SeqCst);
+        }
+        // Immediate durable checkpoint (D-14): each newly recorded named
+        // boundary is persisted through the owner-checked operation while the
+        // handler is still running — never only after failure.
+        let pending = checkpoints.lock().ok().and_then(|mut slot| slot.take());
+        if let Some(cp) = pending
+            && last_persisted.as_deref() != Some(cp.as_str())
+        {
+            if queue
+                .checkpoint_owned(&job_id, &owner, None, Some(cp.clone()))
+                .await
+                .unwrap_or(false)
+            {
+                last_persisted = Some(cp);
+            } else if let Ok(mut slot) = checkpoints.lock() {
+                // Lease lost mid-run: hand the value back so the terminal
+                // path can attempt one final persist.
+                *slot = Some(cp);
+            }
         }
         let _ = queue.heartbeat(&job_id, &owner, lease).await;
     }
@@ -479,20 +687,42 @@ mod tests {
 
     #[tokio::test]
     async fn backoff_is_deterministic_distributed_and_bounded() {
-        let (worker, _) = worker_with(HandlerRegistry::new()).await;
-        let worker = worker.with_config(WorkerConfig::default());
-        let base = worker.config.backoff_base.as_secs_f64();
+        let defaults = WorkerConfig::default();
+        let base = defaults.backoff_base.as_secs_f64();
         let mut buckets = [0; 10];
         for n in 0..10_000 {
             let id = format!("job-{n}");
-            let delay = worker.backoff(1, &id);
-            assert_eq!(delay, worker.backoff(1, &id));
+            let delay = Worker::backoff_with(
+                defaults.backoff_base,
+                defaults.backoff_max,
+                defaults.backoff_jitter,
+                1,
+                &id,
+            );
+            assert_eq!(
+                delay,
+                Worker::backoff_with(
+                    defaults.backoff_base,
+                    defaults.backoff_max,
+                    defaults.backoff_jitter,
+                    1,
+                    &id
+                )
+            );
             let fraction = delay.as_secs_f64() / base;
             assert!((0.8..=1.2).contains(&fraction));
             let bucket = (((fraction - 0.8) / 0.4 * 10.0) as usize).min(9);
             buckets[bucket] += 1;
             for attempt in [0, 2, 8, 16, u32::MAX] {
-                assert!(worker.backoff(attempt, &id) <= worker.config.backoff_max);
+                assert!(
+                    Worker::backoff_with(
+                        defaults.backoff_base,
+                        defaults.backoff_max,
+                        defaults.backoff_jitter,
+                        attempt,
+                        &id
+                    ) <= defaults.backoff_max
+                );
             }
         }
         assert!(buckets.iter().all(|count| (700..=1300).contains(count)), "{buckets:?}");
@@ -503,5 +733,252 @@ mod tests {
         assert!(!validate_payload("not json", &serde_json::json!({})));
         assert!(validate_payload(r#"{"type":"object"}"#, &serde_json::json!({"a":1})));
         assert!(!validate_payload(r#"{"type":"object"}"#, &serde_json::json!(1)));
+    }
+
+    // ─── 01-03-02: cooperative cancellation, per-kind retry, immediacy ───
+
+    use crate::registry::RetryPolicy;
+
+    /// Records one named boundary, then waits for cancellation and fails.
+    struct CheckpointThenWait;
+    #[async_trait::async_trait]
+    impl JobHandler for CheckpointThenWait {
+        fn kind(&self) -> JobKind {
+            "test.checkpoint_wait".into()
+        }
+        fn payload_schema(&self) -> &'static str {
+            r#"{"type":"object"}"#
+        }
+        fn is_idempotent(&self) -> bool {
+            true
+        }
+        async fn run(&self, ctx: JobContext, _p: Value) -> Result<JobOutcome, JobError> {
+            ctx.checkpoint_named("stage.one", serde_json::json!({"n": 1}));
+            for _ in 0..1000 {
+                if ctx.is_cancelled() {
+                    return Ok(JobOutcome::failure());
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+            Err(JobError::Storage("cancel never arrived".into()))
+        }
+    }
+
+    /// Waits for cancellation and fails without ever reaching a boundary.
+    struct WaitCancelNoCheckpoint;
+    #[async_trait::async_trait]
+    impl JobHandler for WaitCancelNoCheckpoint {
+        fn kind(&self) -> JobKind {
+            "test.wait_cancel".into()
+        }
+        fn payload_schema(&self) -> &'static str {
+            r#"{"type":"object"}"#
+        }
+        fn is_idempotent(&self) -> bool {
+            true
+        }
+        async fn run(&self, ctx: JobContext, _p: Value) -> Result<JobOutcome, JobError> {
+            for _ in 0..1000 {
+                if ctx.is_cancelled() {
+                    return Ok(JobOutcome::failure());
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+            Err(JobError::Storage("cancel never arrived".into()))
+        }
+    }
+
+    /// Succeeds after a fixed delay, ignoring mid-run cancellation.
+    struct SlowSucceed;
+    #[async_trait::async_trait]
+    impl JobHandler for SlowSucceed {
+        fn kind(&self) -> JobKind {
+            "test.slow_succeed".into()
+        }
+        fn payload_schema(&self) -> &'static str {
+            r#"{"type":"object"}"#
+        }
+        fn is_idempotent(&self) -> bool {
+            true
+        }
+        async fn run(&self, _ctx: JobContext, _p: Value) -> Result<JobOutcome, JobError> {
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            Ok(JobOutcome::success(None))
+        }
+    }
+
+    /// Records a boundary and then fails slowly, so the test can observe
+    /// the row while the handler is still running.
+    struct CheckpointThenSlowFail;
+    #[async_trait::async_trait]
+    impl JobHandler for CheckpointThenSlowFail {
+        fn kind(&self) -> JobKind {
+            "test.slow_fail".into()
+        }
+        fn payload_schema(&self) -> &'static str {
+            r#"{"type":"object"}"#
+        }
+        fn is_idempotent(&self) -> bool {
+            true
+        }
+        async fn run(&self, ctx: JobContext, _p: Value) -> Result<JobOutcome, JobError> {
+            ctx.checkpoint_named("stage.one", serde_json::json!({"n": 1}));
+            tokio::time::sleep(Duration::from_secs(30)).await;
+            Ok(JobOutcome::failure())
+        }
+    }
+
+    #[test]
+    fn disposition_json_round_trips_all_outcomes() {
+        for d in [
+            CancellationDisposition::CancelledAtCheckpoint,
+            CancellationDisposition::CompletedBeforeObservation,
+            CancellationDisposition::MissedBoundary,
+        ] {
+            let raw = disposition_json(d);
+            assert_eq!(parse_disposition(&raw), Some(d), "{raw}");
+            assert_eq!(d.to_string().parse::<CancellationDisposition>(), Ok(d));
+        }
+        assert_eq!(parse_disposition("{}"), None);
+        assert!("bogus".parse::<CancellationDisposition>().is_err());
+    }
+
+    #[tokio::test]
+    async fn pre_start_cancel_reports_cancelled_at_checkpoint() {
+        let (worker, queue) = worker_with(HandlerRegistry::new().register(Arc::new(Succeed))).await;
+        // A valid payload so the run would succeed absent cancellation.
+        let mut job = record("j-pre", kinds::SYSTEM_NOOP_TEST, "Queued");
+        job.payload_json = r#"{"n":1}"#.into();
+        queue.enqueue(job).await.unwrap();
+        queue.request_cancel("j-pre").await.unwrap();
+
+        assert_eq!(
+            worker.run_once().await.unwrap(),
+            WorkerOutcome::Cancelled {
+                job_id: "j-pre".into(),
+                disposition: CancellationDisposition::CancelledAtCheckpoint,
+            }
+        );
+        assert_eq!(queue.get("j-pre").await.unwrap().unwrap().state, "Cancelled");
+    }
+
+    #[tokio::test]
+    async fn cancel_at_boundary_reports_cancelled_at_checkpoint() {
+        let (worker, queue) =
+            worker_with(HandlerRegistry::new().register(Arc::new(CheckpointThenWait))).await;
+        queue.enqueue(record("j-cb", "test.checkpoint_wait", "Queued")).await.unwrap();
+
+        let handle = tokio::spawn(async move { worker.run_once().await });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        queue.request_cancel("j-cb").await.unwrap();
+        let outcome = handle.await.unwrap().unwrap();
+        assert_eq!(
+            outcome,
+            WorkerOutcome::Cancelled {
+                job_id: "j-cb".into(),
+                disposition: CancellationDisposition::CancelledAtCheckpoint,
+            }
+        );
+        assert_eq!(queue.get("j-cb").await.unwrap().unwrap().state, "Cancelled");
+    }
+
+    #[tokio::test]
+    async fn cancel_without_boundary_reports_missed_boundary() {
+        let (worker, queue) =
+            worker_with(HandlerRegistry::new().register(Arc::new(WaitCancelNoCheckpoint))).await;
+        queue.enqueue(record("j-mb", "test.wait_cancel", "Queued")).await.unwrap();
+
+        let handle = tokio::spawn(async move { worker.run_once().await });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        queue.request_cancel("j-mb").await.unwrap();
+        let outcome = handle.await.unwrap().unwrap();
+        assert_eq!(
+            outcome,
+            WorkerOutcome::Cancelled {
+                job_id: "j-mb".into(),
+                disposition: CancellationDisposition::MissedBoundary,
+            },
+            "no boundary reached: must not claim a checkpoint cancellation"
+        );
+        assert_eq!(queue.get("j-mb").await.unwrap().unwrap().state, "Cancelled");
+    }
+
+    #[tokio::test]
+    async fn success_before_observation_stays_succeeded() {
+        let (worker, queue) =
+            worker_with(HandlerRegistry::new().register(Arc::new(SlowSucceed))).await;
+        queue.enqueue(record("j-cbo", "test.slow_succeed", "Queued")).await.unwrap();
+
+        let handle = tokio::spawn(async move { worker.run_once().await });
+        // The handler runs 150 ms; the request lands mid-run but the handler
+        // finishes without observing it.
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        queue.request_cancel("j-cbo").await.unwrap();
+        assert_eq!(
+            handle.await.unwrap().unwrap(),
+            WorkerOutcome::Succeeded { job_id: "j-cbo".into() }
+        );
+        assert_eq!(queue.get("j-cbo").await.unwrap().unwrap().state, "Succeeded");
+    }
+
+    #[tokio::test]
+    async fn per_kind_policy_caps_attempts_and_backoff() {
+        let policy =
+            RetryPolicy { max_attempts: 2, backoff_base_ms: 10, backoff_max_ms: 20, jitter: 0.0 };
+        struct Flaky;
+        #[async_trait::async_trait]
+        impl JobHandler for Flaky {
+            fn kind(&self) -> JobKind {
+                "test.flaky_kind".into()
+            }
+            fn payload_schema(&self) -> &'static str {
+                r#"{"type":"object"}"#
+            }
+            fn is_idempotent(&self) -> bool {
+                true
+            }
+            async fn run(&self, _ctx: JobContext, _p: Value) -> Result<JobOutcome, JobError> {
+                Ok(JobOutcome::failure())
+            }
+        }
+        let (worker, queue) =
+            worker_with(HandlerRegistry::new().register_with_policy(Arc::new(Flaky), policy)).await;
+        queue.enqueue(record("j-pk", "test.flaky_kind", "Queued")).await.unwrap();
+
+        // Attempt 1 of 2: bounded per-kind backoff (10 ms base, zero jitter).
+        match worker.run_once().await.unwrap() {
+            WorkerOutcome::Retried { next_delay_ms, .. } => assert_eq!(next_delay_ms, 10),
+            other => panic!("expected Retried, got {other:?}"),
+        }
+        queue.reschedule("j-pk", Duration::ZERO, None).await.unwrap();
+        // Attempt 2 of 2: exhausted into the inspectable state.
+        assert_eq!(
+            worker.run_once().await.unwrap(),
+            WorkerOutcome::DeadLettered { job_id: "j-pk".into() }
+        );
+        let row = queue.get("j-pk").await.unwrap().unwrap();
+        assert_eq!(row.state, "DeadLettered");
+        assert_eq!(row.attempts, 2);
+    }
+
+    #[tokio::test]
+    async fn checkpoint_reaches_storage_while_the_handler_runs() {
+        let (worker, queue) =
+            worker_with(HandlerRegistry::new().register(Arc::new(CheckpointThenSlowFail))).await;
+        queue.enqueue(record("j-imm", "test.slow_fail", "Queued")).await.unwrap();
+
+        let handle = tokio::spawn(async move { worker.run_once().await });
+        // The handler sleeps 30 s; the watchdog (5 ms poll) must persist the
+        // boundary long before the handler returns.
+        let mut seen = false;
+        for _ in 0..200 {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            if queue.get("j-imm").await.unwrap().unwrap().checkpoint_json.is_some() {
+                seen = true;
+                break;
+            }
+        }
+        assert!(seen, "named checkpoint must be queryable while the handler runs");
+        handle.abort();
     }
 }

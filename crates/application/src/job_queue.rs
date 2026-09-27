@@ -354,6 +354,213 @@ mod tests {
         assert_eq!(other.max_attempts, 5, "unrelated kinds keep the default policy");
     }
 
+    /// 01-03-02: a crashed run resumes after its committed named boundary
+    /// when a new worker picks the job up.
+    #[tokio::test]
+    async fn worker_resumes_crashed_job_from_named_checkpoint() {
+        use jobs::queue::JobQueue as _;
+
+        struct ResumeCheck;
+        #[async_trait]
+        impl JobHandler for ResumeCheck {
+            fn kind(&self) -> JobKind {
+                "test.resume".into()
+            }
+            fn payload_schema(&self) -> &'static str {
+                r#"{"type":"object"}"#
+            }
+            fn is_idempotent(&self) -> bool {
+                true
+            }
+            async fn run(&self, ctx: JobContext, _p: Value) -> Result<JobOutcome, JobError> {
+                let boundary = ctx.job.checkpoint_json.clone().unwrap_or_default();
+                if boundary.contains("import.validated") && ctx.job.attempts == 2 {
+                    Ok(JobOutcome::success(Some("resumed".into())))
+                } else {
+                    Ok(JobOutcome::failure())
+                }
+            }
+        }
+
+        let (dir, db) = db().await;
+        let path = dir.path().join("qai.db");
+        let queue = SqliteJobQueue::new(db.clone());
+        let registry = HandlerRegistry::new().register(Arc::new(ResumeCheck));
+        let worker = build_worker(db.clone(), registry, "w2");
+
+        // The first worker crashes after committing a named boundary.
+        queue.enqueue(record("j-crash", "test.resume", "{}")).await.unwrap();
+        queue.claim_next("crasher", Duration::from_secs(60)).await.unwrap();
+        let boundary = r#"{"version":1,"name":"import.validated","payload":{"n":1}}"#;
+        assert!(
+            queue
+                .checkpoint_owned("j-crash", "crasher", None, Some(boundary.into()))
+                .await
+                .unwrap()
+        );
+        // Simulate the crash: force the lease into the past.
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .connect_with(sqlx::sqlite::SqliteConnectOptions::new().filename(&path))
+            .await
+            .unwrap();
+        sqlx::query(
+            "UPDATE jobs SET lease_expires_at = '2000-01-01T00:00:00Z' WHERE id = 'j-crash'",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        pool.close().await;
+
+        assert_eq!(worker.recover_interrupted().await.unwrap(), 1);
+        assert_eq!(
+            worker.run_once().await.unwrap(),
+            WorkerOutcome::Succeeded { job_id: "j-crash".into() }
+        );
+        let stored = SqliteJobQueue::new(db).get("j-crash").await.unwrap().unwrap();
+        assert_eq!(stored.state, "Succeeded");
+        assert_eq!(stored.attempts, 2);
+        assert!(stored.checkpoint_json.is_some_and(|cp| cp.contains("import.validated")));
+    }
+
+    /// 01-03-02: worker terminal outcomes persist the locked disposition in
+    /// the existing result/error JSON.
+    #[tokio::test]
+    async fn worker_persists_cancellation_dispositions_in_sqlite() {
+        use jobs::queue::JobQueue as _;
+        use jobs::worker::{CancellationDisposition, parse_disposition};
+
+        struct SlowSucceed;
+        #[async_trait]
+        impl JobHandler for SlowSucceed {
+            fn kind(&self) -> JobKind {
+                "test.slow_succeed".into()
+            }
+            fn payload_schema(&self) -> &'static str {
+                r#"{"type":"object"}"#
+            }
+            fn is_idempotent(&self) -> bool {
+                true
+            }
+            async fn run(&self, _ctx: JobContext, _p: Value) -> Result<JobOutcome, JobError> {
+                tokio::time::sleep(Duration::from_millis(300)).await;
+                Ok(JobOutcome::success(None))
+            }
+        }
+
+        // `JobRecord` carries no error column, so read the stored
+        // result/error JSON back through a direct query on the same file.
+        async fn stored_disposition(
+            path: &std::path::Path,
+            id: &str,
+        ) -> Option<CancellationDisposition> {
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .connect_with(sqlx::sqlite::SqliteConnectOptions::new().filename(path))
+                .await
+                .unwrap();
+            let raw: Option<String> =
+                sqlx::query_scalar("SELECT error_json FROM jobs WHERE id = ?")
+                    .bind(id)
+                    .fetch_optional(&pool)
+                    .await
+                    .unwrap()
+                    .flatten();
+            pool.close().await;
+            raw.as_deref().and_then(parse_disposition)
+        }
+
+        let (dir, db) = db().await;
+        let db_path = dir.path().join("qai.db");
+        let queue = Arc::new(SqliteJobQueue::new(db.clone()));
+
+        // Pre-start request → CancelledAtCheckpoint with the disposition stored.
+        let registry = HandlerRegistry::new().register(Arc::new(Succeed));
+        let worker = build_worker(db.clone(), registry, "w1");
+        queue.enqueue(record("j-d1", kinds::SYSTEM_NOOP_TEST, "{}")).await.unwrap();
+        queue.request_cancel("j-d1").await.unwrap();
+        assert_eq!(
+            worker.run_once().await.unwrap(),
+            WorkerOutcome::Cancelled {
+                job_id: "j-d1".into(),
+                disposition: CancellationDisposition::CancelledAtCheckpoint,
+            }
+        );
+        assert_eq!(
+            stored_disposition(&db_path, "j-d1").await,
+            Some(CancellationDisposition::CancelledAtCheckpoint)
+        );
+
+        // Late request with a successful finish → CompletedBeforeObservation.
+        let registry = HandlerRegistry::new().register(Arc::new(SlowSucceed));
+        let worker = build_worker(db.clone(), registry, "w1");
+        queue.enqueue(record("j-d2", "test.slow_succeed", "{}")).await.unwrap();
+        let handle = tokio::spawn(async move { worker.run_once().await });
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        queue.request_cancel("j-d2").await.unwrap();
+        assert_eq!(
+            handle.await.unwrap().unwrap(),
+            WorkerOutcome::Succeeded { job_id: "j-d2".into() }
+        );
+        assert_eq!(
+            stored_disposition(&db_path, "j-d2").await,
+            Some(CancellationDisposition::CompletedBeforeObservation)
+        );
+    }
+
+    /// 01-03-02: per-kind exhaustion through the real worker and SQLite row.
+    #[tokio::test]
+    async fn worker_per_kind_exhaustion_dead_letters_through_sqlite() {
+        use jobs::queue::JobQueue as _;
+        use jobs::registry::RetryPolicy;
+        use jobs::worker::Worker;
+
+        let (dir, db) = db().await;
+        let db_path = dir.path().join("qai.db");
+        let mut registry = HandlerRegistry::new().register(Arc::new(AlwaysFail));
+        registry.set_policy(
+            "test.always_fail",
+            RetryPolicy { max_attempts: 2, backoff_base_ms: 1, backoff_max_ms: 2, jitter: 0.0 },
+        );
+        let registry = Arc::new(registry);
+        let queue = Arc::new(SqliteJobQueue::new(db.clone()).with_retry_registry(registry.clone()));
+        let worker = Worker::new(queue.clone(), registry, "w1");
+
+        queue.enqueue(record("j-ex", "test.always_fail", "{}")).await.unwrap();
+        // Enqueue stamped the kind policy into the row.
+        assert_eq!(
+            SqliteJobQueue::new(db.clone()).get("j-ex").await.unwrap().unwrap().max_attempts,
+            2
+        );
+
+        match worker.run_once().await.unwrap() {
+            WorkerOutcome::Retried { .. } => {}
+            other => panic!("expected Retried, got {other:?}"),
+        }
+        queue.reschedule("j-ex", Duration::ZERO, None).await.unwrap();
+        // Force due: a zero backoff lands ~now; backdate for determinism.
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .connect_with(sqlx::sqlite::SqliteConnectOptions::new().filename(&db_path))
+            .await
+            .unwrap();
+        sqlx::query("UPDATE jobs SET available_at = '2000-01-01T00:00:00Z' WHERE id = 'j-ex'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        pool.close().await;
+
+        assert_eq!(
+            worker.run_once().await.unwrap(),
+            WorkerOutcome::DeadLettered { job_id: "j-ex".into() }
+        );
+        let stored = SqliteJobQueue::new(db).get("j-ex").await.unwrap().unwrap();
+        assert_eq!(stored.state, "DeadLettered");
+        assert_eq!(stored.attempts, 2);
+
+        // Explicit operator retry reopens the window after exhaustion.
+        queue.retry("j-ex").await.unwrap();
+        let stored = queue.get("j-ex").await.unwrap().unwrap();
+        assert_eq!((stored.state.as_str(), stored.attempts), ("Queued", 0));
+    }
+
     #[tokio::test]
     async fn duplicate_idempotency_key_is_rejected() {
         let (_dir, db) = db().await;
