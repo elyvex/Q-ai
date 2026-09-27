@@ -43,6 +43,13 @@ pub enum AuditAction {
     PrincipalChanged,
     RoleChanged,
     JobDeadLettered,
+    JobEnqueued,
+    JobLeased,
+    JobCompleted,
+    JobFailed,
+    JobRetried,
+    JobCancellationRequested,
+    JobCancelled,
     DoctorRepairExecuted,
 }
 

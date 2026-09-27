@@ -55,9 +55,10 @@ fn empty_catalog_lists_and_guarded_mutations() {
     }
 
     // Mutations are refused explicitly (USAGE), not stubbed as success.
+    // (`qai job cancel` used to be refused here; since 01-03 it persists a
+    // durable cooperative request — see `crates/cli/tests/jobs.rs`.)
     for args in [
         &["source", "import", "manifest.json"][..],
-        &["job", "cancel", "job-1"][..],
         &["secret", "set", "secret://env/a/b"][..],
         &["secret", "delete", "secret://env/a/b"][..],
     ] {

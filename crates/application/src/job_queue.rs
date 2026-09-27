@@ -8,13 +8,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use audit::{Actor, AuditAction, AuditOutcome};
+use domain::SubjectRef;
 use jobs::queue::JobQueue;
 use jobs::registry::HandlerRegistry;
-use jobs::worker::Worker;
+use jobs::worker::{Worker, parse_disposition};
 use jobs::{JobError, JobState};
 use storage::Database as _;
 use storage::repository::JobRecord;
 use storage_sqlite::SqliteDatabase;
+
+use crate::audit_bridge::AuditedMutation;
 
 /// A [`JobQueue`] backed by the SQLite `jobs` table.
 pub struct SqliteJobQueue {
@@ -42,6 +46,58 @@ fn to_err(e: storage::error::StorageError) -> JobError {
     JobError::Storage(e.to_string())
 }
 
+/// Subject URN for a job's lifecycle audit chain: one ordered chain per job.
+fn job_subject(job_id: &str) -> SubjectRef {
+    SubjectRef(format!("urn:qai:job:{job_id}"))
+}
+
+/// Allowlisted lifecycle payload (D-11, T-03-SECRET): identity, kind, state,
+/// attempts, and disposition only. Payload, checkpoint, and error content
+/// never enter the audit chain.
+fn lifecycle_after(job: &JobRecord, state: &str, disposition: Option<&str>) -> serde_json::Value {
+    let mut after = serde_json::json!({
+        "job_id": job.id,
+        "kind": job.kind,
+        "state": state,
+        "attempts": job.attempts,
+        "max_attempts": job.max_attempts,
+    });
+    if let Some(disposition) = disposition {
+        after["disposition"] = disposition.into();
+    }
+    after
+}
+
+/// Stage one hash-chained lifecycle event in the same unit of work as the
+/// job mutation (D-10, D-11). Worker transitions use [`Actor::Job`].
+async fn stage_job_audit(
+    uow: &mut dyn storage::UnitOfWork,
+    action: AuditAction,
+    job: &JobRecord,
+    state: &str,
+    disposition: Option<&str>,
+) -> Result<(), JobError> {
+    AuditedMutation {
+        actor: Actor::Job { job_id: job.id.clone() },
+        action,
+        subject: job_subject(&job.id),
+        outcome: AuditOutcome::Allowed,
+        reason: None,
+        before: None,
+        after: Some(lifecycle_after(job, state, disposition)),
+        request_id: Some(job.id.clone()),
+    }
+    .stage(uow)
+    .await
+    .map_err(|e| JobError::Storage(e.to_string()))?;
+    Ok(())
+}
+
+/// Read a job inside the same unit of work for its audit payload.
+async fn job_in(uow: &mut dyn storage::UnitOfWork, job_id: &str) -> Result<JobRecord, JobError> {
+    uow.jobs().get(job_id).await.map_err(to_err)?.ok_or(JobError::NotFound { id: job_id.into() })
+}
+
 #[async_trait]
 impl JobQueue for SqliteJobQueue {
     async fn enqueue(&self, mut job: JobRecord) -> Result<(), JobError> {
@@ -49,7 +105,8 @@ impl JobQueue for SqliteJobQueue {
             registry.stamp_job_policy(&mut job);
         }
         let mut uow = self.db.write().await.map_err(to_err)?;
-        uow.jobs().enqueue(job).await.map_err(to_err)?;
+        uow.jobs().enqueue(job.clone()).await.map_err(to_err)?;
+        stage_job_audit(&mut *uow, AuditAction::JobEnqueued, &job, "Queued", None).await?;
         uow.commit().await.map_err(to_err)
     }
 
@@ -60,6 +117,9 @@ impl JobQueue for SqliteJobQueue {
     ) -> Result<Option<JobRecord>, JobError> {
         let mut uow = self.db.write().await.map_err(to_err)?;
         let claimed = uow.jobs().claim_next(owner, lease.as_secs()).await.map_err(to_err)?;
+        if let Some(ref job) = claimed {
+            stage_job_audit(&mut *uow, AuditAction::JobLeased, job, &job.state, None).await?;
+        }
         uow.commit().await.map_err(to_err)?;
         Ok(claimed)
     }
@@ -94,7 +154,16 @@ impl JobQueue for SqliteJobQueue {
         result: Option<String>,
     ) -> Result<(), JobError> {
         let mut uow = self.db.write().await.map_err(to_err)?;
-        uow.jobs().finish(job_id, &state.to_string(), result).await.map_err(to_err)?;
+        uow.jobs().finish(job_id, &state.to_string(), result.clone()).await.map_err(to_err)?;
+        let job = job_in(&mut *uow, job_id).await?;
+        let disposition = result.as_deref().and_then(parse_disposition).map(|d| d.to_string());
+        let action = match state {
+            JobState::Succeeded => AuditAction::JobCompleted,
+            JobState::Cancelled => AuditAction::JobCancelled,
+            _ => AuditAction::JobFailed,
+        };
+        stage_job_audit(&mut *uow, action, &job, &state.to_string(), disposition.as_deref())
+            .await?;
         uow.commit().await.map_err(to_err)
     }
 
@@ -106,6 +175,8 @@ impl JobQueue for SqliteJobQueue {
     ) -> Result<(), JobError> {
         let mut uow = self.db.write().await.map_err(to_err)?;
         uow.jobs().reschedule(job_id, delay.as_secs(), reason).await.map_err(to_err)?;
+        let job = job_in(&mut *uow, job_id).await?;
+        stage_job_audit(&mut *uow, AuditAction::JobRetried, &job, &job.state, None).await?;
         uow.commit().await.map_err(to_err)
     }
 
@@ -117,17 +188,22 @@ impl JobQueue for SqliteJobQueue {
     }
 
     /// Durable cooperative cancellation request (D-16): persists only the
-    /// flag in the same unit of work (lifecycle audit arrives in 01-03-03).
+    /// flag plus its lifecycle audit event in the same unit of work.
     async fn request_cancel(&self, job_id: &str) -> Result<(), JobError> {
         let mut uow = self.db.write().await.map_err(to_err)?;
         uow.jobs().request_cancel(job_id).await.map_err(to_err)?;
+        let job = job_in(&mut *uow, job_id).await?;
+        stage_job_audit(&mut *uow, AuditAction::JobCancellationRequested, &job, &job.state, None)
+            .await?;
         uow.commit().await.map_err(to_err)
     }
 
-    /// Explicit operator retry of an eligible job (D-15).
+    /// Explicit operator retry of an eligible job (D-15), audited as a retry.
     async fn retry(&self, job_id: &str) -> Result<(), JobError> {
         let mut uow = self.db.write().await.map_err(to_err)?;
         uow.jobs().retry(job_id).await.map_err(to_err)?;
+        let job = job_in(&mut *uow, job_id).await?;
+        stage_job_audit(&mut *uow, AuditAction::JobRetried, &job, &job.state, None).await?;
         uow.commit().await.map_err(to_err)
     }
 
@@ -149,7 +225,13 @@ impl JobQueue for SqliteJobQueue {
         Ok(applied)
     }
 
-    /// Owner-held terminal transition (T-03-LEASE).
+    /// Owner-held terminal transition (T-03-LEASE) with its lifecycle audit
+    /// event in the same unit of work. This is the worker's completion /
+    /// failure / cancellation path, so it carries the same audit contract
+    /// as the plain finish, including the cancellation disposition.
+    /// Checkpoint and heartbeat writes stay unaudited: D-11 enumerates
+    /// enqueue, lease, completion, failure, and cancellation — high-frequency
+    /// progress writes would flood the chain without adding transitions.
     async fn finish_owned(
         &self,
         job_id: &str,
@@ -160,9 +242,20 @@ impl JobQueue for SqliteJobQueue {
         let mut uow = self.db.write().await.map_err(to_err)?;
         let applied = uow
             .jobs()
-            .finish_owned(job_id, owner, &state.to_string(), result)
+            .finish_owned(job_id, owner, &state.to_string(), result.clone())
             .await
             .map_err(to_err)?;
+        if applied {
+            let job = job_in(&mut *uow, job_id).await?;
+            let disposition = result.as_deref().and_then(parse_disposition).map(|d| d.to_string());
+            let action = match state {
+                JobState::Succeeded => AuditAction::JobCompleted,
+                JobState::Cancelled => AuditAction::JobCancelled,
+                _ => AuditAction::JobFailed,
+            };
+            stage_job_audit(&mut *uow, action, &job, &state.to_string(), disposition.as_deref())
+                .await?;
+        }
         uow.commit().await.map_err(to_err)?;
         Ok(applied)
     }
@@ -201,6 +294,148 @@ pub fn build_worker(
     let registry = Arc::new(registry);
     let queue = Arc::new(SqliteJobQueue::new(db).with_retry_registry(registry.clone()));
     Worker::new(queue, registry, owner)
+}
+
+// ─── Operator job controls (D-15, D-16) ─────────────────────────────
+
+/// Operator-facing job control failure with a centralized exit mapping.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum JobControlError {
+    /// No job with this id exists.
+    NotFound { id: String },
+    /// The job exists but is in a state that rejects the operation.
+    Ineligible { id: String, state: String },
+    /// No database file exists yet; the operator must migrate first (D-05).
+    DatabaseMissing { path: String },
+    /// A storage-layer failure.
+    Storage(String),
+}
+
+impl JobControlError {
+    /// Map to the centralized CLI exit code: missing ids → NOT_FOUND,
+    /// ineligible states → CONFLICT, missing database → VALIDATION with the
+    /// `qai db migrate` remedy.
+    pub fn exit_code(&self) -> i32 {
+        match self {
+            Self::NotFound { .. } => 5,
+            Self::Ineligible { .. } => 6,
+            Self::DatabaseMissing { .. } => 3,
+            Self::Storage(_) => 1,
+        }
+    }
+}
+
+impl std::fmt::Display for JobControlError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotFound { id } => write!(f, "job not found: {id}"),
+            Self::Ineligible { id, state } => {
+                write!(f, "job {id} in state {state} rejects this operation")
+            }
+            Self::DatabaseMissing { path } => {
+                write!(f, "no database at {path}; run `qai db migrate` first")
+            }
+            Self::Storage(detail) => write!(f, "job storage error: {detail}"),
+        }
+    }
+}
+
+fn control_err(e: storage::error::StorageError) -> JobControlError {
+    JobControlError::Storage(e.to_string())
+}
+
+/// Open the control database, refusing to create state (D-05): a missing
+/// file names `qai db migrate` instead of materializing an empty database.
+async fn open_control_db(path: &str) -> Result<SqliteDatabase, JobControlError> {
+    if std::fs::symlink_metadata(path).is_err() {
+        return Err(JobControlError::DatabaseMissing { path: path.to_string() });
+    }
+    SqliteDatabase::new(path, 4, true).await.map_err(control_err)
+}
+
+/// Stage an operator-attributed lifecycle event: the local CLI principal is
+/// a [`Actor::System`] (no principal row exists for the operator), while
+/// worker transitions use [`Actor::Job`].
+async fn stage_operator_audit(
+    uow: &mut dyn storage::UnitOfWork,
+    action: AuditAction,
+    job: &JobRecord,
+    state: &str,
+) -> Result<(), JobControlError> {
+    AuditedMutation {
+        actor: Actor::System { name: "qai-cli".to_string() },
+        action,
+        subject: job_subject(&job.id),
+        outcome: AuditOutcome::Allowed,
+        reason: None,
+        before: None,
+        after: Some(lifecycle_after(job, state, None)),
+        request_id: Some(job.id.clone()),
+    }
+    .stage(uow)
+    .await
+    .map_err(|e| JobControlError::Storage(e.to_string()))?;
+    Ok(())
+}
+
+/// Explicit operator retry of an eligible job (D-15).
+///
+/// Returns the post-commit inspection envelope (the same shape as
+/// `qai job show`). Missing ids → [`JobControlError::NotFound`];
+/// ineligible states → [`JobControlError::Ineligible`] with the row
+/// untouched.
+pub async fn retry_job(db_path: &str, job_id: &str) -> Result<serde_json::Value, JobControlError> {
+    let db = open_control_db(db_path).await?;
+    let mut uow = db.write().await.map_err(control_err)?;
+    let before = uow.jobs().get(job_id).await.map_err(control_err)?;
+    let Some(before) = before else {
+        let _ = uow.rollback().await;
+        return Err(JobControlError::NotFound { id: job_id.to_string() });
+    };
+    if !matches!(before.state.as_str(), "Failed" | "DeadLettered" | "Interrupted") {
+        let _ = uow.rollback().await;
+        return Err(JobControlError::Ineligible { id: job_id.to_string(), state: before.state });
+    }
+    uow.jobs().retry(job_id).await.map_err(control_err)?;
+    let job = uow.jobs().get(job_id).await.map_err(control_err)?.ok_or_else(|| {
+        JobControlError::Storage(format!("job {job_id} vanished inside its retry"))
+    })?;
+    stage_operator_audit(&mut *uow, AuditAction::JobRetried, &job, &job.state).await?;
+    uow.commit().await.map_err(control_err)?;
+    crate::db::get_job(db_path, job_id).await.map_err(control_err)
+}
+
+/// Cooperative operator cancellation request (D-16).
+///
+/// Persists only the request flag plus its audit event; returns the
+/// still-running inspectable job and never claims the worker has stopped —
+/// that truth arrives when the worker reports its disposition.
+pub async fn request_job_cancel(
+    db_path: &str,
+    job_id: &str,
+) -> Result<serde_json::Value, JobControlError> {
+    let db = open_control_db(db_path).await?;
+    let mut uow = db.write().await.map_err(control_err)?;
+    let before = uow.jobs().get(job_id).await.map_err(control_err)?;
+    let Some(before) = before else {
+        let _ = uow.rollback().await;
+        return Err(JobControlError::NotFound { id: job_id.to_string() });
+    };
+    if !matches!(
+        before.state.as_str(),
+        "Queued" | "Leased" | "Running" | "Checkpointed" | "Interrupted"
+    ) {
+        let _ = uow.rollback().await;
+        return Err(JobControlError::Ineligible { id: job_id.to_string(), state: before.state });
+    }
+    uow.jobs().request_cancel(job_id).await.map_err(control_err)?;
+    let job = uow.jobs().get(job_id).await.map_err(control_err)?.ok_or_else(|| {
+        JobControlError::Storage(format!("job {job_id} vanished inside its cancellation"))
+    })?;
+    stage_operator_audit(&mut *uow, AuditAction::JobCancellationRequested, &job, &job.state)
+        .await?;
+    uow.commit().await.map_err(control_err)?;
+    crate::db::get_job(db_path, job_id).await.map_err(control_err)
 }
 
 #[cfg(test)]
@@ -559,6 +794,134 @@ mod tests {
         queue.retry("j-ex").await.unwrap();
         let stored = queue.get("j-ex").await.unwrap().unwrap();
         assert_eq!((stored.state.as_str(), stored.attempts), ("Queued", 0));
+    }
+
+    /// 01-03-03: every worker-driven lifecycle transition stages its audit
+    /// event in the same transaction, ordered and actor-attributed.
+    #[tokio::test]
+    async fn lifecycle_transitions_emit_ordered_audited_events() {
+        use jobs::queue::JobQueue as _;
+
+        async fn audit_actions(path: &std::path::Path) -> Vec<(String, String, String, String)> {
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .connect_with(sqlx::sqlite::SqliteConnectOptions::new().filename(path))
+                .await
+                .unwrap();
+            let rows = sqlx::query(
+                "SELECT action, actor_kind, subject_urn, COALESCE(after_json, '') AS after_json \
+                 FROM audit_events ORDER BY sequence ASC",
+            )
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+            pool.close().await;
+            rows.into_iter()
+                .map(|r| {
+                    use sqlx::Row as _;
+                    (
+                        r.get::<String, _>("action"),
+                        r.get::<String, _>("actor_kind"),
+                        r.get::<String, _>("subject_urn"),
+                        r.get::<String, _>("after_json"),
+                    )
+                })
+                .collect()
+        }
+
+        let (dir, db) = db().await;
+        let db_path = dir.path().join("qai.db");
+        let registry = HandlerRegistry::new().register(Arc::new(Succeed));
+        let worker = build_worker(db.clone(), registry, "w1");
+        let queue = Arc::new(SqliteJobQueue::new(db.clone()));
+
+        // Happy path: enqueue → lease → completion.
+        queue.enqueue(record("j-a1", kinds::SYSTEM_NOOP_TEST, "{}")).await.unwrap();
+        assert_eq!(
+            worker.run_once().await.unwrap(),
+            WorkerOutcome::Succeeded { job_id: "j-a1".into() }
+        );
+
+        // Cancelled path: request → pre-start observation → disposition.
+        queue.enqueue(record("j-a2", kinds::SYSTEM_NOOP_TEST, "{}")).await.unwrap();
+        queue.request_cancel("j-a2").await.unwrap();
+        let outcome = worker.run_once().await.unwrap();
+        assert!(matches!(outcome, WorkerOutcome::Cancelled { .. }), "{outcome:?}");
+
+        // Exhaustion path with explicit operator retry afterwards.
+        let mut registry = HandlerRegistry::new().register(Arc::new(AlwaysFail));
+        registry.set_policy(
+            "test.always_fail",
+            jobs::registry::RetryPolicy {
+                max_attempts: 1,
+                backoff_base_ms: 1,
+                backoff_max_ms: 2,
+                jitter: 0.0,
+            },
+        );
+        let failing = Worker::new(queue.clone(), Arc::new(registry), "w1");
+        queue.enqueue(record("j-a3", "test.always_fail", "{}")).await.unwrap();
+        assert_eq!(
+            failing.run_once().await.unwrap(),
+            WorkerOutcome::DeadLettered { job_id: "j-a3".into() }
+        );
+        retry_job(db_path.to_str().unwrap(), "j-a3").await.unwrap();
+
+        let events = audit_actions(&db_path).await;
+        let actions: Vec<&str> = events.iter().map(|e| e.0.as_str()).collect();
+        // Note the j-a2 order: the request persists before the worker
+        // leases the job; the lease event is D-11's audited lease, and the
+        // pre-start observation cancels it immediately after.
+        assert_eq!(
+            actions,
+            vec![
+                "job_enqueued",
+                "job_leased",
+                "job_completed",
+                "job_enqueued",
+                "job_cancellation_requested",
+                "job_leased",
+                "job_cancelled",
+                "job_enqueued",
+                "job_leased",
+                "job_failed",
+                "job_retried",
+            ],
+            "{actions:?}"
+        );
+        // Worker transitions are job-actor attributed to their own subject
+        // chain; the explicit operator retry is CLI-attributed instead.
+        for (action, actor, subject, _) in &events {
+            if action == "job_retried" && subject == "urn:qai:job:j-a3" {
+                assert_eq!(actor, "system", "{action}");
+            } else {
+                assert_eq!(actor, "job", "{action}");
+            }
+            assert!(subject.starts_with("urn:qai:job:"), "{action}");
+        }
+        // …except the explicit operator retry, which is CLI-attributed.
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .connect_with(sqlx::sqlite::SqliteConnectOptions::new().filename(&db_path))
+            .await
+            .unwrap();
+        let retry_actor: String =
+            sqlx::query_scalar("SELECT actor_id FROM audit_events WHERE action = 'job_retried'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        pool.close().await;
+        assert_eq!(retry_actor, "qai-cli");
+        // Cancellation outcome carries the locked disposition; payloads stay
+        // metadata-only.
+        let cancelled = events.iter().find(|e| e.0 == "job_cancelled").unwrap();
+        assert!(cancelled.3.contains("cancelled_at_checkpoint"), "{}", cancelled.3);
+        for (_, _, _, after) in &events {
+            assert!(!after.contains("password"), "{after}");
+        }
+        // The composed chain verifies end to end (D-12).
+        let report =
+            crate::audit_bridge::verify_persisted_audit(db_path.to_str().unwrap()).await.unwrap();
+        assert!(report.valid, "{report:?}");
+        assert_eq!(report.checked_events, events.len());
     }
 
     #[tokio::test]

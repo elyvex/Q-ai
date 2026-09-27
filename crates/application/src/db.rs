@@ -401,6 +401,11 @@ fn redact_json_text_column(raw: &str) -> String {
 }
 
 /// Show one job, including its (redacted) payload.
+///
+/// The envelope exposes the inspection fields operators need — attempts and
+/// limits, state, cancellation request, redacted checkpoint/error content,
+/// and the worker-reported cancellation disposition (if any) — without ever
+/// emitting secret sentinels (T-03-SECRET).
 pub async fn get_job(path: &str, id: &str) -> Result<serde_json::Value, StorageError> {
     let db = SqliteDatabase::open_read_only(path).await?;
     let row = sqlx::query_scalar::<_, String>(
@@ -409,7 +414,7 @@ pub async fn get_job(path: &str, id: &str) -> Result<serde_json::Value, StorageE
          'available_at', available_at, 'cancel_requested', cancel_requested, \
          'payload_json', payload_json, 'idempotency_key', idempotency_key, \
          'lease_owner', lease_owner, 'checkpoint_json', checkpoint_json, \
-         'created_by', created_by) \
+         'error_json', error_json, 'created_by', created_by) \
          FROM jobs WHERE id = ?",
     )
     .bind(id)
@@ -419,11 +424,19 @@ pub async fn get_job(path: &str, id: &str) -> Result<serde_json::Value, StorageE
     .ok_or_else(|| StorageError::NotFound { urn: format!("job:{id}") })?;
     let mut job: serde_json::Value =
         serde_json::from_str(&row).map_err(|_| StorageError::StorageUnavailable)?;
-    for column in ["payload_json", "checkpoint_json"] {
+    for column in ["payload_json", "checkpoint_json", "error_json"] {
         if let Some(raw) = job.get(column).and_then(|value| value.as_str()) {
             job[column] = serde_json::Value::String(redact_json_text_column(raw));
         }
     }
+    // Surface the worker-reported cancellation disposition (if any) as a
+    // first-class field, parsed from the redacted error JSON.
+    job["disposition"] = job
+        .get("error_json")
+        .and_then(|value| value.as_str())
+        .and_then(jobs::worker::parse_disposition)
+        .map(|disposition| serde_json::Value::String(disposition.to_string()))
+        .unwrap_or(serde_json::Value::Null);
     domain::redaction::redact_json_value(&mut job);
     Ok(job)
 }

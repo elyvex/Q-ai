@@ -197,8 +197,10 @@ pub enum JobAction {
     List,
     /// Show a job.
     Show { id: String },
-    /// Cancel a job.
+    /// Request cooperative cancellation of a job (D-16).
     Cancel { id: String },
+    /// Explicitly retry an eligible failed/dead-lettered/interrupted job (D-15).
+    Retry { id: String },
 }
 
 #[derive(Subcommand)]
@@ -936,14 +938,79 @@ fn handle_job(action: JobAction, path: &str, json: bool) -> i32 {
                 storage_error_code(&e)
             }
         },
-        JobAction::Cancel { .. } => {
-            eprintln!(
-                "refusing `qai job cancel`: cancellation must coordinate with the worker \
-                 lease and record an audit event in the same transaction (Phase 1)"
-            );
-            exit_code::USAGE
+        // Durable cooperative request (D-16): persists the flag plus its
+        // audit event, returns the still-running job, and never claims the
+        // worker has stopped.
+        JobAction::Cancel { id } => {
+            match block_on(application::job_queue::request_job_cancel(path, &id)) {
+                Ok(item) => {
+                    if json {
+                        println!("{item}");
+                    } else {
+                        println!("cancel requested: {}", catalog_line(&item));
+                    }
+                    exit_code::OK
+                }
+                Err(e) => report_job_control_error("job cancel", &e, json),
+            }
         }
+        // Explicit retry after exhaustion (D-15): only eligible states move.
+        JobAction::Retry { id } => match block_on(application::job_queue::retry_job(path, &id)) {
+            Ok(item) => {
+                if json {
+                    println!("{item}");
+                } else {
+                    println!("job retried: {}", catalog_line(&item));
+                }
+                exit_code::OK
+            }
+            Err(e) => report_job_control_error("job retry", &e, json),
+        },
     }
+}
+
+/// Render a job-control failure with the centralized exit mapping (D-15,
+/// D-16): missing ids → NOT_FOUND, ineligible states → CONFLICT, missing
+/// database → VALIDATION with the `qai db migrate` remedy. Every path emits
+/// one document in JSON mode.
+fn report_job_control_error(
+    op: &str,
+    err: &application::job_queue::JobControlError,
+    json: bool,
+) -> i32 {
+    use application::job_queue::JobControlError as E;
+    let code = err.exit_code();
+    let summary = format!("{op} failed: {err}");
+    let remedy = match err {
+        E::NotFound { .. } => "check the job id with `qai job list`, then retry",
+        E::Ineligible { .. } => {
+            "only an eligible job state accepts this operation; inspect it with `qai job show <id> --json`"
+        }
+        E::DatabaseMissing { .. } => "run `qai db migrate` to create or update the database",
+        E::Storage(_) => "check database availability and migrations, then retry",
+    };
+    let next_command: String = match err {
+        E::NotFound { .. } => "qai job list".to_string(),
+        E::Ineligible { id, .. } => format!("qai job show {id} --json"),
+        E::DatabaseMissing { .. } => "qai db migrate".to_string(),
+        E::Storage(_) => "qai doctor --json".to_string(),
+    };
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "code": code,
+                "summary": summary,
+                "remedy": remedy,
+                "next_command": next_command,
+            })
+        );
+    } else {
+        eprintln!("[{code}] {summary}");
+        eprintln!("      remedy: {remedy}");
+        eprintln!("      next: {next_command}");
+    }
+    code
 }
 
 fn handle_secret(action: SecretAction, json: bool) -> i32 {
