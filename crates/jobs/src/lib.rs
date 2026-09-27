@@ -222,6 +222,47 @@ pub struct JobOutcome {
     pub result: Option<String>,
 }
 
+// ─── Named durable checkpoints (D-14) ─────────────────────────────
+
+/// Version tag for the [`NamedCheckpoint`] JSON representation.
+///
+/// Bumped if the serialized shape ever changes so a resumed worker can
+/// distinguish payload versions instead of misreading an older boundary.
+pub const NAMED_CHECKPOINT_VERSION: u32 = 1;
+
+/// A versioned named resume boundary (D-14).
+///
+/// Serialized as `{"version":1,"name":"…","payload":…}` into the existing
+/// `checkpoint_json` column — no schema change. Resume continues after the
+/// last committed named checkpoint without repeating the committed stage.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct NamedCheckpoint {
+    /// Schema version ([`NAMED_CHECKPOINT_VERSION`]).
+    pub version: u32,
+    /// The handler-declared boundary name (e.g. `"import.validated"`).
+    pub name: String,
+    /// Opaque stage payload; interpreted only by the owning handler kind.
+    pub payload: serde_json::Value,
+}
+
+impl NamedCheckpoint {
+    /// Build a version-1 named checkpoint.
+    pub fn new(name: &str, payload: serde_json::Value) -> Self {
+        Self { version: NAMED_CHECKPOINT_VERSION, name: name.to_string(), payload }
+    }
+
+    /// Serialize to the exact string stored in `checkpoint_json`.
+    pub fn to_json_string(&self) -> String {
+        serde_json::to_string(self).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    /// Parse a stored `checkpoint_json` value back into a named checkpoint.
+    /// Returns `None` for legacy raw values predating named boundaries.
+    pub fn parse(raw: &str) -> Option<Self> {
+        serde_json::from_str::<Self>(raw).ok().filter(|cp| cp.version == NAMED_CHECKPOINT_VERSION)
+    }
+}
+
 // ─── JobContext ──────────────────────────────────────────────
 
 /// Context provided to a job handler during execution.
@@ -318,6 +359,42 @@ impl JobContext {
             checkpoint = value,
             "job checkpoint"
         );
+    }
+
+    /// Record a named durable checkpoint boundary (D-14).
+    ///
+    /// Stores the versioned [`NamedCheckpoint`] JSON in the local slot (so
+    /// [`latest_checkpoint`](Self::latest_checkpoint) keeps working) and
+    /// stages it for immediate persistence: the worker drains the slot via
+    /// [`take_pending_checkpoint`](Self::take_pending_checkpoint) and writes
+    /// it through the queue, making the value readable from the committed
+    /// SQLite row before the handler continues — not only after failure.
+    pub fn checkpoint_named(&self, name: &str, payload: serde_json::Value) {
+        let stored = NamedCheckpoint::new(name, payload).to_json_string();
+        if let Ok(mut slot) = self.checkpoint.lock() {
+            *slot = Some(stored.clone());
+        }
+        tracing::info!(
+            target: "qai.job",
+            job_id = %self.job.id,
+            checkpoint_name = name,
+            "job named checkpoint"
+        );
+    }
+
+    /// Drain the locally recorded checkpoint value, if any.
+    ///
+    /// Used by the worker's watchdog to persist each named boundary
+    /// immediately through the queue. Returns `None` when no new boundary
+    /// was recorded since the last drain.
+    pub fn take_pending_checkpoint(&self) -> Option<String> {
+        self.checkpoint.lock().ok().and_then(|mut slot| slot.take())
+    }
+
+    /// The latest named checkpoint recorded by the handler, if the stored
+    /// value carries the versioned representation.
+    pub fn latest_checkpoint_named(&self) -> Option<NamedCheckpoint> {
+        self.latest_checkpoint().as_deref().and_then(NamedCheckpoint::parse)
     }
 
     /// The latest checkpoint value recorded by the handler, if any.
@@ -558,6 +635,38 @@ mod tests {
         assert!(ctx.latest_checkpoint().is_none());
         ctx.checkpoint("stage-2");
         assert_eq!(ctx.latest_checkpoint().as_deref(), Some("stage-2"));
+    }
+
+    #[test]
+    fn named_checkpoint_round_trips_versioned_json() {
+        let cp = NamedCheckpoint::new("import.validated", serde_json::json!({"n": 3}));
+        assert_eq!(cp.version, NAMED_CHECKPOINT_VERSION);
+        let raw = cp.to_json_string();
+        let back = NamedCheckpoint::parse(&raw).expect("versioned JSON must parse");
+        assert_eq!(back, cp);
+        // Legacy raw values are not mistaken for named boundaries.
+        assert!(NamedCheckpoint::parse("\"stage-3\"").is_none());
+        assert!(NamedCheckpoint::parse("not-json").is_none());
+    }
+
+    #[test]
+    fn checkpoint_named_is_visible_and_drainable() {
+        let ctx = JobContext::new(record("job-ncp", "test", "Running"));
+        ctx.checkpoint_named("stage.done", serde_json::json!({"n": 3}));
+        // Compatibility: the raw slot still carries the value.
+        assert!(ctx.latest_checkpoint().is_some());
+        // The queue-facing operation persists exactly this string.
+        let named = ctx.latest_checkpoint_named().expect("must parse as named");
+        assert_eq!(named.name, "stage.done");
+        assert_eq!(named.payload, serde_json::json!({"n": 3}));
+        // A second boundary replaces the first; the drain hands one value out.
+        ctx.checkpoint_named("stage.next", serde_json::json!({}));
+        let drained = ctx.take_pending_checkpoint().expect("drain must yield the boundary");
+        assert_eq!(
+            NamedCheckpoint::parse(&drained).expect("drained value parses").name,
+            "stage.next"
+        );
+        assert!(ctx.take_pending_checkpoint().is_none());
     }
 
     #[test]

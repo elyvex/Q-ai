@@ -57,6 +57,46 @@ pub trait JobQueue: Send + Sync {
     /// Whether cancellation has been requested.
     async fn cancel_requested(&self, job_id: &str) -> Result<bool, JobError>;
 
+    /// Persist a cooperative cancellation request (D-16).
+    ///
+    /// Sets only the request flag; never clears the lease owner/expiry, so a
+    /// live worker keeps its lease and observes the request at its next
+    /// checkpoint. Accepted only for non-terminal jobs
+    /// (`Queued`/`Leased`/`Running`/`Checkpointed`/`Interrupted`).
+    async fn request_cancel(&self, job_id: &str) -> Result<(), JobError>;
+
+    /// Explicit operator retry after exhaustion (D-15).
+    ///
+    /// Accepted only for `Failed`/`DeadLettered`/`Interrupted` jobs. Resets
+    /// the attempt/availability fields (`Queued`, attempts 0, due now, lease
+    /// cleared) while preserving the last committed `checkpoint_json` so the
+    /// retried run resumes after its boundary. Automatic retries never touch
+    /// non-idempotent jobs; this explicit path is the only way back.
+    async fn retry(&self, job_id: &str) -> Result<(), JobError>;
+
+    /// Record a progress update and/or checkpoint when `owner` holds the
+    /// current lease (T-03-LEASE).
+    ///
+    /// Returns whether a row was affected: a caller that does not hold the
+    /// lease changes nothing.
+    async fn checkpoint_owned(
+        &self,
+        job_id: &str,
+        owner: &str,
+        progress: Option<String>,
+        checkpoint: Option<String>,
+    ) -> Result<bool, JobError>;
+
+    /// Transition a job to a terminal/recorded state when `owner` holds the
+    /// current lease (T-03-LEASE). Returns whether a row was affected.
+    async fn finish_owned(
+        &self,
+        job_id: &str,
+        owner: &str,
+        state: JobState,
+        result: Option<String>,
+    ) -> Result<bool, JobError>;
+
     /// Fetch a job by id.
     async fn get(&self, job_id: &str) -> Result<Option<JobRecord>, JobError>;
 
@@ -240,6 +280,107 @@ impl JobQueue for InMemoryJobQueue {
         Ok(self.with_job(job_id, |job| job.cancel_requested).unwrap_or(false))
     }
 
+    async fn request_cancel(&self, job_id: &str) -> Result<(), JobError> {
+        let outcome = self.with_job(job_id, |job| {
+            let eligible = matches!(
+                job.state.as_str(),
+                "Queued" | "Leased" | "Running" | "Checkpointed" | "Interrupted"
+            );
+            if eligible {
+                // Request-only: the live lease (owner/expiry) is preserved so
+                // the owning worker observes the request cooperatively.
+                job.cancel_requested = true;
+            }
+            eligible
+        });
+        match outcome {
+            Some(true) => Ok(()),
+            Some(false) => {
+                let state = self.get(job_id).await?.map(|j| j.state).unwrap_or_default();
+                Err(JobError::InvalidState {
+                    id: job_id.to_string(),
+                    state,
+                    expected: "a non-terminal state".to_string(),
+                })
+            }
+            None => Err(JobError::NotFound { id: job_id.to_string() }),
+        }
+    }
+
+    async fn retry(&self, job_id: &str) -> Result<(), JobError> {
+        let outcome = self.with_job(job_id, |job| {
+            let eligible = matches!(job.state.as_str(), "Failed" | "DeadLettered" | "Interrupted");
+            if eligible {
+                // Explicit operator retry: fresh attempt window, due now, no
+                // lease — but the last committed checkpoint is preserved so
+                // the run resumes after its boundary (D-14).
+                job.state = JobState::Queued.to_string();
+                job.attempts = 0;
+                job.available_at = now_rfc3339();
+                job.lease_owner = None;
+                job.lease_expires_at = None;
+                job.cancel_requested = false;
+            }
+            eligible
+        });
+        match outcome {
+            Some(true) => Ok(()),
+            Some(false) => {
+                let state = self.get(job_id).await?.map(|j| j.state).unwrap_or_default();
+                Err(JobError::InvalidState {
+                    id: job_id.to_string(),
+                    state,
+                    expected: "Failed, DeadLettered, or Interrupted".to_string(),
+                })
+            }
+            None => Err(JobError::NotFound { id: job_id.to_string() }),
+        }
+    }
+
+    async fn checkpoint_owned(
+        &self,
+        job_id: &str,
+        owner: &str,
+        progress: Option<String>,
+        checkpoint: Option<String>,
+    ) -> Result<bool, JobError> {
+        Ok(self
+            .with_job(job_id, |job| {
+                let holds = job.state == "Running" && job.lease_owner.as_deref() == Some(owner);
+                if holds {
+                    // Only provided columns move; a `None` never clears a
+                    // committed boundary.
+                    if progress.is_some() {
+                        job.checkpoint_json = checkpoint.or_else(|| job.checkpoint_json.clone());
+                    } else if checkpoint.is_some() {
+                        job.checkpoint_json = checkpoint;
+                    }
+                }
+                holds
+            })
+            .unwrap_or(false))
+    }
+
+    async fn finish_owned(
+        &self,
+        job_id: &str,
+        owner: &str,
+        state: JobState,
+        _result: Option<String>,
+    ) -> Result<bool, JobError> {
+        Ok(self
+            .with_job(job_id, |job| {
+                let holds = job.state == "Running" && job.lease_owner.as_deref() == Some(owner);
+                if holds {
+                    job.state = state.to_string();
+                    job.lease_owner = None;
+                    job.lease_expires_at = None;
+                }
+                holds
+            })
+            .unwrap_or(false))
+    }
+
     async fn get(&self, job_id: &str) -> Result<Option<JobRecord>, JobError> {
         Ok(self.jobs.lock().unwrap().get(job_id).cloned())
     }
@@ -348,5 +489,104 @@ mod tests {
         q.claim_next("w1", Duration::from_secs(60)).await.unwrap();
         assert!(q.heartbeat("j2", "w1", Duration::from_secs(60)).await.unwrap());
         assert!(!q.heartbeat("j2", "w2", Duration::from_secs(60)).await.unwrap());
+    }
+
+    /// 01-03-01 contract: a named checkpoint recorded through the owned
+    /// operation is immediately readable from the stored row.
+    #[tokio::test]
+    async fn named_checkpoint_is_immediately_visible_to_the_next_reader() {
+        use crate::NamedCheckpoint;
+        let q = InMemoryJobQueue::new();
+        q.enqueue(record("j-ncp", "system.noop_test", "Queued")).await.unwrap();
+        q.claim_next("w1", Duration::from_secs(60)).await.unwrap();
+
+        let stored =
+            NamedCheckpoint::new("stage.done", serde_json::json!({"n": 3})).to_json_string();
+        assert!(q.checkpoint_owned("j-ncp", "w1", None, Some(stored.clone())).await.unwrap());
+        // Readable from the committed row before the handler continues.
+        let row = q.get("j-ncp").await.unwrap().unwrap();
+        assert_eq!(row.checkpoint_json.as_deref(), Some(stored.as_str()));
+        let named = NamedCheckpoint::parse(row.checkpoint_json.as_deref().unwrap()).unwrap();
+        assert_eq!(named.name, "stage.done");
+        // A reclaim (Interrupted → Running) carries the boundary forward.
+        q.reap_expired_at("2999-01-01T00:00:00Z");
+        let row = q.get("j-ncp").await.unwrap().unwrap();
+        assert_eq!(row.state, "Interrupted");
+        assert_eq!(row.checkpoint_json.as_deref(), Some(stored.as_str()));
+    }
+
+    /// 01-03-01 contract: explicit retry eligibility per state.
+    #[tokio::test]
+    async fn explicit_retry_accepts_only_eligible_states() {
+        let q = InMemoryJobQueue::new();
+        for (id, state) in
+            [("r-failed", "Failed"), ("r-dead", "DeadLettered"), ("r-inter", "Interrupted")]
+        {
+            let mut job = record(id, "system.noop_test", state);
+            job.attempts = 5;
+            job.cancel_requested = true;
+            job.checkpoint_json = Some(r#"{"version":1,"name":"b","payload":{}}"#.into());
+            q.enqueue(job).await.unwrap();
+            q.retry(id).await.unwrap();
+            let row = q.get(id).await.unwrap().unwrap();
+            assert_eq!(row.state, "Queued", "{id}");
+            assert_eq!(row.attempts, 0, "{id}: explicit retry resets the attempt window");
+            assert!(row.lease_owner.is_none() && row.lease_expires_at.is_none(), "{id}");
+            assert!(!row.cancel_requested, "{id}");
+            assert!(row.checkpoint_json.is_some(), "{id}: boundary preserved for resume");
+        }
+        for (id, state) in [("r-queued", "Queued"), ("r-run", "Running"), ("r-ok", "Succeeded")] {
+            q.enqueue(record(id, "system.noop_test", state)).await.unwrap();
+            let err = q.retry(id).await.unwrap_err();
+            assert!(matches!(err, JobError::InvalidState { .. }), "{id}: {err:?}");
+            assert_eq!(q.get(id).await.unwrap().unwrap().state, state, "{id} unchanged");
+        }
+        assert!(matches!(q.retry("missing").await.unwrap_err(), JobError::NotFound { .. }));
+    }
+
+    /// 01-03-01 contract: cancellation is request-only and owner-safe.
+    #[tokio::test]
+    async fn cancel_request_preserves_the_live_lease() {
+        let q = InMemoryJobQueue::new();
+        q.enqueue(record("j-cx", "system.noop_test", "Queued")).await.unwrap();
+        q.claim_next("w1", Duration::from_secs(60)).await.unwrap();
+
+        q.request_cancel("j-cx").await.unwrap();
+        assert!(q.cancel_requested("j-cx").await.unwrap());
+        let row = q.get("j-cx").await.unwrap().unwrap();
+        assert_eq!(row.state, "Running");
+        assert_eq!(row.lease_owner.as_deref(), Some("w1"));
+        assert!(row.lease_expires_at.is_some(), "live lease expiry preserved");
+
+        // Terminal jobs reject the request without mutation.
+        q.enqueue(record("j-done", "system.noop_test", "Succeeded")).await.unwrap();
+        let err = q.request_cancel("j-done").await.unwrap_err();
+        assert!(matches!(err, JobError::InvalidState { .. }));
+        assert!(!q.cancel_requested("j-done").await.unwrap());
+        assert!(matches!(
+            q.request_cancel("missing").await.unwrap_err(),
+            JobError::NotFound { .. }
+        ));
+    }
+
+    /// 01-03-01 contract: non-owner terminal/checkpoint writes affect zero rows.
+    #[tokio::test]
+    async fn non_owner_writes_change_no_row() {
+        let q = InMemoryJobQueue::new();
+        q.enqueue(record("j-own", "system.noop_test", "Queued")).await.unwrap();
+        q.claim_next("w1", Duration::from_secs(60)).await.unwrap();
+
+        assert!(!q.heartbeat("j-own", "w2", Duration::from_secs(60)).await.unwrap());
+        assert!(!q.checkpoint_owned("j-own", "w2", None, Some("x".into())).await.unwrap());
+        assert!(!q.finish_owned("j-own", "w2", JobState::Succeeded, None).await.unwrap());
+        let row = q.get("j-own").await.unwrap().unwrap();
+        assert_eq!(row.state, "Running");
+        assert_eq!(row.lease_owner.as_deref(), Some("w1"));
+        assert!(row.checkpoint_json.is_none());
+
+        // The holder's writes still apply.
+        assert!(q.checkpoint_owned("j-own", "w1", None, Some("cp".into())).await.unwrap());
+        assert!(q.finish_owned("j-own", "w1", JobState::Succeeded, None).await.unwrap());
+        assert_eq!(q.get("j-own").await.unwrap().unwrap().state, "Succeeded");
     }
 }

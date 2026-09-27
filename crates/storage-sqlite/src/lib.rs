@@ -1008,16 +1008,122 @@ impl JobRepository for SqliteJobRepository {
     }
 
     async fn cancel(&mut self, job_id: &str) -> Result<(), StorageError> {
+        self.request_cancel(job_id).await
+    }
+
+    async fn request_cancel(&mut self, job_id: &str) -> Result<(), StorageError> {
         let mut tx = self.tx.lock().await;
-        let affected = sqlx::query("UPDATE jobs SET cancel_requested = 1 WHERE id = ?")
-            .bind(job_id)
-            .execute(&mut **tx)
-            .await
-            .map_err(map_sqlx_error)?;
-        if affected.rows_affected() == 0 {
-            return Err(StorageError::NotFound { urn: format!("job:{job_id}") });
+        // Request-only: the predicate admits non-terminal jobs and the SET
+        // clause touches nothing but the flag, so a live lease (owner and
+        // expiry) survives the request (T-03-LEASE).
+        let affected = sqlx::query(
+            "UPDATE jobs SET cancel_requested = 1
+             WHERE id = ? AND state IN ('Queued','Leased','Running','Checkpointed','Interrupted')",
+        )
+        .bind(job_id)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        if affected.rows_affected() > 0 {
+            return Ok(());
         }
+        let exists = sqlx::query("SELECT 1 AS one FROM jobs WHERE id = ?")
+            .bind(job_id)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(|_| StorageError::StorageUnavailable)?;
+        if exists.is_some() {
+            return Err(StorageError::ConstraintViolation {
+                message: format!("job {job_id} is terminal and cannot be cancelled"),
+            });
+        }
+        Err(StorageError::NotFound { urn: format!("job:{job_id}") })
+    }
+
+    async fn retry(&mut self, job_id: &str) -> Result<(), StorageError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query("SELECT state FROM jobs WHERE id = ?")
+            .bind(job_id)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(|_| StorageError::StorageUnavailable)?;
+        let Some(row) = row else {
+            return Err(StorageError::NotFound { urn: format!("job:{job_id}") });
+        };
+        let state: String = row.get("state");
+        if !matches!(state.as_str(), "Failed" | "DeadLettered" | "Interrupted") {
+            return Err(StorageError::ConstraintViolation {
+                message: format!(
+                    "job {job_id} is in state {state}; explicit retry accepts only \
+                     Failed, DeadLettered, or Interrupted"
+                ),
+            });
+        }
+        // Fresh attempt window, due now, lease cleared — but the last
+        // committed checkpoint survives so the run resumes after its boundary.
+        sqlx::query(
+            "UPDATE jobs
+             SET state = 'Queued', attempts = 0,
+                 available_at = ?, lease_owner = NULL, lease_expires_at = NULL,
+                 cancel_requested = 0, error_code = NULL, error_json = NULL,
+                 finished_at = NULL
+             WHERE id = ?",
+        )
+        .bind(now_rfc3339())
+        .bind(job_id)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
         Ok(())
+    }
+
+    async fn checkpoint_owned(
+        &mut self,
+        job_id: &str,
+        owner: &str,
+        progress: Option<String>,
+        checkpoint: Option<String>,
+    ) -> Result<bool, StorageError> {
+        let mut tx = self.tx.lock().await;
+        // Owner-held Running leases only; a `NULL` argument never clears a
+        // committed column (COALESCE keeps the stored value).
+        let result = sqlx::query(
+            "UPDATE jobs
+             SET progress_json = COALESCE(?, progress_json),
+                 checkpoint_json = COALESCE(?, checkpoint_json)
+             WHERE id = ? AND lease_owner = ? AND state = 'Running'",
+        )
+        .bind(progress)
+        .bind(checkpoint)
+        .bind(job_id)
+        .bind(owner)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    async fn finish_owned(
+        &mut self,
+        job_id: &str,
+        owner: &str,
+        state: &str,
+        result: Option<String>,
+    ) -> Result<bool, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let result = sqlx::query(
+            "UPDATE jobs SET state = ?, finished_at = ?, error_json = ?
+             WHERE id = ? AND lease_owner = ? AND state = 'Running'",
+        )
+        .bind(state)
+        .bind(now_rfc3339())
+        .bind(result)
+        .bind(job_id)
+        .bind(owner)
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(result.rows_affected() > 0)
     }
 
     async fn checkpoint(

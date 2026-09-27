@@ -19,12 +19,22 @@ use storage_sqlite::SqliteDatabase;
 /// A [`JobQueue`] backed by the SQLite `jobs` table.
 pub struct SqliteJobQueue {
     db: Arc<SqliteDatabase>,
+    /// Optional retry registry: when present, `enqueue` snapshots the job
+    /// kind's [`RetryPolicy`](jobs::registry::RetryPolicy) into the row's
+    /// `max_attempts` (D-15). Absent, rows keep their caller-supplied limit.
+    registry: Option<Arc<HandlerRegistry>>,
 }
 
 impl SqliteJobQueue {
     /// Wrap a database handle.
     pub fn new(db: Arc<SqliteDatabase>) -> Self {
-        Self { db }
+        Self { db, registry: None }
+    }
+
+    /// Snapshot per-kind retry policy at enqueue time.
+    pub fn with_retry_registry(mut self, registry: Arc<HandlerRegistry>) -> Self {
+        self.registry = Some(registry);
+        self
     }
 }
 
@@ -34,7 +44,10 @@ fn to_err(e: storage::error::StorageError) -> JobError {
 
 #[async_trait]
 impl JobQueue for SqliteJobQueue {
-    async fn enqueue(&self, job: JobRecord) -> Result<(), JobError> {
+    async fn enqueue(&self, mut job: JobRecord) -> Result<(), JobError> {
+        if let Some(registry) = &self.registry {
+            registry.stamp_job_policy(&mut job);
+        }
         let mut uow = self.db.write().await.map_err(to_err)?;
         uow.jobs().enqueue(job).await.map_err(to_err)?;
         uow.commit().await.map_err(to_err)
@@ -103,6 +116,57 @@ impl JobQueue for SqliteJobQueue {
         Ok(job.map(|j| j.cancel_requested).unwrap_or(false))
     }
 
+    /// Durable cooperative cancellation request (D-16): persists only the
+    /// flag in the same unit of work (lifecycle audit arrives in 01-03-03).
+    async fn request_cancel(&self, job_id: &str) -> Result<(), JobError> {
+        let mut uow = self.db.write().await.map_err(to_err)?;
+        uow.jobs().request_cancel(job_id).await.map_err(to_err)?;
+        uow.commit().await.map_err(to_err)
+    }
+
+    /// Explicit operator retry of an eligible job (D-15).
+    async fn retry(&self, job_id: &str) -> Result<(), JobError> {
+        let mut uow = self.db.write().await.map_err(to_err)?;
+        uow.jobs().retry(job_id).await.map_err(to_err)?;
+        uow.commit().await.map_err(to_err)
+    }
+
+    /// Owner-held checkpoint write (T-03-LEASE).
+    async fn checkpoint_owned(
+        &self,
+        job_id: &str,
+        owner: &str,
+        progress: Option<String>,
+        checkpoint: Option<String>,
+    ) -> Result<bool, JobError> {
+        let mut uow = self.db.write().await.map_err(to_err)?;
+        let applied = uow
+            .jobs()
+            .checkpoint_owned(job_id, owner, progress, checkpoint)
+            .await
+            .map_err(to_err)?;
+        uow.commit().await.map_err(to_err)?;
+        Ok(applied)
+    }
+
+    /// Owner-held terminal transition (T-03-LEASE).
+    async fn finish_owned(
+        &self,
+        job_id: &str,
+        owner: &str,
+        state: JobState,
+        result: Option<String>,
+    ) -> Result<bool, JobError> {
+        let mut uow = self.db.write().await.map_err(to_err)?;
+        let applied = uow
+            .jobs()
+            .finish_owned(job_id, owner, &state.to_string(), result)
+            .await
+            .map_err(to_err)?;
+        uow.commit().await.map_err(to_err)?;
+        Ok(applied)
+    }
+
     async fn get(&self, job_id: &str) -> Result<Option<JobRecord>, JobError> {
         let mut uow = self.db.write().await.map_err(to_err)?;
         let job = uow.jobs().get(job_id).await.map_err(to_err)?;
@@ -126,12 +190,17 @@ impl JobQueue for SqliteJobQueue {
 }
 
 /// Assemble a [`Worker`] for a SQLite database.
+///
+/// The worker's registry is also attached to the queue so `enqueue`
+/// snapshots each kind's retry policy into the row (D-15).
 pub fn build_worker(
     db: Arc<SqliteDatabase>,
     registry: HandlerRegistry,
     owner: impl Into<String>,
 ) -> Worker {
-    Worker::new(Arc::new(SqliteJobQueue::new(db)), Arc::new(registry), owner)
+    let registry = Arc::new(registry);
+    let queue = Arc::new(SqliteJobQueue::new(db).with_retry_registry(registry.clone()));
+    Worker::new(queue, registry, owner)
 }
 
 #[cfg(test)]
@@ -254,6 +323,35 @@ mod tests {
         assert_eq!(outcome, WorkerOutcome::DeadLettered { job_id: "j2".into() });
         let stored = SqliteJobQueue::new(db).get("j2").await.unwrap().unwrap();
         assert_eq!(stored.state, "DeadLettered");
+    }
+
+    /// 01-03-01: enqueue snapshots the kind's retry policy into the row's
+    /// `max_attempts` without touching unrelated kinds.
+    #[tokio::test]
+    async fn enqueue_snapshots_per_kind_retry_policy() {
+        use jobs::queue::JobQueue as _;
+        use jobs::registry::RetryPolicy;
+
+        let (_dir, db) = db().await;
+        let mut registry = HandlerRegistry::new().register(Arc::new(Succeed));
+        registry.set_policy(
+            kinds::SYSTEM_NOOP_TEST,
+            RetryPolicy {
+                max_attempts: 2,
+                backoff_base_ms: 100,
+                backoff_max_ms: 1_000,
+                jitter: 0.0,
+            },
+        );
+        let queue = SqliteJobQueue::new(db.clone()).with_retry_registry(Arc::new(registry));
+
+        queue.enqueue(record("j-noop", kinds::SYSTEM_NOOP_TEST, "{}")).await.unwrap();
+        queue.enqueue(record("j-other", "test.always_fail", "{}")).await.unwrap();
+
+        let noop = SqliteJobQueue::new(db.clone()).get("j-noop").await.unwrap().unwrap();
+        assert_eq!(noop.max_attempts, 2);
+        let other = SqliteJobQueue::new(db).get("j-other").await.unwrap().unwrap();
+        assert_eq!(other.max_attempts, 5, "unrelated kinds keep the default policy");
     }
 
     #[tokio::test]

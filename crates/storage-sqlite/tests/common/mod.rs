@@ -192,6 +192,33 @@ pub async fn job_cancel_requested(path: &str, id: &str) -> bool {
     n != 0
 }
 
+/// The lease owner of a job.
+pub async fn job_owner(path: &str, id: &str) -> Option<String> {
+    let pool = rw_pool(path).await;
+    let row = sqlx::query_scalar::<_, Option<String>>("SELECT lease_owner FROM jobs WHERE id = ?")
+        .bind(id)
+        .fetch_optional(&pool)
+        .await
+        .unwrap()
+        .flatten();
+    pool.close().await;
+    row
+}
+
+/// The lease expiry of a job.
+pub async fn job_lease_expiry(path: &str, id: &str) -> Option<String> {
+    let pool = rw_pool(path).await;
+    let row =
+        sqlx::query_scalar::<_, Option<String>>("SELECT lease_expires_at FROM jobs WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&pool)
+            .await
+            .unwrap()
+            .flatten();
+    pool.close().await;
+    row
+}
+
 /// Force a job's lease into the past, simulating a crashed worker.
 pub async fn backdate_lease(path: &str, id: &str) {
     let pool = rw_pool(path).await;

@@ -344,6 +344,45 @@ pub trait JobRepository: Send + Sync {
         Err(StorageError::StorageUnavailable)
     }
 
+    /// Persist a cooperative cancellation request without touching the lease
+    /// (D-16, T-03-LEASE). Sets only `cancel_requested` on a non-terminal
+    /// job; the owning worker keeps its lease and observes the request at
+    /// its next checkpoint.
+    async fn request_cancel(&mut self, _job_id: &str) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Explicit operator retry after exhaustion (D-15). Accepts only
+    /// `Failed`/`DeadLettered`/`Interrupted` jobs: resets the
+    /// attempt/availability fields while preserving `checkpoint_json`.
+    async fn retry(&mut self, _job_id: &str) -> Result<(), StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Update job progress and checkpoint when `owner` holds the current
+    /// lease (T-03-LEASE). Returns whether a row was affected.
+    async fn checkpoint_owned(
+        &mut self,
+        _job_id: &str,
+        _owner: &str,
+        _progress: Option<String>,
+        _checkpoint: Option<String>,
+    ) -> Result<bool, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Finish a job with a final state when `owner` holds the current lease
+    /// (T-03-LEASE). Returns whether a row was affected.
+    async fn finish_owned(
+        &mut self,
+        _job_id: &str,
+        _owner: &str,
+        _state: &str,
+        _result: Option<String>,
+    ) -> Result<bool, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
     /// Update job progress and checkpoint.
     async fn checkpoint(
         &mut self,
