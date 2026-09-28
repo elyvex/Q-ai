@@ -102,12 +102,12 @@ Plans:
   4. User can view frequency, distribution, and co-occurrence for any root or lemma
   5. Displayed canonical text is never modified by normalization in any result
 
-**Plans**: 8 plans
+**Plans**: 1/8 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 03-01-PLAN.md — TRACER: end-to-end normalize → index → search with explainability, the per-hit canonical-display (SC5) pin, and the normalization rule-doc correction (SC1)
+- [x] 03-01-PLAN.md — TRACER: end-to-end normalize → index → search with explainability, the per-hit canonical-display (SC5) pin, and the normalization rule-doc correction (SC1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -267,7 +267,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 |-------|----------------|--------|-----------|
 | 1. Foundations | 3/5 | In Progress|  |
 | 2. Canonical Quran Core | 7/7 | Complete    | 2026-09-25 |
-| 3. Quran Search & Linguistics | 0/8 | Not started | - |
+| 3. Quran Search & Linguistics | 1/8 | In Progress|  |
 | 4. Quran Graph | 0/TBD | Not started | - |
 | 5. Rich Quran Experience | 0/TBD | Not started | - |
 | 6. Hadith & Tafsir | 0/TBD | Not started | - |
