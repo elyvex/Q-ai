@@ -67,3 +67,51 @@ of truth for completion; partial work is recorded as ◐ rather than counted as 
 - **Boundary:** brownfield gap closure; no new migration/package/broker;
   deferred/owner-gated items stay open. Phase 2 remains the active phase;
   unrelated gates above are unchanged.
+
+## Phase 3 closure — Quran Search & Linguistics (GSD plans 03-01…03-08), 2026-09-28
+
+- **Status: implemented and phased; alpha proven on the synthetic fixture.**
+  Phase 3 (roadmap) is the legacy `phase-02-rag` board by another number
+  (D-04): evidence-driven brownfield gap closure, not a licensed-data or
+  linguist-ratified release.
+- **Success criteria (each backed by a named repeatable check):**
+  - **SC1** normalized/exact search with explainability (I9 trace) and the
+    normalization rule-doc correction — plans 03-01, 03-02.
+  - **SC2** concatenated (spaceless) search: independent oracle + ≥120-case
+    golden fixture + segmentation-tiling runner + CLI snapshot — plan 03-02.
+  - **SC3** morphology: lemma/root/analyses/word family with all typed relation
+    builders, CLI `family`/`lemma` and versioned HTTP routes — plans 03-04,
+    03-05.
+  - **SC4** frequency / distribution / co-occurrence plus real root/lemma
+    frequency and selectable multi-analysis modes, every numeric report carrying
+    `CountingRules` — plan 03-03 (CLI/HTTP surfaces 03-05).
+  - **SC5** displayed canonical text never modified by normalization: per-hit
+    canonical-display identity pin (I8) — plan 03-01.
+  - Closing exit evidence: license/attribution activation gate (03-06),
+    `doctor --indexes` end-to-end soak + performance budgets + attributed tool
+    registry (03-07).
+- **Alpha (D-03):** `cargo test -p application --test alpha_e2e` walks
+  normalize → forms → index → all five search modes → token/root/lemma/family →
+  frequency/distribution/co-occurrence on the synthetic fixture, asserting every
+  result contract (trace + canonical span on hits; dataset attribution on
+  lexicon results; `CountingRules` on every numeric report).
+- **Owner gates remain BLOCKED (🔴, never a silent pass):**
+  - **OD-11** (morphology dataset selection & licensing, ADR-0203) — 🔴
+    unanswered. SC3/SC4 are satisfied behaviorally on the `synthetic_test_only`
+    lexicon only; QAC ships via the user-supplied import path (Option B) until
+    `licenses/qac/` is captured. Record: `docs/05-followups/phase-03-owner-gates.md`.
+  - **OD-12 / D-08** (normalization catalog + named linguist) — 🔴 unanswered.
+    ADR-0204/0205/0210/0215 stay Draft; goldens keep
+    `reviewed_by: pending-linguist`. Record:
+    `docs/05-followups/phase-03-owner-gates.md`.
+- **Deferred (recorded, not dropped):** UI/result-contract research checksum →
+  Phase 5; counting/discovery tail (`hapax_search`, collocation, interval,
+  first/last-occurrence, `unusual_usage`, `near_duplicate_passages`,
+  `missing_expected_form`, numeric-report tool) → later phases; legacy
+  `phase-02-rag` tail → follow-ups; transliteration/L8, graph, additional
+  qira'at/editions, multi-RAG/comparative scripture. Record:
+  `docs/05-followups/phase-03-deferrals.md`.
+- **Gate:** `cargo test -p application --test alpha_e2e`,
+  `cargo test -p cli --test quran`, `cargo test --workspace`, and
+  `xtask arch-check` / `migrate-check`; the pre-existing
+  `cli --test doctor_json` audit-tamper failure remains for its own owner.

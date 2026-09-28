@@ -2,6 +2,39 @@
 
 > Completed tasks across all phases. Newest first.
 
+## Phase 3 — Quran Search & Linguistics closure (GSD plans 03-01…03-08), 2026-09-28
+
+- Closed the roadmap Phase 3 board (legacy `phase-02-rag`, D-04) through eight
+  GSD plans mapping to the five success criteria, each with a named repeatable
+  check: SC1 normalize+search with explainability (03-01), SC2 concatenated
+  golden set + segmentation runner (03-02), SC3 morphology/family + CLI/HTTP
+  (03-04/03-05), SC4 counting + real root/lemma frequency + multi-analysis modes
+  (03-03/03-05), SC5 canonical-display identity pin (03-01). Exit evidence:
+  license/attribution activation gate (03-06), `doctor --indexes` soak +
+  performance budgets + attributed tool registry (03-07), owner-gate records +
+  deferral ledger + full-chain alpha (03-08).
+- **Alpha proven (D-03):** `cargo test -p application --test alpha_e2e` walks
+  normalize → forms → index → all five search modes → token/root/lemma/family →
+  frequency/distribution/co-occurrence on the synthetic fixture, asserting trace
+  + canonical span on every hit, dataset attribution on lexicon results, and
+  `CountingRules` on every numeric report. CLI surfaces green via
+  `cargo test -p cli --test quran`.
+- **Owner gates remain 🔴 BLOCKED:** OD-11 (morphology dataset/license, ADR-0203)
+  and OD-12/D-08 (normalization catalog + named linguist) are recorded with
+  exact closing steps in `docs/05-followups/phase-03-owner-gates.md`; SC3/SC4 are
+  satisfied behaviorally on the `synthetic_test_only` lexicon only and no
+  ADR/golden is flipped to Accepted. `decisions-needed.md` stays the source of
+  truth.
+- **Deferred, not dropped:** UI + result-contract research checksum (Phase 5);
+  the counting/discovery tail incl. `hapax_search`; legacy `phase-02-rag` tail;
+  transliteration/L8, graph (Phase 4), additional editions/multi-RAG — recorded
+  in `docs/05-followups/phase-03-deferrals.md`, including the deferral of the
+  `03-VALIDATION.md` per-task map to `/gsd-validate-phase` (the PLAN `<verify>`
+  blocks are the authoritative map).
+- **Not claimed:** licensed morphology activation, linguist ratification, or any
+  scholarly result on real data. A pre-existing `cli --test doctor_json`
+  audit-tamper failure is unrelated (Phase-1 territory) and left to its owner.
+
 ## Phase 1 — TASK-001 Foundation Gap Closure (GSD plans 01-01…01-05), 2026-09-28
 
 - Closed the cross-phase foundation record: plans 01-01 (tracer), 01-02
