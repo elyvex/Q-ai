@@ -14,6 +14,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use application::quran::activate_edition;
+use application::job_queue::{build_default_registry, build_worker};
 use application::quran_cli::{cmd_edition_show, cmd_import};
 use application::quran_reader::{QuranReader, QuranReaderService, ReaderError};
 use domain::{PrincipalId, SemVer, Timestamp};
@@ -51,6 +52,15 @@ fn timestamp() -> Timestamp {
 
 fn pinned() -> EditionSelector {
     EditionSelector::Pinned { slug: SLUG.to_string(), version: VERSION.parse::<SemVer>().unwrap() }
+}
+
+/// Drain the durable import queue the way `qai serve` does (D-13).
+///
+/// `cmd_import` is enqueue-only since Phase 1 plan 01-04: the edition stays
+/// unstaged until an explicit worker/host processes the queued record.
+async fn drain_import_queue(db: &Arc<SqliteDatabase>) {
+    let worker = build_worker(db.clone(), build_default_registry(db), "test-owner");
+    assert_eq!(worker.run_until_idle().await.unwrap(), 1);
 }
 
 fn input(run_id: &str, manifest: &str) -> ImportInput {
@@ -239,6 +249,8 @@ async fn declared_license_is_persisted_verbatim() {
 
     let out = cmd_import(&path, manifest_path.to_str().unwrap(), "json", false, None).await;
     assert_eq!(out.exit, 0, "import must succeed: {}", out.human);
+    // Enqueue-only boundary (D-13): staging appears only after host processing.
+    drain_import_queue(&db).await;
     activate_edition(&*db, SLUG, VERSION, &principal(), "appr-1", &timestamp()).await.unwrap();
 
     // Canonical row: the declared status and identifier are stored verbatim.
@@ -271,6 +283,8 @@ async fn undeclared_license_is_unknown_without_invented_permissions() {
 
     let out = cmd_import(&path, manifest_path.to_str().unwrap(), "json", false, None).await;
     assert_eq!(out.exit, 0, "import must succeed: {}", out.human);
+    // Enqueue-only boundary (D-13): staging appears only after host processing.
+    drain_import_queue(&db).await;
     activate_edition(&*db, SLUG, VERSION, &principal(), "appr-1", &timestamp()).await.unwrap();
 
     let mut uow = db.write().await.unwrap();
