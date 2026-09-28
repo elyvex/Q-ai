@@ -2,9 +2,15 @@
 # Enforced in CI (AC-P0-02). Source of truth: docs/03-plan/phases/phase-00-foundation/readme.md §6.
 #
 # Semantics:
-#   workspace.allow   = workspace crates whose EDGE to this crate is legal.
-#   external.allow    = (reserved) external crates permitted; unused for now.
-#   workspace.deny    = workspace crates that MUST NOT be depended on (fail-closed even if allow empty).
+#   workspace.allow            = workspace crates whose EDGE to this crate is legal.
+#   external.registry.allow    = registry (crates.io) crates this crate may depend on.
+#   external.git.allow         = git-source crates this crate may depend on (empty unless explicitly justified).
+#   workspace.deny             = workspace crates that MUST NOT be depended on (fail-closed even if allow empty).
+#
+# A crate with no `external` section (or an empty allow list) may use no
+# external edge of that class — fail closed. The registry lists in the
+# FND-07 block below are derived from current `cargo metadata --all-features`
+# output; adding a new external dependency requires naming it there first.
 #
 # A crate NOT listed here is treated as "allow = []", i.e. it must have no workspace
 # dependencies at all (this catches accidental coupling from newly-added crates).
@@ -99,3 +105,126 @@ workspace = { allow = ["domain", "quran-core"] }
 # No backend query-language leaks; no llm/embeddings/retrieval/vector store.
 [quran-graph]
 workspace = { allow = ["domain", "quran-core"] }
+
+# --- Phase 1 (FND-07) external dependency policy ---
+# Registry/git edges are explicit per crate and fail closed (D-02, D-03).
+# Each `external.registry.allow` list is derived from the crate's current
+# direct dependencies in `cargo metadata --all-features` output; no package
+# was added, installed, or upgraded to produce it. All `external.git.allow`
+# lists are empty: the workspace currently has no git-source dependency, so
+# any git edge fails until explicitly justified here. A crate with no entry
+# in this block (or an empty list) may use no external edge of that class.
+[domain.external.registry]
+allow = ["proptest", "serde", "serde_json", "thiserror", "time", "uuid"]
+[domain.external.git]
+allow = []
+
+[application.external.registry]
+allow = ["async-trait", "lru", "proptest", "serde", "serde_json", "sqlx", "tempfile", "thiserror", "tokio", "tracing", "unicode-segmentation", "uuid"]
+[application.external.git]
+allow = []
+
+[storage.external.registry]
+allow = ["async-trait", "serde", "serde_json", "thiserror", "tokio"]
+[storage.external.git]
+allow = []
+
+[storage-sqlite.external.registry]
+allow = ["async-trait", "sha2", "sqlx", "tempfile", "thiserror", "time", "tokio", "uuid"]
+[storage-sqlite.external.git]
+allow = []
+
+[provenance.external.registry]
+allow = ["async-trait", "serde", "serde_json", "sha2", "thiserror", "time", "uuid"]
+[provenance.external.git]
+allow = []
+
+[audit.external.registry]
+allow = ["async-trait", "serde", "serde_json", "sha2", "thiserror", "tokio"]
+[audit.external.git]
+allow = []
+
+[jobs.external.registry]
+allow = ["async-trait", "serde", "serde_json", "thiserror", "time", "tokio", "tracing", "uuid"]
+[jobs.external.git]
+allow = []
+
+[sources.external.registry]
+allow = ["async-trait", "base64", "ed25519-dalek", "serde", "serde_json", "sha2", "thiserror", "time", "tokio", "uuid"]
+[sources.external.git]
+allow = []
+
+[cli.external.registry]
+allow = ["clap", "serde_json", "sqlx", "tempfile", "thiserror", "tokio", "tracing", "trycmd"]
+[cli.external.git]
+allow = []
+
+[server.external.registry]
+allow = ["async-trait", "axum", "serde", "serde_json", "sqlx", "tempfile", "thiserror", "tokio", "tower", "tower-http"]
+[server.external.git]
+allow = []
+
+[observability.external.registry]
+allow = ["metrics", "opentelemetry", "opentelemetry-otlp", "opentelemetry_sdk", "serde_json", "tokio", "tracing", "tracing-opentelemetry", "tracing-subscriber"]
+[observability.external.git]
+allow = []
+
+[testkit.external.registry]
+allow = ["async-trait", "serde_json", "tempfile", "tokio"]
+[testkit.external.git]
+allow = []
+
+[xtask.external.registry]
+allow = ["anyhow", "clap", "dirs", "serde", "serde_json", "sha2", "sqlx", "time", "tokio", "toml"]
+[xtask.external.git]
+allow = []
+
+[config.external.registry]
+allow = ["async-trait", "chacha20poly1305", "keyring", "serde", "serde_json", "sha2", "tempfile", "thiserror", "tokio", "toml", "zeroize"]
+[config.external.git]
+allow = []
+
+[quran-core.external.registry]
+allow = ["proptest", "serde", "serde_json", "thiserror", "unicode-segmentation"]
+[quran-core.external.git]
+allow = []
+
+[quran-corpus.external.registry]
+allow = ["async-trait", "csv", "proptest", "serde", "serde_json", "sha2", "similar", "tempfile", "thiserror", "tokio", "unicode-normalization", "unicode-segmentation"]
+[quran-corpus.external.git]
+allow = []
+
+[citations.external.registry]
+allow = ["async-trait", "serde", "serde_json", "sha2", "thiserror", "tokio"]
+[citations.external.git]
+allow = []
+
+[tools.external.registry]
+allow = ["serde", "serde_json", "sha2", "thiserror"]
+[tools.external.git]
+allow = []
+
+[tool-registry.external.registry]
+allow = ["async-trait", "serde", "serde_json", "thiserror", "tokio"]
+[tool-registry.external.git]
+allow = []
+
+[quran-normalization.external.registry]
+allow = ["proptest", "serde", "serde_json", "sha2", "thiserror", "unicode-normalization"]
+[quran-normalization.external.git]
+allow = []
+
+[quran-search.external.registry]
+allow = ["async-trait", "proptest", "regex-automata", "serde", "serde_json", "sha2", "sqlx", "tempfile", "thiserror", "tokio"]
+[quran-search.external.git]
+allow = []
+
+[quran-morphology.external.registry]
+allow = ["serde", "serde_json", "thiserror"]
+[quran-morphology.external.git]
+allow = []
+
+[quran-graph.external.registry]
+allow = ["serde", "serde_json", "thiserror"]
+[quran-graph.external.git]
+allow = []

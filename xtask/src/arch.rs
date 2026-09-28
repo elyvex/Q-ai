@@ -3,10 +3,15 @@
 //! The rule set lives in `xtask/allowlist.toml` (source of truth: readme §6).
 //! A workspace crate may only depend on workspace crates listed in its `allow` set;
 //! a crate absent from the allowlist must have no workspace (path) dependencies.
+//! Registry and git dependencies are governed separately: each crate names its
+//! explicitly allowed external names per source class (`external.registry.allow`,
+//! `external.git.allow`); an absent rule — or an unrecognized source scheme —
+//! is empty and fail closed.
 //!
 //! `violations()` is pure and unit-tested: the AC-P0-02 mutation test feeds it a
 //! synthetic metadata graph containing the forbidden `domain -> cli` edge and asserts
-//! the check fails.
+//! the check fails, and the FND-07 mutation tests prove allowed/forbidden
+//! registry and git edges plus path fail-closed behavior.
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -44,6 +49,28 @@ pub struct Dependency {
     pub source: Option<String>,
 }
 
+/// The source class of a dependency edge, derived from the `cargo metadata`
+/// `source` field. Unknown schemes fail closed: they are never treated as
+/// allowed merely because a name is absent from the path-only rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceKind {
+    Path,
+    Registry,
+    Git,
+    Unknown,
+}
+
+impl Dependency {
+    pub fn source_kind(&self) -> SourceKind {
+        match self.source.as_deref() {
+            None => SourceKind::Path,
+            Some(s) if s.starts_with("registry+") => SourceKind::Registry,
+            Some(s) if s.starts_with("git+") => SourceKind::Git,
+            Some(_) => SourceKind::Unknown,
+        }
+    }
+}
+
 /// The parsed allowlist, keyed by crate name.
 ///
 /// A map (rather than Phase-0's hardcoded struct) so later phases can register new
@@ -59,10 +86,29 @@ pub struct Allowlist {
 pub struct CrateRule {
     #[serde(default)]
     pub workspace: WorkspaceRule,
+    /// Explicit per-crate external policy, kept distinct per source class.
+    /// Absent (or empty) means no external edge of that class is allowed.
+    #[serde(default)]
+    pub external: ExternalRule,
 }
 
 #[derive(Debug, Default, Deserialize)]
 pub struct WorkspaceRule {
+    #[serde(default)]
+    pub allow: Vec<String>,
+}
+
+/// Per-source-class external allowances for one crate.
+#[derive(Debug, Default, Deserialize)]
+pub struct ExternalRule {
+    #[serde(default)]
+    pub registry: ExternalAllow,
+    #[serde(default)]
+    pub git: ExternalAllow,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct ExternalAllow {
     #[serde(default)]
     pub allow: Vec<String>,
 }
@@ -73,6 +119,24 @@ impl Allowlist {
     pub fn allowed_workspace_deps(&self, crate_name: &str) -> HashSet<&str> {
         match self.crates.get(crate_name) {
             Some(rule) => rule.workspace.allow.iter().map(String::as_str).collect(),
+            None => Default::default(),
+        }
+    }
+
+    /// Returns the explicitly allowed registry-dependency names for a crate,
+    /// or an empty set if the crate (or its registry policy) is not recognized.
+    pub fn registry_allow(&self, crate_name: &str) -> HashSet<&str> {
+        match self.crates.get(crate_name) {
+            Some(rule) => rule.external.registry.allow.iter().map(String::as_str).collect(),
+            None => Default::default(),
+        }
+    }
+
+    /// Returns the explicitly allowed git-dependency names for a crate,
+    /// or an empty set if the crate (or its git policy) is not recognized.
+    pub fn git_allow(&self, crate_name: &str) -> HashSet<&str> {
+        match self.crates.get(crate_name) {
+            Some(rule) => rule.external.git.allow.iter().map(String::as_str).collect(),
             None => Default::default(),
         }
     }
@@ -101,7 +165,11 @@ pub fn load_metadata(cwd: &Path) -> Result<Metadata> {
 
 /// Computes forbidden dependency edges. Pure — no I/O, no side effects.
 ///
-/// Returns human-readable violation strings, one per offending edge.
+/// Every edge is classified by source kind: path edges are checked against
+/// `workspace.allow`, registry edges against `external.registry.allow`, git
+/// edges against `external.git.allow`, and any unrecognized source scheme
+/// fails closed. Returns human-readable violation strings, one per offending
+/// edge, sorted for deterministic diagnostics.
 pub fn violations(meta: &Metadata, allowlist: &Allowlist) -> Vec<String> {
     // Map each package id -> package (workspace members only).
     let member_ids: HashSet<&str> = meta.workspace_member_ids.iter().map(String::as_str).collect();
@@ -116,28 +184,76 @@ pub fn violations(meta: &Metadata, allowlist: &Allowlist) -> Vec<String> {
 
     for pkg in packages_by_id.values() {
         let allowed = allowlist.allowed_workspace_deps(&pkg.name);
-        let mut allowed_path_deps: HashSet<&str> = HashSet::new();
+        let registry_allowed = allowlist.registry_allow(&pkg.name);
+        let git_allowed = allowlist.git_allow(&pkg.name);
+        // Deduplicate repeat (name, source) entries so one offending edge
+        // yields exactly one diagnostic.
+        let mut seen: HashSet<(String, String)> = HashSet::new();
+        let mut offending_paths: Vec<String> = Vec::new();
+        let mut offending_external: Vec<(String, String, String)> = Vec::new();
         for dep in &pkg.dependencies {
-            // A workspace (path) dependency has `source == None`.
-            if dep.source.is_none() {
-                // cargo metadata exposes the canonical target package name in `name`.
-                allowed_path_deps.insert(dep.name.as_str());
+            match dep.source_kind() {
+                SourceKind::Path => {
+                    // cargo metadata exposes the canonical target package name in `name`.
+                    if !allowed.contains(dep.name.as_str())
+                        && seen.insert((dep.name.clone(), "path".to_string()))
+                    {
+                        offending_paths.push(dep.name.clone());
+                    }
+                }
+                SourceKind::Registry => {
+                    if !registry_allowed.contains(dep.name.as_str())
+                        && seen.insert((dep.name.clone(), "registry".to_string()))
+                    {
+                        let source = dep.source.clone().unwrap_or_default();
+                        offending_external.push((
+                            dep.name.clone(),
+                            "registry source".to_string(),
+                            source,
+                        ));
+                    }
+                }
+                SourceKind::Git => {
+                    if !git_allowed.contains(dep.name.as_str())
+                        && seen.insert((dep.name.clone(), "git".to_string()))
+                    {
+                        let source = dep.source.clone().unwrap_or_default();
+                        offending_external.push((
+                            dep.name.clone(),
+                            "git source".to_string(),
+                            source,
+                        ));
+                    }
+                }
+                SourceKind::Unknown => {
+                    let source = dep.source.clone().unwrap_or_default();
+                    if seen.insert((dep.name.clone(), source.clone())) {
+                        offending_external.push((
+                            dep.name.clone(),
+                            "unknown source".to_string(),
+                            source,
+                        ));
+                    }
+                }
             }
         }
-        let mut offending: Vec<String> = allowed_path_deps
-            .iter()
-            .filter(|target| !allowed.contains(**target))
-            .map(|target| target.to_string())
-            .collect();
-        offending.sort();
-        for target in offending {
+        offending_paths.sort();
+        for target in offending_paths {
             found.push(format!(
                 "{} -> {} : forbidden dependency edge (not in allowlist)",
                 pkg.name, target
             ));
         }
+        offending_external.sort();
+        for (target, kind, source) in offending_external {
+            found.push(format!(
+                "{} -> {} ({} {}) : forbidden external dependency edge (not in allowlist)",
+                pkg.name, target, kind, source
+            ));
+        }
     }
 
+    found.sort();
     found
 }
 
@@ -391,7 +507,10 @@ mod tests {
                     vec![
                         ("domain", None),
                         ("serde", reg),
-                        ("qai-schema", Some("git+https://github.com/example/qai-schema?rev=abc123")),
+                        (
+                            "qai-schema",
+                            Some("git+https://github.com/example/qai-schema?rev=abc123"),
+                        ),
                     ],
                 ),
             ],
