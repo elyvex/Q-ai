@@ -57,6 +57,84 @@ fn quran_counting_graph_snapshots() {
     ]);
 }
 
+/// Phase 4 tracer CLI surface (D-11): host-backed import, then the
+/// SQLite-backed structural slice — build persists the projection, inspect
+/// shows the manifest with its generation stamp, neighbors open a bounded
+/// view with pinned canonical quotations, and selection/validation errors
+/// stay typed.
+#[test]
+fn quran_graph_snapshots() {
+    let guard = ServeGuard::start();
+    guard.run_segments(&["tests/quran/graph_s1.trycmd"]);
+
+    let out = qai_out(guard.dir.path(), &["quran", "activate", "test-edition-min@0.1.0", "--yes"]);
+    assert!(out.status.success(), "activate: {}", String::from_utf8_lossy(&out.stderr));
+    let human = String::from_utf8_lossy(&out.stdout);
+    assert!(human.contains("activated test-edition-min@0.1.0 (generation 1)"), "{human}");
+
+    // Build persists the structural projection into SQLite.
+    let out = qai_out(guard.dir.path(), &["quran", "graph", "build"]);
+    assert!(out.status.success(), "build: {}", String::from_utf8_lossy(&out.stderr));
+    let human = String::from_utf8_lossy(&out.stdout);
+    assert!(human.contains("structural projection:"), "{human}");
+    assert!(human.contains("(edition"), "{human}");
+
+    // The JSON document pins the structural family identity.
+    let out = qai_out(guard.dir.path(), &["quran", "graph", "build", "--json"]);
+    assert!(out.status.success(), "build --json: {}", String::from_utf8_lossy(&out.stderr));
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).expect("one JSON document");
+    assert_eq!(doc["manifest"]["projection_id"], "quran-structural-v1", "{doc}");
+    assert!(doc["nodes"].as_array().is_some_and(|nodes| !nodes.is_empty()), "{doc}");
+    assert!(doc["edges"].as_array().is_some_and(|edges| !edges.is_empty()), "{doc}");
+
+    // Inspect reads the manifest back from SQLite with its generation stamp.
+    let out = qai_out(guard.dir.path(), &["quran", "graph", "inspect", "--db"]);
+    assert!(out.status.success(), "inspect --db: {}", String::from_utf8_lossy(&out.stderr));
+    let human = String::from_utf8_lossy(&out.stdout);
+    assert!(human.contains("quran-structural-v1"), "{human}");
+    assert!(human.contains("generation 1"), "{human}");
+
+    // Exactly one of --file or --db is required.
+    let out = qai_out(guard.dir.path(), &["quran", "graph", "inspect"]);
+    assert_eq!(out.status.code(), Some(2), "both flags absent is a usage error");
+    let out = qai_out(guard.dir.path(), &["quran", "graph", "inspect", "--file", "x.json", "--db"]);
+    assert_eq!(out.status.code(), Some(2), "both flags present is a usage error");
+
+    // Bounded neighbors with pinned canonical quotations on ayah hits.
+    let out =
+        qai_out(guard.dir.path(), &["quran", "graph", "neighbors", "--db", "--node", "ayah:1:1"]);
+    assert!(out.status.success(), "neighbors: {}", String::from_utf8_lossy(&out.stderr));
+    let human = String::from_utf8_lossy(&out.stdout);
+    assert!(human.contains("neighbors of ayah:1:1"), "{human}");
+    assert!(human.contains("ayah:1:1 -> quran:"), "{human}");
+
+    let out = qai_out(
+        guard.dir.path(),
+        &["quran", "graph", "neighbors", "--db", "--node", "ayah:1:1", "--json"],
+    );
+    assert!(out.status.success(), "neighbors --json: {}", String::from_utf8_lossy(&out.stderr));
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).expect("one JSON document");
+    assert_eq!(doc["truncated"], false, "{doc}");
+    assert_eq!(doc["manifest"]["projection_id"], "quran-structural-v1", "{doc}");
+    let quotations = doc["quotations"].as_array().cloned().unwrap_or_default();
+    assert!(!quotations.is_empty(), "ayah hits carry quotations: {doc}");
+    for quotation in &quotations {
+        let reference = quotation["reference"].as_str().unwrap_or_default();
+        assert!(reference.starts_with("quran:"), "pinned canonical ref: {quotation}");
+        assert!(reference.contains("@0.1.0:") || reference.contains('@'), "{quotation}");
+    }
+
+    // Unknown nodes are not-found; out-of-range budgets are validation errors.
+    let out =
+        qai_out(guard.dir.path(), &["quran", "graph", "neighbors", "--db", "--node", "ayah:9:99"]);
+    assert_eq!(out.status.code(), Some(5), "unknown node is not found");
+    let out = qai_out(
+        guard.dir.path(),
+        &["quran", "graph", "neighbors", "--db", "--node", "ayah:1:1", "--hops", "0"],
+    );
+    assert_eq!(out.status.code(), Some(3), "out-of-range hops are a validation error");
+}
+
 /// Phase 2 six-family integrity surface (D-10/D-11): host-backed segments.
 #[test]
 fn quran_verify_snapshots() {

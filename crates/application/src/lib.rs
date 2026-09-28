@@ -14,6 +14,8 @@ pub mod quran_counting;
 pub mod quran_doctor;
 pub mod quran_doctor_indexes;
 pub mod quran_forms;
+pub mod quran_graph_build;
+pub mod quran_graph_store;
 pub mod quran_index;
 pub mod quran_lexicon_api;
 pub mod quran_morphology;

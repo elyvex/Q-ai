@@ -3214,94 +3214,35 @@ fn stage_graph(graph: &GraphFile) -> Result<quran_graph::MemGraphStore, String> 
     Ok(store)
 }
 
-fn structural_manifest(
-    edition_id: &str,
-    corpus_generation: i64,
-) -> quran_graph::ProjectionManifest {
-    quran_graph::ProjectionManifest {
-        id: format!("build-{edition_id}-{corpus_generation}"),
-        projection_id: quran_graph::STRUCTURAL_PROJECTION_ID.to_string(),
-        builder_version: quran_graph::STRUCTURAL_BUILDER_VERSION.to_string(),
-        edition_id: edition_id.to_string(),
-        corpus_generation: corpus_generation as u64,
-        dataset_versions: std::collections::BTreeMap::new(),
-        dependency_snapshot: std::collections::BTreeMap::from([(
-            "canonical".to_string(),
-            format!("generation-{corpus_generation}"),
-        )]),
-        status: quran_graph::ProjectionStatus::Active,
-        manifest: serde_json::json!({"source": "quran_cli.cmd_graph_build"}),
-        created_at: domain::Timestamp::now().to_string(),
-    }
-}
-
-/// `qai quran graph build`: structural projection from the active edition.
+/// `qai quran graph build`: structural projection from the active edition,
+/// persisted to SQLite (staged-batch build with fenced publish) with an
+/// optional JSON document on disk.
 pub async fn cmd_graph_build(db_path: &str, out: Option<&str>) -> CommandOutput {
-    use quran_graph::{AyahInput, StructuralInput, SurahInput, TokenInput, build_structural};
-    use storage::Database as _;
     let db = match open_db(db_path).await {
         Ok(db) => db,
         Err(error) => return open_error_output(error),
     };
-    let mut uow = match db.write().await {
-        Ok(uow) => uow,
-        Err(error) => return open_error_output(error),
-    };
-    let active = match uow.quran().get_active().await {
-        Ok(active) => active,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
-    };
-    let Some(active) = active else {
-        let _ = uow.rollback().await;
-        return CommandOutput::err(
-            exit::NOT_FOUND,
-            "no active edition; import one first".to_string(),
-        );
-    };
-    let edition_id = active.edition_id.clone();
-    let surahs = match uow.quran().list_surahs(&edition_id).await {
-        Ok(surahs) => surahs,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
-    };
-    let ayahs = match uow.quran().list_ayahs_range(&edition_id, 1, i64::MAX).await {
-        Ok(ayahs) => ayahs,
-        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
-    };
-    let mut structural_ayahs = Vec::new();
-    let mut tokens = Vec::new();
-    for ayah in &ayahs {
-        structural_ayahs.push(AyahInput {
-            surah: ayah.surah as u32,
-            ayah: ayah.ayah as u32,
-            text: String::new(),
-        });
-        match uow.quran().get_tokens(&edition_id, ayah.surah, ayah.ayah).await {
-            Ok(rows) => {
-                for token in rows {
-                    tokens.push(TokenInput {
-                        surah: ayah.surah as u32,
-                        ayah: ayah.ayah as u32,
-                        position: token.position as u32,
-                        surface: String::new(),
-                    });
-                }
-            }
-            Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    let collected = match super::quran_graph_build::collect_structural_input(&db).await {
+        Ok(Some(collected)) => collected,
+        Ok(None) => {
+            return CommandOutput::err(
+                exit::NOT_FOUND,
+                "no active edition; import one first".to_string(),
+            );
         }
-    }
-    let _ = uow.rollback().await;
-
-    let input = StructuralInput {
-        edition_id: edition_id.clone(),
-        input_version: format!("corpus-generation-{}", active.corpus_generation),
-        surahs: surahs.iter().map(|s| SurahInput { number: s.number as u32 }).collect(),
-        ayahs: structural_ayahs,
-        tokens,
-        divisions: Vec::new(),
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
     };
-    let built = build_structural(&input);
-    let manifest = structural_manifest(&edition_id, active.corpus_generation);
-    let document = GraphFile { manifest, nodes: built.nodes.clone(), edges: built.edges.clone() };
+    let edition_id = collected.edition_id.clone();
+    let report = match super::quran_graph_build::publish_structural_build(db_path, &collected).await
+    {
+        Ok(report) => report,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let document = GraphFile {
+        manifest: report.manifest,
+        nodes: report.built.nodes,
+        edges: report.built.edges,
+    };
     let json = match serde_json::to_value(&document) {
         Ok(json) => json,
         Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
@@ -3315,15 +3256,42 @@ pub async fn cmd_graph_build(db_path: &str, out: Option<&str>) -> CommandOutput 
     CommandOutput::ok(
         format!(
             "structural projection: {} nodes, {} edges (edition {edition_id})",
-            built.nodes.len(),
-            built.edges.len()
+            document.nodes.len(),
+            document.edges.len()
         ),
         json,
     )
 }
 
-/// `qai quran graph inspect`.
-pub async fn cmd_graph_inspect(file: &str) -> CommandOutput {
+/// Map a [`quran_graph::GraphError`] to the operator surface: unknown nodes
+/// and projections are not-found, budget/pattern violations are validation
+/// failures (never silent truncation), denials are policy, build failures
+/// are internal.
+fn graph_error_exit(error: &quran_graph::GraphError) -> i32 {
+    use quran_graph::GraphError as E;
+    match error {
+        E::NodeNotFound { .. } | E::UnknownProjection { .. } => exit::NOT_FOUND,
+        E::BudgetExceeded { .. } | E::PatternRejected { .. } => exit::VALIDATION,
+        E::AuthzDenied { .. } => exit::POLICY,
+        E::BuildFailed { .. } => exit::INTERNAL,
+    }
+}
+
+/// `qai quran graph inspect`: manifest plus node/edge counts, from a
+/// projection file or from the active SQLite projection (`--db`).
+///
+/// Exactly one of `--file` or `--db` is required; both absent or both
+/// present is a usage error.
+pub async fn cmd_graph_inspect(db_path: &str, file: Option<&str>, use_db: bool) -> CommandOutput {
+    match (file, use_db) {
+        (Some(path), false) => inspect_graph_file(path),
+        (None, true) => inspect_graph_db(db_path).await,
+        _ => CommandOutput::err(exit::USAGE, "specify exactly one of --file or --db".to_string()),
+    }
+}
+
+/// File-backed inspect: the fixture/debug path (unchanged semantics).
+fn inspect_graph_file(file: &str) -> CommandOutput {
     use quran_graph::GraphStore;
     let graph = match read_graph_file(file) {
         Ok(graph) => graph,
@@ -3357,8 +3325,69 @@ pub async fn cmd_graph_inspect(file: &str) -> CommandOutput {
     )
 }
 
-/// `qai quran graph neighbors` (budgeted, explicit truncation).
-pub async fn cmd_graph_neighbors(file: &str, node: &str, hops: usize) -> CommandOutput {
+/// SQLite-backed inspect: the active projection's manifest (identity plus
+/// the generation stamp read from the active edition row at build time).
+async fn inspect_graph_db(db_path: &str) -> CommandOutput {
+    use quran_graph::GraphStore;
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return open_error_output(error),
+    };
+    let store = match super::quran_graph_store::SqliteGraphStore::open_active(
+        &db,
+        quran_graph::STRUCTURAL_PROJECTION_ID,
+    )
+    .await
+    {
+        Ok(store) => store,
+        Err(error) => return CommandOutput::err(graph_error_exit(&error), error.to_string()),
+    };
+    let inspection = store.inspect();
+    let capabilities = store.capabilities();
+    let manifest = store.manifest();
+    CommandOutput::ok(
+        format!(
+            "projection {}: {} nodes, {} edges (build {}, generation {}, status active); capabilities: {}",
+            manifest.projection_id,
+            inspection.node_count,
+            inspection.edge_count,
+            store.projection_row_id(),
+            manifest.corpus_generation,
+            capabilities.join(", ")
+        ),
+        serde_json::json!({
+            "manifest": manifest,
+            "nodes": inspection.node_count,
+            "edges": inspection.edge_count,
+            "build_row_id": store.projection_row_id(),
+            "capabilities": capabilities,
+        }),
+    )
+}
+
+/// `qai quran graph neighbors` (budgeted, explicit truncation), from a
+/// projection file or from the active SQLite projection (`--db`, with every
+/// ayah hit resolved to a pinned canonical reference through the reader).
+///
+/// Exactly one of `--file` or `--db` is required; both absent or both
+/// present is a usage error.
+pub async fn cmd_graph_neighbors(
+    db_path: &str,
+    file: Option<&str>,
+    use_db: bool,
+    node: &str,
+    hops: usize,
+) -> CommandOutput {
+    match (file, use_db) {
+        (Some(path), false) => neighbors_graph_file(path, node, hops),
+        (None, true) => neighbors_graph_db(db_path, node, hops).await,
+        _ => CommandOutput::err(exit::USAGE, "specify exactly one of --file or --db".to_string()),
+    }
+}
+
+/// File-backed neighbors: the fixture/debug path (unchanged semantics, typed
+/// error mapping).
+fn neighbors_graph_file(file: &str, node: &str, hops: usize) -> CommandOutput {
     use quran_graph::{AuthzScope, EdgeFilter, GraphStore, QueryBudgets};
     let graph = match read_graph_file(file) {
         Ok(graph) => graph,
@@ -3386,8 +3415,155 @@ pub async fn cmd_graph_neighbors(file: &str, node: &str, hops: usize) -> Command
                 "incomplete_reason": result.incomplete_reason,
             }),
         ),
-        Err(error) => CommandOutput::err(exit::NOT_FOUND, error.to_string()),
+        Err(error) => CommandOutput::err(graph_error_exit(&error), error.to_string()),
     }
+}
+
+/// SQLite-backed neighbors over the active structural projection.
+///
+/// Every ayah-kind hit resolves through the canonical reader to a pinned
+/// reference (`quran:<slug>@<version>:<surah>:<ayah>`) plus its stored text
+/// hash. Graph records carry refs and hashes only; display text never flows
+/// from graph rows. A hit that no longer resolves fails closed (never a
+/// fabricated quotation).
+async fn neighbors_graph_db(db_path: &str, node: &str, hops: usize) -> CommandOutput {
+    use quran_graph::{AuthzScope, EdgeFilter, GraphStore, QueryBudgets};
+    use storage::Database as _;
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return open_error_output(error),
+    };
+    let store = match super::quran_graph_store::SqliteGraphStore::open_active(
+        &db,
+        quran_graph::STRUCTURAL_PROJECTION_ID,
+    )
+    .await
+    {
+        Ok(store) => store,
+        Err(error) => return CommandOutput::err(graph_error_exit(&error), error.to_string()),
+    };
+    let budgets = QueryBudgets { max_hops: hops, ..QueryBudgets::default() };
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    let scope = AuthzScope::all_visible();
+    let result = match store.neighbors(node, &EdgeFilter::any(), &budgets, &cancel, &scope) {
+        Ok(result) => result,
+        Err(error) => return CommandOutput::err(graph_error_exit(&error), error.to_string()),
+    };
+    let manifest = store.manifest().clone();
+    let build_row_id = store.projection_row_id().to_string();
+    drop(store);
+
+    // Staleness is advisory, never a failure: the manifest pins the
+    // generation the projection was built from.
+    let mut uow = match db.write().await {
+        Ok(uow) => uow,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let active_generation = uow
+        .quran()
+        .get_active()
+        .await
+        .map(|active| active.map(|row| row.corpus_generation))
+        .unwrap_or(None);
+    let _ = uow.rollback().await;
+    let stale = active_generation
+        .is_some_and(|generation| manifest.corpus_generation != generation.max(0) as u64);
+
+    let reader = super::quran_reader::QuranReaderService::new(Arc::new(db));
+    let mut quotations = Vec::new();
+    for hit in &result.nodes {
+        if hit.kind != quran_graph::NodeKind::Ayah {
+            continue;
+        }
+        let Some((surah, ayah)) = parse_ayah_stable_id(&hit.stable_id) else {
+            return CommandOutput::err(
+                exit::INTERNAL,
+                format!("unparseable ayah stable ID '{}'", hit.stable_id),
+            );
+        };
+        let reference = quran_core::QuranRef::Ayah {
+            edition: quran_core::EditionSelector::Active,
+            surah: match quran_core::SurahNumber::new(surah) {
+                Ok(number) => number,
+                Err(_) => {
+                    return CommandOutput::err(
+                        exit::INTERNAL,
+                        format!("unparseable ayah stable ID '{}'", hit.stable_id),
+                    );
+                }
+            },
+            ayah: match quran_core::AyahNumber::new(ayah) {
+                Ok(number) => number,
+                Err(_) => {
+                    return CommandOutput::err(
+                        exit::INTERNAL,
+                        format!("unparseable ayah stable ID '{}'", hit.stable_id),
+                    );
+                }
+            },
+        };
+        use super::quran_reader::QuranReader as _;
+        let view = match reader.get_ayah(&reference, &quran_core::AyahOptions::default()).await {
+            Ok(view) => view,
+            Err(error) => {
+                return CommandOutput::err(
+                    exit::INTERNAL,
+                    format!("quotation unavailable for '{}': {error}", hit.stable_id),
+                );
+            }
+        };
+        quotations.push(serde_json::json!({
+            "node": hit.stable_id,
+            "reference": view.canonical.reference(),
+            "text_hash": view.canonical.text_hash().hex,
+        }));
+    }
+
+    let mut human = format!(
+        "neighbors of {node}: {} node(s), {} edge(s){}{}",
+        result.nodes.len(),
+        result.edges.len(),
+        if result.truncated { " (truncated)" } else { "" },
+        if stale { " (stale projection)" } else { "" }
+    );
+    for quotation in &quotations {
+        human.push_str(&format!(
+            "\n  {} -> {}",
+            quotation["node"].as_str().unwrap_or("?"),
+            quotation["reference"].as_str().unwrap_or("?")
+        ));
+    }
+    if let Some(reason) = &result.incomplete_reason {
+        human.push_str(&format!("\nincomplete: {reason}"));
+    }
+    json_or_err(
+        human,
+        &serde_json::json!({
+            "nodes": result.nodes,
+            "edges": result.edges,
+            "truncated": result.truncated,
+            "incomplete_reason": result.incomplete_reason,
+            "quotations": quotations,
+            "manifest": {
+                "projection_id": manifest.projection_id,
+                "build_row_id": build_row_id,
+                "corpus_generation": manifest.corpus_generation,
+            },
+            "stale": stale,
+        }),
+    )
+}
+
+/// Parse an `ayah:<surah>:<ayah>` stable ID into canonical numbers.
+fn parse_ayah_stable_id(stable_id: &str) -> Option<(u16, u32)> {
+    let rest = stable_id.strip_prefix("ayah:")?;
+    let mut parts = rest.split(':');
+    let surah: u16 = parts.next()?.parse().ok()?;
+    let ayah: u32 = parts.next()?.parse().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    Some((surah, ayah))
 }
 
 /// `qai quran graph path` (bounded, deterministic).

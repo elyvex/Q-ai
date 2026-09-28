@@ -675,26 +675,33 @@ pub enum MorphologyAction {
     },
 }
 
-/// Knowledge-graph subcommands (build/inspect/root-family/export).
+/// Knowledge-graph subcommands (build/inspect/neighbors backed by SQLite;
+/// file flags keep working for the fixture/debug path).
 #[derive(Subcommand)]
 pub enum GraphAction {
-    /// Build the structural projection from the active edition (in-memory).
+    /// Build the structural projection from the active edition (SQLite).
     Build {
         /// Write the built projection as JSON to this path (optional).
         #[arg(long)]
         out: Option<String>,
     },
-    /// Inspect the projection manifest and node/edge counts from a file.
+    /// Inspect the projection manifest and node/edge counts.
     Inspect {
         /// Projection JSON written by `graph build --out`.
         #[arg(long)]
-        file: String,
+        file: Option<String>,
+        /// Use the active SQLite projection instead of a file.
+        #[arg(long)]
+        db: bool,
     },
     /// Bounded neighbors of a node (budgeted, explicit truncation).
     Neighbors {
         /// Projection JSON file.
         #[arg(long)]
-        file: String,
+        file: Option<String>,
+        /// Use the active SQLite projection instead of a file.
+        #[arg(long)]
+        db: bool,
         /// Stable node id (e.g. `ayah:1:1`).
         #[arg(long)]
         node: String,
@@ -1013,9 +1020,18 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
             GraphAction::Build { out } => {
                 application::quran_cli::cmd_graph_build(db_path, out.as_deref()).await
             }
-            GraphAction::Inspect { file } => application::quran_cli::cmd_graph_inspect(&file).await,
-            GraphAction::Neighbors { file, node, hops } => {
-                application::quran_cli::cmd_graph_neighbors(&file, &node, hops).await
+            GraphAction::Inspect { file, db } => {
+                application::quran_cli::cmd_graph_inspect(db_path, file.as_deref(), db).await
+            }
+            GraphAction::Neighbors { file, db, node, hops } => {
+                application::quran_cli::cmd_graph_neighbors(
+                    db_path,
+                    file.as_deref(),
+                    db,
+                    &node,
+                    hops,
+                )
+                .await
             }
             GraphAction::Path { file, from, to, hops } => {
                 application::quran_cli::cmd_graph_path(&file, &from, &to, hops).await
