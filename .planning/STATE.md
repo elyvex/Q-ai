@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Quran Search & Linguistics
 status: executing
-stopped_at: Completed 03-03-PLAN.md
-last_updated: "2026-09-28T02:09:08.757Z"
+stopped_at: Completed 03-04-PLAN.md
+last_updated: "2026-09-28T02:38:09.214Z"
 last_activity: 2026-09-28
 last_activity_desc: Phase 03 execution started
-state_head: 1d91159e8f1aa4b39a8a7abf4dd53e0b2c847fb6
+state_head: 445986b03d32368048d942f4c0104759e9f9f0d1
 progress:
   total_phases: 12
   completed_phases: 1
   total_plans: 20
-  completed_plans: 14
+  completed_plans: 15
   percent: 8
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-23)
 ## Current Position
 
 Phase: 03 (Quran Search & Linguistics) — EXECUTING
-Plan: 4 of 8
+Plan: 5 of 8
 Status: Ready to execute
 Last activity: 2026-09-28 — Phase 03 execution started
 
@@ -72,6 +72,7 @@ Progress: [█░░░░░░░░░] 8%
 | Phase 01-foundations P04 | 72min | 3 tasks | 32 files |
 | Phase 03 P02 | 20 min | 3 tasks | 4 files |
 | Phase 03 P03 | 23 min | 3 tasks | 8 files |
+| Phase 03 P04 | 18 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,10 @@ Recent decisions affecting current work:
 - [Phase 03]: [Phase 03-02]: The plan's CLI target crates/cli/tests/quran/search.trycmd does not exist; SC2 CLI snapshots land in the real host-backed segment crates/cli/tests/quran/search_s2.trycmd (Rule 3 correction).
 - [Phase 03]: 03-03: Multi-analysis counting semantics (SingleSource = single-matching-analysis token; AllAnalyses = one vote per analysis row; OneVotePerToken = one vote per token) are code-implemented but not linguist-ratified (OD-12 BLOCKED, ADR-0211 Draft); asserted on the synthetic lexicon only and never elect an authoritative winner (I11/ADR-0209).
 - [Phase 03]: 03-03: root/lemma frequency and the selectable-mode rules block read the active <slug>@<version> dataset from the active quran_datasets row; no active dataset stays a typed CountingError::UnavailableDataset (QAI-CNT-0005), never an empty report (SC4/G-01/G-07).
+- [Phase 03]: [Phase 03]: 03-04: Every typed family relation kind (same_form/same_lemma/same_stem/same_root/derived/inflectional/affix) is built as an explained, dataset-attributed, status-proposed row via one db.write() UoW; relation strings come from FamilyRelation::relation_name() so the 0017 CHECK domain is satisfied by construction, and a non-merge test asserts no is_correct/is_primary/selected column exists and no analysis is ever flipped off imported (I11/I13/ADR-0210).
+- [Phase 03]: [Phase 03]: 03-04: affix_search fails closed with MorphologyToolError::UnavailableDataset naming 'affix/morpheme index' (QAI-MORPH-0004) instead of the silent Ok(Vec::new()) on the active-dataset path; the labeled L7 heuristic branch is unchanged for the no-dataset case (G-09).
+- [Phase 03]: [Phase 03]: 03-04: The family synthetic lexicon must keep lemma->root functional (lemma = k%9, root = k%3) because quran_lemmas is UNIQUE(dataset_id, lemma); the first scheme (root k%4 / lemma k%5) tripped activation with a unique-constraint violation (Rule 1 fix).
+- [Phase 03]: [Phase 03]: 03-04: The 154-family curated golden set stays reviewed_by: pending-linguist / reviewed_at: null with every row synthetic_test_only, and the runner pins that labeling; linguistic correctness awaits OD-12/D-08 (ADR-0210/0215 not-Accepted).
 
 ### Pending Todos
 
@@ -136,6 +141,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-28T02:09:08.665Z
-Stopped at: Completed 03-03-PLAN.md
+Last session: 2026-09-28T02:37:54.897Z
+Stopped at: Completed 03-04-PLAN.md
 Resume file: None
