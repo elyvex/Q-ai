@@ -1,22 +1,9 @@
 # Phase 2 CLI acceptance — edition identity/primary/license surface (D-07)
-
-`QAI_DATA_DIR` points the real `qai` binary at a fresh temp database (set by the
-harness); the synthetic identity fixture declares a non-null upstream identity,
-`is_primary: true`, and a concrete license, so `edition show` can report all
-three on the human line and in `--json`.
-
-```console
-$ qai db migrate
-migrations applied; schema version 21
-
-```
-
-```console
-$ qai quran import ../../fixtures/quran/test-edition-identity/manifest.json
-imported test-edition-identity@0.1.0 to Staged
-note: synthetic test data — non-canonical (ADR-0101 fallback)
-
-```
+#
+# Segment 2 of 2 (host-backed, D-13): the segment-1 import has reached its
+# host-owned terminal state. The synthetic identity fixture declares a
+# non-null upstream identity, `is_primary: true`, and a concrete license, so
+# `edition show` can report all three on the human line and in `--json`.
 
 ```console
 $ qai quran activate test-edition-identity@0.1.0 --yes

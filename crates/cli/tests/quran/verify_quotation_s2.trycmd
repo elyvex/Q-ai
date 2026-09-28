@@ -1,23 +1,11 @@
 # Phase 2 quotation hard-failure surface (D-15, QC-07)
-
-`QAI_DATA_DIR` points the real `qai` binary at a fresh temp database (set by the
-harness). `qai quran verify-quotation` is read-only: it verifies an externally
-supplied quotation against the pinned `slug@version` and reports the verdict
-together with the RESOLVED canonical hash. A mismatch is a hard failure — a
-non-zero exit with a typed `QAI-QUR-*` code — never a success.
-
-```console
-$ qai db migrate
-migrations applied; schema version [..]
-
-```
-
-```console
-$ qai quran import ../../fixtures/quran/test-edition-min/manifest.json
-imported test-edition-min@0.1.0 to Staged
-note: synthetic test data — non-canonical (ADR-0101 fallback)
-
-```
+#
+# Segment 2 of 2 (host-backed, D-13): the segment-1 import has reached its
+# host-owned terminal state. `qai quran verify-quotation` is read-only: it
+# verifies an externally supplied quotation against the pinned `slug@version`
+# and reports the verdict together with the RESOLVED canonical hash. A
+# mismatch is a hard failure — a non-zero exit with a typed `QAI-QUR-*` code —
+# never a success.
 
 ```console
 $ qai quran activate test-edition-min@0.1.0 --yes

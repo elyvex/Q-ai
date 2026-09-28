@@ -19,52 +19,85 @@ fn run_cases(pattern: &str) {
     drop(dir);
 }
 
-/// Phase 1 reading flow (AC-P1-16, P1-T50).
+/// Phase 1 reading flow (AC-P1-16, P1-T50): host-backed segments — the queued
+/// imports reach terminal state under `qai serve` before dependent commands.
 #[test]
 fn quran_snapshots() {
-    run_cases("tests/quran/read_flow.trycmd");
+    let guard = ServeGuard::start();
+    guard.run_segments(&[
+        "tests/quran/read_flow_s1.trycmd",
+        "tests/quran/read_flow_s2.trycmd",
+        "tests/quran/read_flow_s3.trycmd",
+        "tests/quran/read_flow_s4.trycmd",
+    ]);
 }
 
-/// Phase 2 normalization introspection (P2-T23).
+/// Phase 2 normalization introspection (P2-T23): host-backed segments.
 #[test]
 fn quran_normalize_snapshots() {
-    run_cases("tests/quran/normalize.trycmd");
+    let guard = ServeGuard::start();
+    guard.run_segments(&["tests/quran/normalize_s1.trycmd", "tests/quran/normalize_s2.trycmd"]);
 }
 
-/// Phase 2 search surfaces (P2-T51/T52).
+/// Phase 2 search surfaces (P2-T51/T52): host-backed segments.
 #[test]
 fn quran_search_snapshots() {
-    run_cases("tests/quran/search.trycmd");
+    let guard = ServeGuard::start();
+    guard.run_segments(&["tests/quran/search_s1.trycmd", "tests/quran/search_s2.trycmd"]);
 }
 
-/// Phase 2 counting + Phase 4 graph CLI surfaces (P2-T104, TASK-424 slice).
+/// Phase 2 counting + Phase 4 graph CLI surfaces (P2-T104, TASK-424 slice):
+/// host-backed segments.
 #[test]
 fn quran_counting_graph_snapshots() {
-    run_cases("tests/quran/counting_graph.trycmd");
+    let guard = ServeGuard::start();
+    guard.run_segments(&[
+        "tests/quran/counting_graph_s1.trycmd",
+        "tests/quran/counting_graph_s2.trycmd",
+    ]);
 }
 
-/// Phase 2 six-family integrity surface (D-10/D-11).
+/// Phase 2 six-family integrity surface (D-10/D-11): host-backed segments.
 #[test]
 fn quran_verify_snapshots() {
-    run_cases("tests/quran/verify.trycmd");
+    let guard = ServeGuard::start();
+    guard.run_segments(&["tests/quran/verify_s1.trycmd", "tests/quran/verify_s2.trycmd"]);
 }
 
-/// Phase 2 operator reference-corpus path (QV-015, ADR-0114).
+/// Phase 2 operator reference-corpus path (QV-015, ADR-0114): host-backed
+/// segments; the mismatch import queues and the host records the failure.
 #[test]
 fn quran_reference_snapshots() {
-    run_cases("tests/quran/reference.trycmd");
+    let guard = ServeGuard::start();
+    guard.run_segments(&[
+        "tests/quran/reference_s1.trycmd",
+        "tests/quran/reference_s2.trycmd",
+        "tests/quran/reference_s3.trycmd",
+        "tests/quran/reference_s4.trycmd",
+        "tests/quran/reference_s5.trycmd",
+        "tests/quran/reference_s6.trycmd",
+    ]);
 }
 
-/// Phase 2 edition identity/primary/license operator surface (D-07).
+/// Phase 2 edition identity/primary/license operator surface (D-07):
+/// host-backed segments.
 #[test]
 fn edition_identity_snapshots() {
-    run_cases("tests/quran/edition_identity.trycmd");
+    let guard = ServeGuard::start();
+    guard.run_segments(&[
+        "tests/quran/edition_identity_s1.trycmd",
+        "tests/quran/edition_identity_s2.trycmd",
+    ]);
 }
 
-/// Phase 2 quotation hard-failure surface (D-15, QC-07).
+/// Phase 2 quotation hard-failure surface (D-15, QC-07): host-backed segments.
 #[test]
 fn quran_verify_quotation_snapshots() {
-    run_cases("tests/quran/verify_quotation.trycmd");
+    let guard = ServeGuard::start();
+    guard.run_segments(&[
+        "tests/quran/verify_quotation_s1.trycmd",
+        "tests/quran/verify_quotation_s2.trycmd",
+    ]);
 }
 
 /// Upstream catalog ingestion (metadata-only, no database).
@@ -173,6 +206,10 @@ fn free_port() -> u16 {
     port
 }
 
+fn is_terminal_state(state: &str) -> bool {
+    matches!(state, "Succeeded" | "Failed" | "DeadLettered" | "Cancelled")
+}
+
 fn readyz_ok(port: u16) -> bool {
     use std::io::{Read, Write};
     let addr: std::net::SocketAddr = format!("127.0.0.1:{port}").parse().unwrap();
@@ -205,10 +242,13 @@ struct ServeGuard {
 }
 
 impl ServeGuard {
+    /// Migrate a temp database and start a real `qai serve` child on an
+    /// isolated loopback port, waiting for `/readyz`. Seeds nothing: callers
+    /// enqueue what they need (task 1 seeds its proof job; task-3 flows
+    /// import through the CLI).
     fn start() -> Self {
         let dir = tempfile::tempdir().unwrap();
         migrate_db(dir.path());
-        seed_job(&dir.path().join("qai.db"), "job-host-import", "quran.import", &import_payload());
         let port = free_port();
         let mut cmd = std::process::Command::new(env!("CARGO_BIN_EXE_qai"));
         cmd.args(["--data-dir", dir.path().to_str().unwrap()]);
@@ -227,6 +267,63 @@ impl ServeGuard {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
         guard
+    }
+
+    fn db_path(&self) -> std::path::PathBuf {
+        self.dir.path().join("qai.db")
+    }
+
+    /// Run trycmd segment files in order against this guard's database, with
+    /// host-backed synchronization after every segment: a queued import
+    /// reaches its terminal state before the next segment's dependent
+    /// commands run (D-13). trycmd has no wait primitive, so one-shot files
+    /// are split at import boundaries instead.
+    fn run_segments(&self, segments: &[&str]) {
+        for segment in segments {
+            {
+                trycmd::TestCases::new()
+                    .default_bin_name("qai")
+                    .env("QAI_DATA_DIR", self.dir.path().to_str().unwrap())
+                    .case("tests/quran/*.toml")
+                    .case(segment);
+            }
+            self.wait_all_imports_terminal(std::time::Duration::from_secs(120));
+        }
+    }
+
+    /// Poll the existing application read path until every `quran.import` job
+    /// is terminal. Gentle polling: each check is cheap and read-only, and
+    /// hammering the single write connection starves a running import.
+    fn wait_all_imports_terminal(&self, budget: std::time::Duration) {
+        let path = self.db_path();
+        let path = path.to_str().unwrap();
+        let start = std::time::Instant::now();
+        loop {
+            let runtime =
+                tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+            let page = runtime.block_on(application::db::list_jobs(path)).expect("list jobs");
+            let items = page["items"].as_array().cloned().unwrap_or_default();
+            let mut pending = Vec::new();
+            for item in &items {
+                if item["kind"] == "quran.import"
+                    && !is_terminal_state(item["state"].as_str().unwrap_or_default())
+                {
+                    pending.push(format!(
+                        "{}={}",
+                        item["id"].as_str().unwrap_or("?"),
+                        item["state"].as_str().unwrap_or("?")
+                    ));
+                }
+            }
+            if pending.is_empty() {
+                return;
+            }
+            assert!(
+                start.elapsed() < budget,
+                "queued imports not terminal within {budget:?}: {pending:?}"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
     }
 
     fn job_state(&self, id: &str) -> String {
@@ -299,6 +396,9 @@ impl Drop for ServeGuard {
 #[test]
 fn serve_hosts_the_worker_and_shuts_down_joined() {
     let mut guard = ServeGuard::start();
+    // The task-1 proof job is seeded explicitly: flow guards start bare so
+    // CLI-driven imports never collide with a pre-seeded edition.
+    seed_job(&guard.db_path(), "job-host-import", "quran.import", &import_payload());
 
     // The host owns the seeded import: exactly one claimed-and-terminal job,
     // with no one-shot drain involved.
@@ -397,12 +497,13 @@ fn enqueue_only_import_is_queued_without_host() {
     // A second import uses the v2 manifest: re-importing the same
     // `slug@version` is a catalog conflict (UNIQUE(source_id, version),
     // pre-existing on the sync path — the setup seam is untouched here).
-    let out = qai_out(
-        dir.path(),
-        &["quran", "import", "../../fixtures/quran/test-edition-min-v2.json"],
+    let out =
+        qai_out(dir.path(), &["quran", "import", "../../fixtures/quran/test-edition-min-v2.json"]);
+    assert!(
+        out.status.success(),
+        "second import enqueues: {}",
+        String::from_utf8_lossy(&out.stderr)
     );
-    assert!(out.status.success(), "second import enqueues: {}", String::from_utf8_lossy(&out.stderr));
-    let human = String::from_utf8_lossy(&out.stdout);
     let human = String::from_utf8_lossy(&out.stdout);
     assert!(human.contains("queued"), "queued wording: {human}");
     assert!(human.contains("Queued"), "queued state: {human}");

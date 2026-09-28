@@ -1,0 +1,17 @@
+# Phase 2 CLI acceptance — operator reference-corpus path (QV-015, ADR-0114)
+#
+# Segment 6 of 6 (host-backed, D-13): the segment-5 mismatch import has
+# reached its host-owned terminal state (dead letter after bounded retries)
+# with no edition staged — fail-closed through the host boundary.
+#
+# Reaching this block proves the harness synchronization observed every import
+# terminal, including the mismatch job's dead letter.
+
+No edition is staged for the mismatched import: validation finds nothing.
+
+```console
+$ qai quran validate test-edition-identity@0.1.0
+? 5
+error: [..]
+
+```

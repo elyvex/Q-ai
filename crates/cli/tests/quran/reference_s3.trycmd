@@ -1,0 +1,16 @@
+# Phase 2 CLI acceptance — operator reference-corpus path (QV-015, ADR-0114)
+#
+# Segment 3 of 5 (host-backed, D-13): queue the import with its companion
+# reference. The harness synchronizes on the host-owned terminal state before
+# segment 4; the comparison is evaluated inside the host-run handler.
+#
+# The companion synthetic reference is byte-identical to the rich fixture and
+# its declared pins match, so the comparison is evaluated and passes.
+
+```console
+$ qai quran import ../../fixtures/quran/test-edition-rich/manifest.json --reference ../../fixtures/quran/test-edition-rich/reference.json
+queued test-edition-rich@0.1.0 import as job [..] (state: Queued)
+inspect with `qai job show [..]`; `qai serve` processes queued work
+note: synthetic test data — non-canonical (ADR-0101 fallback)
+
+```

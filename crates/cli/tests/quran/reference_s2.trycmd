@@ -1,0 +1,25 @@
+# Phase 2 CLI acceptance — operator reference-corpus path (QV-015, ADR-0114)
+#
+# Segment 2 of 5 (host-backed, D-13): the segment-1 import has reached its
+# host-owned terminal state. A reference-less import records the QV-015 skip
+# (`reference_comparison: skipped`), never `pass`, and the overall exit
+# stays 0.
+
+```console
+$ qai quran activate test-edition-min@0.1.0 --yes
+activated test-edition-min@0.1.0 (generation 1)
+
+```
+
+```console
+$ qai quran verify
+QURAN VERIFY
+counts: pass — 2 checks pass
+addressing: pass — 4 checks pass
+unicode: pass — 1 checks pass
+checksums: pass — 3 checks pass
+roundtrip: pass — 1 checks pass
+reference_comparison: skipped — reference comparison skipped: no reference corpus configured (ADR-0114; OD-03 owner gate)
+exit: 0
+
+```

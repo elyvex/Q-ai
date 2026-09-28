@@ -1,0 +1,18 @@
+# Phase 2 quotation hard-failure surface (D-15, QC-07)
+#
+# Segment 1 of 2 (host-backed, D-13): migrate, then queue the import. The
+# harness synchronizes on the host-owned terminal state before segment 2.
+
+```console
+$ qai db migrate
+migrations applied; schema version [..]
+
+```
+
+```console
+$ qai quran import ../../fixtures/quran/test-edition-min/manifest.json
+queued test-edition-min@0.1.0 import as job [..] (state: Queued)
+inspect with `qai job show [..]`; `qai serve` processes queued work
+note: synthetic test data — non-canonical (ADR-0101 fallback)
+
+```

@@ -1,0 +1,84 @@
+# Phase 2 CLI acceptance — operator reference-corpus path (QV-015, ADR-0114)
+#
+# Segment 4 of 5 (host-backed, D-13): the segment-3 import has reached its
+# host-owned terminal state with the reference comparison evaluated.
+
+```console
+$ qai quran activate test-edition-rich@0.1.0 --yes
+activated test-edition-rich@0.1.0 (generation 2)
+
+```
+
+```console
+$ qai quran verify
+QURAN VERIFY
+counts: pass — 2 checks pass
+addressing: pass — 4 checks pass
+unicode: pass — 1 checks pass
+checksums: pass — 3 checks pass
+roundtrip: pass — 1 checks pass
+reference_comparison: pass — 1 checks pass
+exit: 0
+
+```
+
+```console
+$ qai quran verify --json
+{
+  "addressing": {
+    "checks": [
+      "quran.edition_active",
+      "quran.ayah_identifiers",
+      "quran.division_coverage",
+      "quran.basmala_policy"
+    ],
+    "gate": "exit::OK",
+    "status": "pass",
+    "summary": "4 checks pass"
+  },
+  "checksums": {
+    "checks": [
+      "quran.edition_checksum",
+      "quran.structure_hash",
+      "quran.token_order_hash"
+    ],
+    "gate": "exit::OK",
+    "status": "pass",
+    "summary": "3 checks pass"
+  },
+  "counts": {
+    "checks": [
+      "quran.surah_count",
+      "quran.ayah_count"
+    ],
+    "gate": "exit::OK",
+    "status": "pass",
+    "summary": "2 checks pass"
+  },
+  "reference_comparison": {
+    "checks": [
+      "quran.reference_corpus"
+    ],
+    "gate": "exit::OK",
+    "status": "pass",
+    "summary": "1 checks pass"
+  },
+  "roundtrip": {
+    "checks": [
+      "quran.token_roundtrip"
+    ],
+    "gate": "exit::OK",
+    "status": "pass",
+    "summary": "1 checks pass"
+  },
+  "unicode": {
+    "checks": [
+      "quran.unicode_form"
+    ],
+    "gate": "exit::OK",
+    "status": "pass",
+    "summary": "1 checks pass"
+  }
+}
+
+```

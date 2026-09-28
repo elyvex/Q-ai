@@ -1,0 +1,17 @@
+# Phase 2 CLI acceptance — operator reference-corpus path (QV-015, ADR-0114)
+#
+# Segment 5 of 6 (host-backed, D-13): an incompatible reference queues like
+# any other import. The harness synchronizes on the host-owned terminal state
+# — bounded retries per D-15, then an inspectable dead letter — before segment
+# 6 proves nothing was staged.
+#
+# The identity fixture is never imported elsewhere, so the operator sees only
+# the reference-comparison failure.
+
+```console
+$ qai quran import ../../fixtures/quran/test-edition-identity/manifest.json --reference ../../fixtures/quran/test-edition-rich/reference.json
+queued test-edition-identity@0.1.0 import as job [..] (state: Queued)
+inspect with `qai job show [..]`; `qai serve` processes queued work
+note: synthetic test data — non-canonical (ADR-0101 fallback)
+
+```
