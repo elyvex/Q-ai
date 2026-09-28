@@ -50,16 +50,22 @@ async fn migrated_db() -> (tempfile::TempDir, Arc<SqliteDatabase>, String) {
          VALUES ('src-1', 'Test source', 'quran_edition', '2026-09-27T00:00:00Z', \
          '2026-09-27T00:00:00Z')"
             .to_string(),
+        "INSERT INTO sources (id, title, content_type, created_at, updated_at) \
+         VALUES ('src-2', 'Test source 2', 'quran_edition', '2026-09-27T00:00:00Z', \
+         '2026-09-27T00:00:00Z')"
+            .to_string(),
         "INSERT INTO source_versions \
             (id, source_id, version, schema_version, state, trust_level, \
              license_status, license_json, created_at) \
          VALUES ('sv-1', 'src-1', '0.1.0', 1, 'Staged', 'ImportedUnverified', \
                  'PublicDomain', '{}', '2026-09-27T00:00:00Z')"
             .to_string(),
+        // A second source at the same manifest version: distinct idempotency
+        // keys per job while the manifest/source version check still passes.
         "INSERT INTO source_versions \
             (id, source_id, version, schema_version, state, trust_level, \
              license_status, license_json, created_at) \
-         VALUES ('sv-2', 'src-1', '0.2.0', 1, 'Staged', 'ImportedUnverified', \
+         VALUES ('sv-2', 'src-2', '0.1.0', 1, 'Staged', 'ImportedUnverified', \
                  'PublicDomain', '{}', '2026-09-27T00:00:00Z')"
             .to_string(),
     ] {
