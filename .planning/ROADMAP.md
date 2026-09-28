@@ -41,7 +41,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Background jobs enqueue, lease, checkpoint, and cancel without an external broker
   5. `xtask arch-check` passes and CI fails on any forbidden crate dependency
 
-**Plans**: 4/5 plans executed
+**Plans**: 5/5 plans executed
 
 Plans:
 
@@ -49,7 +49,7 @@ Plans:
 - [x] 01-02-PLAN.md — Audited durable mutations with same-UnitOfWork provenance/audit/outbox coverage and rollback proof
 - [x] 01-03-PLAN.md — Durable job checkpoints, per-kind retry, cooperative cancellation, and lifecycle audit controls
 - [x] 01-04-PLAN.md — Long-lived `qai serve` worker host with safe shutdown and enqueue-only one-shot import boundary
-- [ ] 01-05-PLAN.md — Registry/git architecture enforcement, final evidence gates, and TASK-001 repository closure
+- [x] 01-05-PLAN.md — Registry/git architecture enforcement, final evidence gates, and TASK-001 repository closure
 
 ### Phase 2: Canonical Quran Core
 
@@ -265,7 +265,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundations | 4/5 | In Progress|  |
+| 1. Foundations | 5/5 | In Progress|  |
 | 2. Canonical Quran Core | 7/7 | Complete    | 2026-09-25 |
 | 3. Quran Search & Linguistics | 6/8 | In Progress|  |
 | 4. Quran Graph | 0/TBD | Not started | - |

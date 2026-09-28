@@ -70,6 +70,7 @@ Progress: [█░░░░░░░░░] 8%
 | Phase 01-foundations P03 | 35min | 3 tasks | 16 files |
 | Phase 03 P01 | 19 min | 3 tasks | 3 files |
 | Phase 01-foundations P04 | 72min | 3 tasks | 32 files |
+| Phase 01-foundations P05 | 150min | 3 tasks | 10 files |
 | Phase 03 P02 | 20 min | 3 tasks | 4 files |
 | Phase 03 P03 | 23 min | 3 tasks | 8 files |
 | Phase 03 P04 | 18 min | 3 tasks | 4 files |
@@ -113,6 +114,7 @@ Recent decisions affecting current work:
 - [Phase 03]: [Phase 03-01]: The empty/whitespace query fallback edge is disposed at the CLI boundary: cmd_search returns a typed usage error (exit::USAGE, 'provide query text') before opening the service; search_normalized has no empty guard and legitimately returns Ok with zero hits, so the guard is asserted where the operator actually calls it.
 - [Phase 01-foundations]: 01-04: qai serve owns the durable worker host (run_until_shutdown over a watch channel, default registry, readiness gate, signal-driven joined shutdown); one-shot quran import is enqueue-only with a queued job result (D-13..D-16)
 - [Phase 01-foundations]: 01-04: CLI corpus flows run host-backed as 22 import-boundary trycmd segments with read-only terminal-state sync; QV-015 mismatch fails through the host to an inspectable dead letter with nothing staged
+- [Phase 01-foundations]: 01-05: registry/git external policy derived from live cargo metadata (23 crates, git empty, no package churn) with inline mutation coverage; TASK-001 closed active→completed (indexes 0/1) with a record-specific checker; tree-wide fmt + quran_identity reds quarantined as foreign concurrent-session files, quoted and untouched (D-01/D-02/D-03)
 - [Phase 03]: [Phase 03-02]: The concatenated golden oracle is independent of the Rust search stack — a pure-Python re-implementation of L6's full ordered rule list plus the surah-scoped 3-ayah window store computes every expectation, so agreement with the service is evidence rather than tautology.
 - [Phase 03]: [Phase 03-02]: Concatenated golden rows carry their own allow_cross_ayah/max_ayah_span selectors and the dispatcher passes them through (never a literal or default); cross-ayah rows are restricted to clean boundary cases so the boundary parts provably tile the whole query, and ayah-level-win dedup is asserted on every row.
 - [Phase 03]: [Phase 03-02]: The plan's CLI target crates/cli/tests/quran/search.trycmd does not exist; SC2 CLI snapshots land in the real host-backed segment crates/cli/tests/quran/search_s2.trycmd (Rule 3 correction).
