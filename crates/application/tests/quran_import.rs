@@ -984,10 +984,7 @@ async fn enqueue_import_job_reports_queued_and_stages_only_via_host() {
     assert_eq!(enqueued.state, "Queued");
     assert!(!enqueued.job_id.is_empty());
     assert!(enqueued.max_attempts >= 1, "carries the retry snapshot");
-    assert!(
-        enqueued.inspect_command.contains(&enqueued.job_id),
-        "inspect command names the job"
-    );
+    assert!(enqueued.inspect_command.contains(&enqueued.job_id), "inspect command names the job");
 
     // Queued in storage with no worker side effect: nothing staged.
     let queue = Arc::new(SqliteJobQueue::new(db.clone()));

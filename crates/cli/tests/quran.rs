@@ -394,8 +394,15 @@ fn enqueue_only_import_is_queued_without_host() {
     assert_eq!(out.status.code(), Some(5), "unstaged edition is not found");
 
     // Human wording reports queued state and never claims terminal staging.
-    let out = qai_out(dir.path(), &["quran", "import", manifest]);
-    assert!(out.status.success());
+    // A second import uses the v2 manifest: re-importing the same
+    // `slug@version` is a catalog conflict (UNIQUE(source_id, version),
+    // pre-existing on the sync path — the setup seam is untouched here).
+    let out = qai_out(
+        dir.path(),
+        &["quran", "import", "../../fixtures/quran/test-edition-min-v2.json"],
+    );
+    assert!(out.status.success(), "second import enqueues: {}", String::from_utf8_lossy(&out.stderr));
+    let human = String::from_utf8_lossy(&out.stdout);
     let human = String::from_utf8_lossy(&out.stdout);
     assert!(human.contains("queued"), "queued wording: {human}");
     assert!(human.contains("Queued"), "queued state: {human}");

@@ -1307,49 +1307,69 @@ pub async fn deprecate_edition(
     Ok(())
 }
 
-/// Enqueue a `quran.import` job and run the worker inline to completion.
-pub async fn run_import_job(
+/// Result of enqueueing a `quran.import` job (D-13): identities for the
+/// operator to inspect, never a terminal staging claim.
+pub struct ImportEnqueueResult {
+    /// Durable job id; inspect with `qai job show <id>`.
+    pub job_id: String,
+    /// Always [`QURAN_IMPORT_KIND`].
+    pub kind: String,
+    /// Always `Queued`: the one-shot call never waits for handler completion.
+    pub state: String,
+    /// Enqueue-time retry snapshot for this kind (D-15).
+    pub max_attempts: u32,
+    /// Runnable inspect command for the operator.
+    pub inspect_command: String,
+}
+
+/// Validate-then-enqueue a `quran.import` job without running it.
+///
+/// One-shot CLI paths use this: the job row goes through the audited
+/// [`crate::job_queue::SqliteJobQueue`] (D-11) with the kind's retry snapshot
+/// stamped at enqueue time (D-15), and the long-lived host executes it. No
+/// worker is constructed or drained here — a `Staged` edition appears only
+/// after host processing (D-13).
+pub async fn enqueue_import_job(
     db: &std::sync::Arc<storage_sqlite::SqliteDatabase>,
     input: quran_corpus::import::ImportInput,
-) -> Result<jobs::JobOutcome, jobs::JobError> {
+) -> Result<ImportEnqueueResult, jobs::JobError> {
     use jobs::queue::JobQueue;
     use jobs::registry::HandlerRegistry;
-    use jobs::worker::Worker;
-    let queue = std::sync::Arc::new(crate::job_queue::SqliteJobQueue::new(db.clone()));
     let registry = std::sync::Arc::new(
         HandlerRegistry::new().register(std::sync::Arc::new(QuranImportHandler::new(db.clone()))),
+    );
+    let queue = std::sync::Arc::new(
+        crate::job_queue::SqliteJobQueue::new(db.clone()).with_retry_registry(registry.clone()),
     );
     let job_id = input.job_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let mut payload = input.clone();
     payload.job_id = Some(job_id.clone());
     let payload_json = serde_json::to_value(&payload)
         .map_err(|err| jobs::JobError::Storage(format!("bad import payload: {err}")))?;
-    queue
-        .enqueue(storage::repository::JobRecord {
-            id: job_id.clone(),
-            kind: QURAN_IMPORT_KIND.into(),
-            payload_json: payload_json.to_string(),
-            idempotency_key: Some(import_idempotency_key(&input.source_version_id)),
-            state: "Queued".into(),
-            priority: 0,
-            attempts: 0,
-            max_attempts: 1,
-            available_at: input.created_at.clone(),
-            lease_owner: None,
-            lease_expires_at: None,
-            checkpoint_json: None,
-            cancel_requested: false,
-            created_by: input.invoked_by.clone(),
-        })
-        .await?;
-    let worker = Worker::new(queue.clone(), registry, "qai-cli");
-    worker.run_until_idle().await?;
-    // Read the terminal state through the queue.
-    let job =
-        queue.get(&job_id).await?.ok_or_else(|| jobs::JobError::NotFound { id: job_id.clone() })?;
-    match job.state.as_str() {
-        "Succeeded" => Ok(jobs::JobOutcome { success: true, result: Some(job_id) }),
-        "Cancelled" => Err(jobs::JobError::Cancelled { id: job_id }),
-        _ => Err(jobs::JobError::Storage(format!("import job ended as {}", job.state))),
-    }
+    let mut record = storage::repository::JobRecord {
+        id: job_id.clone(),
+        kind: QURAN_IMPORT_KIND.into(),
+        payload_json: payload_json.to_string(),
+        idempotency_key: Some(import_idempotency_key(&input.source_version_id)),
+        state: "Queued".into(),
+        priority: 0,
+        attempts: 0,
+        max_attempts: 1,
+        available_at: input.created_at.clone(),
+        lease_owner: None,
+        lease_expires_at: None,
+        checkpoint_json: None,
+        cancel_requested: false,
+        created_by: input.invoked_by.clone(),
+    };
+    registry.stamp_job_policy(&mut record);
+    let max_attempts = record.max_attempts;
+    queue.enqueue(record).await?;
+    Ok(ImportEnqueueResult {
+        job_id: job_id.clone(),
+        kind: QURAN_IMPORT_KIND.into(),
+        state: "Queued".into(),
+        max_attempts,
+        inspect_command: format!("qai job show {job_id}"),
+    })
 }

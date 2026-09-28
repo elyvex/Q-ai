@@ -65,7 +65,8 @@ pub enum QuranAction {
         #[command(subcommand)]
         action: EditionAction,
     },
-    /// Import an edition manifest to `Staged` (runs the `quran.import` job inline).
+    /// Queue an edition-manifest import as a `quran.import` job; `qai serve`
+    /// stages it (D-13). Reports the queued job id, never terminal staging.
     Import {
         /// Manifest path.
         manifest: String,

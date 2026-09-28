@@ -889,65 +889,37 @@ pub async fn cmd_import(
         created_at: at,
         reference_manifest_text: reference_text,
     };
-    let run_id = input.run_id.clone();
-    match super::quran::run_import_job(&db, input).await {
-        Ok(_) => {
+    // Enqueue-only boundary (D-13): the one-shot command validates, persists
+    // the catalog rows above and one queued job row, then reports the job id.
+    // No worker is constructed or drained here; `qai serve` owns execution
+    // and the edition stays unstaged until the host processes the job.
+    match super::quran::enqueue_import_job(&db, input).await {
+        Ok(enqueued) => {
             // OD-01 B-track: synthetic pipeline-exercise data is never
             // canonical — label it on the human surface every time.
-            let mut human =
-                format!("imported {}@{} to Staged\n", doc.edition.slug, doc.edition.version);
+            let mut human = format!(
+                "queued {}@{} import as job {} (state: Queued)\ninspect with `{}`; `qai serve` processes queued work\n",
+                doc.edition.slug, doc.edition.version, enqueued.job_id, enqueued.inspect_command,
+            );
             if doc.edition.synthetic {
                 human.push_str("note: synthetic test data — non-canonical (ADR-0101 fallback)\n");
             }
             CommandOutput::ok(
                 human,
-                serde_json::json!({"slug": doc.edition.slug, "version": doc.edition.version.to_string()}),
+                serde_json::json!({
+                    "job_id": enqueued.job_id,
+                    "kind": enqueued.kind,
+                    "state": enqueued.state,
+                    "max_attempts": enqueued.max_attempts,
+                    "inspect": enqueued.inspect_command,
+                    "slug": doc.edition.slug,
+                    "version": doc.edition.version.to_string(),
+                }),
             )
         }
-        Err(err) => {
-            // A QV-015 reference-comparison failure is a validation failure,
-            // not an internal error: surface the durable report and exit 3 so
-            // the operator sees a fail-closed corpus-integrity result.
-            let mut uow = match db.write().await {
-                Ok(uow) => uow,
-                Err(_) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
-            };
-            // A fetch failure here is a storage failure, not evidence about
-            // the import: surface it distinctly instead of masking it behind
-            // the import error (WR-08).
-            let report = match uow.quran().get_validation_report(&run_id).await {
-                Ok(report) => report,
-                Err(fetch_err) => {
-                    let _ = uow.rollback().await;
-                    return CommandOutput::err(exit::INTERNAL, fetch_err.to_string());
-                }
-            };
-            let _ = uow.rollback().await;
-            let reference_failed = report
-                .as_ref()
-                .and_then(|report| {
-                    serde_json::from_str::<Vec<quran_corpus::validation::Finding>>(
-                        &report.findings_json,
-                    )
-                    .ok()
-                })
-                .is_some_and(|findings| {
-                    findings.iter().any(|finding| {
-                        finding.rule_id == "QV-015"
-                            && finding.severity == quran_corpus::validation::Severity::Fatal
-                    })
-                });
-            if reference_failed {
-                CommandOutput::err(
-                    exit::VALIDATION,
-                    format!(
-                        "QV-015 reference comparison failed for {run_id}; see the validation report"
-                    ),
-                )
-            } else {
-                CommandOutput::err(exit::INTERNAL, err.to_string())
-            }
-        }
+        // The job never ran, so no validation report exists to consult: an
+        // enqueue failure is storage/queue-level and internal.
+        Err(err) => CommandOutput::err(exit::INTERNAL, err.to_string()),
     }
 }
 
