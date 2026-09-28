@@ -24,7 +24,7 @@
 ### Quran Search, Linguistics & Tools
 
 - [x] **REQ-quran-normalization**: Search normalization that never replaces displayed canonical text; indexed search forms, user-controlled normalization, concatenated-word search (PRD §8)
-- [ ] **REQ-quran-linguistics**: Token linguistic data with multiple analyses and Arabic word families (PRD §9)
+- [x] **REQ-quran-linguistics**: Token linguistic data with multiple analyses and Arabic word families (PRD §9)
 - [ ] **REQ-quran-research-tools**: First-class typed tools (UI/API/workflow/agent-usable): exact/normalized search, root/morphology, frequency/distribution, context/comparison, graph, rhetorical/structural, discovery (PRD §11)
 - [ ] **REQ-quran-result-contract**: Every Quran tool result includes the stated result fields including a research checksum (PRD §12)
 - [ ] **REQ-quran-graph**: First-class graph representation independent of vector search: node/edge types, edge provenance, graph search, explainability, semi-automated annotation (PRD §10)
@@ -102,7 +102,7 @@ Deferred post-MVP extensions (from PRD §44.2 excludes — acknowledged, not in 
 | REQ-data-separation-layers | Phase 2 | Complete |
 | REQ-ingestion-validation-eval | Phase 2 | Complete |
 | REQ-quran-normalization | Phase 3 | Complete |
-| REQ-quran-linguistics | Phase 3 | Pending |
+| REQ-quran-linguistics | Phase 3 | Complete |
 | REQ-quran-graph | Phase 4 | Pending |
 | REQ-quran-display | Phase 5 | Pending |
 | REQ-quran-research-tools | Phase 5 | Pending |

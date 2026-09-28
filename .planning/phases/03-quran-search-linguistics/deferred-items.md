@@ -23,3 +23,24 @@ failures in unrelated files are not auto-fixed).
   snapshots to the queued/host contract.
 - **Not fixed here:** outside plan 03-01's `files_modified` and outside the
   rule-doc correction's blast radius.
+
+## From plan 03-03 (executed 2026-09-28)
+
+### 1. `cargo fmt --check` is red for two committed 03-01 test files (pre-existing, NOT caused by 03-03)
+
+- **Files:** `crates/application/tests/alpha_smoke.rs`,
+  `crates/application/tests/canonical_display_identity.rs`
+- **Finding:** running `cargo fmt -p application` (edition-2024 `rustfmt.toml`)
+  reformats these two committed files, so they are not currently rustfmt-clean in
+  CI terms. They are unrelated to plan 03-03 and were reverted here rather than
+  fixed.
+- **Owner:** a formatting-sweep follow-up (or the phase gate) should run
+  `cargo fmt -p application` on the 03-01 artifacts.
+- **Not fixed here:** outside plan 03-03's `files_modified`.
+
+### Status note (03-01 item 1, now resolved)
+
+`cargo test -p cli --test quran` is **green (13/13)** on the 03-03 base commit
+`0afc4d1`; the stale-snapshot failure recorded above was refreshed by the later
+`01-04`/`03-02` snapshot commits.
+
