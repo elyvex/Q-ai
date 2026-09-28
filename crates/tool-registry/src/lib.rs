@@ -258,9 +258,21 @@ impl ToolRegistry {
         Self { backend }
     }
 
+    /// The full registered tool set (§12 tool plan; D-13): the two direct-read
+    /// tools plus the attributed search/lexicon surface.
+    pub const TOOL_NAMES: [&'static str; 7] = [
+        "quran.get_ayah",
+        "quran.get_context",
+        "quran.search",
+        "quran.root",
+        "quran.lemma",
+        "quran.morphology",
+        "quran.family",
+    ];
+
     /// Registered tool names.
     pub fn tool_names(&self) -> Vec<&'static str> {
-        vec!["quran.get_ayah", "quran.get_context"]
+        Self::TOOL_NAMES.to_vec()
     }
 
     /// `quran.get_ayah`: exact ayah lookup, no synthesis, ever.
@@ -485,6 +497,41 @@ mod tests {
         (view, meta)
     }
 
+    /// A conformant attributed envelope for the D-13 tools: attribution always
+    /// present, rules present where a normalization trace applies.
+    fn attributed(
+        tool: &str,
+        version: SemVer,
+        query: serde_json::Value,
+    ) -> ToolResult<serde_json::Value> {
+        ToolResult {
+            tool_name: tool.to_string(),
+            tool_version: version,
+            query: query.clone(),
+            normalization_rules: vec!["N01".to_string(), "N03".to_string()],
+            edition_id: Some("ed-1".to_string()),
+            edition_version: Some("0.1.0".to_string()),
+            canonical_references: vec!["quran:test@0.1.0:1:1".to_string()],
+            analysis_sources: vec![AnalysisSource {
+                kind: "dataset".to_string(),
+                reference: "test-morph@0.1.0".to_string(),
+            }],
+            results: serde_json::json!({ "ok": true }),
+            confidence: None,
+            warnings: Vec::new(),
+            execution_time_ms: 0.0,
+            reproducibility: reproducibility(
+                tool,
+                version,
+                &query,
+                Some("test"),
+                Some("0.1.0"),
+                BTreeMap::new(),
+                3,
+            ),
+        }
+    }
+
     #[async_trait]
     impl QuranBackend for FakeBackend {
         async fn backend_get_ayah(
@@ -501,6 +548,53 @@ mod tests {
             _spec: &ContextSpec,
         ) -> Result<(ContextView, BackendMeta), ToolError> {
             Err(ToolError::Backend { code: "QAI-QUR-0310".into(), detail: "unimplemented".into() })
+        }
+
+        async fn backend_search(
+            &self,
+            params: &SearchToolParams,
+        ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+            Ok(attributed(
+                "quran.search",
+                SEARCH_TOOL_VERSION,
+                serde_json::to_value(params).unwrap(),
+            ))
+        }
+
+        async fn backend_root(
+            &self,
+            params: &RootToolParams,
+        ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+            Ok(attributed("quran.root", ROOT_TOOL_VERSION, serde_json::to_value(params).unwrap()))
+        }
+
+        async fn backend_lemma(
+            &self,
+            params: &LemmaToolParams,
+        ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+            Ok(attributed("quran.lemma", LEMMA_TOOL_VERSION, serde_json::to_value(params).unwrap()))
+        }
+
+        async fn backend_morphology(
+            &self,
+            params: &MorphologyToolParams,
+        ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+            Ok(attributed(
+                "quran.morphology",
+                MORPHOLOGY_TOOL_VERSION,
+                serde_json::to_value(params).unwrap(),
+            ))
+        }
+
+        async fn backend_family(
+            &self,
+            params: &FamilyToolParams,
+        ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+            Ok(attributed(
+                "quran.family",
+                FAMILY_TOOL_VERSION,
+                serde_json::to_value(params).unwrap(),
+            ))
         }
     }
 

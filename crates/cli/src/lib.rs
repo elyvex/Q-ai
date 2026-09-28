@@ -334,8 +334,14 @@ pub fn dispatch(cli: Cli) -> i32 {
                                 return exit_code::INTERNAL;
                             }
                         };
+                        // Full D-13 tool surface: the two direct-read tools plus
+                        // the attributed search/lexicon tools, wired to the
+                        // serving-index root the API search backend uses.
                         let tools = std::sync::Arc::new(
-                            application::quran_tools::ReaderToolBackend::registry(reader.clone()),
+                            application::quran_tools::ReaderToolBackend::registry_with_index_root(
+                                reader.clone(),
+                                application::quran_index::index_root_for_db(&db_path),
+                            ),
                         );
                         let api = std::sync::Arc::new(server::api::ReaderBackend::new(reader));
                         let search = match application::quran_search_api::SearchApiService::open(

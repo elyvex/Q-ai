@@ -8,15 +8,23 @@
 //! every result carries edition identity, canonical references, and a
 //! deterministic reproducibility checksum.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use async_trait::async_trait;
 use quran_core::{
-    AyahNumber, AyahOptions, AyahView, ContextSpec, ContextView, QuranRef, SurahNumber,
+    AyahNumber, AyahOptions, AyahView, ContextSpec, ContextView, EditionSelector, QuranEdition,
+    QuranRef, SurahNumber,
 };
 use storage::Database as _;
-use tool_registry::{BackendMeta, GetAyahParams, GetContextParams, QuranBackend, ToolRegistry};
-use tools::{ToolError, ToolResult};
+use tool_registry::{
+    BackendMeta, FAMILY_TOOL_VERSION, FamilyToolParams, GetAyahParams, GetContextParams,
+    LEMMA_TOOL_VERSION, LemmaToolParams, MORPHOLOGY_TOOL_VERSION, MorphologyToolParams,
+    QuranBackend, ROOT_TOOL_VERSION, RootToolParams, SEARCH_TOOL_VERSION, SearchToolParams,
+    ToolRegistry,
+};
+use tools::{AnalysisSource, ToolError, ToolResult, reproducibility};
 
 use crate::quran_reader::{QuranReader, QuranReaderService, ReaderError};
 
@@ -30,11 +38,24 @@ fn tool_error(error: ReaderError) -> ToolError {
     to_tool_error(error)
 }
 
-async fn backend_meta(
+/// Map a search failure to a typed tool backend error (codes delegated).
+fn search_tool_error(error: crate::quran_search::SearchError) -> ToolError {
+    use storage::error::Diagnostic;
+    ToolError::Backend { code: error.code().to_string(), detail: error.to_string() }
+}
+
+/// Map a morphology/lexicon failure to a typed tool backend error. An
+/// unavailable dataset is `QAI-MORPH-0004`, never an empty result.
+fn morphology_tool_error(error: crate::quran_morphology::MorphologyToolError) -> ToolError {
+    use storage::error::Diagnostic;
+    ToolError::Backend { code: error.code().to_string(), detail: error.to_string() }
+}
+
+/// Build read metadata for one edition row.
+async fn meta_from_edition(
     reader: &QuranReaderService,
-    reference: &QuranRef,
+    edition: &QuranEdition,
 ) -> Result<BackendMeta, ToolError> {
-    let edition = reader.get_edition(reference.edition()).await.map_err(tool_error)?;
     let mut uow = reader.database().write().await.map_err(|err| ToolError::Backend {
         code: "QAI-QUR-0310".into(),
         detail: err.to_string(),
@@ -67,20 +88,71 @@ async fn backend_meta(
     })
 }
 
+async fn backend_meta(
+    reader: &QuranReaderService,
+    reference: &QuranRef,
+) -> Result<BackendMeta, ToolError> {
+    let edition = reader.get_edition(reference.edition()).await.map_err(tool_error)?;
+    meta_from_edition(reader, &edition).await
+}
+
+/// Read metadata for the active edition (the lexicon tools' read context).
+async fn active_meta(reader: &QuranReaderService) -> Result<BackendMeta, ToolError> {
+    let edition = reader.get_edition(&EditionSelector::Active).await.map_err(tool_error)?;
+    meta_from_edition(reader, &edition).await
+}
+
+/// A pinned `quran:<slug>@<version>:<surah>:<ayah>` reference.
+fn pinned_ref(meta: &BackendMeta, surah: i64, ayah: i64) -> String {
+    format!("quran:{}@{}:{surah}:{ayah}", meta.edition_slug, meta.edition_version)
+}
+
+/// One `dataset` analysis source for a lexicon result.
+fn dataset_source(dataset: &str) -> Vec<AnalysisSource> {
+    vec![AnalysisSource { kind: "dataset".to_string(), reference: dataset.to_string() }]
+}
+
+/// The default index root used by the reader-only constructors (matches
+/// [`crate::quran_index::index_root_for_db`]'s fallback). The direct-read tools
+/// never read it.
+fn default_index_root() -> std::path::PathBuf {
+    std::path::PathBuf::from("index")
+}
+
 /// The tool backend: [`QuranReaderService`] behind the registry trait.
 pub struct ReaderToolBackend {
     reader: Arc<QuranReaderService>,
+    /// Serving-index root; only `quran.search` reads it.
+    index_root: std::path::PathBuf,
 }
 
 impl ReaderToolBackend {
-    /// Wrap a reader.
+    /// Wrap a reader (direct-read tools; the index root is only used by
+    /// `quran.search`).
     pub fn new(reader: Arc<QuranReaderService>) -> Self {
-        Self { reader }
+        Self { reader, index_root: default_index_root() }
     }
 
-    /// A registry wired to the reader.
+    /// Wrap a reader with an explicit serving-index root (D-13 search tool).
+    pub fn with_index_root(
+        reader: Arc<QuranReaderService>,
+        index_root: std::path::PathBuf,
+    ) -> Self {
+        Self { reader, index_root }
+    }
+
+    /// A registry wired to the reader (direct-read tools).
     pub fn registry(reader: Arc<QuranReaderService>) -> ToolRegistry {
         ToolRegistry::new(Arc::new(Self::new(reader)))
+    }
+
+    /// A registry wired to the reader and its serving-index root: the full
+    /// D-13 tool surface (search + lexicon tools included).
+    pub fn registry_with_index_root(
+        reader: Arc<QuranReaderService>,
+        index_root: std::path::PathBuf,
+    ) -> ToolRegistry {
+        ToolRegistry::new(Arc::new(Self::with_index_root(reader, index_root)))
     }
 }
 
@@ -104,6 +176,239 @@ impl QuranBackend for ReaderToolBackend {
         let view = self.reader.get_context(reference, spec).await.map_err(tool_error)?;
         let meta = backend_meta(&self.reader, reference).await?;
         Ok((view, meta))
+    }
+
+    /// `quran.search` (D-13): normalized L3 search over the serving index. The
+    /// envelope carries the hit trace's rule ids (I9) and canonical attribution;
+    /// an empty query never reaches here (the registry guard rejects it).
+    async fn backend_search(
+        &self,
+        params: &SearchToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let started = Instant::now();
+        let meta = active_meta(&self.reader).await?;
+        let search_params = crate::quran_search::SearchParams {
+            text: params.text.clone(),
+            edition: params.edition.clone(),
+            mode: crate::quran_search::MatchMode::WholeToken,
+            filters: Vec::new(),
+            limit: params.limit.unwrap_or(20).clamp(1, 1000),
+            offset: 0,
+            explain: false,
+            highlight: false,
+        };
+        let output = crate::quran_search::search_normalized(
+            self.reader.database(),
+            &self.index_root,
+            &search_params,
+            crate::quran_search::NormalizedProfile::Registry(
+                quran_normalization::ProfileId::L3,
+                None,
+            ),
+        )
+        .await
+        .map_err(search_tool_error)?;
+        let normalization_rules: Vec<String> = output
+            .hits
+            .first()
+            .map(|hit| {
+                hit.explanation().rule_ids().iter().map(|rule| rule.as_str().to_string()).collect()
+            })
+            .unwrap_or_default();
+        let canonical_references: Vec<String> =
+            output.hits.iter().map(|hit| hit.reference().to_string()).collect();
+        let analysis_sources = canonical_references
+            .iter()
+            .map(|reference| AnalysisSource {
+                kind: "canonical".to_string(),
+                reference: reference.clone(),
+            })
+            .collect();
+        let query = serde_json::to_value(params).unwrap_or(serde_json::Value::Null);
+        Ok(ToolResult {
+            tool_name: "quran.search".to_string(),
+            tool_version: SEARCH_TOOL_VERSION,
+            query: query.clone(),
+            normalization_rules,
+            edition_id: Some(meta.edition_id.clone()),
+            edition_version: Some(meta.edition_version.clone()),
+            canonical_references,
+            analysis_sources,
+            results: serde_json::to_value(&output).unwrap_or(serde_json::Value::Null),
+            confidence: None,
+            warnings: Vec::new(),
+            execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
+            reproducibility: reproducibility(
+                "quran.search",
+                SEARCH_TOOL_VERSION,
+                &query,
+                Some(&meta.edition_slug),
+                Some(&meta.edition_version),
+                BTreeMap::new(),
+                meta.corpus_generation,
+            ),
+        })
+    }
+
+    /// `quran.root` (D-13): root-grouped occurrences from the active dataset,
+    /// attributed per dataset (no attribution means no result).
+    async fn backend_root(
+        &self,
+        params: &RootToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let started = Instant::now();
+        let meta = active_meta(&self.reader).await?;
+        let (dataset_id, occurrences) =
+            crate::quran_morphology::root_search(self.reader.database(), &params.root)
+                .await
+                .map_err(morphology_tool_error)?;
+        let canonical_references: Vec<String> =
+            occurrences.iter().map(|occ| pinned_ref(&meta, occ.surah, occ.ayah)).collect();
+        let query = serde_json::to_value(params).unwrap_or(serde_json::Value::Null);
+        Ok(ToolResult {
+            tool_name: "quran.root".to_string(),
+            tool_version: ROOT_TOOL_VERSION,
+            query: query.clone(),
+            normalization_rules: Vec::new(),
+            edition_id: Some(meta.edition_id.clone()),
+            edition_version: Some(meta.edition_version.clone()),
+            canonical_references,
+            analysis_sources: dataset_source(&dataset_id),
+            results: serde_json::to_value(&occurrences).unwrap_or(serde_json::Value::Null),
+            confidence: None,
+            warnings: Vec::new(),
+            execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
+            reproducibility: reproducibility(
+                "quran.root",
+                ROOT_TOOL_VERSION,
+                &query,
+                Some(&meta.edition_slug),
+                Some(&meta.edition_version),
+                BTreeMap::new(),
+                meta.corpus_generation,
+            ),
+        })
+    }
+
+    /// `quran.lemma` (D-13): lemma-grouped occurrences from the active dataset.
+    async fn backend_lemma(
+        &self,
+        params: &LemmaToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let started = Instant::now();
+        let meta = active_meta(&self.reader).await?;
+        let (dataset_id, occurrences) =
+            crate::quran_morphology::lemma_search(self.reader.database(), &params.lemma)
+                .await
+                .map_err(morphology_tool_error)?;
+        let canonical_references: Vec<String> =
+            occurrences.iter().map(|occ| pinned_ref(&meta, occ.surah, occ.ayah)).collect();
+        let query = serde_json::to_value(params).unwrap_or(serde_json::Value::Null);
+        Ok(ToolResult {
+            tool_name: "quran.lemma".to_string(),
+            tool_version: LEMMA_TOOL_VERSION,
+            query: query.clone(),
+            normalization_rules: Vec::new(),
+            edition_id: Some(meta.edition_id.clone()),
+            edition_version: Some(meta.edition_version.clone()),
+            canonical_references,
+            analysis_sources: dataset_source(&dataset_id),
+            results: serde_json::to_value(&occurrences).unwrap_or(serde_json::Value::Null),
+            confidence: None,
+            warnings: Vec::new(),
+            execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
+            reproducibility: reproducibility(
+                "quran.lemma",
+                LEMMA_TOOL_VERSION,
+                &query,
+                Some(&meta.edition_slug),
+                Some(&meta.edition_version),
+                BTreeMap::new(),
+                meta.corpus_generation,
+            ),
+        })
+    }
+
+    /// `quran.morphology` (D-13): every analysis of one token, attributed.
+    async fn backend_morphology(
+        &self,
+        params: &MorphologyToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let started = Instant::now();
+        let meta = active_meta(&self.reader).await?;
+        let (dataset_id, analyses) = crate::quran_morphology::morphology_for_token(
+            self.reader.database(),
+            &meta.edition_slug,
+            &meta.edition_version,
+            i64::from(params.surah),
+            i64::from(params.ayah),
+            i64::from(params.position),
+        )
+        .await
+        .map_err(morphology_tool_error)?;
+        let canonical_references =
+            vec![pinned_ref(&meta, i64::from(params.surah), i64::from(params.ayah))];
+        let query = serde_json::to_value(params).unwrap_or(serde_json::Value::Null);
+        Ok(ToolResult {
+            tool_name: "quran.morphology".to_string(),
+            tool_version: MORPHOLOGY_TOOL_VERSION,
+            query: query.clone(),
+            normalization_rules: Vec::new(),
+            edition_id: Some(meta.edition_id.clone()),
+            edition_version: Some(meta.edition_version.clone()),
+            canonical_references,
+            analysis_sources: dataset_source(&dataset_id),
+            results: serde_json::to_value(&analyses).unwrap_or(serde_json::Value::Null),
+            confidence: None,
+            warnings: Vec::new(),
+            execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
+            reproducibility: reproducibility(
+                "quran.morphology",
+                MORPHOLOGY_TOOL_VERSION,
+                &query,
+                Some(&meta.edition_slug),
+                Some(&meta.edition_version),
+                BTreeMap::new(),
+                meta.corpus_generation,
+            ),
+        })
+    }
+
+    /// `quran.family` (D-13): explained family relations, attributed per dataset.
+    async fn backend_family(
+        &self,
+        params: &FamilyToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let started = Instant::now();
+        let meta = active_meta(&self.reader).await?;
+        let (dataset_id, members) =
+            crate::quran_morphology::word_family(self.reader.database(), &params.kind, &params.id)
+                .await
+                .map_err(morphology_tool_error)?;
+        let query = serde_json::to_value(params).unwrap_or(serde_json::Value::Null);
+        Ok(ToolResult {
+            tool_name: "quran.family".to_string(),
+            tool_version: FAMILY_TOOL_VERSION,
+            query: query.clone(),
+            normalization_rules: Vec::new(),
+            edition_id: Some(meta.edition_id.clone()),
+            edition_version: Some(meta.edition_version.clone()),
+            canonical_references: Vec::new(),
+            analysis_sources: dataset_source(&dataset_id),
+            results: serde_json::to_value(&members).unwrap_or(serde_json::Value::Null),
+            confidence: None,
+            warnings: Vec::new(),
+            execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
+            reproducibility: reproducibility(
+                "quran.family",
+                FAMILY_TOOL_VERSION,
+                &query,
+                Some(&meta.edition_slug),
+                Some(&meta.edition_version),
+                BTreeMap::new(),
+                meta.corpus_generation,
+            ),
+        })
     }
 }
 
