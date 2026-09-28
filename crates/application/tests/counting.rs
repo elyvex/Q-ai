@@ -322,7 +322,9 @@ fn morph_import_params(document_text: String) -> MorphologyImportParams {
         batch_id: Some("batch-count-lex".to_string()),
         attribution: "synthetic test import (not scholarly data)".to_string(),
         license_status: "PublicDomain".to_string(),
-        license_json: "{}".to_string(),
+        // Gate 6 (D-07): the synthetic lexicon carries the mandatory capture
+        // fields + redistribution_allowed, so activation stays permitted.
+        license_json: r#"{"source_url":"https://example.invalid/qai-synthetic-test-lexicon","capture_date":"2026-09-28","capturer":"qai-test-fixtures","spdx_id":"CC0-1.0","redistribution_allowed":true}"#.to_string(),
     }
 }
 

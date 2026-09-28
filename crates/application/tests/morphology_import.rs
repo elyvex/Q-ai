@@ -255,7 +255,10 @@ fn import_params(document_text: String, batch: &str) -> MorphologyImportParams {
         batch_id: Some(batch.to_string()),
         attribution: "synthetic test import (not scholarly data)".to_string(),
         license_status: "PublicDomain".to_string(),
-        license_json: "{}".to_string(),
+        // Gate 6 (D-07) requires the mandatory capture fields plus
+        // `redistribution_allowed: true`; the synthetic lexicon is CC0-like
+        // in-repo fixture data (see fixtures/quran/morphology/license-matrix.json).
+        license_json: r#"{"source_url":"https://example.invalid/qai-synthetic-test-lexicon","capture_date":"2026-09-28","capturer":"qai-test-fixtures","spdx_id":"CC0-1.0","redistribution_allowed":true,"modification_allowed":true,"attribution_required":false}"#.to_string(),
     }
 }
 

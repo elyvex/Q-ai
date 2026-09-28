@@ -77,6 +77,14 @@ pub enum MorphologyJobError {
     /// Unmatched tokens remain (activation gate, AC-P2-16).
     #[error("unmatched tokens remain: {0} across {1} surah(s)")]
     UnmatchedRemaining(usize, usize),
+    /// License evidence absent/non-permissive (D-07/G-04 activation gate 6).
+    #[error("license evidence for {dataset} does not permit activation: {reason}")]
+    LicenseEvidence {
+        /// Dataset identity (`slug@version`).
+        dataset: String,
+        /// Why activation is refused.
+        reason: String,
+    },
     /// Cancellation requested; staging keeps prior checkpoint state.
     #[error("morphology import cancelled")]
     Cancelled,
@@ -105,6 +113,8 @@ impl storage::error::Diagnostic for MorphologyJobError {
             }
             Self::CanonicalChanged => storage::error::DiagnosticCode::new("QAI-IDX", 5),
             Self::Approval(_) => storage::error::DiagnosticCode::new("QAI-MORPH", 5),
+            // Codes are append-only; 6 is the license-evidence gate (D-07).
+            Self::LicenseEvidence { .. } => storage::error::DiagnosticCode::new("QAI-MORPH", 6),
             Self::BadState { .. } | Self::BlockingFindings(..) | Self::UnmatchedRemaining(..) => {
                 storage::error::DiagnosticCode::new("QAI-MORPH", 2)
             }
@@ -132,6 +142,10 @@ impl storage::error::Diagnostic for MorphologyJobError {
             }
             Self::UnmatchedRemaining(..) => {
                 "Fix alignment gaps (per-surah report), then re-import.".to_string()
+            }
+            Self::LicenseEvidence { .. } => {
+                "Capture the dataset license per licenses/README.md (source_url, capture_date, capturer, redistribution_allowed: true), then re-import."
+                    .to_string()
             }
             Self::Cancelled => "Re-run the import; staging resumes from checkpoints.".to_string(),
         })
@@ -482,6 +496,35 @@ pub async fn run_morphology_import(
             .replace_staging_rows(&batch_id, staged)
             .await
             .map_err(MorphologyJobError::storage)?;
+        // Persist the dataset row (state `staged`) carrying the operator's
+        // license/attribution evidence so the activation gate (gate 6) can
+        // consult it (D-07/G-04). The import never activates; an already-active
+        // dataset keeps its validated evidence and is never clobbered here.
+        if fatal == 0 {
+            let existing = uow
+                .quran()
+                .get_dataset(&params.dataset_slug, &params.dataset_version)
+                .await
+                .map_err(MorphologyJobError::storage)?;
+            if existing.as_ref().is_none_or(|row| row.state != "active") {
+                uow.quran()
+                    .upsert_dataset(QuranDatasetRow {
+                        id: format!("{}@{}", params.dataset_slug, params.dataset_version),
+                        slug: params.dataset_slug.clone(),
+                        version: params.dataset_version.clone(),
+                        title: format!("{} {}", params.dataset_slug, params.dataset_version),
+                        license_status: params.license_status.clone(),
+                        license_json: params.license_json.clone(),
+                        attribution: params.attribution.clone(),
+                        root_convention: "unified-v1-draft".to_string(),
+                        tagset_version: "unified-v1-draft".to_string(),
+                        state: "staged".to_string(),
+                        created_at: created.clone(),
+                    })
+                    .await
+                    .map_err(MorphologyJobError::storage)?;
+            }
+        }
         uow.commit().await.map_err(MorphologyJobError::storage)?;
     }
     // MV-018 post-check.
@@ -613,6 +656,38 @@ pub async fn activate_morphology(
         uow.rollback().await.map_err(MorphologyJobError::storage)?;
         return Err(MorphologyJobError::UnmatchedRemaining(unmatched.len(), surahs.len()));
     }
+    // Gate 6 (D-07/G-04): the dataset's captured license evidence must be
+    // present and permissive BEFORE any promotion. The row was written at
+    // import; a missing row means no evidence was ever captured. Fail closed —
+    // never guess a status, never bundle on unknown provenance (T-03-22).
+    let dataset_id = format!("{}@{}", batch.dataset_slug, batch.dataset_version);
+    let license_evidence = match uow
+        .quran()
+        .get_dataset(&batch.dataset_slug, &batch.dataset_version)
+        .await
+        .map_err(MorphologyJobError::storage)
+        .and_then(|row| {
+            row.ok_or_else(|| license_gate_error(&dataset_id, "no license evidence captured"))
+        })
+        .and_then(|row| {
+            quran_morphology::license::LicenseEvidence::from_status_and_json(
+                &row.license_status,
+                &row.license_json,
+            )
+            .map_err(|err| license_gate_error(&dataset_id, err.to_string()))
+        })
+        .and_then(|evidence| {
+            evidence
+                .require_activation_allowed()
+                .map(|()| evidence)
+                .map_err(|err| license_gate_error(&dataset_id, err.to_string()))
+        }) {
+        Ok(evidence) => evidence,
+        Err(err) => {
+            uow.rollback().await.map_err(MorphologyJobError::storage)?;
+            return Err(err);
+        }
+    };
     let staged = uow
         .quran()
         .list_staging_rows(&params.batch_id)
@@ -620,7 +695,6 @@ pub async fn activate_morphology(
         .map_err(MorphologyJobError::storage)?;
 
     // Resolve staged payloads into lexicon rows (ids content-addressed).
-    let dataset_id = format!("{}@{}", batch.dataset_slug, batch.dataset_version);
     let active = uow.quran().active_dataset().await.map_err(MorphologyJobError::storage)?;
     let mut roots: HashMap<String, storage::quran::LexiconRootRow> = HashMap::new();
     let mut lemmas: HashMap<String, storage::quran::LexiconLemmaRow> = HashMap::new();
@@ -737,19 +811,7 @@ pub async fn activate_morphology(
             .map_err(MorphologyJobError::storage)?;
     }
     uow.quran()
-        .upsert_dataset(QuranDatasetRow {
-            id: dataset_id.clone(),
-            slug: batch.dataset_slug.clone(),
-            version: batch.dataset_version.clone(),
-            title: format!("{} {}", batch.dataset_slug, batch.dataset_version),
-            license_status: "Unspecified".to_string(),
-            license_json: "{}".to_string(),
-            attribution: format!("{} (imported; attribution pending ADR-0203)", batch.dataset_slug),
-            root_convention: "unified-v1-draft".to_string(),
-            tagset_version: "unified-v1-draft".to_string(),
-            state: "active".to_string(),
-            created_at: finished.clone(),
-        })
+        .set_dataset_state(&dataset_id, "active")
         .await
         .map_err(MorphologyJobError::storage)?;
     let root_rows: Vec<_> = roots.into_values().collect();
@@ -772,7 +834,11 @@ pub async fn activate_morphology(
             outcome: AuditOutcome::Allowed,
             reason: None,
             before: None,
-            after: Some(serde_json::json!({"dataset": dataset_id, "approval": params.approval_id})),
+            after: Some(serde_json::json!({
+                "dataset": dataset_id,
+                "approval": params.approval_id,
+                "license_status": license_evidence.status(),
+            })),
             request_id: None,
             prev_chain_hash: domain::ContentHash {
                 algorithm: domain::HashAlgorithm::Sha256,
@@ -801,6 +867,11 @@ pub async fn activate_morphology(
 
 fn none_if_empty(value: &str) -> Option<String> {
     if value.trim().is_empty() { None } else { Some(value.to_string()) }
+}
+
+/// Build the typed activation-gate error for absent/non-permissive evidence.
+fn license_gate_error(dataset: &str, reason: impl Into<String>) -> MorphologyJobError {
+    MorphologyJobError::LicenseEvidence { dataset: dataset.to_string(), reason: reason.into() }
 }
 
 /// Pattern labels explicitly supplied by a morphology row.
