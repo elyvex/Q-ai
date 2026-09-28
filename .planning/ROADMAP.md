@@ -102,7 +102,7 @@ Plans:
   4. User can view frequency, distribution, and co-occurrence for any root or lemma
   5. Displayed canonical text is never modified by normalization in any result
 
-**Plans**: 5/8 plans executed
+**Plans**: 6/8 plans executed
 
 Plans:
 **Wave 1**
@@ -121,7 +121,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 03-06-PLAN.md — Licensing: machine-readable license matrix + fail-closed activation-rejection gate + CLI license plumbing (G-04/D-07)
+- [x] 03-06-PLAN.md — Licensing: machine-readable license matrix + fail-closed activation-rejection gate + CLI license plumbing (G-04/D-07)
 - [ ] 03-07-PLAN.md — Hardening: `doctor --indexes` end-to-end soak + performance budgets + attributed tool registry (G-08/G-06/G-11)
 
 **Wave 5** *(blocked on Wave 4 completion)*
@@ -267,7 +267,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 |-------|----------------|--------|-----------|
 | 1. Foundations | 4/5 | In Progress|  |
 | 2. Canonical Quran Core | 7/7 | Complete    | 2026-09-25 |
-| 3. Quran Search & Linguistics | 5/8 | In Progress|  |
+| 3. Quran Search & Linguistics | 6/8 | In Progress|  |
 | 4. Quran Graph | 0/TBD | Not started | - |
 | 5. Rich Quran Experience | 0/TBD | Not started | - |
 | 6. Hadith & Tafsir | 0/TBD | Not started | - |

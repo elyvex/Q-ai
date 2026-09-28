@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Quran Search & Linguistics
 status: executing
-stopped_at: Completed 03-05-PLAN.md
-last_updated: "2026-09-28T05:00:57.432Z"
+stopped_at: Completed 03-06-PLAN.md
+last_updated: "2026-09-28T05:36:41.057Z"
 last_activity: 2026-09-28
 last_activity_desc: Phase 03 execution started
-state_head: adf477f6072f2cb15841f2cfce7b31899a6ecf67
+state_head: 8d172be549d67e8d6f6cc14ed9189690eee99330
 progress:
   total_phases: 12
   completed_phases: 1
   total_plans: 20
-  completed_plans: 16
+  completed_plans: 17
   percent: 8
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-23)
 ## Current Position
 
 Phase: 03 (Quran Search & Linguistics) — EXECUTING
-Plan: 6 of 8
+Plan: 7 of 8
 Status: Ready to execute
 Last activity: 2026-09-28 — Phase 03 execution started
 
@@ -74,6 +74,7 @@ Progress: [█░░░░░░░░░] 8%
 | Phase 03 P03 | 23 min | 3 tasks | 8 files |
 | Phase 03 P04 | 18 min | 3 tasks | 4 files |
 | Phase 03 P05 | 1h 50m | 2 tasks | 12 files |
+| Phase 03 P06 | 27 min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -125,6 +126,10 @@ Recent decisions affecting current work:
 - [Phase 03]: [Phase 03]: 03-05: A missing morphology dataset is the same typed capability error on both surfaces — exit 5 (QAI-MORPH-0004, the existing tool_exit mapping) at the CLI and 404 (new QAI-LEX-0004 Diagnostic namespace, 'an unavailable capability is a state problem') at HTTP — never an empty list or an empty 200 envelope (T-03-21).
 - [Phase 03]: [Phase 03]: 03-05: qai quran family/lemma are TOP-LEVEL QuranAction variants per D-10 (nesting under MorphologyAction would render qai quran morphology family); the published FrequencyReport keeps its CountingRules block under the field name 'rules' rather than being renamed to counting_rules.
 - [Phase 03]: [Phase 03]: 03-05: The plan's named CLI artifact crates/cli/tests/quran/family.trycmd became family_s1.trycmd + family_s2.trycmd because the host-backed harness splits a queued import from its dependent commands (the identical correction 03-02/03-03 recorded); a new quran_family_snapshots runner entry was required or the file would never execute.
+- [Phase 03]: 03-06: The morphology license evidence reaches gate 6 through the dataset row: run_morphology_import upserts the row (state staged) with the operator's license_status/license_json/attribution and activate_morphology validates it before flipping state to active — no migration (the 0017 row already carries the columns), and every activation path shares one enforcement point (D-07/G-04).
+- [Phase 03]: 03-06: Activation promotion no longer re-upserts the dataset row (which hardcoded license_status Unspecified / license_json {}): it calls set_dataset_state(active), and the import-side upsert is skipped when the existing row is already active, so a validated dataset's evidence can never be silently downgraded (T-03-22).
+- [Phase 03]: 03-06: The permissive allowlist is the permissive half of domain::LicenseStatus (PublicDomain/OpenLicense/PermissionGranted/UserOwned); Unspecified/metadata_only/pending_license_review/Unknown/empty and any unrecognized status are refused, and redistribution_allowed is the binding bundling gate. The gate code is append-only QAI-MORPH-6 mapping to exit::VALIDATION.
+- [Phase 03]: 03-06: OD-11 stays BLOCKED and is implemented as a gate rather than resolved: the qac entry in fixtures/quran/morphology/license-matrix.json is pending_license_review/redistribution_allowed:false and QAC ships only via user-supplied import until licenses/qac/ is captured per licenses/README.md; the gate validates license evidence structurally, not the truth of the captured terms.
 
 ### Pending Todos
 
@@ -146,6 +151,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-28T05:00:57.276Z
-Stopped at: Completed 03-05-PLAN.md
+Last session: 2026-09-28T05:36:29.154Z
+Stopped at: Completed 03-06-PLAN.md
 Resume file: None
