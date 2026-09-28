@@ -10,15 +10,15 @@
 //! Mechanics on synthetic text — the mushaf goldens await a licensed corpus
 //! (P2-X01); the header must read `reviewed_by: pending-linguist`.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::AtomicBool;
 
 use application::quran::activate_edition;
 use application::quran_forms::{RebuildParams, rebuild_forms};
 use application::quran_index::{IndexBuildParams, QURAN_AYAH_INDEX_ID, rebuild_index};
 use application::quran_search::{
-    ExactField, MatchMode, NormalizedProfile, PhraseMode, RateLimiter, SearchParams, search_exact,
-    search_normalized, search_phrase, search_regex,
+    ExactField, MatchMode, NormalizedProfile, PhraseMode, RateLimiter, SearchParams,
+    search_concatenated, search_exact, search_normalized, search_phrase, search_regex,
 };
 use domain::{PrincipalId, Timestamp};
 use quran_corpus::import::{ImportInput, ImportOptions, ImportOutcome, ImportProgress, run_import};
@@ -29,6 +29,8 @@ use tempfile::tempdir;
 
 const FIXTURE: &str =
     concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/quran/search/queries.jsonl");
+const CONCATENATED_FIXTURE: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/quran/search/concatenated.jsonl");
 const BASE_MANIFEST: &str = include_str!("../../../fixtures/quran/test-edition-min/manifest.json");
 const PRINCIPAL: &str = "00000000-0000-0000-0000-000000000001";
 const CREATED_AT: &str = "2026-09-14T00:00:00Z";
@@ -178,19 +180,19 @@ fn load_goldens() -> Vec<GoldenRow> {
     rows
 }
 
+/// Short `s:a` form of a fully-qualified service reference
+/// (`quran:<slug>@<ver>:<s>:<a>`).
+fn short_ref(reference: &str) -> String {
+    let mut parts = reference.rsplit(':');
+    let ayah = parts.next().unwrap_or(reference);
+    let surah = parts.next().unwrap_or(reference);
+    format!("{surah}:{ayah}")
+}
+
 fn references_of(out: &application::quran_search::SearchOutput) -> BTreeSet<String> {
     // Service references are fully qualified (`quran:<slug>@<ver>:<s>:<a>`);
     // the oracle stores short `s:a` refs. Compare on the short form.
-    out.hits
-        .iter()
-        .map(|h| {
-            let r = h.reference();
-            let mut parts = r.rsplit(':');
-            let ayah = parts.next().unwrap_or(r);
-            let surah = parts.next().unwrap_or(r);
-            format!("{surah}:{ayah}")
-        })
-        .collect()
+    out.hits.iter().map(|h| short_ref(h.reference())).collect()
 }
 
 /// All 400 golden queries agree with the independent oracle.
@@ -323,4 +325,243 @@ async fn normalized_recall_covers_exact() {
         checked += 1;
     }
     assert_eq!(checked, 200);
+}
+
+// ─── SC2: concatenated (spaceless) golden suite (G-03, D-11) ───────────────
+//
+// `fixtures/quran/search/concatenated.jsonl` holds >= 120 `search_concatenated`
+// rows whose reference sets, totals, segmentations, and cross-ayah boundary
+// labels are derived independently by `scripts/gen_concatenated_goldens.py`
+// (pure-Python L6 skeleton + surah-scoped 3-ayah window matching). Each row
+// carries its OWN `allow_cross_ayah`/`max_ayah_span` selector — the dispatcher
+// never substitutes a literal or a default.
+
+#[derive(serde::Deserialize)]
+struct ExpectedSegment {
+    query_part: String,
+    canonical_token: u16,
+    surah: u16,
+    ayah: u32,
+    #[allow(dead_code)]
+    position: usize,
+}
+
+#[derive(serde::Deserialize)]
+struct ConcatenatedRow {
+    tool: String,
+    input: String,
+    allow_cross_ayah: bool,
+    max_ayah_span: u32,
+    expected_references: Vec<String>,
+    expected_total: u64,
+    must_not_contain: Vec<String>,
+    expected_segmentation: Vec<ExpectedSegment>,
+    #[serde(default)]
+    expected_rules_contain: Vec<String>,
+    #[serde(default)]
+    expected_boundary_refs: Vec<String>,
+}
+
+fn load_concatenated_goldens() -> Vec<ConcatenatedRow> {
+    let text = std::fs::read_to_string(CONCATENATED_FIXTURE).expect("concatenated fixture exists");
+    let mut lines = text.lines();
+    let header: serde_json::Value =
+        serde_json::from_str(lines.next().expect("header present")).expect("header parses");
+    assert_eq!(header["header"], true);
+    assert_eq!(header["reviewed_by"], "pending-linguist");
+    let rows: Vec<ConcatenatedRow> = lines
+        .enumerate()
+        .map(|(i, line)| {
+            serde_json::from_str(line).unwrap_or_else(|e| panic!("concatenated line {i}: {e}"))
+        })
+        .collect();
+    assert!(rows.len() >= 120, "concatenated golden set must hold >= 120 rows, got {}", rows.len());
+    rows
+}
+
+/// All >= 120 concatenated golden queries agree with the independent oracle,
+/// including segmentation tiling, disclosed L6 folds, and cross-ayah boundary
+/// labeling. Selected by the `-- concatenated` libtest filter (a zero-match
+/// filter exits 0, so this function's name is part of the gate).
+#[tokio::test]
+async fn all_concatenated_search_goldens_pass() {
+    let rows = load_concatenated_goldens();
+    let (_dir, db, data_dir) = searchable_db().await;
+    let registry = quran_normalization::ProfileRegistry::new();
+    let pipeline = quran_normalization::NormalizationPipeline::for_profile(
+        &registry,
+        ProfileId::L6,
+        SemVer::new(1, 0, 0),
+    )
+    .expect("L6 pipeline builds");
+    let mut cross_ayah_rows = 0usize;
+    let mut persian_rows = 0usize;
+
+    for (i, row) in rows.iter().enumerate() {
+        // Dispatcher: each row's own selectors flow into the service call.
+        let (got, total, out) = match row.tool.as_str() {
+            "search_concatenated" => {
+                let out = search_concatenated(
+                    &db,
+                    &data_dir,
+                    &base_params(&row.input, MatchMode::Substring),
+                    false,
+                    3,
+                )
+                .await
+                .unwrap_or_else(|e| panic!("golden {i} concatenated {:?}: {e}", row.input));
+                (references_of(&out), out.total_matches, out)
+            }
+            other => panic!("golden {i}: unknown tool {other}"),
+        };
+
+        let want: BTreeSet<String> = row.expected_references.iter().cloned().collect();
+        assert_eq!(got, want, "golden {i} concatenated {:?}: reference set", row.input);
+        assert_eq!(total, row.expected_total, "golden {i} concatenated {:?}: total", row.input);
+        for banned in &row.must_not_contain {
+            assert!(
+                !got.contains(banned),
+                "golden {i} concatenated {:?}: must_not_contain {banned} hit",
+                row.input
+            );
+        }
+
+        let query_skeleton = pipeline.apply(&row.input).0.text().to_string();
+        assert!(!query_skeleton.is_empty(), "golden {i}: empty query skeleton");
+
+        // Persian-codepoint rows must disclose the L6 fold (N10), never apply
+        // it silently (SC1 precision discipline carried into SC2).
+        if !row.expected_rules_contain.is_empty() {
+            persian_rows += 1;
+            for hit in &out.hits {
+                let ids: Vec<String> =
+                    hit.explanation().rule_ids().iter().map(|r| format!("{r:?}")).collect();
+                for rule in &row.expected_rules_contain {
+                    assert!(
+                        ids.iter().any(|id| id == rule),
+                        "golden {i} {:?}: hit {} must disclose rule {rule}, got {ids:?}",
+                        row.input,
+                        hit.reference()
+                    );
+                }
+            }
+        }
+
+        // Every hit carries a non-empty segmentation that tiles a contiguous
+        // slice of the query, and every part resolves to a real canonical token.
+        for hit in &out.hits {
+            let parts = hit.segmentation();
+            assert!(
+                !parts.is_empty(),
+                "golden {i} {:?}: hit {} has empty segmentation",
+                row.input,
+                hit.reference()
+            );
+            let tiled: String = parts.iter().map(|p| p.query_part.as_str()).collect();
+            assert!(
+                query_skeleton.contains(&tiled),
+                "golden {i} {:?}: segmentation {tiled:?} is not a slice of {query_skeleton:?}",
+                row.input
+            );
+            for part in parts {
+                assert!(
+                    part.canonical_token >= 1,
+                    "golden {i} {:?}: canonical_token must be 1-based",
+                    row.input
+                );
+                assert!(
+                    !part.canonical_surface.is_empty()
+                        && hit.quotation().arabic_text().contains(&part.canonical_surface),
+                    "golden {i} {:?}: part {:?} does not resolve to a canonical token",
+                    row.input,
+                    part.query_part
+                );
+            }
+        }
+
+        // Expected segmentation, grouped per (surah, ayah) hit.
+        let mut expected_groups: BTreeMap<(u16, u32), Vec<&ExpectedSegment>> = BTreeMap::new();
+        for seg in &row.expected_segmentation {
+            expected_groups.entry((seg.surah, seg.ayah)).or_default().push(seg);
+        }
+        for ((surah, ayah), segs) in &expected_groups {
+            let want_ref = format!("{surah}:{ayah}");
+            let hit = out
+                .hits
+                .iter()
+                .find(|h| short_ref(h.reference()) == want_ref)
+                .unwrap_or_else(|| {
+                    panic!("golden {i} {:?}: no hit for expected segment ref {want_ref}", row.input)
+                });
+            let parts = hit.segmentation();
+            assert_eq!(
+                parts.len(),
+                segs.len(),
+                "golden {i} {:?}: segmentation length for {want_ref}",
+                row.input
+            );
+            for (part, seg) in parts.iter().zip(segs.iter()) {
+                assert_eq!(
+                    part.query_part, seg.query_part,
+                    "golden {i} {:?}: query_part for {want_ref}",
+                    row.input
+                );
+                assert_eq!(
+                    part.canonical_token, seg.canonical_token,
+                    "golden {i} {:?}: canonical_token for {want_ref}",
+                    row.input
+                );
+            }
+        }
+
+        // Boundary labeling: every expected boundary ref is labeled, and every
+        // non-boundary ref is not (an ayah-level hit wins dedup and is never
+        // presented as a cross-verse fragment).
+        let boundary: BTreeSet<String> = row.expected_boundary_refs.iter().cloned().collect();
+        if !boundary.is_empty() {
+            cross_ayah_rows += 1;
+        }
+        for hit in &out.hits {
+            let sr = short_ref(hit.reference());
+            if boundary.contains(&sr) {
+                assert!(
+                    hit.spans_ayah_boundary(),
+                    "golden {i} {:?}: {sr} must report spans_ayah_boundary",
+                    row.input
+                );
+            } else {
+                assert!(
+                    !hit.spans_ayah_boundary(),
+                    "golden {i} {:?}: {sr} must not report spans_ayah_boundary \
+                     (ayah-level hit wins dedup)",
+                    row.input
+                );
+            }
+        }
+
+        // Cross-ayah rows: the overlapped hits' segmentations tile the whole
+        // query in canonical order.
+        if !boundary.is_empty() {
+            let mut tiled = String::new();
+            for hit in out.hits.iter().filter(|h| boundary.contains(&short_ref(h.reference()))) {
+                for part in hit.segmentation() {
+                    tiled.push_str(&part.query_part);
+                }
+            }
+            assert_eq!(
+                tiled, query_skeleton,
+                "golden {i} {:?}: cross-ayah hits must tile the query",
+                row.input
+            );
+        }
+    }
+
+    assert!(
+        cross_ayah_rows >= 10,
+        "concatenated golden set must hold >= 10 cross-ayah rows, saw {cross_ayah_rows}"
+    );
+    assert!(
+        persian_rows >= 10,
+        "concatenated golden set must hold >= 10 persian-codepoint rows, saw {persian_rows}"
+    );
 }
