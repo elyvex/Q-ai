@@ -242,3 +242,10 @@ None beyond the plan's own register. The changes add no new trust boundary of an
 ---
 *Phase: 03-quran-search-linguistics*
 *Completed: 2026-09-28*
+
+## Self-Check: PASSED
+
+- All 8 declared artifacts exist: `crates/quran-morphology/src/license.rs`, `crates/quran-morphology/src/lib.rs`, `crates/application/src/quran_morphology.rs`, `crates/application/src/quran_cli.rs`, `crates/cli/src/quran.rs`, `crates/application/tests/morphology_import.rs`, `fixtures/quran/morphology/license-matrix.json`, plus the integration-wiring `crates/cli/src/lib.rs` and the two test-helper files.
+- All 4 plan task commits exist: `87c7360` (Task 1 RED), `a70cca3` (Task 1 GREEN), `e015800` (Task 2), `324d043` (Task 3).
+- Verification commands re-run and green: `cargo test -p quran-morphology --lib license_evidence` (4 pass), `cargo test -p application --lib` (51 pass incl. 6 new), `cargo test -p application --test morphology_import` (15 pass incl. 3 new), `--test counting` (9 pass), `--test family_goldens` (1 pass), `cargo test -p cli --test quran` (14 pass), `cargo build -p cli` (ok), `cargo clippy -p quran-morphology -p application -p cli --all-targets -- -D warnings` (clean), `rustfmt --check` on touched files (clean), `xtask migrate-check` (OK), `xtask arch-check` (OK).
+- Out-of-scope failures left alone: `application --test quran_identity` (2 known `NotStaged`) and `cli --test doctor_json` (audit-tamper) — both predate phase 3.
