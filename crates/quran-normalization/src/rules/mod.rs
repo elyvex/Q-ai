@@ -5,7 +5,9 @@
 //! documented on each rule struct; linguistic review of the catalog is
 //! ADR-0204 (DRAFT until the linguist signs off, P2-X02).
 //!
-//! Rules N18–N24 (heuristic / reserved) are not implemented here.
+//! Rules N18–N22 (heuristic affix / repeated-letter folds) are implemented by
+//! [`heuristic_rules`]; [`by_id`] returns `None` only for the reserved N23–N24,
+//! which have no implementation.
 
 pub mod n01;
 pub mod n02;
