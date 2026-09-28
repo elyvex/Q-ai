@@ -79,3 +79,51 @@ failures in unrelated files are not auto-fixed).
 Plan 03-04 did not touch the 03-01 test artifacts; item 2 above restates the
 open fmt redness so the phase gate still sees it.
 
+## From plan 03-05 (executed 2026-09-28)
+
+### 1. `cargo test -p cli --test doctor_json` fails on the audit-tamper case (pre-existing, NOT caused by 03-05)
+
+- **Test:** `audit_verify_rejects_corrupt_chain_without_modifying_database`
+- **Result:** `report["tampered_sequences"]` is `Null` where the test expects
+  `[<event_count>]`, after the test drops `trg_audit_no_update` and rewrites the
+  tail row's `chain_hash` + `reason`. The corrupt run still exits 3 with
+  `valid: false`, so the tamper is detected but not reported under
+  `tampered_sequences`.
+- **Non-causation proof:** the same test fails identically on a read-only
+  `git archive` snapshot of the pre-03-05 plan base
+  (`2d5878a790cef6375ef441ae59456e99db558cb9`) with none of 03-05's changes
+  present. 03-05 touches `quran_cli.rs` (additive `cmd_family`), a new
+  `quran_lexicon_api` module, `server` routes, and CLI serve wiring — none of
+  which is on the `qai audit verify` path.
+- **Owner:** the audit-verification surface (`crates/application/src/audit_bridge.rs`
+  `diagnose_invalid_audit` / `verify_persisted_audit` and the audit triggers).
+- **Not fixed here:** outside plan 03-05's `files_modified` and outside the
+  lexicon surface entirely.
+
+### 2. `docs/08-api/quran-v1-openapi.json` does not document the three new lexicon routes (follow-up)
+
+- **Finding:** `POST /api/v1/quran/family`, `POST /api/v1/quran/count/root-frequency`
+  and `POST /api/v1/quran/count/lemma-frequency` are served (and contract-tested
+  in `crates/server/tests/api.rs`) but absent from the published v1 OpenAPI
+  document. `openapi_spec_covers_every_route` asserts a fixed path list, so it
+  stays green and does not catch the drift.
+- **Owner:** the API-docs surface; add the three paths plus their
+  request/response schemas so the served routes and the spec agree again.
+- **Not fixed here:** `docs/08-api/quran-v1-openapi.json` is outside plan 03-05's
+  `files_modified`.
+
+### 3. The CLI word-family snapshot exercises the typed-unavailability path only (scope note, not a defect)
+
+- **Finding:** `crates/cli/tests/quran/family_s2.trycmd` pins the command tree,
+  the typed `UnavailableDataset` (`QAI-MORPH-0004`, exit 5) and the usage guard.
+  It does not pin an attributed relation list, because a morphology dataset can
+  only be activated through an approval row and no CLI path mints one — the
+  trycmd harness would have to seed the approval + synthetic lexicon in Rust.
+  The attributed branch is covered instead by `crates/application/tests/family_goldens.rs`
+  (03-04, 154 curated families through `word_family`) and by the new
+  `lexicon_family_route_returns_attributed_relations` server contract test.
+- **Owner:** nobody urgently; if a CLI-level attributed snapshot is wanted, add
+  a seeding helper to `crates/cli/tests/quran.rs` (approval row + synthetic
+  lexicon document) as a follow-up.
+
+

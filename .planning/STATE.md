@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Quran Search & Linguistics
 status: executing
-stopped_at: Completed 03-04-PLAN.md
-last_updated: "2026-09-28T02:38:09.214Z"
+stopped_at: Completed 03-05-PLAN.md
+last_updated: "2026-09-28T05:00:57.432Z"
 last_activity: 2026-09-28
 last_activity_desc: Phase 03 execution started
-state_head: 445986b03d32368048d942f4c0104759e9f9f0d1
+state_head: adf477f6072f2cb15841f2cfce7b31899a6ecf67
 progress:
   total_phases: 12
   completed_phases: 1
   total_plans: 20
-  completed_plans: 15
+  completed_plans: 16
   percent: 8
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-23)
 ## Current Position
 
 Phase: 03 (Quran Search & Linguistics) — EXECUTING
-Plan: 5 of 8
+Plan: 6 of 8
 Status: Ready to execute
 Last activity: 2026-09-28 — Phase 03 execution started
 
@@ -73,6 +73,7 @@ Progress: [█░░░░░░░░░] 8%
 | Phase 03 P02 | 20 min | 3 tasks | 4 files |
 | Phase 03 P03 | 23 min | 3 tasks | 8 files |
 | Phase 03 P04 | 18 min | 3 tasks | 4 files |
+| Phase 03 P05 | 1h 50m | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -120,6 +121,10 @@ Recent decisions affecting current work:
 - [Phase 03]: [Phase 03]: 03-04: affix_search fails closed with MorphologyToolError::UnavailableDataset naming 'affix/morpheme index' (QAI-MORPH-0004) instead of the silent Ok(Vec::new()) on the active-dataset path; the labeled L7 heuristic branch is unchanged for the no-dataset case (G-09).
 - [Phase 03]: [Phase 03]: 03-04: The family synthetic lexicon must keep lemma->root functional (lemma = k%9, root = k%3) because quran_lemmas is UNIQUE(dataset_id, lemma); the first scheme (root k%4 / lemma k%5) tripped activation with a unique-constraint violation (Rule 1 fix).
 - [Phase 03]: [Phase 03]: 03-04: The 154-family curated golden set stays reviewed_by: pending-linguist / reviewed_at: null with every row synthetic_test_only, and the runner pins that labeling; linguistic correctness awaits OD-12/D-08 (ADR-0210/0215 not-Accepted).
+- [Phase 03]: [Phase 03]: 03-05: The lexicon surfaces are CLI/HTTP-only wrappers over the existing services — cmd_family + a new LexiconBackend/LexiconApiService both call word_family/root_frequency/lemma_frequency, so SC3/SC4 results cannot drift between surfaces (G-02/G-10/D-10).
+- [Phase 03]: [Phase 03]: 03-05: A missing morphology dataset is the same typed capability error on both surfaces — exit 5 (QAI-MORPH-0004, the existing tool_exit mapping) at the CLI and 404 (new QAI-LEX-0004 Diagnostic namespace, 'an unavailable capability is a state problem') at HTTP — never an empty list or an empty 200 envelope (T-03-21).
+- [Phase 03]: [Phase 03]: 03-05: qai quran family/lemma are TOP-LEVEL QuranAction variants per D-10 (nesting under MorphologyAction would render qai quran morphology family); the published FrequencyReport keeps its CountingRules block under the field name 'rules' rather than being renamed to counting_rules.
+- [Phase 03]: [Phase 03]: 03-05: The plan's named CLI artifact crates/cli/tests/quran/family.trycmd became family_s1.trycmd + family_s2.trycmd because the host-backed harness splits a queued import from its dependent commands (the identical correction 03-02/03-03 recorded); a new quran_family_snapshots runner entry was required or the file would never execute.
 
 ### Pending Todos
 
@@ -141,6 +146,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-28T02:37:54.897Z
-Stopped at: Completed 03-04-PLAN.md
+Last session: 2026-09-28T05:00:57.276Z
+Stopped at: Completed 03-05-PLAN.md
 Resume file: None
