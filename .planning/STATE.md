@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Quran Search & Linguistics
 status: executing
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-09-28T01:10:11.198Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-09-28T01:37:21.236Z"
 last_activity: 2026-09-28
 last_activity_desc: Phase 03 execution started
-state_head: 2fc26cd9200e22d40b33545c611d617ba0d992d7
+state_head: 288030b965e333c049dd63085e86a71673773c64
 progress:
   total_phases: 12
   completed_phases: 1
   total_plans: 20
-  completed_plans: 12
+  completed_plans: 13
   percent: 8
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-23)
 ## Current Position
 
 Phase: 03 (Quran Search & Linguistics) — EXECUTING
-Plan: 2 of 8
+Plan: 3 of 8
 Status: Ready to execute
 Last activity: 2026-09-28 — Phase 03 execution started
 
@@ -70,6 +70,7 @@ Progress: [█░░░░░░░░░] 8%
 | Phase 01-foundations P03 | 35min | 3 tasks | 16 files |
 | Phase 03 P01 | 19 min | 3 tasks | 3 files |
 | Phase 01-foundations P04 | 72min | 3 tasks | 32 files |
+| Phase 03 P02 | 20 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -108,6 +109,9 @@ Recent decisions affecting current work:
 - [Phase 03]: [Phase 03-01]: The empty/whitespace query fallback edge is disposed at the CLI boundary: cmd_search returns a typed usage error (exit::USAGE, 'provide query text') before opening the service; search_normalized has no empty guard and legitimately returns Ok with zero hits, so the guard is asserted where the operator actually calls it.
 - [Phase 01-foundations]: 01-04: qai serve owns the durable worker host (run_until_shutdown over a watch channel, default registry, readiness gate, signal-driven joined shutdown); one-shot quran import is enqueue-only with a queued job result (D-13..D-16)
 - [Phase 01-foundations]: 01-04: CLI corpus flows run host-backed as 22 import-boundary trycmd segments with read-only terminal-state sync; QV-015 mismatch fails through the host to an inspectable dead letter with nothing staged
+- [Phase 03]: [Phase 03-02]: The concatenated golden oracle is independent of the Rust search stack — a pure-Python re-implementation of L6's full ordered rule list plus the surah-scoped 3-ayah window store computes every expectation, so agreement with the service is evidence rather than tautology.
+- [Phase 03]: [Phase 03-02]: Concatenated golden rows carry their own allow_cross_ayah/max_ayah_span selectors and the dispatcher passes them through (never a literal or default); cross-ayah rows are restricted to clean boundary cases so the boundary parts provably tile the whole query, and ayah-level-win dedup is asserted on every row.
+- [Phase 03]: [Phase 03-02]: The plan's CLI target crates/cli/tests/quran/search.trycmd does not exist; SC2 CLI snapshots land in the real host-backed segment crates/cli/tests/quran/search_s2.trycmd (Rule 3 correction).
 
 ### Pending Todos
 
@@ -129,6 +133,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-28T00:33:25.949Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-09-28T01:37:21.152Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None

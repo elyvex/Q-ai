@@ -16,7 +16,7 @@
     {
       "number": "3",
       "name": "Quran Search & Linguistics",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "number": "4",
@@ -69,5 +69,5 @@
     "label": "Advance to the next step",
     "reason": "Phase 03 of 12 · 8% · executing"
   },
-  "updated_at": "2026-09-28T00:33:23.098Z"
+  "updated_at": "2026-09-28T01:37:01.056Z"
 }
