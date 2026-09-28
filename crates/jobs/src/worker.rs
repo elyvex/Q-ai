@@ -163,7 +163,51 @@ impl Worker {
         let Some(job) = self.queue.claim_next(&self.owner, self.config.lease).await? else {
             return Ok(WorkerOutcome::Idle);
         };
+        self.process_claimed(job, None).await
+    }
 
+    /// Long-lived host loop (D-13): recover interrupted leases, claim one job
+    /// at a time, and stop claiming once shutdown is signalled. When shutdown
+    /// arrives during a handler, persist an owner-safe cancellation request
+    /// for that job and await its durable terminal transition instead of
+    /// aborting it (D-14, D-16). Returns the number of jobs processed.
+    ///
+    /// The 01-03 named-checkpoint, retry, and [`CancellationDisposition`]
+    /// behavior is preserved: the per-job path below is shared with
+    /// [`run_once`](Self::run_once).
+    pub async fn run_until_shutdown(
+        &self,
+        mut shutdown: tokio::sync::watch::Receiver<bool>,
+    ) -> Result<u32, JobError> {
+        self.recover_interrupted().await?;
+        let mut processed = 0;
+        loop {
+            if *shutdown.borrow() {
+                break;
+            }
+            let Some(job) = self.queue.claim_next(&self.owner, self.config.lease).await? else {
+                // Bounded idle wait: wake for shutdown or the next poll.
+                tokio::select! {
+                    _ = shutdown.changed() => break,
+                    _ = tokio::time::sleep(self.config.poll_interval) => continue,
+                }
+            };
+            let outcome = self.process_claimed(job, Some(&mut shutdown)).await?;
+            debug_assert!(!matches!(outcome, WorkerOutcome::Idle));
+            processed += 1;
+        }
+        Ok(processed)
+    }
+
+    /// Run one claimed job through validation, the handler/watchdog, and the
+    /// owner-checked terminal transition. With a shutdown receiver, a signal
+    /// during the handler persists an owner-safe cancellation request and
+    /// awaits the durable outcome instead of aborting (D-14, D-16).
+    async fn process_claimed(
+        &self,
+        job: JobRecord,
+        shutdown: Option<&mut tokio::sync::watch::Receiver<bool>>,
+    ) -> Result<WorkerOutcome, JobError> {
         let Some(handler) = self.registry.get(&job.kind) else {
             warn!(job_id = %job.id, kind = %job.kind, "no handler registered; dead-lettering");
             let _ = self
@@ -218,7 +262,24 @@ impl Worker {
             self.config.poll_interval,
         ));
 
-        let result = handler.run(ctx, payload).await;
+        let handler_future = handler.run(ctx, payload);
+        tokio::pin!(handler_future);
+        let result = match shutdown {
+            Some(rx) => {
+                tokio::select! {
+                    r = &mut handler_future => r,
+                    _ = rx.changed() => {
+                        // Owner-safe cooperative request (D-14/D-16): flag
+                        // only, never clears the lease; the watchdog raises
+                        // the handler flag within one poll, then the terminal
+                        // path below awaits the durable outcome.
+                        let _ = self.queue.request_cancel(&job.id).await;
+                        handler_future.await
+                    }
+                }
+            }
+            None => handler_future.await,
+        };
         watchdog.abort();
 
         // Flush any boundary the watchdog did not persist yet.
