@@ -21,6 +21,7 @@ pub mod compare;
 pub mod dataset;
 pub mod error;
 pub mod family;
+pub mod license;
 pub mod policy;
 pub mod tagset;
 pub mod validate;
