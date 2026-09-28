@@ -319,6 +319,54 @@ fn quran_graph_snapshots() {
     assert_eq!(doc["counts"]["edges"], 142, "{doc}");
     assert_eq!(doc["truncation"]["truncated"], false, "{doc}");
 
+    // Static rendering writes DOT/SVG files carrying node and edge
+    // identities (coordinates stay presentational, never asserted).
+    let dot_path = guard.dir.path().join("graph.dot");
+    let out = qai_out(
+        guard.dir.path(),
+        &[
+            "quran",
+            "graph",
+            "export",
+            "--db",
+            "--format",
+            "dot",
+            "--out",
+            dot_path.to_str().unwrap(),
+        ],
+    );
+    assert!(out.status.success(), "export dot: {}", String::from_utf8_lossy(&out.stderr));
+    let dot = std::fs::read_to_string(&dot_path).expect("DOT file writes");
+    assert!(dot.contains("digraph"), "{dot}");
+    assert!(dot.contains("ayah:1:1"), "{dot}");
+    assert!(dot.contains("NEXT"), "{dot}");
+    let svg_path = guard.dir.path().join("graph.svg");
+    let out = qai_out(
+        guard.dir.path(),
+        &[
+            "quran",
+            "graph",
+            "export",
+            "--db",
+            "--format",
+            "svg",
+            "--seed",
+            "ayah:1:1",
+            "--out",
+            svg_path.to_str().unwrap(),
+        ],
+    );
+    assert!(out.status.success(), "export svg: {}", String::from_utf8_lossy(&out.stderr));
+    let svg = std::fs::read_to_string(&svg_path).expect("SVG file writes");
+    assert!(svg.contains("<svg"), "{svg}");
+    assert!(svg.contains("ayah:1:1"), "{svg}");
+    // DOT/SVG without --out and unknown formats are usage errors.
+    let out = qai_out(guard.dir.path(), &["quran", "graph", "export", "--db", "--format", "dot"]);
+    assert_eq!(out.status.code(), Some(2), "render without --out is a usage error");
+    let out =
+        qai_out(guard.dir.path(), &["quran", "graph", "export", "--db", "--format", "graphml"]);
+    assert_eq!(out.status.code(), Some(2), "unknown format is a usage error");
+
     // Word-root reads without an active dataset are the typed unavailable
     // capability (exit 5 with the morphology diagnostic code).
     let out = qai_out(guard.dir.path(), &["quran", "graph", "root-family", "ktb"]);

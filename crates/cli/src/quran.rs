@@ -807,6 +807,12 @@ pub enum GraphAction {
         /// Use the active SQLite projection instead of a file.
         #[arg(long, default_value_t = false)]
         db: bool,
+        /// Output format (`json`, `dot`, or `svg`; dot/svg require `--out`).
+        #[arg(long, default_value = "json")]
+        format: String,
+        /// Seed stable id for SVG layering (defaults to the first node).
+        #[arg(long)]
+        seed: Option<String>,
         /// Output path (defaults to stdout).
         #[arg(long)]
         out: Option<String>,
@@ -1318,11 +1324,13 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
             GraphAction::RootFamily { root, limit } => {
                 application::quran_cli::cmd_graph_root_family(db_path, &root, limit).await
             }
-            GraphAction::Export { file, db, out } => {
+            GraphAction::Export { file, db, format, seed, out } => {
                 application::quran_cli::cmd_graph_export(
                     db_path,
                     file.as_deref(),
                     db,
+                    &format,
+                    seed.as_deref(),
                     out.as_deref(),
                 )
                 .await

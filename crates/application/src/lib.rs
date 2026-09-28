@@ -17,6 +17,7 @@ pub mod quran_forms;
 pub mod quran_graph_annotations;
 pub mod quran_graph_api;
 pub mod quran_graph_build;
+pub mod quran_graph_export;
 pub mod quran_graph_store;
 pub mod quran_index;
 pub mod quran_lexicon_api;

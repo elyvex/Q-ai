@@ -4212,89 +4212,182 @@ pub async fn cmd_graph_root_family(db_path: &str, root: &str, limit: usize) -> C
 }
 
 /// `qai quran graph export`: Graph JSON with identities + truncation flags,
-/// from a projection file or from the active SQLite projection (`--db`,
-/// policy-filtered so only effective assertions for kept edges ship).
+/// or static DOT/SVG rendering, from a projection file or from the active
+/// SQLite projection (`--db`, policy-filtered so only effective assertions
+/// for kept edges ship).
 ///
 /// Exactly one of `--file` or `--db` is required; both absent or both
-/// present is a usage error.
+/// present is a usage error. DOT and SVG render to files (`--out` required).
+#[allow(clippy::too_many_arguments)]
 pub async fn cmd_graph_export(
     db_path: &str,
     file: Option<&str>,
     use_db: bool,
+    format: &str,
+    seed: Option<&str>,
     out: Option<&str>,
 ) -> CommandOutput {
+    let format = match format {
+        "json" => ExportFormat::Json,
+        "dot" => ExportFormat::Dot,
+        "svg" => ExportFormat::Svg,
+        other => {
+            return CommandOutput::err(
+                exit::USAGE,
+                format!("unknown export format `{other}`; use json, dot, or svg"),
+            );
+        }
+    };
     match (file, use_db) {
-        (Some(path), false) => export_graph_file(path, out),
-        (None, true) => export_graph_db(db_path, out).await,
+        (Some(path), false) => export_file(path, format, seed, out),
+        (None, true) => export_db(db_path, format, seed, out).await,
         _ => CommandOutput::err(exit::USAGE, "specify exactly one of --file or --db".to_string()),
     }
 }
 
-/// File-backed export: the fixture/debug path (unchanged semantics).
-fn export_graph_file(file: &str, out: Option<&str>) -> CommandOutput {
-    use quran_graph::export_json;
+/// Export output format (`--format`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExportFormat {
+    Json,
+    Dot,
+    Svg,
+}
+
+/// File-backed export: the fixture/debug path over the file manifest and
+/// node/edge sets (no authority table, so asserted edges would report the
+/// gap — fixture files carry structural edges).
+fn export_file(
+    file: &str,
+    format: ExportFormat,
+    seed: Option<&str>,
+    out: Option<&str>,
+) -> CommandOutput {
     let graph = match read_graph_file(file) {
         Ok(graph) => graph,
         Err(message) => return CommandOutput::err(exit::NOT_FOUND, message),
     };
-    let json = export_json(&graph.nodes, &graph.edges, &[], &graph.manifest);
-    match out {
-        Some(path) => {
-            let text = serde_json::to_string_pretty(&json).unwrap_or_default();
-            if let Err(error) = std::fs::write(path, text) {
-                return CommandOutput::err(exit::INTERNAL, format!("write {path}: {error}"));
-            }
-            CommandOutput::ok(format!("exported {} nodes to {path}", graph.nodes.len()), json)
-        }
-        None => {
-            CommandOutput::ok(format!("exported {} nodes as Graph JSON", graph.nodes.len()), json)
-        }
-    }
+    let sets = super::quran_graph_export::ProjectionSets {
+        manifest: graph.manifest,
+        nodes: graph.nodes,
+        edges: graph.edges,
+        assertions: Vec::new(),
+    };
+    render_export(&sets, format, seed, out)
 }
 
 /// SQLite-backed export over the active structural projection: the full
 /// pinned sets through the pre-serialization policy filter, serialized
-/// with the complete notice (bounded reads with truncation travel through
-/// subgraph/pattern exports in plan 04-05 surfaces).
-async fn export_graph_db(db_path: &str, out: Option<&str>) -> CommandOutput {
-    use super::quran_graph_annotations::visible_export_sets;
-    use quran_graph::{ExportNotice, export_json_with_notice};
+/// with the complete notice.
+async fn export_db(
+    db_path: &str,
+    format: ExportFormat,
+    seed: Option<&str>,
+    out: Option<&str>,
+) -> CommandOutput {
     let service = match super::quran_graph_api::GraphApiService::open(db_path).await {
         Ok(service) => service,
         Err(error) => return graph_error_output(&error),
     };
-    let (nodes, edges, assertions) = service.export_sets();
-    let (nodes, edges, traveling) = visible_export_sets(&nodes, &edges, &assertions);
-    let manifest = service.manifest().clone();
-    let json =
-        export_json_with_notice(&nodes, &edges, &traveling, &manifest, &ExportNotice::complete());
-    match out {
-        Some(path) => {
-            let text = serde_json::to_string_pretty(&json).unwrap_or_default();
-            if let Err(error) = std::fs::write(path, text) {
+    let row_id = service.manifest().id.clone();
+    let sets =
+        match super::quran_graph_export::load_projection_sets(service.database(), &row_id).await {
+            Ok(sets) => sets,
+            Err(error) => return graph_error_output(&error),
+        };
+    render_export(&sets, format, seed, out)
+}
+
+/// Serialize `sets` in the requested format. JSON travels through the
+/// policy filter with the complete notice; DOT/SVG render the pinned sets
+/// with a truncation banner when partial (full-projection exports are
+/// complete) and always write to `--out`.
+fn render_export(
+    sets: &super::quran_graph_export::ProjectionSets,
+    format: ExportFormat,
+    seed: Option<&str>,
+    out: Option<&str>,
+) -> CommandOutput {
+    use quran_graph::{AuthzScope, ExportNotice};
+    let scope = AuthzScope::all_visible();
+    match format {
+        ExportFormat::Json => {
+            let json =
+                super::quran_graph_export::assemble_export(sets, &scope, &ExportNotice::complete());
+            let nodes = sets.nodes.len();
+            let edges = sets.edges.len();
+            let traveling = json["assertions"].as_array().map(Vec::len).unwrap_or(0);
+            match out {
+                Some(path) => {
+                    let text = serde_json::to_string_pretty(&json).unwrap_or_default();
+                    if let Err(error) = std::fs::write(path, text) {
+                        return CommandOutput::err(
+                            exit::INTERNAL,
+                            format!("write {path}: {error}"),
+                        );
+                    }
+                    CommandOutput::ok(
+                        format!(
+                            "exported {nodes} nodes, {edges} edges, {traveling} assertions to {path} (projection {})",
+                            sets.manifest.projection_id,
+                        ),
+                        json,
+                    )
+                }
+                None => CommandOutput::ok(
+                    format!(
+                        "exported {nodes} nodes, {edges} edges, {traveling} assertions as Graph JSON (projection {})",
+                        sets.manifest.projection_id,
+                    ),
+                    json,
+                ),
+            }
+        }
+        ExportFormat::Dot | ExportFormat::Svg => {
+            let path = match out {
+                Some(path) => path,
+                None => {
+                    return CommandOutput::err(
+                        exit::USAGE,
+                        "dot and svg exports require --out".to_string(),
+                    );
+                }
+            };
+            let notice = ExportNotice::complete();
+            let text = match format {
+                ExportFormat::Dot => {
+                    super::quran_graph_export::render_dot(&sets.nodes, &sets.edges, &notice)
+                }
+                ExportFormat::Svg => {
+                    let seed = seed.map(str::to_string).unwrap_or_else(|| {
+                        sets.nodes
+                            .iter()
+                            .map(|node| node.stable_id.clone())
+                            .min()
+                            .unwrap_or_default()
+                    });
+                    super::quran_graph_export::render_svg(&sets.nodes, &sets.edges, &seed, &notice)
+                }
+                ExportFormat::Json => unreachable!("json handled above"),
+            };
+            if let Err(error) = std::fs::write(path, &text) {
                 return CommandOutput::err(exit::INTERNAL, format!("write {path}: {error}"));
             }
+            let kind = if format == ExportFormat::Dot { "DOT" } else { "SVG" };
             CommandOutput::ok(
                 format!(
-                    "exported {} nodes, {} edges, {} assertions to {path} (projection {})",
-                    nodes.len(),
-                    edges.len(),
-                    traveling.len(),
-                    manifest.projection_id,
+                    "wrote {kind} ({} nodes, {} edges) to {path}",
+                    sets.nodes.len(),
+                    sets.edges.len()
                 ),
-                json,
+                serde_json::json!({
+                    "format": if format == ExportFormat::Dot { "dot" } else { "svg" },
+                    "out": path,
+                    "nodes": sets.nodes.len(),
+                    "edges": sets.edges.len(),
+                    "truncated": false,
+                }),
             )
         }
-        None => CommandOutput::ok(
-            format!(
-                "exported {} nodes, {} edges, {} assertions as Graph JSON (projection {})",
-                nodes.len(),
-                edges.len(),
-                traveling.len(),
-                manifest.projection_id,
-            ),
-            json,
-        ),
     }
 }
 
