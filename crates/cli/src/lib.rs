@@ -40,6 +40,9 @@ pub struct Cli {
 }
 
 #[derive(Subcommand)]
+// The top-level command enum nests large subcommand enums (e.g. QuranAction
+// with its morphology subcommands); the size is inherent to the CLI shape.
+#[allow(clippy::large_enum_variant)]
 pub enum Commands {
     /// Short status summary.
     Status,

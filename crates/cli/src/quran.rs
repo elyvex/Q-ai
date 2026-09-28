@@ -594,6 +594,15 @@ pub enum MorphologyAction {
         /// Resume/replace a specific batch id.
         #[arg(long)]
         batch: Option<String>,
+        /// License status recorded on the dataset (permissive statuses activate).
+        #[arg(long)]
+        license_status: Option<String>,
+        /// License detail JSON (capture fields; see licenses/README.md).
+        #[arg(long)]
+        license_json: Option<String>,
+        /// Path to a machine-readable license evidence capture/matrix file.
+        #[arg(long)]
+        license_evidence: Option<String>,
     },
     /// Activate a staged batch (approval-gated; cannot run in the importer).
     Activate {
@@ -950,6 +959,9 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
                 edition,
                 attribution,
                 batch,
+                license_status,
+                license_json,
+                license_evidence,
             } => {
                 application::quran_cli::cmd_morphology_import(
                     db_path,
@@ -960,6 +972,9 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
                     &edition,
                     &attribution,
                     batch.as_deref(),
+                    license_status.as_deref(),
+                    license_json.as_deref(),
+                    license_evidence.as_deref(),
                 )
                 .await
             }

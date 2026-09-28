@@ -2709,6 +2709,7 @@ fn morphology_exit(error: &super::quran_morphology::MorphologyJobError) -> i32 {
     match error {
         M::Cancelled => exit::CANCELLED,
         M::BlockingFindings(..) | M::UnmatchedRemaining(..) => exit::VALIDATION,
+        M::LicenseEvidence { .. } => exit::VALIDATION,
         M::Approval(_) => exit::CONFLICT,
         M::BadState { .. } => exit::CONFLICT,
         M::CanonicalChanged => exit::CONFLICT,
@@ -2727,6 +2728,78 @@ fn tool_exit(error: &super::quran_morphology::MorphologyToolError) -> i32 {
     }
 }
 
+/// Resolve operator license evidence into `(license_status, license_json)`.
+///
+/// `--license-evidence` points at a capture object (the `licenses/README.md`
+/// `capture.json` shape) or a machine-readable matrix with an `artifacts` map
+/// (`fixtures/quran/morphology/license-matrix.json`), selecting the entry that
+/// matches the dataset slug (or the sole entry). A missing/unreadable file or
+/// invalid JSON is a typed usage error — never a silent default.
+fn resolve_license_evidence(
+    dataset: &str,
+    license_status: Option<&str>,
+    license_json: Option<&str>,
+    license_evidence: Option<&str>,
+) -> Result<(String, String), String> {
+    let Some(path) = license_evidence else {
+        return Ok((
+            license_status.unwrap_or("Unspecified").to_string(),
+            license_json.unwrap_or("{}").to_string(),
+        ));
+    };
+    let text = std::fs::read_to_string(path)
+        .map_err(|error| format!("read license evidence {path}: {error}"))?;
+    let value: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|error| format!("license evidence {path} is not valid JSON: {error}"))?;
+    let entry = select_evidence_entry(&value, dataset)?;
+    let json = serde_json::to_string(entry)
+        .map_err(|error| format!("license evidence {path} cannot be re-encoded: {error}"))?;
+    let status = license_status.map(str::to_string).unwrap_or_else(|| derive_license_status(entry));
+    Ok((status, json))
+}
+
+/// Select one capture entry from an evidence file (matrix or bare capture).
+fn select_evidence_entry<'a>(
+    value: &'a serde_json::Value,
+    dataset: &str,
+) -> Result<&'a serde_json::Value, String> {
+    if let Some(artifacts) = value.get("artifacts").and_then(serde_json::Value::as_object) {
+        if let Some(entry) = artifacts.get(dataset) {
+            return Ok(entry);
+        }
+        if artifacts.len() == 1 {
+            return Ok(artifacts.values().next().expect("one entry"));
+        }
+        return Err(format!(
+            "license evidence matrix has {} entries and none matches dataset `{dataset}`",
+            artifacts.len()
+        ));
+    }
+    if value.is_object() {
+        return Ok(value);
+    }
+    Err("license evidence must be a JSON object".to_string())
+}
+
+/// Derive a permissive status from captured `spdx_id`/`redistribution_allowed`.
+///
+/// Never invents permissiveness: without a redistribution grant it falls back
+/// to `Unspecified`, which the activation gate rejects.
+fn derive_license_status(entry: &serde_json::Value) -> String {
+    let has_spdx = entry
+        .get("spdx_id")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|value| !value.trim().is_empty());
+    if has_spdx {
+        "OpenLicense".to_string()
+    } else if entry.get("redistribution_allowed").and_then(serde_json::Value::as_bool) == Some(true)
+    {
+        "PermissionGranted".to_string()
+    } else {
+        "Unspecified".to_string()
+    }
+}
+
 /// `qai quran morphology import`.
 #[allow(clippy::too_many_arguments)]
 pub async fn cmd_morphology_import(
@@ -2738,6 +2811,9 @@ pub async fn cmd_morphology_import(
     edition: &str,
     attribution: &str,
     batch: Option<&str>,
+    license_status: Option<&str>,
+    license_json: Option<&str>,
+    license_evidence: Option<&str>,
 ) -> CommandOutput {
     use super::quran_morphology::{MorphologyImportParams, run_morphology_import};
     let db = match open_db(db_path).await {
@@ -2756,6 +2832,11 @@ pub async fn cmd_morphology_import(
         }
         _ => return CommandOutput::err(exit::USAGE, "use --edition slug@version".to_string()),
     };
+    let (license_status, license_json) =
+        match resolve_license_evidence(dataset, license_status, license_json, license_evidence) {
+            Ok(pair) => pair,
+            Err(message) => return CommandOutput::err(exit::USAGE, message),
+        };
     let params = MorphologyImportParams {
         dataset_slug: dataset.to_string(),
         dataset_version: version.to_string(),
@@ -2766,8 +2847,8 @@ pub async fn cmd_morphology_import(
         invoked_by: LOCAL_PRINCIPAL.to_string(),
         batch_id: batch.map(str::to_string),
         attribution: attribution.to_string(),
-        license_status: "Unspecified".to_string(),
-        license_json: "{}".to_string(),
+        license_status,
+        license_json,
     };
     match run_morphology_import(&db, &params, &std::sync::atomic::AtomicBool::new(false), |_| {})
         .await
@@ -3670,4 +3751,95 @@ pub async fn cmd_search(db_path: &str, opts: &SearchCliOptions) -> CommandOutput
         human.push_str(&format!("warning [{}]: {}\n", warning.code, warning.message));
     }
     CommandOutput::ok(human, serde_json::to_value(&output).unwrap_or_default())
+}
+
+#[cfg(test)]
+mod license_evidence_tests {
+    use super::{derive_license_status, resolve_license_evidence, select_evidence_entry};
+
+    const MATRIX: &str = r#"{
+        "matrix_version": "1",
+        "artifacts": {
+            "synthetic-test-lexicon": {
+                "artifact": "synthetic-test-lexicon",
+                "source_url": "https://example.invalid/synthetic",
+                "capture_date": "2026-09-28",
+                "capturer": "qai-test-fixtures",
+                "spdx_id": "CC0-1.0",
+                "redistribution_allowed": true
+            },
+            "qac": {
+                "artifact": "qac",
+                "source_url": "https://corpus.quran.com/",
+                "capture_date": null,
+                "capturer": null,
+                "spdx_id": null,
+                "redistribution_allowed": false,
+                "license_status": "pending_license_review"
+            }
+        }
+    }"#;
+
+    #[test]
+    fn license_evidence_selects_matrix_entry_by_dataset_slug() {
+        let value: serde_json::Value = serde_json::from_str(MATRIX).unwrap();
+        let entry = select_evidence_entry(&value, "synthetic-test-lexicon").unwrap();
+        assert_eq!(entry.get("artifact").and_then(|v| v.as_str()), Some("synthetic-test-lexicon"));
+    }
+
+    #[test]
+    fn license_evidence_selects_sole_entry_when_slug_unknown() {
+        let value: serde_json::Value =
+            serde_json::from_str(r#"{"artifacts":{"only":{"source_url":"u","capture_date":"d","capturer":"c","redistribution_allowed":true}}}"#)
+                .unwrap();
+        let entry = select_evidence_entry(&value, "other").unwrap();
+        assert_eq!(entry.get("capturer").and_then(|v| v.as_str()), Some("c"));
+    }
+
+    #[test]
+    fn license_evidence_missing_file_is_typed_error() {
+        let err = resolve_license_evidence(
+            "synthetic-test-lexicon",
+            None,
+            None,
+            Some("/nonexistent/qai-license-evidence-xyz.json"),
+        )
+        .unwrap_err();
+        assert!(err.contains("read license evidence"), "{err}");
+    }
+
+    #[test]
+    fn license_evidence_invalid_json_is_typed_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bad.json");
+        std::fs::write(&path, "{ not json").unwrap();
+        let err = resolve_license_evidence(
+            "synthetic-test-lexicon",
+            None,
+            None,
+            Some(path.to_str().unwrap()),
+        )
+        .unwrap_err();
+        assert!(err.contains("not valid JSON"), "{err}");
+    }
+
+    #[test]
+    fn license_evidence_derives_status_from_capture() {
+        let with_spdx: serde_json::Value =
+            serde_json::from_str(r#"{"spdx_id":"CC0-1.0","redistribution_allowed":true}"#).unwrap();
+        assert_eq!(derive_license_status(&with_spdx), "OpenLicense");
+        let granted: serde_json::Value =
+            serde_json::from_str(r#"{"redistribution_allowed":true}"#).unwrap();
+        assert_eq!(derive_license_status(&granted), "PermissionGranted");
+        let unknown: serde_json::Value = serde_json::from_str(r#"{}"#).unwrap();
+        assert_eq!(derive_license_status(&unknown), "Unspecified");
+    }
+
+    #[test]
+    fn license_evidence_absent_flag_keeps_placeholder_status() {
+        let (status, json) =
+            resolve_license_evidence("synthetic-test-lexicon", None, None, None).unwrap();
+        assert_eq!(status, "Unspecified");
+        assert_eq!(json, "{}");
+    }
 }
