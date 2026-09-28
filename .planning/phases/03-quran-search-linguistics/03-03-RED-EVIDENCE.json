@@ -1,0 +1,9 @@
+{
+  "command": "cargo test -p application --test counting -- root_lemma_frequency multi_analysis_modes --nocapture",
+  "exitCode": 101,
+  "targetTest": "root_lemma_frequency",
+  "targetFile": "crates/application/tests/counting.rs",
+  "expected": "root_frequency answers Ok(FrequencyReport) with count > 0 over the active synthetic lexicon",
+  "actual": "Err(UnavailableDataset { capability: \"root frequency\" }) - the service is still the hard stub",
+  "output": "# tests 2\n# pass 0\n# fail 2\nnot ok 1 - root_lemma_frequency\nnot ok 2 - multi_analysis_modes\n   Compiling application v0.0.0 (/Users/ali/dev/rust/Q-ai/crates/application)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.19s\n     Running tests/counting.rs (target/debug/deps/counting-03eaf76540e4bb0d)\n\nrunning 2 tests\n\nthread 'multi_analysis_modes' (4650286) panicked at crates/application/tests/counting.rs:414:5:\nsingle-source count must answer over the active dataset: Some(UnavailableDataset { capability: \"root frequency\" })\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\nthread 'root_lemma_frequency' (4650287) panicked at crates/application/tests/counting.rs:380:5:\nroot frequency must answer over the active dataset: Some(UnavailableDataset { capability: \"root frequency\" })\ntest root_lemma_frequency ... FAILED\ntest multi_analysis_modes ... FAILED\n\nfailures:\n\nfailures:\n    multi_analysis_modes\n    root_lemma_frequency\n\ntest result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.65s\n\nerror: test failed, to rerun pass `-p application --test counting`\n"
+}

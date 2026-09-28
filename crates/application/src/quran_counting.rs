@@ -713,11 +713,13 @@ pub async fn near_duplicate_passages(
     Ok((rules, hits))
 }
 
-/// Morphology-gated stubs: root/lemma counting needs an active lexicon.
-/// Each names the missing capability (AC-P2-01 fallback, never guessed data).
+/// Morphology-gated root counting (needs an active lexicon). The active
+/// dataset id and the caller-selected multi-analysis mode flow into the rules.
 pub async fn root_frequency(
     _db: &SqliteDatabase,
     _root: &str,
+    _profile: &str,
+    _mode: MultiAnalysisHandling,
 ) -> Result<FrequencyReport, CountingError> {
     Err(CountingError::UnavailableDataset { capability: "root frequency".to_string() })
 }
@@ -726,6 +728,8 @@ pub async fn root_frequency(
 pub async fn lemma_frequency(
     _db: &SqliteDatabase,
     _lemma: &str,
+    _profile: &str,
+    _mode: MultiAnalysisHandling,
 ) -> Result<FrequencyReport, CountingError> {
     Err(CountingError::UnavailableDataset { capability: "lemma frequency".to_string() })
 }
