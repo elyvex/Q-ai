@@ -140,7 +140,28 @@ Plans:
   3. User can export a subgraph with edge provenance intact
   4. Graph queries explain why each result was returned
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 04-01-PLAN.md — TRACER: structural build → inspect → neighbors → canonical quotation over SQLite, schema fix, vocab, conformance, fixtures
+
+**Wave 2** *(blocked on 04-01)*
+
+- [ ] 04-02-PLAN.md — Annotation authority, review queue, word-root/annotated builders, rebuild preservation, review CLI
+
+**Wave 3** *(blocked on 04-02)*
+
+- [ ] 04-03-PLAN.md — Path modes, subgraph, patterns, root-family, CLI read tree, Graph JSON export, DOT/SVG render
+
+**Wave 4** *(blocked on 04-03)*
+
+- [ ] 04-04-PLAN.md — HTTP read routes, OpenAPI, typed tools, cross-surface parity, explainability contract
+
+**Wave 5** *(blocked on 04-04: shared lib.rs wiring)*
+
+- [ ] 04-05-PLAN.md — Read-only doctor, explicit repair/GC, owner-gate and deferral ledgers, full phase gate
 
 ### Phase 5: Rich Quran Experience
 
