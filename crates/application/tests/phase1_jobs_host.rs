@@ -158,8 +158,7 @@ async fn host_claims_and_completes_a_queued_import() {
     assert_eq!(staged_count(&db, "run-host-1").await, 14);
 
     // The composed lifecycle keeps the persisted audit chain valid (D-12).
-    let report =
-        application::audit_bridge::verify_persisted_audit(&db_path).await.unwrap();
+    let report = application::audit_bridge::verify_persisted_audit(&db_path).await.unwrap();
     assert!(report.valid, "{report:?}");
 
     // Joined shutdown: the host returns instead of detaching.
@@ -184,8 +183,7 @@ async fn host_claims_and_completes_a_queued_import() {
 async fn host_shutdown_finalizes_an_in_flight_import_truthfully() {
     let (_dir, db, db_path) = migrated_db().await;
     let queue = Arc::new(
-        SqliteJobQueue::new(db.clone())
-            .with_retry_registry(Arc::new(build_default_registry(&db))),
+        SqliteJobQueue::new(db.clone()).with_retry_registry(Arc::new(build_default_registry(&db))),
     );
 
     // Deterministic pre-start boundary: requested before the host starts.
@@ -236,9 +234,8 @@ async fn host_shutdown_finalizes_an_in_flight_import_truthfully() {
         }
         "Cancelled" => {
             assert!(
-                ["cancelled_at_checkpoint", "missed_boundary"].contains(
-                    &race["disposition"].as_str().unwrap_or_default()
-                ),
+                ["cancelled_at_checkpoint", "missed_boundary"]
+                    .contains(&race["disposition"].as_str().unwrap_or_default()),
                 "{race}"
             );
         }
