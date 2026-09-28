@@ -186,3 +186,12 @@ None — no new network endpoint, auth path, file-access pattern, or trust-bound
 - Phase-5 consumers now have a pinned contract: for every hit and every mode, the displayed canonical text is the stored canonical bytes at the hit's canonical span.
 - SC1 has a named repeatable check (golden suite + parity gate) that is green; SC5 has a repeatable per-hit assertion.
 - Open concern for the phase: the CLI snapshot tree (`cargo test -p cli --test quran`) is red due to the parallel 01-04 enqueue-only import refactor leaving trycmd snapshots stale — the owning plan must refresh them before the phase gate.
+
+## Self-Check: PASSED
+
+- FOUND: `crates/application/tests/alpha_smoke.rs`
+- FOUND: `crates/application/tests/canonical_display_identity.rs`
+- FOUND: `crates/quran-normalization/src/rules/mod.rs`
+- FOUND: `.planning/phases/03-quran-search-linguistics/03-01-SUMMARY.md`
+- FOUND: `.planning/phases/03-quran-search-linguistics/deferred-items.md`
+- FOUND commit: `43c21fb` (Task 1), `a2856d5` (Task 2), `0034fe0` (Task 3), `3f4ea05` (plan metadata)
