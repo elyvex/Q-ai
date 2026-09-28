@@ -1688,10 +1688,14 @@ pub async fn affix_search(
         active
     };
     if active.is_some() {
-        // Dataset backend: morpheme-exact scan over active analyses.
-        // (Full morpheme index arrives with T73 field population; the
-        // labeled scan below is the correct interim with identical labels.)
-        return Ok(Vec::new());
+        // G-09 (fail closed): the dataset backend needs a populated morpheme
+        // index, which no activation path builds yet. Until it exists this is
+        // a typed capability error — never a silent `Ok(Vec::new())` that a
+        // caller could mistake for "no such affix". The L7 heuristic branch
+        // below stays untouched for the no-dataset case.
+        return Err(MorphologyToolError::UnavailableDataset {
+            capability: "affix/morpheme index".to_string(),
+        });
     }
     // L7 heuristic backend over stored affix-stripped forms.
     if profile != "L7.affix" {
