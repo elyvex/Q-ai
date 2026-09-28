@@ -965,3 +965,42 @@ async fn rejected_rollbacks_leave_canonical_state_untouched() {
     assert_eq!(edition.version, "0.1.0");
     uow.rollback().await.unwrap();
 }
+
+/// 01-04-02 — one-shot import is enqueue-only (D-13): the call validates,
+/// persists a queued `quran.import` record with the retry snapshot, and
+/// returns an inspectable job id without running any worker. The handler
+/// still stages the edition once an explicitly constructed worker/host
+/// processes the queued record.
+#[tokio::test]
+async fn enqueue_import_job_reports_queued_and_stages_only_via_host() {
+    let (_dir, db) = migrated_db().await;
+    let db = Arc::new(db);
+
+    let enqueued =
+        application::quran::enqueue_import_job(&db, input("run-enqueue", BASE_MANIFEST, None))
+            .await
+            .unwrap();
+    assert_eq!(enqueued.kind, QURAN_IMPORT_KIND);
+    assert_eq!(enqueued.state, "Queued");
+    assert!(!enqueued.job_id.is_empty());
+    assert!(enqueued.max_attempts >= 1, "carries the retry snapshot");
+    assert!(
+        enqueued.inspect_command.contains(&enqueued.job_id),
+        "inspect command names the job"
+    );
+
+    // Queued in storage with no worker side effect: nothing staged.
+    let queue = Arc::new(SqliteJobQueue::new(db.clone()));
+    let job = queue.get(&enqueued.job_id).await.unwrap().unwrap();
+    assert_eq!(job.state, "Queued");
+    assert_eq!(staged_count(&db, "run-enqueue").await, 0);
+
+    // Explicit host-side processing stages the edition (the one-shot call
+    // above constructed no worker: staging appears only now).
+    let registry =
+        Arc::new(HandlerRegistry::new().register(Arc::new(QuranImportHandler::new(db.clone()))));
+    let worker = Worker::new(queue.clone(), registry, "test-owner");
+    assert_eq!(worker.run_until_idle().await.unwrap(), 1);
+    assert_eq!(queue.get(&enqueued.job_id).await.unwrap().unwrap().state, "Succeeded");
+    assert_eq!(staged_count(&db, "run-enqueue").await, 14);
+}

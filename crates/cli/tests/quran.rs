@@ -354,3 +354,53 @@ fn serve_still_refuses_non_loopback_binds() {
     let out = qai_out(dir.path(), &["serve", "--bind", "0.0.0.0:18738"]);
     assert_eq!(out.status.code(), Some(4), "exit POLICY");
 }
+
+// ─── 01-04-02: enqueue-only import (D-13) ─────────────────────────────
+//
+// Without any host running, `qai quran import` validates, persists a queued
+// `quran.import` job, and returns its id in `Queued` state. The test fails if
+// the one-shot process constructs or drains a worker: then the job would be
+// terminal and the edition already staged.
+
+#[test]
+fn enqueue_only_import_is_queued_without_host() {
+    let dir = tempfile::tempdir().unwrap();
+    migrate_db(dir.path());
+    // No `qai serve` child exists anywhere in this test.
+    let manifest = "../../fixtures/quran/test-edition-min/manifest.json";
+
+    let out = qai_out(dir.path(), &["quran", "import", manifest, "--json"]);
+    assert!(out.status.success(), "import enqueues: {}", String::from_utf8_lossy(&out.stderr));
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).expect("one JSON document");
+    assert_eq!(doc["kind"], "quran.import", "{doc}");
+    assert_eq!(doc["state"], "Queued", "{doc}");
+    let job_id = doc["job_id"].as_str().expect("durable job id");
+    assert!(!job_id.is_empty());
+    assert!(doc["max_attempts"].as_u64().unwrap_or(0) >= 1, "retry metadata: {doc}");
+    assert!(
+        doc["inspect"].as_str().unwrap_or_default().contains(job_id),
+        "inspect command names the job: {doc}"
+    );
+
+    // The job is inspectable through the existing read path and still queued:
+    // no worker ran inside the one-shot process.
+    let out = qai_out(dir.path(), &["job", "show", job_id, "--json"]);
+    assert!(out.status.success());
+    let shown: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(shown["state"], "Queued", "{shown}");
+
+    // Nothing is staged until a host processes the job.
+    let out = qai_out(dir.path(), &["quran", "validate", "test-edition-min@0.1.0"]);
+    assert_eq!(out.status.code(), Some(5), "unstaged edition is not found");
+
+    // Human wording reports queued state and never claims terminal staging.
+    let out = qai_out(dir.path(), &["quran", "import", manifest]);
+    assert!(out.status.success());
+    let human = String::from_utf8_lossy(&out.stdout);
+    assert!(human.contains("queued"), "queued wording: {human}");
+    assert!(human.contains("Queued"), "queued state: {human}");
+    // The human import mints its own job; assert the shape, not the id.
+    assert!(human.contains("job"), "names the queued job: {human}");
+    assert!(human.contains("qai job show"), "points at inspection: {human}");
+    assert!(!human.contains("to Staged"), "no terminal claim: {human}");
+}
