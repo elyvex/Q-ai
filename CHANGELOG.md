@@ -4,6 +4,24 @@ All notable changes to Q-ai are documented here.
 
 ## [Unreleased]
 
+### Added — Phase 1 foundation gap closure (TASK-001, GSD plans 01-01…01-05, 2026-09-28)
+
+- Closed the cross-phase brownfield foundation record: plans 01-01, 01-02,
+  01-03, 01-04, 01-05 map to roadmap criteria C1, C2, C3, C4, C5 with
+  repeatable evidence (foundation/config/audit suites, same-UoW failure
+  matrix, job lifecycle + host suites, `arch-check` + `migrate-check` +
+  `xtask ci`), governed by locked decisions D-01, D-02, D-03, D-04, D-05,
+  D-06, D-07, D-08, D-09, D-10, D-11, D-12, D-13, D-14, D-15, D-16.
+- `xtask arch-check` now enforces an explicit per-crate registry/git external
+  policy (`xtask/allowlist.toml` FND-07 block, fail closed) with inline
+  mutation coverage; current edges stay green, no package added.
+- Boundary: no new migration, package, broker, or schema rewrite (brownfield,
+  non-expansion); no deferred idea, later-phase feature, or unrelated worktree change
+  absorbed; owner gates (dataset license, reviewer, remote deployment) stay
+  open. Evidence: closed TASK-001 record, `01-VALIDATION.md`
+  (`nyquist_compliant`/`wave_0_complete`), `cargo test --workspace` +
+  clippy + fmt gate outcomes recorded per file.
+
 ### Added — Index/linguistics doctor checks (P2-T105, 2026-09-24)
 
 - `qai doctor --indexes [--json]` runs 19 read-only Phase-2 checks

@@ -47,3 +47,23 @@ of truth for completion; partial work is recorded as ◐ rather than counted as 
 2. Implement SQLite graph persistence and application/CLI/API/doctor integration before claiming graph milestones.
 3. Run the clean-machine Phase-0 exit ritual when the Docker daemon is available.
 4. Keep owner decisions in `docs/05-followups/decisions-needed.md`; agents must not invent approvals.
+
+## Phase 1 closure — TASK-001 foundation gap closure, 2026-09-28
+
+- **TASK-001-foundation-gap-closure: Status: Completed** (plan 01-05-02;
+  record at `docs/04-tasks/completed/TASK-001-foundation-gap-closure.md`;
+  owner sign-off NOT claimed).
+- **Plans:** 01-01, 01-02, 01-03, 01-04, 01-05 — evidence per plan in the
+  closed record §Completion and `.planning/phases/01-foundations/01-VALIDATION.md`.
+- **Criteria:** C1, C2, C3, C4, C5 — each maps to a repeatable command (help +
+  foundation suite; config precedence; same-UoW audit + `audit verify`; job
+  lifecycle + host suites; `arch-check` + `xtask ci`).
+- **Decisions:** D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08, D-09, D-10,
+  D-11, D-12, D-13, D-14, D-15, D-16.
+- **Gate:** clippy/arch/migrate green, all Phase 1 suites green; `cargo fmt`
+  and `cargo test --workspace` red only on quoted foreign concurrent-session
+  files (untouched); `cargo-deny` unavailable locally (CI-enforced). Re-run
+  the full gate when the tree is quiet.
+- **Boundary:** brownfield gap closure; no new migration/package/broker;
+  deferred/owner-gated items stay open. Phase 2 remains the active phase;
+  unrelated gates above are unchanged.

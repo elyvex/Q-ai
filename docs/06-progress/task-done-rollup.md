@@ -2,6 +2,28 @@
 
 > Completed tasks across all phases. Newest first.
 
+## Phase 1 — TASK-001 Foundation Gap Closure (GSD plans 01-01…01-05), 2026-09-28
+
+- Closed the cross-phase foundation record: plans 01-01 (tracer), 01-02
+  (audited mutations), 01-03 (durable jobs), 01-04 (serve host + enqueue-only
+  import), 01-05 (registry/git policy + closure) map to the five roadmap
+  criteria C1, C2, C3, C4, C5, each with a repeatable command in the closed
+  TASK-001 record §Completion and `.planning/phases/01-foundations/01-VALIDATION.md`.
+- Locked decisions D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08, D-09, D-10,
+  D-11, D-12, D-13, D-14, D-15, D-16 govern the closure; all ten PROBE
+  dispositions retained; all 27 threat predicates mitigated in-plan.
+- Final gate: `cargo fmt --all -- --check` (red only on 2 foreign untracked
+  03-01 scratch files, untouched), `cargo clippy --workspace --all-targets --
+  -D warnings` green, `cargo test --workspace` (stops at foreign
+  `quran_identity` under a concurrent `quran_cli.rs` rewrite; every Phase 1
+  target green), `cargo run -q -p xtask -- arch-check` OK, `cargo run -q
+  -p xtask -- migrate-check` OK (21, checksums stable), `cargo run -p xtask
+  -- ci` wrapper red at its fmt step for the same foreign reason (sub-steps
+  evidenced individually). `cargo-deny` not installed locally (CI-enforced).
+- Brownfield, non-expansion boundary: no new migration/package/broker; owner
+  gates (dataset license, reviewer, remote deployment) explicitly unclaimed.
+  Active index count 0, completed index count 1, `Status: Completed`.
+
 ## Phase 2 — TASK-002 Canonical Quran Core closure (GSD plans 02-01…02-07), 2026-09-25
 
 - Closed the repository task record for the canonical core: plans 02-01…02-07 map to the
