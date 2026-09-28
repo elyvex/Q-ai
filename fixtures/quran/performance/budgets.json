@@ -1,0 +1,133 @@
+{
+  "format": "qai.quran.performance-budgets",
+  "format_version": 1,
+  "reference_hardware": "4-core laptop, cold OS cache, warm index",
+  "regression_tolerance_percent": 20,
+  "source": [
+    "docs/02-architecture/decisions/ADR-0207-concatenated-search.md: search.concatenated p99 <= 150 ms",
+    "docs/03-plan/phases/phase-02-rag/plan.md 17.1 Latency table (p50/p99/Cap)",
+    "docs/03-plan/phases/phase-02-rag/acceptance.md 2.4 Latency targets (AC-P2-43)"
+  ],
+  "notes": [
+    "Rows with applies_to=full-corpus gate full-corpus benchmark runs on reference hardware with a warm index; they are NOT executed on the 14-ayah synthetic fixture (OD-11: no licensed corpus is active yet).",
+    "fixture_bound_ms gates the fixture harness and guards against orders-of-magnitude regressions only; it is never a p99 substitute.",
+    "No threshold may be silently loosened: any change to a value_ms here must be recorded with a rationale (plan prohibition)."
+  ],
+  "budgets": {
+    "search.exact.p50_ms": {
+      "value_ms": 5,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p50 for search_exact (single token)."
+    },
+    "search.exact.p99_ms": {
+      "value_ms": 25,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p99 for search_exact (single token)."
+    },
+    "search.normalized.p50_ms": {
+      "value_ms": 8,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p50 for search_normalized (indexed profile)."
+    },
+    "search.normalized.p99_ms": {
+      "value_ms": 40,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p99 for search_normalized (indexed profile)."
+    },
+    "search.normalized_adhoc.p50_ms": {
+      "value_ms": 60,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p50 for search_normalized with ad-hoc rules."
+    },
+    "search.normalized_adhoc.p99_ms": {
+      "value_ms": 250,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p99 for search_normalized with ad-hoc rules."
+    },
+    "search.phrase.p50_ms": {
+      "value_ms": 12,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p50 for search_phrase (3 tokens, slop 0)."
+    },
+    "search.phrase.p99_ms": {
+      "value_ms": 60,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p99 for search_phrase (3 tokens, slop 0)."
+    },
+    "search.concatenated.p50_ms": {
+      "value_ms": 35,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p50 for search_concatenated (3-20 chars)."
+    },
+    "search.concatenated.p99_ms": {
+      "value_ms": 150,
+      "applies_to": "full-corpus",
+      "rationale": "ADR-0207 concatenated-search target: p99 <= 150 ms on reference hardware with a warm index."
+    },
+    "search.regex.p50_ms": {
+      "value_ms": 80,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p50 for search_regex (anchored)."
+    },
+    "search.regex.p99_ms": {
+      "value_ms": 500,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p99 for search_regex (anchored); the 3 s hard cap is enforced in the service."
+    },
+    "search.root.p50_ms": {
+      "value_ms": 20,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p50 for root_search (frequent root, 339 hits)."
+    },
+    "search.root.p99_ms": {
+      "value_ms": 90,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p99 for root_search (frequent root, 339 hits)."
+    },
+    "search.family.p50_ms": {
+      "value_ms": 60,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p50 for word_family (large root, no suggestions)."
+    },
+    "search.family.p99_ms": {
+      "value_ms": 250,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p99 for word_family (large root, no suggestions)."
+    },
+    "search.morphology.p50_ms": {
+      "value_ms": 6,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p50 for morphology (single token, all datasets)."
+    },
+    "search.morphology.p99_ms": {
+      "value_ms": 30,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p99 for morphology (single token, all datasets)."
+    },
+    "search.frequency.p50_ms": {
+      "value_ms": 40,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p50 for frequency (root, breakdown by surah)."
+    },
+    "search.frequency.p99_ms": {
+      "value_ms": 180,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p99 for frequency (root, breakdown by surah)."
+    },
+    "normalize.explain.p50_ms": {
+      "value_ms": 1,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p50 for normalize --explain (single string)."
+    },
+    "normalize.explain.p99_ms": {
+      "value_ms": 5,
+      "applies_to": "full-corpus",
+      "rationale": "plan 17.1 p99 for normalize --explain (single string)."
+    },
+    "fixture_bound_ms": {
+      "value_ms": 2000,
+      "applies_to": "fixture",
+      "rationale": "Fixture harness bound on the 14-ayah synthetic index: guards against orders-of-magnitude regressions, not p99. Carried over unchanged from the pre-existing search_latency harness (never loosened)."
+    }
+  }
+}

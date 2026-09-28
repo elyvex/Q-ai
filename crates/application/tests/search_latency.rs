@@ -1,10 +1,12 @@
 //! Phase 2 — search latency gates (P2-T55, AC-P2-43 harness shape).
 //!
 //! Measures single-shot wall times for every search tool on the fixture
-//! index and asserts generous CI bounds. These bounds lock the benchmark
-//! harness shape; the plan §17.1 p50/p99 targets gate full-corpus runs on
-//! reference hardware (recorded per-op below for the runbook), not the
-//! 14-ayah fixture where every op completes in milliseconds.
+//! index and asserts the machine-readable fixture bound. The bound lives in
+//! `fixtures/quran/performance/budgets.json` (G-06) together with the ADR-0207
+//! concatenated `p99 <= 150 ms` target and the plan §17.1 p50/p99 table. The
+//! full-corpus p50/p99 rows gate reference-hardware runs on a licensed corpus
+//! and are **OD-11-dependent**: no licensed corpus is active, so they are
+//! recorded here and never executed against the 14-ayah fixture.
 
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
@@ -28,9 +30,27 @@ const PRINCIPAL: &str = "00000000-0000-0000-0000-000000000001";
 const CREATED_AT: &str = "2026-09-14T00:00:00Z";
 const V1_URN: &str = "quran-edition:test-edition-min@0.1.0";
 
+/// The codified budget artifact (G-06): ADR-0207 concatenated `p99 <= 150 ms`,
+/// the plan §17.1 p50/p99 table, and the fixture bound. `include_str!` keeps
+/// the artifact from silently disappearing.
+const BUDGETS_JSON: &str = include_str!("../../../fixtures/quran/performance/budgets.json");
+
 /// Generous CI bound per op on the fixture (fixture ops take milliseconds;
-/// the bound guards against orders-of-magnitude regressions, not p99).
+/// the bound guards against orders-of-magnitude regressions, not p99). It is
+/// asserted equal to the artifact's `fixture_bound_ms` — never loosened.
 const FIXTURE_BOUND: Duration = Duration::from_millis(2000);
+
+/// Parse the committed budget artifact.
+fn budgets() -> serde_json::Value {
+    serde_json::from_str(BUDGETS_JSON).expect("budgets.json parses")
+}
+
+/// Read one named budget row's `value_ms`.
+fn budget_ms(doc: &serde_json::Value, name: &str) -> u64 {
+    doc["budgets"][name]["value_ms"]
+        .as_u64()
+        .unwrap_or_else(|| panic!("missing budget row {name} in budgets.json"))
+}
 
 fn principal() -> PrincipalId {
     PRINCIPAL.parse().unwrap()
@@ -155,6 +175,12 @@ fn base_params(text: &str) -> SearchParams {
 /// are recorded in the assertion messages as the full-corpus gate.
 #[tokio::test]
 async fn search_latency_within_fixture_bounds() {
+    // The fixture bound comes from the codified artifact (G-06) and must equal
+    // the pre-existing 2000 ms — the artifact may never silently loosen it.
+    let doc = budgets();
+    let fixture_bound = Duration::from_millis(budget_ms(&doc, "fixture_bound_ms"));
+    assert_eq!(fixture_bound, FIXTURE_BOUND, "the fixture bound must not be loosened");
+
     let (_dir, db, data_dir) = searchable_db().await;
     let v = SemVer::new(1, 0, 0);
     let limiter = RateLimiter::new(10_000);
@@ -237,9 +263,68 @@ async fn search_latency_within_fixture_bounds() {
     for (op, target, elapsed) in &actuals {
         eprintln!("latency: {op} took {elapsed:?} (plan §17.1 {target} on full corpus)");
         assert!(
-            *elapsed < FIXTURE_BOUND,
-            "{op} exceeded the fixture bound {FIXTURE_BOUND:?}: {elapsed:?}"
+            *elapsed < fixture_bound,
+            "{op} exceeded the fixture bound {fixture_bound:?}: {elapsed:?}"
         );
     }
     assert_eq!(actuals.len(), 7);
+
+    // The plan §17.1 p50/p99 rows (search.exact/normalized/concatenated/…)
+    // gate full-corpus runs on reference hardware and are OD-11-dependent: no
+    // licensed corpus is active yet, so they are recorded, never executed
+    // against the fixture.
+    assert_eq!(
+        doc["budgets"]["search.concatenated.p99_ms"]["applies_to"], "full-corpus",
+        "full-corpus rows are dataset-gated (OD-11), not fixture-executed"
+    );
+    assert!(
+        doc["notes"].as_array().is_some_and(|notes| {
+            notes.iter().any(|note| note.as_str().is_some_and(|text| text.contains("OD-11")))
+        }),
+        "the artifact must record the OD-11 dependency"
+    );
+}
+
+/// G-06: the budget artifact exists, parses, codifies ADR-0207's concatenated
+/// `p99 <= 150 ms` plus the plan §17.1 p50/p99 table, and every row carries
+/// `applies_to` + `rationale` so no threshold is undocumented.
+#[test]
+fn budget_artifact_codifies_adr_0207_and_fixture_bound() {
+    let doc = budgets();
+    assert_eq!(doc["format"], "qai.quran.performance-budgets");
+    assert_eq!(doc["format_version"], 1);
+    assert!(doc["regression_tolerance_percent"].as_u64().is_some());
+
+    // ADR-0207's concatenated target, and the plan §17.1 neighbours.
+    assert_eq!(budget_ms(&doc, "search.concatenated.p99_ms"), 150);
+    assert_eq!(budget_ms(&doc, "search.concatenated.p50_ms"), 35);
+    assert_eq!(budget_ms(&doc, "search.normalized.p50_ms"), 8);
+    assert_eq!(budget_ms(&doc, "search.normalized.p99_ms"), 40);
+    assert_eq!(budget_ms(&doc, "search.exact.p50_ms"), 5);
+    // The fixture bound is carried over unchanged.
+    assert_eq!(budget_ms(&doc, "fixture_bound_ms"), 2000);
+
+    // Every named row is documented and typed.
+    let budgets = doc["budgets"].as_object().expect("budgets is an object");
+    assert!(budgets.len() >= 20, "the §17.1 table is codified in full");
+    for (name, row) in budgets {
+        assert!(row["value_ms"].as_u64().is_some(), "{name} must carry a numeric value_ms");
+        let applies_to =
+            row["applies_to"].as_str().unwrap_or_else(|| panic!("{name} needs applies_to"));
+        assert!(
+            matches!(applies_to, "full-corpus" | "fixture"),
+            "{name} has an unknown applies_to `{applies_to}`"
+        );
+        assert!(
+            row["rationale"].as_str().is_some_and(|text| !text.is_empty()),
+            "{name} needs a non-empty rationale"
+        );
+    }
+    // Exactly one fixture-scoped row: the bound the harness gates against.
+    let fixture_rows: Vec<&String> = budgets
+        .iter()
+        .filter(|(_, row)| row["applies_to"] == "fixture")
+        .map(|(name, _)| name)
+        .collect();
+    assert_eq!(fixture_rows, vec![&"fixture_bound_ms".to_string()]);
 }
