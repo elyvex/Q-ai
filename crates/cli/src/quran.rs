@@ -224,6 +224,17 @@ pub enum QuranAction {
         #[command(subcommand)]
         action: CountAction,
     },
+    /// Surface-form frequency alias (D-10): `qai quran freq <text>`.
+    Freq {
+        /// Target text to count.
+        target: String,
+        /// Counting profile (`L3.diacritics` default).
+        #[arg(long, default_value = "L3.diacritics")]
+        profile: String,
+        /// Multi-analysis handling; surface-form frequency is single-source only.
+        #[arg(long, default_value = "single-source")]
+        mode: String,
+    },
     /// Morphology datasets: import (staging) and activate (approval-gated).
     Morphology {
         #[command(subcommand)]
@@ -519,6 +530,28 @@ pub enum CountAction {
         /// Result cap.
         #[arg(long, default_value_t = 25)]
         limit: usize,
+    },
+    /// Exact root frequency over the active lexicon (SC4; rules block included).
+    RootFrequency {
+        /// Root as stored by the dataset (normalized form).
+        root: String,
+        /// Counting profile recorded in the rules block.
+        #[arg(long, default_value = "L3.diacritics")]
+        profile: String,
+        /// Multi-analysis handling (`single-source`|`all-analyses`|`one-vote-per-token`).
+        #[arg(long, default_value = "single-source")]
+        mode: String,
+    },
+    /// Exact lemma frequency over the active lexicon (SC4; rules block included).
+    LemmaFrequency {
+        /// Lemma as stored by the dataset.
+        lemma: String,
+        /// Counting profile recorded in the rules block.
+        #[arg(long, default_value = "L3.diacritics")]
+        profile: String,
+        /// Multi-analysis handling (`single-source`|`all-analyses`|`one-vote-per-token`).
+        #[arg(long, default_value = "single-source")]
+        mode: String,
     },
 }
 
@@ -877,7 +910,18 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
             CountAction::NearDuplicates { threshold, limit } => {
                 application::quran_cli::cmd_count_near_duplicates(db_path, threshold, limit).await
             }
+            CountAction::RootFrequency { root, profile, mode } => {
+                application::quran_cli::cmd_count_root_frequency(db_path, &root, &profile, &mode)
+                    .await
+            }
+            CountAction::LemmaFrequency { lemma, profile, mode } => {
+                application::quran_cli::cmd_count_lemma_frequency(db_path, &lemma, &profile, &mode)
+                    .await
+            }
         },
+        QuranAction::Freq { target, profile, mode } => {
+            application::quran_cli::cmd_freq(db_path, &target, &profile, &mode).await
+        }
         QuranAction::Morphology { action } => match action {
             MorphologyAction::Import {
                 file,

@@ -2446,6 +2446,103 @@ pub async fn cmd_count_frequency(db_path: &str, target: &str, profile: &str) -> 
     }
 }
 
+/// Parse the `--mode` flag into a multi-analysis handling policy.
+fn parse_multi_analysis_mode(
+    mode: &str,
+) -> Result<super::quran_counting::MultiAnalysisHandling, String> {
+    use super::quran_counting::MultiAnalysisHandling as M;
+    match mode {
+        "single-source" | "single" => Ok(M::SingleSource),
+        "all-analyses" | "all" => Ok(M::AllAnalyses),
+        "one-vote-per-token" | "one-vote" => Ok(M::OneVotePerToken),
+        other => Err(format!(
+            "unknown multi-analysis mode: {other} \
+             (use single-source, all-analyses, or one-vote-per-token)"
+        )),
+    }
+}
+
+/// `qai quran count root-frequency` (SC4/G-01): exact lexicon count with the
+/// active dataset and the requested multi-analysis mode in the rules block.
+pub async fn cmd_count_root_frequency(
+    db_path: &str,
+    root: &str,
+    profile: &str,
+    mode: &str,
+) -> CommandOutput {
+    use super::quran_counting::root_frequency;
+    let mode = match parse_multi_analysis_mode(mode) {
+        Ok(mode) => mode,
+        Err(message) => return CommandOutput::err(exit::USAGE, message),
+    };
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return open_error_output(error),
+    };
+    match root_frequency(&db, root, profile, mode).await {
+        Ok(report) => json_or_err(
+            format!(
+                "{}: {} occurrence(s) under {} [{}] (checksum {})",
+                report.target,
+                report.count,
+                report.rules.profile,
+                report.rules.datasets.join(","),
+                report.checksum
+            ),
+            &report,
+        ),
+        Err(error) => CommandOutput::err(counting_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran count lemma-frequency` (SC4/G-01): the lemma analogue.
+pub async fn cmd_count_lemma_frequency(
+    db_path: &str,
+    lemma: &str,
+    profile: &str,
+    mode: &str,
+) -> CommandOutput {
+    use super::quran_counting::lemma_frequency;
+    let mode = match parse_multi_analysis_mode(mode) {
+        Ok(mode) => mode,
+        Err(message) => return CommandOutput::err(exit::USAGE, message),
+    };
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return open_error_output(error),
+    };
+    match lemma_frequency(&db, lemma, profile, mode).await {
+        Ok(report) => json_or_err(
+            format!(
+                "{}: {} occurrence(s) under {} [{}] (checksum {})",
+                report.target,
+                report.count,
+                report.rules.profile,
+                report.rules.datasets.join(","),
+                report.checksum
+            ),
+            &report,
+        ),
+        Err(error) => CommandOutput::err(counting_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran freq <text>` (D-10): a thin alias for surface-form frequency.
+/// Surface counts are single-source; a non-default `--mode` is refused rather
+/// than silently ignored.
+pub async fn cmd_freq(db_path: &str, target: &str, profile: &str, mode: &str) -> CommandOutput {
+    if mode != "single-source" && mode != "single" {
+        return CommandOutput::err(
+            exit::USAGE,
+            format!(
+                "--mode {mode} applies to `qai quran count root-frequency` / \
+                 `lemma-frequency`, not `freq`"
+            ),
+        );
+    }
+    cmd_count_frequency(db_path, target, profile).await
+}
+
 /// `qai quran count distribution`.
 pub async fn cmd_count_distribution(db_path: &str, target: &str, profile: &str) -> CommandOutput {
     use super::quran_counting::distribution;

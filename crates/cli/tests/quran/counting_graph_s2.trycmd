@@ -89,3 +89,38 @@ $ qai quran root list
 error: no active morphology dataset for root browse; import and activate one first
 
 ```
+
+Root and lemma frequency are typed-unavailable without an active lexicon
+(SC4 closes only once a dataset is activated; never an empty report).
+
+```console
+$ qai quran count root-frequency tst-root
+? 5
+error: dataset unavailable for root frequency: import and activate a morphology dataset first
+
+```
+
+```console
+$ qai quran count lemma-frequency lem-mixed --mode all-analyses
+? 5
+error: dataset unavailable for lemma frequency: import and activate a morphology dataset first
+
+```
+
+The `freq` alias counts surface forms under a profile (D-10).
+
+```console
+$ qai quran freq ويت
+? 0
+[..]: [..] occurrence(s) under L3.diacritics (checksum [..])
+
+```
+
+An unknown multi-analysis mode is a usage error before any query runs.
+
+```console
+$ qai quran count root-frequency tst-root --mode sideways
+? 2
+error: unknown multi-analysis mode: sideways (use single-source, all-analyses, or one-vote-per-token)
+
+```
