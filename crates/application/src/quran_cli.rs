@@ -3270,7 +3270,9 @@ pub async fn cmd_graph_build(db_path: &str, out: Option<&str>) -> CommandOutput 
 fn graph_error_exit(error: &quran_graph::GraphError) -> i32 {
     use quran_graph::GraphError as E;
     match error {
-        E::NodeNotFound { .. } | E::UnknownProjection { .. } => exit::NOT_FOUND,
+        E::NodeNotFound { .. } | E::UnknownProjection { .. } | E::UnknownAssertion { .. } => {
+            exit::NOT_FOUND
+        }
         E::BudgetExceeded { .. } | E::PatternRejected { .. } => exit::VALIDATION,
         E::AuthzDenied { .. } => exit::POLICY,
         E::BuildFailed { .. } => exit::INTERNAL,

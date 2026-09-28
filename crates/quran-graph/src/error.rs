@@ -94,6 +94,8 @@ pub mod codes {
     pub const PATTERN_REJECTED: DiagnosticCode = DiagnosticCode::new("QAI-GRAPH", 3);
     /// A node stable ID does not resolve in this projection.
     pub const NODE_NOT_FOUND: DiagnosticCode = DiagnosticCode::new("QAI-GRAPH", 4);
+    /// A review assertion ID does not resolve in the authority table.
+    pub const UNKNOWN_ASSERTION: DiagnosticCode = DiagnosticCode::new("QAI-GRAPH", 7);
     /// A projection build, stage, or verify step failed.
     pub const BUILD_FAILED: DiagnosticCode = DiagnosticCode::new("QAI-GRAPH", 5);
     /// The caller is not entitled to the requested graph content.
@@ -128,6 +130,15 @@ pub enum GraphError {
         /// Requested stable ID.
         stable_id: String,
     },
+    /// A review assertion ID does not resolve in the authority table.
+    ///
+    /// Absence of an assertion must never read as an empty review queue or
+    /// as a negative claim: unknown IDs are errors, never empty results.
+    #[error("unknown graph assertion '{assertion}'")]
+    UnknownAssertion {
+        /// Requested assertion ID.
+        assertion: String,
+    },
     /// A build, staging, or verification step failed.
     #[error("graph build failed at stage '{stage}': {detail}")]
     BuildFailed {
@@ -148,6 +159,7 @@ impl Diagnostic for GraphError {
     fn code(&self) -> DiagnosticCode {
         match self {
             Self::UnknownProjection { .. } => codes::UNKNOWN_PROJECTION,
+            Self::UnknownAssertion { .. } => codes::UNKNOWN_ASSERTION,
             Self::BudgetExceeded { .. } => codes::BUDGET_EXCEEDED,
             Self::PatternRejected { .. } => codes::PATTERN_REJECTED,
             Self::NodeNotFound { .. } => codes::NODE_NOT_FOUND,
@@ -163,6 +175,7 @@ impl Diagnostic for GraphError {
     fn location(&self) -> Option<String> {
         match self {
             Self::UnknownProjection { projection } => Some(format!("projection '{projection}'")),
+            Self::UnknownAssertion { assertion } => Some(format!("assertion '{assertion}'")),
             Self::NodeNotFound { stable_id } => Some(format!("node '{stable_id}'")),
             Self::BuildFailed { stage, .. } => Some(format!("build stage '{stage}'")),
             Self::BudgetExceeded { .. }
@@ -175,6 +188,10 @@ impl Diagnostic for GraphError {
         Some(match self {
             Self::UnknownProjection { .. } => {
                 "List active projections with build inspection, then retry with a live projection id."
+                    .to_string()
+            }
+            Self::UnknownAssertion { .. } => {
+                "List the review queue for the projection, then retry with a live assertion id."
                     .to_string()
             }
             Self::BudgetExceeded { .. } => {
@@ -203,6 +220,7 @@ impl Diagnostic for GraphError {
             Self::UnknownProjection { .. } | Self::BuildFailed { .. } => {
                 "qai graph build --help".to_string()
             }
+            Self::UnknownAssertion { .. } => "qai quran graph review --help".to_string(),
             Self::BudgetExceeded { .. } => "qai graph subgraph --help".to_string(),
             Self::PatternRejected { .. } => "qai graph pattern --help".to_string(),
             Self::NodeNotFound { .. } => "qai graph neighbors --help".to_string(),

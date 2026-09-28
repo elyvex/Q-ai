@@ -51,6 +51,8 @@ pub enum AuditAction {
     JobCancellationRequested,
     JobCancelled,
     DoctorRepairExecuted,
+    GraphAssertionProposed,
+    GraphAssertionDecided,
 }
 
 // ─── AuditOutcome ──────────────────────────────────
