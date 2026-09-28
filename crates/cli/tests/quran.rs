@@ -100,6 +100,15 @@ fn quran_verify_quotation_snapshots() {
     ]);
 }
 
+/// Phase 3 word-family / lemma CLI surface (SC3, G-02, D-10): host-backed
+/// segments — the family and lemma commands are reachable and typed-unavailable
+/// until a morphology dataset is active.
+#[test]
+fn quran_family_snapshots() {
+    let guard = ServeGuard::start();
+    guard.run_segments(&["tests/quran/family_s1.trycmd", "tests/quran/family_s2.trycmd"]);
+}
+
 /// Upstream catalog ingestion (metadata-only, no database).
 #[test]
 fn quran_catalog_snapshots() {

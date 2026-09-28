@@ -1,0 +1,50 @@
+# Phase 3 CLI acceptance — word-family / lemma inspection surface (SC3, G-02, D-10).
+#
+# Segment 2 of 2 (host-backed, D-13): the segment-1 import has reached its
+# host-owned terminal state. The family/lemma commands are top-level (D-10's
+# `qai quran family <kind> <id>` / `qai quran lemma <lemma>`), and with no
+# active morphology dataset both are typed-unavailable — never an empty list.
+
+```console
+$ qai quran activate test-edition-min@0.1.0 --yes
+activated test-edition-min@0.1.0 (generation 1)
+
+```
+
+```console
+$ qai quran forms rebuild test-edition-min@0.1.0
+rebuilt forms for quran-edition:test-edition-min@0.1.0: 14 ayahs, 64 tokens, 18 skeletons (generation 1)
+MV-018 canonical-unchanged: pass (sha256:235795cb218c2df44496265b4ba5c3377d48944cb28cc4ff64c6104770932704)
+provenance: prov-forms-test-edition-min-0.1.0-g1-[..]
+
+```
+
+The family surface is a first-class command (not nested under `morphology`):
+it parses and reaches its handler, and it is typed-unavailable without an
+active lexicon (QAI-MORPH-0004), never a 200-style empty relation list.
+
+```console
+$ qai quran family token token:1:1:1
+? 5
+error: no active morphology dataset for word family; import and activate one first
+
+```
+
+An empty kind or id is a usage error before any database read.
+
+```console
+$ qai quran family "" token:1:1:1
+? 2
+error: family needs a non-empty <kind> and <id>
+
+```
+
+The D-10 top-level `lemma` alias reaches the lemma read path and is
+typed-unavailable without an active lexicon.
+
+```console
+$ qai quran lemma كتب
+? 5
+error: no active morphology dataset for lemma search; import and activate one first
+
+```

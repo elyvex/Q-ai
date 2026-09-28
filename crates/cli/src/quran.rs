@@ -235,6 +235,19 @@ pub enum QuranAction {
         #[arg(long, default_value = "single-source")]
         mode: String,
     },
+    /// Word-family relations for one lexicon member (SC3, D-10): typed,
+    /// explained relations with dataset attribution.
+    Family {
+        /// Member kind (`token`).
+        kind: String,
+        /// Member id (`token:<surah>:<ayah>:<position>`).
+        id: String,
+    },
+    /// Lemma read path (D-10's top-level `lemma`): all analyses of one lemma.
+    Lemma {
+        /// Lemma spelling as stored by the active dataset.
+        lemma: String,
+    },
     /// Morphology datasets: import (staging) and activate (approval-gated).
     Morphology {
         #[command(subcommand)]
@@ -921,6 +934,12 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
         },
         QuranAction::Freq { target, profile, mode } => {
             application::quran_cli::cmd_freq(db_path, &target, &profile, &mode).await
+        }
+        QuranAction::Family { kind, id } => {
+            application::quran_cli::cmd_family(db_path, &kind, &id).await
+        }
+        QuranAction::Lemma { lemma } => {
+            application::quran_cli::cmd_morphology_lemma(db_path, &lemma).await
         }
         QuranAction::Morphology { action } => match action {
             MorphologyAction::Import {

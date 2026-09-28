@@ -3061,6 +3061,33 @@ pub async fn cmd_morphology_lemma(db_path: &str, lemma: &str) -> CommandOutput {
     }
 }
 
+/// `qai quran family <kind> <id>` (SC3/G-02/D-10): typed and explained family
+/// relations for one lexicon member, with the dataset named in the payload.
+///
+/// With no active dataset the read path returns the typed
+/// `UnavailableDataset` (`QAI-MORPH-0004`) mapped through `tool_exit` — never
+/// an empty relation list an operator could read as "no such family".
+pub async fn cmd_family(db_path: &str, kind: &str, id: &str) -> CommandOutput {
+    use super::quran_morphology::word_family;
+    if kind.trim().is_empty() || id.trim().is_empty() {
+        return CommandOutput::err(
+            exit::USAGE,
+            "family needs a non-empty <kind> and <id>".to_string(),
+        );
+    }
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return open_error_output(error),
+    };
+    match word_family(&db, kind, id).await {
+        Ok((dataset, members)) => json_or_err(
+            format!("{kind} {id}: {} family relation(s) in {dataset}", members.len()),
+            &serde_json::json!({"dataset": dataset, "relations": members}),
+        ),
+        Err(error) => CommandOutput::err(tool_exit(&error), error.to_string()),
+    }
+}
+
 /// `qai quran morphology affix`.
 pub async fn cmd_morphology_affix(db_path: &str, affix: &str, profile: &str) -> CommandOutput {
     use super::quran_morphology::affix_search;
