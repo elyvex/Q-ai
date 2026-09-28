@@ -44,3 +44,38 @@ failures in unrelated files are not auto-fixed).
 `0afc4d1`; the stale-snapshot failure recorded above was refreshed by the later
 `01-04`/`03-02` snapshot commits.
 
+## From plan 03-04 (executed 2026-09-28)
+
+### 1. `affix_search` typed error wording is imprecise when a dataset IS active
+
+- **File:** `crates/application/src/quran_morphology.rs` (`affix_search`,
+  `MorphologyToolError::UnavailableDataset`)
+- **Finding:** with an active dataset whose morpheme index is not yet built,
+  `affix_search` now fails closed with `UnavailableDataset { capability:
+  "affix/morpheme index" }` (code `QAI-MORPH-0004`), whose `Display` reads
+  "no active morphology dataset for affix/morpheme index; import and activate
+  one first". A dataset **is** active in that branch, so the first clause
+  misleads. The plan pinned this exact variant/code (G-09/T-03-16) rather than
+  introducing a new error code, so it was implemented as specified.
+- **Owner:** the SC3 surface plan (03-05, `qai quran family`/morphology
+  surfaces) should consider a dedicated "capability not yet built on the active
+  dataset" message (a new `QAI-MORPH-*` code, or a reworded capability string),
+  coordinated with the Diagnostic code map.
+- **Not fixed here:** changing the variant or code map would exceed plan 03-04's
+  declared scope and its pinned test assertions.
+
+### 2. `cargo fmt --check` remains red for the two 03-01 test files (pre-existing, still NOT caused by 03-04)
+
+- **Files:** `crates/application/tests/alpha_smoke.rs`,
+  `crates/application/tests/canonical_display_identity.rs`
+- **Finding:** unchanged from the 03-03 entry above. Plan 03-04 ran `rustfmt`
+  only on its own two changed files, so these unrelated files were left
+  untouched and the CI-level fmt redness persists.
+- **Owner:** a formatting-sweep follow-up (or the phase gate).
+- **Not fixed here:** outside plan 03-04's `files_modified`.
+
+## Status note (03-03 item 1, still open at 03-04)
+
+Plan 03-04 did not touch the 03-01 test artifacts; item 2 above restates the
+open fmt redness so the phase gate still sees it.
+
