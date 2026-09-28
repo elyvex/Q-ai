@@ -18,5 +18,5 @@ Owner-gated: `docs/05-followups/decisions-needed.md` · Technical questions:
 
 ## Active cross-phase tasks
 
-- `TASK-001-foundation-gap-closure` — Phase 1 foundation gap closure (GSD plans
-  01-01…01-05); active until plan 01-05-02 moves it to `completed/`.
+_No cross-phase task is currently active. The Phase 1 foundation gap closure
+record was moved to `completed/` by plan 01-05-02 on 2026-09-28._

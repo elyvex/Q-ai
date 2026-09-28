@@ -1,7 +1,7 @@
 # TASK-001 — Foundation Gap Closure (Phase 1)
 
 - **Task ID:** `TASK-001-foundation-gap-closure`
-- **Status:** Active
+- **Status: Completed** (2026-09-28, plan 01-05-02; automated evidence in §Completion below; owner sign-off NOT claimed)
 - **Phase:** `01-foundations` (roadmap Phase 1)
 - **Owner:** Engineering (GSD plans 01-01…01-05)
 - **Phase contract:** `.planning/ROADMAP.md` §Phase 1 + `.planning/REQUIREMENTS.md`
@@ -64,7 +64,7 @@ D-15 bounded per-kind retry · D-16 cooperative cancellation outcomes.
 | 01-04-02 | FND-06 enqueue-only | `cargo test -p application --test quran_import -- --nocapture && cargo test -p cli --test quran enqueue_only_import_is_queued_without_host` | 16/16 + named CLI case green 2026-09-28: `run_import_job` replaced by `enqueue_import_job` returning `ImportEnqueueResult{job_id, kind=quran.import, state=Queued, max_attempts (stamped kind snapshot, D-15), inspect_command}` through the audited `SqliteJobQueue` (D-11); private `HandlerRegistry`/`Worker` construction and `run_until_idle` drain removed from the one-shot path (prohibition kept). `cmd_import` validates (dry-run/manifest gates unchanged), persists catalog rows via the existing audited `ensure_source_version`, enqueues, and reports `queued <slug>@<version> import as job <id> (state: Queued)` + inspect/`serve` pointer (+ synthetic note); JSON carries job_id/kind/state/max_attempts/inspect/slug/version and never claims `Staged`. Enqueue failures are storage-level INTERNAL (no report exists pre-run). `QuranAction::Import` docs updated; `quran_cli.rs`/`cli/quran.rs` overlaps limited to the enqueue/result hunks. Application test: enqueue → Queued row + 0 staged (no hidden worker) → explicit `Worker::run_until_idle` → Succeeded + 14 staged. Real-binary `enqueue_only_import_is_queued_without_host` (no serve process): `--json` asserts kind/state/id/retry/inspect, `job show` still Queued, `validate` exit 5 (unstaged), human wording queued-honest with no `to Staged`. Filter runs only the named case, never the trycmd suite. Catalog `UNIQUE(source_id, version)` on same-manifest re-import is pre-existing (identical on the old sync path; setup seam untouched) (D-09/D-10/D-11/D-13) |
 | 01-04-03 | FND-06 snapshots | `cargo test -p cli --test quran -- --nocapture` | 13/13 green 2026-09-28 (twice): `quran.rs` harness starts one real `qai serve` child per flow (migrated temp DB, isolated loopback port, `/readyz`-gated, Drop-SIGKILL cleanup) and `run_segments` runs each flow's one-shot trycmd files in order with `wait_all_imports_terminal` (read-only `list_jobs` poll, 100ms, 120s bound) between segments — queued imports reach host-owned terminal state before activation/forms/index/reads. 8 one-shot flows restructured into 22 import-boundary segments (read_flow×4 incl. second-version lifecycle, reference×6 incl. QV-015 mismatch → host DeadLettered after bounded D-15 retries + `validate` exit 5 proving nothing staged, 6 flows×2); `catalog.trycmd` untouched (no import). Snapshots pin queued import output (`queued <slug>@<version> import as job [..] (state: Queued)` + inspect/`serve` pointer + synthetic note); every other line byte-identical except the pre-existing `index rebuild` manifest-hash drift, now `sha256:[..]` (hash moved 9d1c→be22→cf83 under concurrent phase-2 rule work; drift predates 01-04, manifest code untouched here, sibling rule work owns future pins). Task-local proof inside the target: immediate-queued + later-terminal observed per flow; imports fail if drained inline, if the host is down, or if a job stays unobservable past the bound; no worker verb added, no leaked child/port/DB. Overlap record: 8 originals `git rm`'d, 22 segments created, `quran.rs` harness-only diff (D-03/D-04/D-13) |
 | 01-05-01 | FND-07 external policy | `cargo test -p xtask && cargo run -q -p xtask -- arch-check` | 25/25 + arch-check OK green 2026-09-28: `xtask::arch` classifies every edge by source kind (`Dependency::source_kind`: path/registry/git/unknown) and checks path against `workspace.allow`, registry against `external.registry.allow`, git against `external.git.allow`, unknown schemes fail closed; diagnostics sorted deterministic, path message unchanged. `xtask/allowlist.toml` gains a per-crate FND-07 block derived from current `cargo metadata --all-features` (23 crates, all git allows empty — workspace has no git-source dep); no package added/installed/upgraded. Inline tests: allowed/forbidden registry (exact message), allowed/forbidden git (registry-allow ≠ git-allow), unknown-crate path+registry+git fail-closed, mixed path/external isolation (exactly 1 violation), unknown-scheme fail-closed; path mutation + server OD-14 pin retained. `cargo fmt -p xtask --check` clean, `cargo clippy -p xtask --all-targets -- -D warnings` clean (D-02/D-03, T-05-ARCH/T-05-EXTERNAL/T-05-SUPPLYCHAIN) |
-| 01-05-02 | closure (sole owner) | `cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && ... && sh scripts/verify-phase1-preservation.sh check --task 01-05-02` | _pending_ |
+| 01-05-02 | closure (sole owner) | `cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && ... && sh scripts/verify-phase1-preservation.sh check --task 01-05-02` | Gate captured 2026-09-28 before the move: clippy workspace GREEN; all Phase 1 suites GREEN (see §Completion); `arch-check` + `migrate-check` GREEN; `cargo fmt --all` RED only on 2 foreign untracked 03-01 scratch files; `cargo test --workspace` RED at foreign `quran_identity` (2 NotStaged failures under a concurrent +189-line `quran_cli.rs` rewrite, untouched). `scripts/verify-phase1-records.sh` created, `sh -n` clean, pre-move RED run 23 FAILs/exit 1 as designed. Move performed as one operation post-evidence: task file active→completed, active index entry removed, one dated completed-index entry added; rollup/status/changelog left for 01-05-03 (D-01/D-02/D-03, T-05-STATUS/T-05-SCOPE) |
 | 01-05-03 | final gate + post-move records | `sh scripts/verify-phase1-preservation.sh check --all && sh scripts/verify-phase1-records.sh && sh scripts/verify-phase1-preservation.sh check --all` | _pending_ |
 
 ## Threat predicates
@@ -87,3 +87,94 @@ record references them and does not discharge them.
   (`capture` before edits, `check` after each task and at the final gate).
 
 ---
+
+## Completion — Phase 1 foundation gap closure (2026-09-28, plan 01-05-02)
+
+- **Status:** Completed. Automated evidence is complete and recorded below;
+  owner sign-off (dataset licensing, reviewer acceptance, remote deployment)
+  is a separate gate and is NOT claimed here — see Owner-gated items.
+- **Plans:** 01-01 (foundation tracer: help/config/doctor/migrate/audit) ·
+  01-02 (audited durable mutations + failure matrix) · 01-03 (durable
+  checkpoints/retry/cancellation + lifecycle audit + `qai job`) · 01-04
+  (serve-owned worker host + enqueue-only import + host-backed corpus flows) ·
+  01-05 (registry/git external policy + this closure). Summaries:
+  `.planning/phases/01-foundations/01-01-SUMMARY.md`, `01-02-SUMMARY.md`,
+  `01-03-SUMMARY.md`, `01-04-SUMMARY.md` (01-05-SUMMARY.md is written at
+  finalization, after the 01-05-03 post-move gate).
+- **Roadmap criteria → repeatable evidence:**
+  - C1 (build + stable `qai --help` tree): `cargo build -p cli --bin qai`,
+    `target/debug/qai --help`, `cargo test -p cli --test foundation` (15/15).
+  - C2 (CLI > env > file > defaults + named remedies): `cargo test -p config
+    --lib` (32/32), `cargo test -p testkit --test config_precedence` (10/10),
+    foundation config get/validate/explain cases.
+  - C3 (provenance + append-only audit for state changes): `cargo test
+    -p application --test phase1_foundation` (6/6), `cargo test
+    -p storage-sqlite --test commit_bounds_outbox` (5/5) `--test
+    integrity_audit` (3/3), `qai audit verify` tampered/gap human+JSON cases.
+  - C4 (brokerless enqueue/lease/checkpoint/cancel): `cargo test -p jobs
+    --lib` (37/37), `recovery_jobs` (13/13), `phase1_jobs_audit` (5/5),
+    `cargo test -p cli --test jobs` (4/4), `phase1_jobs_host` (3/3),
+    `cargo test -p cli --test quran` (14/14 incl. real `qai serve` child).
+  - C5 (`arch-check` + CI fail on forbidden edges): `cargo test -p xtask`
+    (25/25 incl. registry/git mutation cases), `cargo run -q -p xtask --
+    arch-check`, `migrate-check`, `cargo run -p xtask -- ci`.
+- **Pre-move final gate (captured 2026-09-28 before the active→completed
+  handoff):** `cargo clippy --workspace --all-targets -- -D warnings` GREEN;
+  Phase 1 quick suite GREEN (config 32/32, config_precedence 10/10,
+  foundation 15/15, phase1_foundation 6/6, jobs 37/37, commit_bounds_outbox
+  5/5, integrity_audit 3/3, phase1_jobs_audit 5/5, recovery_jobs 13/13,
+  phase1_jobs_host 3/3, quran_import 16/16, cli quran 14/14, xtask 25/25, cli
+  jobs 4/4, catalog 2/2); `arch-check` OK; `migrate-check` OK (21 migrations,
+  checksums stable); `adr-lint` OK; `docs/schemas/` clean; `cargo-deny` not
+  installed locally (recorded unavailable, CI-enforced). Two FOREIGN reds,
+  both quoted and untouched: (a) `cargo fmt --all -- --check` fails only on
+  concurrent-session untracked `crates/application/tests/alpha_smoke.rs` and
+  `canonical_display_identity.rs`; (b) `cargo test --workspace` stops at
+  `application --test quran_identity` (2 `NotStaged` failures) under a
+  concurrent session's uncommitted +189-line `quran_cli.rs`/`quran.rs`
+  rewrite. No Phase 1-owned file is implicated in either red.
+- **Locked decisions:** D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08, D-09,
+  D-10, D-11, D-12, D-13, D-14, D-15, D-16 — dispositions per the Locked
+  decisions referenced section above and
+  `.planning/phases/01-foundations/01-VALIDATION.md` §Locked Decision Coverage.
+- **Spec-less probes (all retained-assumption; referenced, not discharged):**
+  PROBE-01 (exact-text-first; importer/approval negatives, full corpus
+  exactness broader than foundation tests), PROBE-02 (traceability / no
+  fabrication; same-UoW rollback + tamper cases, scholarly-claim evaluation
+  out), PROBE-03 (locality; local binary/SQLite/loopback host, remote modes
+  out), PROBE-04 (deny-by-default / no false consensus; no-side-effect doctor
+  + enqueue-only import, consensus evaluation out), PROBE-05 (product vision;
+  Quran-first boundary, full platform vision out), PROBE-06 (goals /
+  non-goals; no model, provider, broker, migration, or package install, later
+  capabilities out), PROBE-07 (engineering baseline; fourteen task commands +
+  fmt/clippy/workspace/arch/migrate/ci, full PRD matrix out), PROBE-08
+  (storage; readiness/atomicity/queue/migrate-check, PostgreSQL portability
+  out), PROBE-09 (CLI/API; foundation/job/enqueue/serve tests, later API
+  domains out), PROBE-10 (architecture quality; inline registry/git mutation +
+  arch-check, UX/performance out).
+- **Prohibitions held:** no criterion closed on prose alone (every row above
+  names a command); no registry/git edge allowed by name absence (explicit
+  per-crate, per-class policy, fail closed); no package installed, upgraded,
+  or blessed (lockfile untouched by Phase 1); no deferred/owner-gated item
+  converted into a deliverable and no unrelated worktree path staged or edited
+  by this closure.
+- **Threat predicates (all mitigated in-plan, see 01-VALIDATION.md §Threat
+  Predicate Register):** T-01-CFG, T-01-DOCTOR, T-01-MIG, T-01-AUDIT, T-01-SQL,
+  T-02-ATOMICITY, T-02-PROVENANCE, T-02-CANONICAL, T-02-RECOVERY, T-02-SQL,
+  T-03-LEASE, T-03-RETRY, T-03-CHECKPOINT, T-03-SECRET, T-03-CONCURRENCY,
+  T-04-HOST, T-04-SHUTDOWN, T-04-ENQUEUE, T-04-LEASE, T-04-SECRET, T-04-SCOPE,
+  T-05-ARCH, T-05-EXTERNAL, T-05-SUPPLYCHAIN, T-05-STATUS, T-05-SCOPE, T-05-INFO.
+- **Brownfield reuse ledger:** Config::load + OriginMap, open_read_only,
+  checksummed migration runner, verify_persisted_audit, existing Clap tree,
+  shared UnitOfWork, existing jobs table/ports/Worker, existing
+  HandlerRegistry/handlers, `qai serve` wiring, `arch-check`/`migrate-check`
+  gates — preserved and extended, nothing rebuilt, no second service created.
+- **Non-expansion boundary:** no new migration (21 checksummed, green), no new
+  package or broker, no schema rewrite; Phase-2 rule/graph/search evolution,
+  later Quran/search/server capabilities, and concurrent worktree paths remain
+  outside this closure and untouched by it.
+- **Owner-gated and deferred items (explicitly NOT closed):** ADR-0101 dataset
+  license + corpus activation, named reviewer acceptance (editorial
+  verification), remote deployment (PostgreSQL/Qdrant/TLS), clean-machine
+  container ritual (P0-T56, no Docker daemon), linguist goldens. Tracked in
+  `docs/05-followups/`; agents must not invent approvals.
