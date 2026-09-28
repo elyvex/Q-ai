@@ -210,7 +210,9 @@ async fn host_shutdown_finalizes_an_in_flight_import_truthfully() {
         if !matches!(job.state.as_str(), "Queued") || is_terminal(&job.state) {
             break;
         }
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        // Gentle polling: each read takes the single write connection, and
+        // hammering it starves the running import into a spurious failure.
+        tokio::time::sleep(Duration::from_millis(100)).await;
     }
     shutdown_tx.send(true).unwrap();
     tokio::time::timeout(Duration::from_secs(60), host)
