@@ -4,15 +4,15 @@ current_phase: 03
 current_phase_name: Quran Search & Linguistics
 status: executing
 stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-09-28T00:33:26.048Z"
+last_updated: "2026-09-28T01:10:11.198Z"
 last_activity: 2026-09-28
 last_activity_desc: Phase 03 execution started
-state_head: 0034fe070ba2785cd696dc62cbce633b9f8a4582
+state_head: 2fc26cd9200e22d40b33545c611d617ba0d992d7
 progress:
   total_phases: 12
   completed_phases: 1
   total_plans: 20
-  completed_plans: 10
+  completed_plans: 12
   percent: 8
 ---
 
@@ -69,6 +69,7 @@ Progress: [█░░░░░░░░░] 8%
 | Phase 01-foundations P02 | 20min | 2 tasks | 8 files |
 | Phase 01-foundations P03 | 35min | 3 tasks | 16 files |
 | Phase 03 P01 | 19 min | 3 tasks | 3 files |
+| Phase 01-foundations P04 | 72min | 3 tasks | 32 files |
 
 ## Accumulated Context
 
@@ -105,6 +106,8 @@ Recent decisions affecting current work:
 - [Phase 01]: 01-03: immediate checkpoint persistence through the queue; per-kind policy with enqueue snapshot; request-only cancellation with three locked dispositions; checkpoint/heartbeat excluded from audit chain (D-14/D-15/D-16/D-11)
 - [Phase 03]: [Phase 03-01]: SC5 is pinned by a per-hit test (canonical_display_identity.rs) that independently resolves each hit's ayah through the reader and asserts the displayed quotation is byte-identical to the canonical row at the hit's canonical span across all five search modes; canonical stored hashes are unchanged across searches (I8/SC5).
 - [Phase 03]: [Phase 03-01]: The empty/whitespace query fallback edge is disposed at the CLI boundary: cmd_search returns a typed usage error (exit::USAGE, 'provide query text') before opening the service; search_normalized has no empty guard and legitimately returns Ok with zero hits, so the guard is asserted where the operator actually calls it.
+- [Phase 01-foundations]: 01-04: qai serve owns the durable worker host (run_until_shutdown over a watch channel, default registry, readiness gate, signal-driven joined shutdown); one-shot quran import is enqueue-only with a queued job result (D-13..D-16)
+- [Phase 01-foundations]: 01-04: CLI corpus flows run host-backed as 22 import-boundary trycmd segments with read-only terminal-state sync; QV-015 mismatch fails through the host to an inspectable dead letter with nothing staged
 
 ### Pending Todos
 
