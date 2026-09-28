@@ -14,7 +14,9 @@ use application::quran_index::{IndexBuildParams, QURAN_AYAH_INDEX_ID, rebuild_in
 use application::quran_morphology::{
     IMPORT_CHECKPOINTS, MorphologyActivateParams, MorphologyDiffKind, MorphologyImportParams,
     RootUnificationCandidate, activate_morphology, affix_search, browse_lemmas, browse_roots,
-    build_same_root_relations, dataset_urn, diff_datasets, enqueue_root_unification, lemma_search,
+    build_affix_relations, build_derived_relations, build_inflectional_relations,
+    build_same_form_relations, build_same_lemma_relations, build_same_root_relations,
+    build_same_stem_relations, dataset_urn, diff_datasets, enqueue_root_unification, lemma_search,
     morphology_compare, morphology_for_token, pattern_search, root_search, run_morphology_import,
     word_family,
 };
@@ -136,6 +138,17 @@ async fn ready_db() -> (tempfile::TempDir, SqliteDatabase) {
     (dir, db)
 }
 
+/// A second read-only pool over the same temp database for raw assertions on
+/// persisted rows that have no service read path.
+async fn read_pool(dir: &tempfile::TempDir) -> sqlx::SqlitePool {
+    let path = dir.path().join("qai.db");
+    sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(sqlx::sqlite::SqliteConnectOptions::new().filename(path).foreign_keys(true))
+        .await
+        .unwrap()
+}
+
 /// Build an aligned array-shape document from real fixture tokens (all
 /// surfaces match the inventory → direct-key alignment).
 async fn aligned_document(db: &SqliteDatabase) -> String {
@@ -166,6 +179,64 @@ async fn aligned_document(db: &SqliteDatabase) -> String {
                     "synthetic_test_only": true,
                 }));
             }
+        }
+    }
+    uow.rollback().await.unwrap();
+    serde_json::to_string(&rows).unwrap()
+}
+
+/// Build an aligned array-shape document whose derived lexicon keys exercise
+/// every family relation kind (G-05): synthetic root/lemma/stem groups plus a
+/// declared prefix/suffix on every token. Real fixture surfaces keep
+/// direct-key alignment; every row stays `synthetic_test_only: true`.
+///
+/// The token index `k` (canonical order across the whole fixture) drives the
+/// groups, so `fixtures/quran/lexicon/families/curated.jsonl` can be computed
+/// independently and must agree row-for-row. `lemma = k % 9` and
+/// `root = k % 3` are chosen so a lemma maps to exactly one root (9 is a
+/// multiple of 3): `quran_lemmas` is UNIQUE(dataset_id, lemma), so two roots
+/// sharing a lemma text would collide at activation.
+async fn family_document(db: &SqliteDatabase) -> String {
+    let mut uow = db.write().await.unwrap();
+    let active = uow.quran().get_active().await.unwrap().unwrap();
+    let ayahs = uow.quran().list_ayahs_range(&active.edition_id, 1, i64::MAX).await.unwrap();
+    let mut rows = Vec::new();
+    let mut index = 0usize;
+    for ayah in &ayahs {
+        let tokens =
+            uow.quran().get_tokens(&active.edition_id, ayah.surah, ayah.ayah).await.unwrap();
+        for token in &tokens {
+            let root = format!("root-{}", index % 3);
+            let lemma = format!("lem-{}", index % 9);
+            let stem = format!("stem-{}", index % 5);
+            let prefix = format!("pre-{}", index % 4);
+            let suffix = format!("suf-{}", index % 3);
+            // Two competing analyses per token; both carry the same family
+            // keys so a token has one root/lemma/stem/affix, never a winner.
+            for analysis_no in [0u32, 1u32] {
+                rows.push(serde_json::json!({
+                    "sura_no": ayah.surah,
+                    "aya_no": ayah.ayah,
+                    "tok_idx": token.position,
+                    "analysis_no": analysis_no,
+                    "surface_form": token.surface,
+                    "lemma_str": lemma,
+                    "root_str": root,
+                    "stem_str": stem,
+                    "tag_native": if analysis_no == 0 { "N" } else { "V" },
+                    "tag_unified": if analysis_no == 0 { "noun" } else { "verb" },
+                    "layer": "B",
+                    "state": "imported",
+                    "segmented": true,
+                    "morphs": [
+                        {"part": "prefix", "text": prefix},
+                        {"part": "stem", "text": stem},
+                        {"part": "suffix", "text": suffix},
+                    ],
+                    "synthetic_test_only": true,
+                }));
+            }
+            index += 1;
         }
     }
     uow.rollback().await.unwrap();
@@ -442,11 +513,13 @@ async fn crash_matrix_cancel_at_each_checkpoint() {
     }
 }
 
-/// P2-T83…T88: family relations build with mandatory explanations and serve.
+/// P2-T83…T88 / G-05: every typed family relation kind is built, each row
+/// carries a non-empty explanation and an in-domain typed relation, and no
+/// analysis is merged, promoted, or marked preferred.
 #[tokio::test]
 async fn family_relations_explained() {
-    let (_dir, db) = ready_db().await;
-    let doc = aligned_document(&db).await;
+    let (dir, db) = ready_db().await;
+    let doc = family_document(&db).await;
     run_morphology_import(&db, &import_params(doc, "batch-fam"), &AtomicBool::new(false), |_| {})
         .await
         .unwrap();
@@ -461,13 +534,93 @@ async fn family_relations_explained() {
     )
     .await
     .unwrap();
-    let built =
-        build_same_root_relations(&db, &format!("{SLUG}@{VERSION}")).await.expect("builders run");
-    assert!(built > 0);
-    let (_, members) = word_family(&db, "token", "token:1:1:1").await.unwrap();
-    // Member 1:1:1 pairs with its window sibling under the shared test root.
-    assert!(members.iter().all(|m| !m.explanation.is_empty()));
-    assert!(members.iter().all(|m| m.relation == "same_root"));
+
+    let dataset = format!("{SLUG}@{VERSION}");
+    let built = vec![
+        ("same_form", build_same_form_relations(&db, &dataset).await.expect("same_form")),
+        ("same_lemma", build_same_lemma_relations(&db, &dataset).await.expect("same_lemma")),
+        ("same_stem", build_same_stem_relations(&db, &dataset).await.expect("same_stem")),
+        ("same_root", build_same_root_relations(&db, &dataset).await.expect("same_root")),
+        ("derived", build_derived_relations(&db, &dataset).await.expect("derived")),
+        ("inflectional", build_inflectional_relations(&db, &dataset).await.expect("inflectional")),
+        ("affix", build_affix_relations(&db, &dataset).await.expect("affix")),
+    ];
+    for (kind, count) in &built {
+        assert!(*count > 0, "relation kind {kind} must build rows, saw {count}");
+    }
+
+    let typed = [
+        "same_form",
+        "same_lemma",
+        "same_stem",
+        "same_root",
+        "derived",
+        "inflectional",
+        "affix",
+    ];
+    let pool = read_pool(&dir).await;
+    let rows = sqlx::query_as::<_, (String, String, String, String, Option<String>, String)>(
+        "SELECT relation, from_id, to_id, explanation, dataset_id, status
+         FROM word_family_relations ORDER BY relation, from_id, to_id",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert!(!rows.is_empty());
+    let kinds_seen: std::collections::BTreeSet<&str> =
+        rows.iter().map(|r| r.0.as_str()).collect();
+    for row in &rows {
+        let (relation, from_id, to_id, explanation, dataset_id, status) = row;
+        assert!(typed.contains(&relation.as_str()), "relation {relation} outside the 0017 domain");
+        assert!(!explanation.trim().is_empty(), "explanation mandatory for {from_id}->{to_id}");
+        assert!(
+            explanation.contains(relation.as_str()),
+            "explanation must state the relation it claims: {explanation}"
+        );
+        assert_eq!(dataset_id.as_deref(), Some(dataset.as_str()), "dataset attribution");
+        assert_eq!(status, "proposed", "built relations stay proposed (never auto-verified)");
+    }
+    assert_eq!(kinds_seen.len(), typed.len(), "every typed kind present: {kinds_seen:?}");
+
+    // No merge / preferred-analysis surface exists, and no analysis was flipped.
+    let ddl: Vec<String> = sqlx::query_scalar(
+        "SELECT sql FROM sqlite_master WHERE name IN
+           ('word_family_relations','quran_token_analyses','quran_roots','quran_lemmas')",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    for statement in &ddl {
+        let lower = statement.to_lowercase();
+        for banned in ["is_correct", "is_primary", "selected"] {
+            assert!(!lower.contains(banned), "no merge/preferred column may exist: {statement}");
+        }
+    }
+    let flipped: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM quran_token_analyses WHERE status != 'imported'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(flipped, 0, "building relations never promotes/merges an analysis");
+
+    // The read path resolves one member per kind to its typed, explained
+    // partner (a single query per kind, driven by the built rows).
+    for (kind, _) in &built {
+        let (from_id, to_id) = rows
+            .iter()
+            .find(|r| r.0 == *kind)
+            .map(|r| (r.1.clone(), r.2.clone()))
+            .unwrap_or_else(|| panic!("kind {kind} has a built row"));
+        let (served_dataset, members) = word_family(&db, "token", &from_id).await.unwrap();
+        assert_eq!(served_dataset, dataset);
+        let partner = members
+            .iter()
+            .find(|m| m.id == to_id && m.relation == *kind)
+            .unwrap_or_else(|| panic!("{kind}: {from_id} must resolve to {to_id}"));
+        assert!(!partner.explanation.trim().is_empty());
+    }
+    pool.close().await;
 }
 
 /// P2-T69: compare two registered dataset versions without merging analyses.

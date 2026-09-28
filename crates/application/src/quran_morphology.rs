@@ -1804,6 +1804,54 @@ pub async fn build_same_root_relations(
     Ok(count)
 }
 
+/// Build same-form family relations (G-05, RED stub).
+pub async fn build_same_form_relations(
+    _db: &SqliteDatabase,
+    _dataset_id: &str,
+) -> Result<usize, MorphologyToolError> {
+    Ok(0)
+}
+
+/// Build same-lemma family relations (G-05, RED stub).
+pub async fn build_same_lemma_relations(
+    _db: &SqliteDatabase,
+    _dataset_id: &str,
+) -> Result<usize, MorphologyToolError> {
+    Ok(0)
+}
+
+/// Build same-stem family relations (G-05, RED stub).
+pub async fn build_same_stem_relations(
+    _db: &SqliteDatabase,
+    _dataset_id: &str,
+) -> Result<usize, MorphologyToolError> {
+    Ok(0)
+}
+
+/// Build derivational family relations (G-05, RED stub).
+pub async fn build_derived_relations(
+    _db: &SqliteDatabase,
+    _dataset_id: &str,
+) -> Result<usize, MorphologyToolError> {
+    Ok(0)
+}
+
+/// Build inflectional family relations (G-05, RED stub).
+pub async fn build_inflectional_relations(
+    _db: &SqliteDatabase,
+    _dataset_id: &str,
+) -> Result<usize, MorphologyToolError> {
+    Ok(0)
+}
+
+/// Build affix family relations (G-05, RED stub).
+pub async fn build_affix_relations(
+    _db: &SqliteDatabase,
+    _dataset_id: &str,
+) -> Result<usize, MorphologyToolError> {
+    Ok(0)
+}
+
 /// `quran.word_family` read path (T84): relations for one member.
 pub async fn word_family(
     db: &SqliteDatabase,
