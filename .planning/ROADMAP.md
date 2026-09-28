@@ -102,7 +102,7 @@ Plans:
   4. User can view frequency, distribution, and co-occurrence for any root or lemma
   5. Displayed canonical text is never modified by normalization in any result
 
-**Plans**: 7/8 plans executed
+**Plans**: 8/8 plans executed
 
 Plans:
 **Wave 1**
@@ -126,7 +126,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 03-08-PLAN.md — Owner gates OD-11/OD-12 recorded BLOCKED + deferral ledger + alpha end-to-end evidence (D-03/D-08)
+- [x] 03-08-PLAN.md — Owner gates OD-11/OD-12 recorded BLOCKED + deferral ledger + alpha end-to-end evidence (D-03/D-08)
 
 ### Phase 4: Quran Graph
 
@@ -267,7 +267,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 |-------|----------------|--------|-----------|
 | 1. Foundations | 5/5 | Complete    | 2026-09-28 |
 | 2. Canonical Quran Core | 7/7 | Complete    | 2026-09-25 |
-| 3. Quran Search & Linguistics | 7/8 | In Progress|  |
+| 3. Quran Search & Linguistics | 8/8 | In Progress|  |
 | 4. Quran Graph | 0/TBD | Not started | - |
 | 5. Rich Quran Experience | 0/TBD | Not started | - |
 | 6. Hadith & Tafsir | 0/TBD | Not started | - |

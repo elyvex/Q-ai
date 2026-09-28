@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
-current_phase: 02
-current_phase_name: Canonical Quran Core
-status: planning
-stopped_at: Phase 01 complete, ready to plan Phase 02
-last_updated: "2026-09-28T06:30:33.170Z"
+current_phase: 03
+current_phase_name: Quran Search & Linguistics
+status: complete
+stopped_at: "Completed 03-08-PLAN.md (phase 03 complete: 8/8 plans)"
+last_updated: "2026-09-28T07:20:56.289Z"
 last_activity: 2026-09-28
-last_activity_desc: Phase 01 complete, transitioned to Phase 02
-state_head: a1276981b69b4aaf5b9db1d8a77c820f8128b3f4
+last_activity_desc: Completed 03-08-PLAN.md — phase 03 execute-complete (owner gates OD-11/OD-12 BLOCKED)
+state_head: 6657a33c81741f8dfedaae7af1043f4de024684e
 progress:
   total_phases: 12
   completed_phases: 2
   total_plans: 20
-  completed_plans: 19
+  completed_plans: 20
   percent: 17
 ---
 
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-09-23)
 
 ## Current Position
 
-Phase: 02 — Canonical Quran Core
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-09-28 — Phase 01 complete, transitioned to Phase 02
+Phase: 03 — Quran Search & Linguistics
+Plan: 8 of 8
+Status: Complete (execute) — alpha proven; OD-11/OD-12 BLOCKED owner gates
+Last activity: 2026-09-28 — Completed 03-08-PLAN.md (phase 03 complete: 8/8 plans)
 
 Progress: [██░░░░░░░░] 17%
 
@@ -78,6 +78,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 03 P05 | 1h 50m | 2 tasks | 12 files |
 | Phase 03 P06 | 27 min | 3 tasks | 10 files |
 | Phase 03 P07 | 28 min | 3 tasks | 7 files |
+| Phase 03 P08 | 50 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -137,6 +138,9 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-07: G-08 closed by an end-to-end doctor soak (import+activate -> forms -> index -> morphology import+activate -> search per mode). 'All 19 green' is realized as 19 stable ids with no failure: the token-level index (quran.fts.token_index) stays skipped by design (no backend), never a silent pass/false fail. The drift case produces QAI-IDX-0101 through the SearchHit stale-index warning after a v2 edition is activated while the serving generation still points at v1, and doctor reports quran.index.drift as warn (read-only, never repairs).
 - [Phase 03]: 03-07: G-06 closed by fixtures/quran/performance/budgets.json — a machine-readable table codifying ADR-0207's concatenated p99<=150ms, the plan 17.1 p50/p99 rows, and fixture_bound_ms=2000, each with applies_to + rationale. search_latency.rs loads it (include_str!), gates the fixture runs against fixture_bound_ms and asserts it is not loosened; the full-corpus rows are recorded OD-11-dependent and never executed on the 14-ayah fixture.
 - [Phase 03]: 03-07: G-11/D-13 closed by extending QuranBackend with backend_search/backend_root/backend_lemma/backend_morphology/backend_family (default typed-unsupported so no backend is forced to implement them) and registering 7 tool names. ReaderToolBackend builds attributed envelopes: quran.search carries normalization_rules from the served hit's NormalizationTrace (I9) plus canonical sources, the lexicon tools carry dataset attribution, and an unavailable dataset surfaces the typed QAI-MORPH-0004 backend error rather than an empty result.
+- [Phase 03]: 03-08: OD-11 and OD-12/D-08 are recorded as explicit BLOCKED owner gates with exact closing steps (licenses/qac capture per licenses/README.md; named Arabic linguist + ADR-0204/0205/0210/0215 acceptance); decisions-needed.md stays the source of truth and the plan closes nothing (T-03-30).
+- [Phase 03]: 03-08: The D-03 alpha is proven on the synthetic fixture only — one full-chain test (alpha_e2e::alpha_end_to_end_synthetic) runs normalize -> forms -> index -> five search modes -> morphology/root/lemma/family -> frequency/distribution/co-occurrence, gating every hit on trace + canonical span + byte-identical quotation (SC5), every lexicon result on dataset attribution, and every numeric report on a complete CountingRules; no linguistic correctness or real-data behavior is claimed (OD-11/OD-12 BLOCKED, T-03-31/T-03-32).
+- [Phase 03]: 03-08: The deferred scope is recorded in docs/05-followups/phase-03-deferrals.md (UI + result-contract checksum -> Phase 5; counting tail incl. hapax_search -> later; legacy phase-02-rag tail -> follow-ups; transliteration/L8; graph -> Phase 4; editions/multi-RAG), and the 03-VALIDATION.md per-task map is deferred to /gsd-validate-phase with the PLAN <verify> blocks as the authoritative Phase-3 map (T-03-33).
 
 ### Pending Todos
 
@@ -158,6 +162,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-28T06:13:30.610Z
-Stopped at: Phase 01 complete, ready to plan Phase 02
+Last session: 2026-09-28T07:20:56.142Z
+Stopped at: Completed 03-08-PLAN.md (phase 03 complete: 8/8 plans)
 Resume file: None
