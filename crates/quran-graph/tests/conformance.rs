@@ -644,6 +644,210 @@ async fn sqlite_deterministic_under_insertion_order() {
     println!("backend: sqlite");
 }
 
+fn hub_parts() -> FixtureParts {
+    let mut nodes = vec![node("hub", NodeKind::Ayah)];
+    let mut edges = Vec::new();
+    for i in 0..5 {
+        let leaf = format!("leaf{i}");
+        nodes.push(node(&leaf, NodeKind::Ayah));
+        edges.push(GraphEdge::structural("hub", "NEXT", &leaf, serde_json::Value::Null));
+    }
+    FixtureParts { projection_id: "hub".to_string(), nodes, edges, assertions: Vec::new() }
+}
+
+fn cycle_parts() -> FixtureParts {
+    FixtureParts {
+        projection_id: "cycle".to_string(),
+        nodes: vec![
+            node("ca", NodeKind::Ayah),
+            node("cb", NodeKind::Ayah),
+            node("cc", NodeKind::Ayah),
+        ],
+        edges: vec![
+            GraphEdge::structural("ca", "NEXT", "cb", serde_json::Value::Null),
+            GraphEdge::structural("cb", "NEXT", "cc", serde_json::Value::Null),
+            GraphEdge::structural("cc", "NEXT", "ca", serde_json::Value::Null),
+        ],
+        assertions: Vec::new(),
+    }
+}
+
+#[tokio::test]
+async fn sqlite_fanout_truncation_carries_reason() {
+    // D-10/ADR-0217: a high-degree node under a tight fanout cap truncates
+    // with a non-empty reason — never an error, never a silent cut.
+    let parts = hub_parts();
+    for backend in backends(&parts).await {
+        println!("backend: {}", backend.name());
+        let store = backend.store();
+        let (cancel, authz, _) = open();
+        let tight = QueryBudgets { max_fanout: 2, ..QueryBudgets::default() };
+        let result = store.neighbors("hub", &EdgeFilter::any(), &tight, &cancel, &authz).unwrap();
+        assert!(result.truncated, "fanout exhaustion truncates");
+        let reason = result.incomplete_reason.clone().unwrap_or_default();
+        assert!(!reason.is_empty(), "truncation always names its reason");
+        assert!(reason.contains("fanout"), "reason names the fanout cap: {reason}");
+        assert_eq!(result.edges.len(), 2, "expansion stops at the cap");
+    }
+}
+
+#[tokio::test]
+async fn sqlite_node_edge_exhaustion_is_incomplete() {
+    // In-flight node/edge exhaustion returns incomplete results rather than
+    // empty-complete ones, each with a non-empty reason.
+    let parts = chain_parts();
+    for backend in backends(&parts).await {
+        println!("backend: {}", backend.name());
+        let store = backend.store();
+        let (cancel, authz, _) = open();
+
+        let tight_nodes = QueryBudgets { max_nodes: 3, ..QueryBudgets::default() };
+        let sub = store.subgraph(&["n0".to_string()], &tight_nodes, &cancel, &authz).unwrap();
+        assert!(sub.truncated, "node exhaustion truncates");
+        assert!(!sub.incomplete_reason.as_deref().unwrap_or_default().is_empty());
+        assert!(!sub.nodes.is_empty(), "partial results are kept, never emptied");
+
+        let tight_edges = QueryBudgets { max_edges: 2, ..QueryBudgets::default() };
+        let sub = store.subgraph(&["n0".to_string()], &tight_edges, &cancel, &authz).unwrap();
+        assert!(sub.truncated, "edge exhaustion truncates");
+        assert!(!sub.incomplete_reason.as_deref().unwrap_or_default().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn sqlite_cycles_terminate_within_hops() {
+    // Cycles terminate: visited-set expansion plus the hop cap bound the
+    // search, and a complete answer is reported complete.
+    let parts = cycle_parts();
+    for backend in backends(&parts).await {
+        println!("backend: {}", backend.name());
+        let store = backend.store();
+        let (cancel, authz, budgets) = open();
+        let paths = store.bounded_paths("ca", "cc", 6, &budgets, &cancel, &authz).unwrap();
+        assert!(!paths.truncated, "a nearby target on a 3-cycle is complete");
+        // Direction-agnostic expansion: the one-hop backward traversal
+        // ca<-cc sorts before the two-hop forward route ca->cb->cc.
+        assert_eq!(paths.paths.len(), 2);
+        assert_eq!(paths.paths[0].node_ids, vec!["ca", "cc"]);
+        assert_eq!(paths.paths[1].node_ids, vec!["ca", "cb", "cc"]);
+        let sub = store.subgraph(&["ca".to_string()], &budgets, &cancel, &authz).unwrap();
+        assert!(!sub.truncated);
+        assert_eq!(sub.nodes.len(), 3, "the whole cycle is reachable exactly once");
+    }
+}
+
+#[tokio::test]
+async fn sqlite_restricted_intermediates_absent_from_paths_and_counts() {
+    // Hidden intermediates appear in neither paths nor expansion counts:
+    // the restricted run expands strictly fewer edges than the full run.
+    let parts = triangle_parts();
+    for backend in backends(&parts).await {
+        println!("backend: {}", backend.name());
+        let store = backend.store();
+        let (cancel, _, budgets) = open();
+        let full = store
+            .bounded_paths("s", "t", 4, &budgets, &cancel, &AuthzScope::all_visible())
+            .unwrap();
+        let scope = AuthzScope::restricted(["a-hidden".to_string()]);
+        let narrow = store.bounded_paths("s", "t", 4, &budgets, &cancel, &scope).unwrap();
+        assert!(!narrow.truncated);
+        assert_eq!(narrow.paths.len(), 1, "only the structural route survives");
+        assert!(
+            narrow.expanded_edges < full.expanded_edges,
+            "hidden edges are not expanded, hence not counted \
+             (full {}, narrow {})",
+            full.expanded_edges,
+            narrow.expanded_edges
+        );
+        for path in &narrow.paths {
+            assert!(
+                !path.node_ids.contains(&"mid".to_string()),
+                "hidden intermediates vanish from paths"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn sqlite_cancelled_expansion_is_incomplete() {
+    // A set cancellation flag yields a typed cancelled incomplete on every
+    // operation — never a hang, never an empty-complete masquerade. The flag
+    // is preset here, which exercises the same per-batch gate mid-expansion
+    // checks run through.
+    let parts = triangle_parts();
+    for backend in backends(&parts).await {
+        println!("backend: {}", backend.name());
+        let store = backend.store();
+        let (_, authz, budgets) = open();
+        let cancel = AtomicBool::new(true);
+
+        let nbrs = store.neighbors("s", &EdgeFilter::any(), &budgets, &cancel, &authz).unwrap();
+        assert!(nbrs.truncated, "cancelled neighbors are incomplete");
+        assert!(
+            nbrs.incomplete_reason.as_deref().unwrap_or_default().contains("cancelled"),
+            "the reason names cancellation"
+        );
+
+        let sub = store.subgraph(&["s".to_string()], &budgets, &cancel, &authz).unwrap();
+        assert!(sub.truncated, "cancelled subgraphs are incomplete");
+
+        let paths = store.bounded_paths("s", "t", 4, &budgets, &cancel, &authz).unwrap();
+        assert!(paths.truncated, "cancelled path search is incomplete");
+        assert!(
+            paths.incomplete_reason.as_deref().unwrap_or_default().contains("cancelled"),
+            "the reason names cancellation"
+        );
+    }
+}
+
+#[tokio::test]
+async fn sqlite_preflight_rejects_each_field() {
+    // Every out-of-range budget field is a QAI-GRAPH-0002 error before any
+    // I/O, on both sides of its valid range.
+    let parts = triangle_parts();
+    for backend in backends(&parts).await {
+        println!("backend: {}", backend.name());
+        let store = backend.store();
+        let (cancel, authz, _) = open();
+        let cases = [
+            QueryBudgets { max_hops: 0, ..QueryBudgets::default() },
+            QueryBudgets { max_hops: 33, ..QueryBudgets::default() },
+            QueryBudgets { max_nodes: 0, ..QueryBudgets::default() },
+            QueryBudgets { max_nodes: 100_001, ..QueryBudgets::default() },
+            QueryBudgets { max_paths: 0, ..QueryBudgets::default() },
+            QueryBudgets { max_paths: 1001, ..QueryBudgets::default() },
+            QueryBudgets { max_edges: 0, ..QueryBudgets::default() },
+            QueryBudgets { max_edges: 200_001, ..QueryBudgets::default() },
+            QueryBudgets { max_fanout: 0, ..QueryBudgets::default() },
+            QueryBudgets { max_fanout: 10_001, ..QueryBudgets::default() },
+            QueryBudgets { timeout_ms: 0, ..QueryBudgets::default() },
+            QueryBudgets { timeout_ms: 300_001, ..QueryBudgets::default() },
+        ];
+        for bad in &cases {
+            let err = store.neighbors("s", &EdgeFilter::any(), bad, &cancel, &authz).unwrap_err();
+            assert!(
+                matches!(err, GraphError::BudgetExceeded { .. }),
+                "out-of-range budget is BudgetExceeded: {bad:?} -> {err}"
+            );
+            assert_eq!(err.code().to_string(), "QAI-GRAPH-0002", "{bad:?}");
+        }
+    }
+}
+
+#[test]
+fn default_budgets_match_documented_values() {
+    // D-10 starting point, pinned: 6 hops, 500 nodes, 10 paths, 2000 edges,
+    // 128 fanout, 5 seconds.
+    let defaults = QueryBudgets::default();
+    assert_eq!(defaults.max_hops, 6);
+    assert_eq!(defaults.max_nodes, 500);
+    assert_eq!(defaults.max_paths, 10);
+    assert_eq!(defaults.max_edges, 2000);
+    assert_eq!(defaults.max_fanout, 128);
+    assert_eq!(defaults.timeout_ms, 5000);
+    assert!(defaults.check().is_ok());
+}
+
 const CONCEPT_SEED: &str = include_str!("../../../fixtures/quran/graph/concept-seed-v1.json");
 const ANNOTATION_GOLDENS: &str =
     include_str!("../../../fixtures/quran/graph/annotation-goldens.json");
