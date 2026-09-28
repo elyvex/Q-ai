@@ -3642,6 +3642,337 @@ pub async fn cmd_graph_export(file: &str, out: Option<&str>) -> CommandOutput {
         }
     }
 }
+
+/// Options for `qai quran graph review propose` (thin wrapper: parsing only,
+/// the annotation service owns validation and writes).
+#[derive(Debug, Clone)]
+pub struct ReviewProposeOptions {
+    /// Caller assertion ID (generated when absent).
+    pub id: Option<String>,
+    /// Assertion family spelling.
+    pub kind: String,
+    /// Edge source stable ID.
+    pub src: String,
+    /// Allowlisted edge predicate.
+    pub edge: String,
+    /// Edge destination stable ID.
+    pub dst: String,
+    /// Evidence JSON object (default `{}`).
+    pub evidence: Option<String>,
+    /// PRD 10.3 source ID.
+    pub source_id: String,
+    /// PRD 10.3 source location.
+    pub source_location: String,
+    /// Creating human (never invented).
+    pub author: String,
+    /// Projection family (default `quran-structural-v1`).
+    pub projection: Option<String>,
+    /// Edition scope (default: active edition).
+    pub edition: Option<String>,
+    /// Dataset scope (default: unscoped).
+    pub scope: Option<String>,
+}
+
+/// Options for `qai quran graph review suggest` (layer D; algorithm triple
+/// required).
+#[derive(Debug, Clone)]
+pub struct ReviewSuggestOptions {
+    /// Caller assertion ID (generated when absent).
+    pub id: Option<String>,
+    /// Assertion family spelling.
+    pub kind: String,
+    /// Edge source stable ID.
+    pub src: String,
+    /// Allowlisted edge predicate.
+    pub edge: String,
+    /// Edge destination stable ID.
+    pub dst: String,
+    /// Evidence JSON object shown in the review queue.
+    pub evidence: Option<String>,
+    /// PRD 10.3 source ID.
+    pub source_id: String,
+    /// PRD 10.3 source location.
+    pub source_location: String,
+    /// Producing algorithm (never invented).
+    pub algorithm: String,
+    /// Algorithm version.
+    pub algorithm_version: String,
+    /// Attributed confidence in [0,1].
+    pub confidence: f64,
+    /// Projection family (default `quran-structural-v1`).
+    pub projection: Option<String>,
+    /// Edition scope (default: active edition).
+    pub edition: Option<String>,
+    /// Dataset scope (default: unscoped).
+    pub scope: Option<String>,
+}
+
+/// Options for `qai quran graph review correct` (unset claim fields default
+/// to the old row's values).
+#[derive(Debug, Clone)]
+pub struct ReviewCorrectOptions {
+    /// Assertion ID being corrected.
+    pub id: String,
+    /// Correcting reviewer (never invented).
+    pub reviewer: String,
+    /// Decision timestamp (default: now).
+    pub decided_at: Option<String>,
+    /// Corrected source.
+    pub src: Option<String>,
+    /// Corrected predicate.
+    pub edge: Option<String>,
+    /// Corrected destination.
+    pub dst: Option<String>,
+    /// Corrected evidence JSON object.
+    pub evidence: Option<String>,
+    /// Corrected source location.
+    pub source_location: Option<String>,
+}
+
+fn review_projection(raw: Option<String>) -> String {
+    raw.filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| quran_graph::STRUCTURAL_PROJECTION_ID.to_string())
+}
+
+fn review_scope(raw: Option<String>) -> String {
+    raw.unwrap_or_default()
+}
+
+async fn review_edition_id(
+    db: &SqliteDatabase,
+    raw: Option<String>,
+) -> Result<String, CommandOutput> {
+    if let Some(edition) = raw.filter(|value| !value.trim().is_empty()) {
+        return Ok(edition);
+    }
+    let mut uow = match db.write().await {
+        Ok(uow) => uow,
+        Err(error) => return Err(CommandOutput::err(exit::INTERNAL, error.to_string())),
+    };
+    let active = match uow.quran().get_active().await {
+        Ok(active) => active,
+        Err(error) => return Err(CommandOutput::err(exit::INTERNAL, error.to_string())),
+    };
+    let _ = uow.rollback().await;
+    active.map(|row| row.edition_id).ok_or_else(|| {
+        CommandOutput::err(exit::NOT_FOUND, "no active edition; import one first".to_string())
+    })
+}
+
+fn review_evidence(raw: Option<String>) -> Result<serde_json::Value, CommandOutput> {
+    match raw {
+        None => Ok(serde_json::json!({})),
+        Some(text) => serde_json::from_str(&text).map_err(|error| {
+            CommandOutput::err(exit::USAGE, format!("bad evidence JSON: {error}"))
+        }),
+    }
+}
+
+fn review_report(
+    verb: &str,
+    report: super::quran_graph_annotations::AnnotationReport,
+) -> CommandOutput {
+    use super::quran_graph_annotations::AnnotationReport;
+    let AnnotationReport { assertion, edge_staged, build_row_id, reused } = report;
+    // Pending rows have no reviewer yet: attribute the author (propose) or
+    // algorithm (suggest) from the seven-field claim provenance instead.
+    let actor = assertion.reviewer.as_deref().unwrap_or_else(|| {
+        assertion
+            .claim
+            .get("provenance")
+            .and_then(|provenance| provenance.get("author_or_algorithm"))
+            .and_then(|value| value.as_str())
+            .unwrap_or("unreviewed")
+    });
+    let human = format!(
+        "{verb} {} ({}) by {} at {}{}",
+        assertion.id,
+        match assertion.decision {
+            quran_graph::AssertionDecision::Pending => "pending",
+            quran_graph::AssertionDecision::Accepted => "accepted",
+            quran_graph::AssertionDecision::Rejected => "rejected",
+            quran_graph::AssertionDecision::Superseded => "superseded",
+            quran_graph::AssertionDecision::Disputed => "disputed",
+        },
+        assertion.reviewer.as_deref().unwrap_or(actor),
+        assertion.decided_at.as_deref().unwrap_or("undecided"),
+        if reused { " (reused)" } else { "" },
+    );
+    json_or_err(
+        human,
+        &serde_json::json!({
+            "assertion": assertion,
+            "edge_staged": edge_staged,
+            "build_row_id": build_row_id,
+            "reused": reused,
+        }),
+    )
+}
+
+/// `qai quran graph review propose`: thin wrapper over the annotation
+/// service (no business logic in the CLI crate).
+pub async fn cmd_graph_review_propose(
+    db_path: &str,
+    options: ReviewProposeOptions,
+) -> CommandOutput {
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return open_error_output(error),
+    };
+    let edition = match review_edition_id(&db, options.edition).await {
+        Ok(edition) => edition,
+        Err(output) => return output,
+    };
+    let evidence = match review_evidence(options.evidence) {
+        Ok(evidence) => evidence,
+        Err(output) => return output,
+    };
+    let kind = match super::quran_graph_annotations::parse_assertion_kind(&options.kind) {
+        Ok(kind) => kind,
+        Err(error) => return CommandOutput::err(graph_error_exit(&error), error.to_string()),
+    };
+    match super::quran_graph_annotations::propose(
+        db_path,
+        super::quran_graph_annotations::ProposeInput {
+            id: options.id,
+            kind,
+            src: options.src,
+            edge: options.edge,
+            dst: options.dst,
+            evidence,
+            source_id: options.source_id,
+            source_location: options.source_location,
+            author: options.author,
+            invoked_by: LOCAL_PRINCIPAL.to_string(),
+            projection_id: review_projection(options.projection),
+            edition_id: edition,
+            dataset_scope: review_scope(options.scope),
+        },
+    )
+    .await
+    {
+        Ok(report) => review_report("proposed", report),
+        Err(error) => CommandOutput::err(graph_error_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran graph review suggest`: thin wrapper over the annotation
+/// service (no business logic in the CLI crate).
+pub async fn cmd_graph_review_suggest(
+    db_path: &str,
+    options: ReviewSuggestOptions,
+) -> CommandOutput {
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return open_error_output(error),
+    };
+    let edition = match review_edition_id(&db, options.edition).await {
+        Ok(edition) => edition,
+        Err(output) => return output,
+    };
+    let evidence = match review_evidence(options.evidence) {
+        Ok(evidence) => evidence,
+        Err(output) => return output,
+    };
+    let kind = match super::quran_graph_annotations::parse_assertion_kind(&options.kind) {
+        Ok(kind) => kind,
+        Err(error) => return CommandOutput::err(graph_error_exit(&error), error.to_string()),
+    };
+    match super::quran_graph_annotations::suggest(
+        db_path,
+        super::quran_graph_annotations::SuggestInput {
+            id: options.id,
+            kind,
+            src: options.src,
+            edge: options.edge,
+            dst: options.dst,
+            evidence,
+            source_id: options.source_id,
+            source_location: options.source_location,
+            algorithm: options.algorithm,
+            algorithm_version: options.algorithm_version,
+            confidence: options.confidence,
+            invoked_by: LOCAL_PRINCIPAL.to_string(),
+            projection_id: review_projection(options.projection),
+            edition_id: edition,
+            dataset_scope: review_scope(options.scope),
+        },
+    )
+    .await
+    {
+        Ok(report) => review_report("suggested", report),
+        Err(error) => CommandOutput::err(graph_error_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran graph review accept|reject`: thin wrapper over the annotation
+/// service (no business logic in the CLI crate).
+pub async fn cmd_graph_review_decide(
+    db_path: &str,
+    verb: &str,
+    id: &str,
+    reviewer: &str,
+    decided_at: Option<&str>,
+) -> CommandOutput {
+    let input = super::quran_graph_annotations::DecideInput {
+        id: id.to_string(),
+        reviewer: reviewer.to_string(),
+        decided_at: decided_at.map(str::to_string),
+        invoked_by: LOCAL_PRINCIPAL.to_string(),
+    };
+    let result = match verb {
+        "accept" => super::quran_graph_annotations::accept(db_path, input).await,
+        _ => super::quran_graph_annotations::reject(db_path, input).await,
+    };
+    match result {
+        Ok(report) => review_report(if verb == "accept" { "accepted" } else { "rejected" }, report),
+        Err(error) => CommandOutput::err(graph_error_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran graph review correct`: thin wrapper over the annotation
+/// service (no business logic in the CLI crate).
+pub async fn cmd_graph_review_correct(
+    db_path: &str,
+    options: ReviewCorrectOptions,
+) -> CommandOutput {
+    let evidence = match options.evidence {
+        None => None,
+        Some(text) => match serde_json::from_str(&text) {
+            Ok(evidence) => Some(evidence),
+            Err(error) => {
+                return CommandOutput::err(exit::USAGE, format!("bad evidence JSON: {error}"));
+            }
+        },
+    };
+    match super::quran_graph_annotations::correct(
+        db_path,
+        super::quran_graph_annotations::CorrectInput {
+            id: options.id,
+            reviewer: options.reviewer,
+            decided_at: options.decided_at,
+            src: options.src,
+            edge: options.edge,
+            dst: options.dst,
+            evidence,
+            source_location: options.source_location,
+            invoked_by: LOCAL_PRINCIPAL.to_string(),
+        },
+    )
+    .await
+    {
+        Ok(report) => {
+            let supersedes = report.assertion.supersedes_id.clone().unwrap_or_default();
+            let output = review_report("corrected", report);
+            CommandOutput {
+                exit: output.exit,
+                human: format!("{} (supersedes {supersedes})", output.human),
+                json: output.json,
+            }
+        }
+        Err(error) => CommandOutput::err(graph_error_exit(&error), error.to_string()),
+    }
+}
 /// Search mode requested on the CLI (one flag family per tool).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SearchCliMode {

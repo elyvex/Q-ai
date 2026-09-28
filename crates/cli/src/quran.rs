@@ -677,6 +677,7 @@ pub enum MorphologyAction {
 
 /// Knowledge-graph subcommands (build/inspect/neighbors backed by SQLite;
 /// file flags keep working for the fixture/debug path).
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 pub enum GraphAction {
     /// Build the structural projection from the active edition (SQLite).
@@ -740,6 +741,160 @@ pub enum GraphAction {
         /// Output path (defaults to stdout).
         #[arg(long)]
         out: Option<String>,
+    },
+    /// Review-queue management (D-11 management scope).
+    ///
+    /// Human decisions are recorded with reviewer plus timestamp; suggestions
+    /// never self-promote. OD-11 morphology dataset/license and OD-12
+    /// linguist stay BLOCKED owner gates (docs/05-followups/decisions-needed.md):
+    /// word-root production acceptance waits owner ratification P4-X01..P4-X05.
+    Review {
+        #[command(subcommand)]
+        action: ReviewAction,
+    },
+}
+
+/// Review-queue management subcommands (plan 04-02, D-06/D-11).
+///
+/// Reads and writes go through `application::quran_graph_annotations`; this
+/// enum carries arguments only, never business logic. Build management stays
+/// CLI-only: no HTTP mutation route and no new mutation agent tool.
+#[derive(Subcommand)]
+pub enum ReviewAction {
+    /// Propose a manual typed edge (layer B, pending, seven-field provenance).
+    Propose {
+        /// Caller assertion ID (generated when absent).
+        #[arg(long)]
+        id: Option<String>,
+        /// Assertion family (`annotation`, default).
+        #[arg(long, default_value = "annotation")]
+        kind: String,
+        /// Edge source stable ID.
+        #[arg(long)]
+        src: String,
+        /// Allowlisted edge predicate.
+        #[arg(long)]
+        edge: String,
+        /// Edge destination stable ID.
+        #[arg(long)]
+        dst: String,
+        /// Evidence JSON object.
+        #[arg(long)]
+        evidence: Option<String>,
+        /// PRD 10.3 source ID.
+        #[arg(long)]
+        source_id: String,
+        /// PRD 10.3 source location.
+        #[arg(long)]
+        source_location: String,
+        /// Creating human (never invented).
+        #[arg(long)]
+        author: String,
+        /// Projection family (default `quran-structural-v1`).
+        #[arg(long)]
+        projection: Option<String>,
+        /// Edition scope (default: active edition).
+        #[arg(long)]
+        edition: Option<String>,
+        /// Dataset scope (default: unscoped).
+        #[arg(long)]
+        scope: Option<String>,
+    },
+    /// Suggest an algorithmic edge for human review (layer D, pending).
+    Suggest {
+        /// Caller assertion ID (generated when absent).
+        #[arg(long)]
+        id: Option<String>,
+        /// Assertion family (`annotation`, default).
+        #[arg(long, default_value = "annotation")]
+        kind: String,
+        /// Edge source stable ID.
+        #[arg(long)]
+        src: String,
+        /// Allowlisted edge predicate.
+        #[arg(long)]
+        edge: String,
+        /// Edge destination stable ID.
+        #[arg(long)]
+        dst: String,
+        /// Evidence JSON object shown in the review queue.
+        #[arg(long)]
+        evidence: Option<String>,
+        /// PRD 10.3 source ID.
+        #[arg(long)]
+        source_id: String,
+        /// PRD 10.3 source location.
+        #[arg(long)]
+        source_location: String,
+        /// Producing algorithm (never invented).
+        #[arg(long)]
+        algorithm: String,
+        /// Algorithm version.
+        #[arg(long)]
+        algorithm_version: String,
+        /// Attributed confidence in [0,1] (opaque metadata, never a threshold).
+        #[arg(long)]
+        confidence: f64,
+        /// Projection family (default `quran-structural-v1`).
+        #[arg(long)]
+        projection: Option<String>,
+        /// Edition scope (default: active edition).
+        #[arg(long)]
+        edition: Option<String>,
+        /// Dataset scope (default: unscoped).
+        #[arg(long)]
+        scope: Option<String>,
+    },
+    /// Accept a pending or disputed suggestion (recorded human decision).
+    Accept {
+        /// Assertion ID.
+        #[arg(long)]
+        id: String,
+        /// Reviewer (never invented).
+        #[arg(long)]
+        reviewer: String,
+        /// Decision timestamp (default: now).
+        #[arg(long)]
+        decided_at: Option<String>,
+    },
+    /// Reject a suggestion (tombstoned immediately, retained for audit).
+    Reject {
+        /// Assertion ID.
+        #[arg(long)]
+        id: String,
+        /// Reviewer (never invented).
+        #[arg(long)]
+        reviewer: String,
+        /// Decision timestamp (default: now).
+        #[arg(long)]
+        decided_at: Option<String>,
+    },
+    /// Correct an assertion: new accepted row supersedes the old (D-07).
+    Correct {
+        /// Assertion ID being corrected.
+        #[arg(long)]
+        id: String,
+        /// Correcting reviewer (never invented).
+        #[arg(long)]
+        reviewer: String,
+        /// Decision timestamp (default: now).
+        #[arg(long)]
+        decided_at: Option<String>,
+        /// Corrected source (default: old claim's).
+        #[arg(long)]
+        src: Option<String>,
+        /// Corrected predicate (default: old claim's).
+        #[arg(long)]
+        edge: Option<String>,
+        /// Corrected destination (default: old claim's).
+        #[arg(long)]
+        dst: Option<String>,
+        /// Corrected evidence (default: old row's).
+        #[arg(long)]
+        evidence: Option<String>,
+        /// Corrected source location (default: old row's).
+        #[arg(long)]
+        source_location: Option<String>,
     },
 }
 
@@ -1042,6 +1197,123 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
             GraphAction::Export { file, out } => {
                 application::quran_cli::cmd_graph_export(&file, out.as_deref()).await
             }
+            GraphAction::Review { action } => match action {
+                ReviewAction::Propose {
+                    id,
+                    kind,
+                    src,
+                    edge,
+                    dst,
+                    evidence,
+                    source_id,
+                    source_location,
+                    author,
+                    projection,
+                    edition,
+                    scope,
+                } => {
+                    application::quran_cli::cmd_graph_review_propose(
+                        db_path,
+                        application::quran_cli::ReviewProposeOptions {
+                            id,
+                            kind,
+                            src,
+                            edge,
+                            dst,
+                            evidence,
+                            source_id,
+                            source_location,
+                            author,
+                            projection,
+                            edition,
+                            scope,
+                        },
+                    )
+                    .await
+                }
+                ReviewAction::Suggest {
+                    id,
+                    kind,
+                    src,
+                    edge,
+                    dst,
+                    evidence,
+                    source_id,
+                    source_location,
+                    algorithm,
+                    algorithm_version,
+                    confidence,
+                    projection,
+                    edition,
+                    scope,
+                } => {
+                    application::quran_cli::cmd_graph_review_suggest(
+                        db_path,
+                        application::quran_cli::ReviewSuggestOptions {
+                            id,
+                            kind,
+                            src,
+                            edge,
+                            dst,
+                            evidence,
+                            source_id,
+                            source_location,
+                            algorithm,
+                            algorithm_version,
+                            confidence,
+                            projection,
+                            edition,
+                            scope,
+                        },
+                    )
+                    .await
+                }
+                ReviewAction::Accept { id, reviewer, decided_at } => {
+                    application::quran_cli::cmd_graph_review_decide(
+                        db_path,
+                        "accept",
+                        &id,
+                        &reviewer,
+                        decided_at.as_deref(),
+                    )
+                    .await
+                }
+                ReviewAction::Reject { id, reviewer, decided_at } => {
+                    application::quran_cli::cmd_graph_review_decide(
+                        db_path,
+                        "reject",
+                        &id,
+                        &reviewer,
+                        decided_at.as_deref(),
+                    )
+                    .await
+                }
+                ReviewAction::Correct {
+                    id,
+                    reviewer,
+                    decided_at,
+                    src,
+                    edge,
+                    dst,
+                    evidence,
+                    source_location,
+                } => {
+                    application::quran_cli::cmd_graph_review_correct(
+                        db_path,
+                        application::quran_cli::ReviewCorrectOptions {
+                            id,
+                            reviewer,
+                            decided_at,
+                            src,
+                            edge,
+                            dst,
+                            evidence,
+                            source_location,
+                        },
+                    )
+                    .await
+                }
+            },
         },
         QuranAction::Search { args } => {
             let QuranSearchArgs {

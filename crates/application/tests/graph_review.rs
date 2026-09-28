@@ -520,3 +520,16 @@ async fn unknown_assertion_is_not_found_and_bad_inputs_are_validation() {
         .expect("identical re-propose reuses");
     assert!(reuse.reused, "content-addressed reuse flagged");
 }
+
+#[test]
+fn no_review_mutation_beyond_cli_management() {
+    // D-11 scope fence: review mutations stay CLI management only — no agent
+    // tool entry and no HTTP mutation route. The server pin reads source
+    // (no new crate edge; arch-check cannot scope dev-dependencies).
+    for name in tool_registry::ToolRegistry::TOOL_NAMES {
+        assert!(!name.contains("review"), "no review mutation agent tool: {name}");
+    }
+    const API: &str = include_str!("../../server/src/api.rs");
+    assert!(!API.contains("graph/review"), "no review mutation HTTP route");
+    assert!(!API.contains("graph_review"), "no review mutation HTTP handler");
+}

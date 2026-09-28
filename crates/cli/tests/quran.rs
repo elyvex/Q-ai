@@ -133,6 +133,155 @@ fn quran_graph_snapshots() {
         &["quran", "graph", "neighbors", "--db", "--node", "ayah:1:1", "--hops", "0"],
     );
     assert_eq!(out.status.code(), Some(3), "out-of-range hops are a validation error");
+
+    // Review management verbs (D-06/D-11): propose then suggest then accept
+    // then correct, each audited, against the host-backed database.
+    let out = qai_out(
+        guard.dir.path(),
+        &[
+            "quran",
+            "graph",
+            "review",
+            "propose",
+            "--id",
+            "rw-cli-propose",
+            "--src",
+            "ayah:1:1",
+            "--edge",
+            "PARALLELS",
+            "--dst",
+            "ayah:1:2",
+            "--source-id",
+            "cli-snapshot",
+            "--source-location",
+            "quran.rs",
+            "--author",
+            "pending-scholar",
+        ],
+    );
+    assert!(out.status.success(), "propose: {}", String::from_utf8_lossy(&out.stderr));
+    let human = String::from_utf8_lossy(&out.stdout);
+    assert!(human.contains("proposed rw-cli-propose (pending)"), "{human}");
+    assert!(human.contains("pending-scholar"), "{human}");
+
+    let out = qai_out(
+        guard.dir.path(),
+        &[
+            "quran",
+            "graph",
+            "review",
+            "suggest",
+            "--id",
+            "rw-cli-suggest",
+            "--src",
+            "ayah:1:1",
+            "--edge",
+            "PARALLELS",
+            "--dst",
+            "ayah:1:2",
+            "--source-id",
+            "cli-snapshot",
+            "--source-location",
+            "quran.rs",
+            "--algorithm",
+            "tracer-suggest-v1",
+            "--algorithm-version",
+            "1.0.0",
+            "--confidence",
+            "0.42",
+        ],
+    );
+    assert!(out.status.success(), "suggest: {}", String::from_utf8_lossy(&out.stderr));
+    let human = String::from_utf8_lossy(&out.stdout);
+    assert!(human.contains("suggested rw-cli-suggest (pending)"), "{human}");
+
+    let out = qai_out(
+        guard.dir.path(),
+        &[
+            "quran",
+            "graph",
+            "review",
+            "accept",
+            "--id",
+            "rw-cli-suggest",
+            "--reviewer",
+            "pending-scholar",
+        ],
+    );
+    assert!(out.status.success(), "accept: {}", String::from_utf8_lossy(&out.stderr));
+    let human = String::from_utf8_lossy(&out.stdout);
+    assert!(human.contains("accepted rw-cli-suggest (accepted)"), "{human}");
+    assert!(human.contains("pending-scholar"), "{human}");
+
+    let out = qai_out(
+        guard.dir.path(),
+        &[
+            "quran",
+            "graph",
+            "review",
+            "correct",
+            "--id",
+            "rw-cli-suggest",
+            "--dst",
+            "ayah:2:1",
+            "--reviewer",
+            "pending-scholar",
+        ],
+    );
+    assert!(out.status.success(), "correct: {}", String::from_utf8_lossy(&out.stderr));
+    let human = String::from_utf8_lossy(&out.stdout);
+    assert!(human.contains("corrected"), "{human}");
+    assert!(human.contains("supersedes rw-cli-suggest"), "{human}");
+
+    // The full assertion record rides the JSON surface with reviewer plus
+    // timestamp plus decision.
+    let out = qai_out(
+        guard.dir.path(),
+        &[
+            "quran",
+            "graph",
+            "review",
+            "accept",
+            "--id",
+            "rw-cli-propose",
+            "--reviewer",
+            "pending-scholar",
+            "--json",
+        ],
+    );
+    assert!(out.status.success(), "accept --json: {}", String::from_utf8_lossy(&out.stderr));
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).expect("one JSON document");
+    assert_eq!(doc["assertion"]["decision"], "accepted", "{doc}");
+    assert_eq!(doc["assertion"]["reviewer"], "pending-scholar", "{doc}");
+    assert!(doc["assertion"]["decided_at"].is_string(), "{doc}");
+
+    // Unknown assertion ids are not-found; empty reviewers are validation.
+    let out = qai_out(
+        guard.dir.path(),
+        &[
+            "quran",
+            "graph",
+            "review",
+            "accept",
+            "--id",
+            "rw-no-such",
+            "--reviewer",
+            "pending-scholar",
+        ],
+    );
+    assert_eq!(out.status.code(), Some(5), "unknown assertion is not found");
+    let out = qai_out(
+        guard.dir.path(),
+        &["quran", "graph", "review", "accept", "--id", "rw-cli-propose", "--reviewer", ""],
+    );
+    assert_eq!(out.status.code(), Some(3), "empty reviewer is a validation error");
+
+    // Every decision above emitted audit events on the same database.
+    let out = qai_out(guard.dir.path(), &["audit", "list"]);
+    assert!(out.status.success(), "audit list: {}", String::from_utf8_lossy(&out.stderr));
+    let human = String::from_utf8_lossy(&out.stdout);
+    assert!(human.contains("graph_assertion_proposed"), "{human}");
+    assert!(human.contains("graph_assertion_decided"), "{human}");
 }
 
 /// Phase 2 six-family integrity surface (D-10/D-11): host-backed segments.
