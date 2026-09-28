@@ -1007,3 +1007,164 @@ async fn root_unification_candidate_is_idempotent_and_reviewable() {
     let error = enqueue_root_unification(&db, &invalid).await.unwrap_err();
     assert!(error.to_string().contains("[0,1]"));
 }
+
+/// The machine-readable per-artifact license matrix (D-07) that the gate and
+/// its tests consume.
+const LICENSE_MATRIX: &str = include_str!("../../../fixtures/quran/morphology/license-matrix.json");
+
+/// D-07/G-04: the machine-readable license matrix is valid JSON, every entry
+/// carries the mandatory capture fields from `licenses/README.md`, and the
+/// unverified provider stays `pending_license_review` (never bundled).
+#[test]
+fn license_gate_matrix_is_valid_json_with_capture_fields() {
+    let value: serde_json::Value =
+        serde_json::from_str(LICENSE_MATRIX).expect("license matrix must parse");
+    let artifacts = value
+        .get("artifacts")
+        .and_then(serde_json::Value::as_object)
+        .expect("matrix is keyed per artifact");
+    assert!(!artifacts.is_empty());
+    let mut permissive = 0usize;
+    let mut pending = 0usize;
+    for (name, entry) in artifacts {
+        for key in ["source_url", "capture_date", "capturer", "redistribution_allowed"] {
+            assert!(entry.get(key).is_some(), "{name} must carry the `{key}` field");
+        }
+        match entry.get("license_status").and_then(serde_json::Value::as_str) {
+            Some("pending_license_review") => {
+                pending += 1;
+                assert_eq!(
+                    entry.get("redistribution_allowed").and_then(serde_json::Value::as_bool),
+                    Some(false),
+                    "{name} pending entry must forbid redistribution"
+                );
+            }
+            _ => permissive += 1,
+        }
+    }
+    assert!(permissive >= 1, "matrix must expose a permissive captured entry");
+    assert!(pending >= 1, "the unverified provider must stay pending, never bundled");
+
+    let synthetic = artifacts.get("synthetic-test-lexicon").expect("synthetic entry present");
+    assert_eq!(
+        synthetic.get("synthetic_test_only").and_then(serde_json::Value::as_bool),
+        Some(true),
+        "the synthetic fixture must stay labeled"
+    );
+    assert_eq!(
+        synthetic.get("redistribution_allowed").and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+    assert!(
+        !synthetic
+            .get("source_url")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .is_empty()
+    );
+}
+
+/// D-07/G-04: activation fails closed when the dataset's license evidence is
+/// absent (`Unspecified`) or forbids redistribution — a typed error, no
+/// promotion, and no dataset flipped active.
+#[tokio::test]
+async fn license_gate_rejects() {
+    use application::quran_morphology::MorphologyJobError;
+    let (dir, db) = ready_db().await;
+    let doc = aligned_document(&db).await;
+
+    // (a) `Unspecified` status is never permissive evidence.
+    let mut params = import_params(doc.clone(), "batch-lic-unspecified");
+    params.license_status = "Unspecified".to_string();
+    run_morphology_import(&db, &params, &AtomicBool::new(false), |_| {}).await.unwrap();
+    let err = activate_morphology(
+        &db,
+        &MorphologyActivateParams {
+            batch_id: "batch-lic-unspecified".to_string(),
+            approval_id: "appr-morph".to_string(),
+            invoked_by: PRINCIPAL.to_string(),
+        },
+        &principal(),
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(err, MorphologyJobError::LicenseEvidence { .. }), "{err:?}");
+    assert!(err.to_string().contains("Unspecified"), "{err}");
+    use storage::error::Diagnostic as _;
+    assert_eq!(err.code().to_string(), "QAI-MORPH-0006");
+
+    // (b) A capture that explicitly forbids redistribution is not evidence.
+    let mut params = import_params(doc, "batch-lic-redist");
+    params.license_json = serde_json::json!({
+        "source_url": "https://example.invalid/restricted",
+        "capture_date": "2026-09-28",
+        "capturer": "qai-test-fixtures",
+        "redistribution_allowed": false,
+    })
+    .to_string();
+    run_morphology_import(&db, &params, &AtomicBool::new(false), |_| {}).await.unwrap();
+    let err = activate_morphology(
+        &db,
+        &MorphologyActivateParams {
+            batch_id: "batch-lic-redist".to_string(),
+            approval_id: "appr-morph".to_string(),
+            invoked_by: PRINCIPAL.to_string(),
+        },
+        &principal(),
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(err, MorphologyJobError::LicenseEvidence { .. }), "{err:?}");
+    assert!(err.to_string().contains("redistribution"), "{err}");
+
+    // Neither rejection promoted a lexicon row or flipped a dataset active.
+    let pool = read_pool(&dir).await;
+    let analyses: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM quran_token_analyses")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let active: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM quran_datasets WHERE state = 'active'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    pool.close().await;
+    assert_eq!(analyses, 0, "a rejected activation promotes no lexicon rows");
+    assert_eq!(active, 0, "a rejected activation never flips a dataset active");
+}
+
+/// D-07/G-04: permissive status plus all mandatory capture fields activates
+/// and promotes rows; the read tools then return attributed analyses.
+#[tokio::test]
+async fn license_gate_passes() {
+    let (_dir, db) = ready_db().await;
+    let doc = aligned_document(&db).await;
+    run_morphology_import(
+        &db,
+        &import_params(doc, "batch-lic-pass"),
+        &AtomicBool::new(false),
+        |_| {},
+    )
+    .await
+    .unwrap();
+    let report = activate_morphology(
+        &db,
+        &MorphologyActivateParams {
+            batch_id: "batch-lic-pass".to_string(),
+            approval_id: "appr-morph".to_string(),
+            invoked_by: PRINCIPAL.to_string(),
+        },
+        &principal(),
+    )
+    .await
+    .expect("permissive captured evidence activates");
+    assert_eq!(report.dataset, format!("{SLUG}@{VERSION}"));
+    let (roots, lemmas, analyses, _morphemes) = report.promoted;
+    assert!(roots > 0 && lemmas > 0 && analyses > 0);
+
+    let (dataset, list) =
+        morphology_for_token(&db, "test-edition-min", "0.1.0", 1, 1, 1).await.unwrap();
+    assert_eq!(dataset, format!("{SLUG}@{VERSION}"));
+    assert!(!list.is_empty(), "the activated dataset serves attributed analyses");
+    assert!(list.iter().all(|a| a.dataset == format!("{SLUG}@{VERSION}")), "dataset attribution");
+}
