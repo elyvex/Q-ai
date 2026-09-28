@@ -549,15 +549,8 @@ async fn family_relations_explained() {
         assert!(*count > 0, "relation kind {kind} must build rows, saw {count}");
     }
 
-    let typed = [
-        "same_form",
-        "same_lemma",
-        "same_stem",
-        "same_root",
-        "derived",
-        "inflectional",
-        "affix",
-    ];
+    let typed =
+        ["same_form", "same_lemma", "same_stem", "same_root", "derived", "inflectional", "affix"];
     let pool = read_pool(&dir).await;
     let rows = sqlx::query_as::<_, (String, String, String, String, Option<String>, String)>(
         "SELECT relation, from_id, to_id, explanation, dataset_id, status
@@ -567,8 +560,7 @@ async fn family_relations_explained() {
     .await
     .unwrap();
     assert!(!rows.is_empty());
-    let kinds_seen: std::collections::BTreeSet<&str> =
-        rows.iter().map(|r| r.0.as_str()).collect();
+    let kinds_seen: std::collections::BTreeSet<&str> = rows.iter().map(|r| r.0.as_str()).collect();
     for row in &rows {
         let (relation, from_id, to_id, explanation, dataset_id, status) = row;
         assert!(typed.contains(&relation.as_str()), "relation {relation} outside the 0017 domain");
@@ -596,12 +588,11 @@ async fn family_relations_explained() {
             assert!(!lower.contains(banned), "no merge/preferred column may exist: {statement}");
         }
     }
-    let flipped: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM quran_token_analyses WHERE status != 'imported'",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let flipped: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM quran_token_analyses WHERE status != 'imported'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(flipped, 0, "building relations never promotes/merges an analysis");
 
     // The read path resolves one member per kind to its typed, explained

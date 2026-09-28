@@ -1742,114 +1742,276 @@ pub struct FamilyMemberView {
     pub dataset: Option<String>,
 }
 
-/// Build same-root family relations from lexicon analyses (T85 builders).
-pub async fn build_same_root_relations(
-    db: &SqliteDatabase,
+/// One dataset token with every analysis it carries (family building).
+struct FamilyToken {
+    surah: i64,
+    ayah: i64,
+    position: i64,
+    analyses: Vec<quran_morphology::TokenAnalysis>,
+}
+
+impl FamilyToken {
+    fn id(&self) -> String {
+        format!("token:{}:{}:{}", self.surah, self.ayah, self.position)
+    }
+}
+
+/// Group dataset analyses by token in canonical `(surah, ayah, position)`
+/// order, each token keeping its analyses ordered by `analysis_index`.
+fn family_tokens_from_rows(
+    rows: Vec<TokenAnalysisRow>,
+    roots: Vec<storage::quran::LexiconRootRow>,
+    lemmas: Vec<storage::quran::LexiconLemmaRow>,
+) -> Vec<FamilyToken> {
+    let mut by_token: BTreeMap<(i64, i64, i64), Vec<quran_morphology::TokenAnalysis>> =
+        BTreeMap::new();
+    for analysis in analysis_map(rows, roots, lemmas).into_values() {
+        by_token
+            .entry((analysis.surah as i64, analysis.ayah as i64, analysis.token_position as i64))
+            .or_default()
+            .push(analysis);
+    }
+    by_token
+        .into_iter()
+        .map(|((surah, ayah, position), mut analyses)| {
+            analyses.sort_by_key(|a| a.analysis_index);
+            FamilyToken { surah, ayah, position, analyses }
+        })
+        .collect()
+}
+
+/// Emit one typed, explained relation row per distinct token pair sharing a
+/// `key_of` value and passing `pair_filter`.
+///
+/// A pair is emitted at most once per builder (an unordered token pair linked
+/// by several shared keys yields one row), the relation string always comes
+/// from [`quran_morphology::relation_name`], the explanation from
+/// [`quran_morphology::explain_relation`], and the mandatory-explanation
+/// constructor is invoked before the row exists (I13/T86).
+fn typed_relation_rows(
     dataset_id: &str,
-) -> Result<usize, MorphologyToolError> {
-    let mut uow = db.write().await.map_err(MorphologyToolError::storage)?;
-    let roots = uow.quran().list_roots(dataset_id).await.map_err(MorphologyToolError::storage)?;
-    let mut relations = Vec::new();
-    for root in &roots {
-        let members = uow
-            .quran()
-            .analyses_for_root(dataset_id, &root.root_normalized)
-            .await
-            .map_err(MorphologyToolError::storage)?;
-        // Pairwise same_root relations with generated explanations.
-        for pair in members.windows(2) {
-            let (a, b) = (&pair[0], &pair[1]);
-            let from = format!("token:{}:{}:{}", a.surah, a.ayah, a.token_position);
-            let to = format!("token:{}:{}:{}", b.surah, b.ayah, b.token_position);
-            let explanation = format!(
-                "same_root: {}:{}:{} and {}:{}:{} share root {} (dataset {})",
-                a.surah,
-                a.ayah,
-                a.token_position,
-                b.surah,
-                b.ayah,
-                b.token_position,
-                root.root_normalized,
-                dataset_id
-            );
-            // Constructor-enforced non-empty explanation (T86).
-            let _check = quran_morphology::FamilyMember::new(&from, "token", &explanation)?;
-            relations.push(storage::quran::FamilyRelationRow {
-                id: format!("fam:{dataset_id}:{}:{from}:{to}", root.root_normalized),
-                relation: "same_root".to_string(),
-                from_kind: "token".to_string(),
-                from_id: from,
-                to_kind: "token".to_string(),
-                to_id: to,
-                explanation,
-                dataset_id: Some(dataset_id.to_string()),
-                provenance: LexiconProvenance {
-                    layer: "B".to_string(),
-                    algorithm: None,
-                    algorithm_version: None,
-                    confidence: None,
-                    reviewer: None,
-                    status: "imported".to_string(),
-                },
-                status: "proposed".to_string(),
-                evidence_json: serde_json::json!({"root": root.root_normalized}).to_string(),
-                corpus_generation: 0,
-                created_at: now(),
-            });
+    tokens: &[FamilyToken],
+    relation: quran_morphology::FamilyRelation,
+    key_of: impl Fn(&quran_morphology::TokenAnalysis) -> Vec<String>,
+    pair_filter: impl Fn(&quran_morphology::TokenAnalysis, &quran_morphology::TokenAnalysis) -> bool,
+) -> Result<Vec<storage::quran::FamilyRelationRow>, MorphologyToolError> {
+    // token index -> (shared key -> representative analysis carrying that key)
+    let per_token: Vec<BTreeMap<String, quran_morphology::TokenAnalysis>> = tokens
+        .iter()
+        .map(|token| {
+            let mut keys: BTreeMap<String, quran_morphology::TokenAnalysis> = BTreeMap::new();
+            for analysis in &token.analyses {
+                for key in key_of(analysis) {
+                    let key = key.trim().to_string();
+                    if !key.is_empty() {
+                        keys.entry(key).or_insert_with(|| analysis.clone());
+                    }
+                }
+            }
+            keys
+        })
+        .collect();
+    // shared key -> token indices carrying it
+    let mut groups: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
+    for (index, keys) in per_token.iter().enumerate() {
+        for key in keys.keys() {
+            groups.entry(key.as_str()).or_default().push(index);
         }
     }
+
+    let relation_name = quran_morphology::relation_name(relation);
+    let mut emitted: BTreeSet<(usize, usize)> = BTreeSet::new();
+    let mut rows = Vec::new();
+    for (key, members) in &groups {
+        for (offset, &left) in members.iter().enumerate() {
+            for &right in &members[offset + 1..] {
+                if !emitted.insert((left, right)) {
+                    continue;
+                }
+                let left_analysis = &per_token[left][*key];
+                let right_analysis = &per_token[right][*key];
+                if !pair_filter(left_analysis, right_analysis) {
+                    continue;
+                }
+                let from = tokens[left].id();
+                let to = tokens[right].id();
+                let explanation =
+                    quran_morphology::explain_relation(left_analysis, right_analysis, relation);
+                // Constructor-enforced non-empty explanation + token kind (T86).
+                let _check = quran_morphology::FamilyMember::new(&from, "token", &explanation)?;
+                rows.push(storage::quran::FamilyRelationRow {
+                    id: format!("fam:{dataset_id}:{relation_name}:{from}:{to}"),
+                    relation: relation_name.to_string(),
+                    from_kind: "token".to_string(),
+                    from_id: from,
+                    to_kind: "token".to_string(),
+                    to_id: to,
+                    explanation,
+                    dataset_id: Some(dataset_id.to_string()),
+                    provenance: LexiconProvenance {
+                        layer: "B".to_string(),
+                        algorithm: None,
+                        algorithm_version: None,
+                        confidence: None,
+                        reviewer: None,
+                        status: "imported".to_string(),
+                    },
+                    status: "proposed".to_string(),
+                    evidence_json: serde_json::json!({
+                        "relation": relation_name,
+                        "shared_key": key,
+                    })
+                    .to_string(),
+                    corpus_generation: 0,
+                    created_at: now(),
+                });
+            }
+        }
+    }
+    Ok(rows)
+}
+
+/// Shared builder body: one `db.write()` unit of work that loads the dataset
+/// analyses, derives the typed relations, inserts them, and commits — the
+/// `build_same_root_relations` template (P2-T85/G-05).
+async fn build_typed_relations(
+    db: &SqliteDatabase,
+    dataset_id: &str,
+    relation: quran_morphology::FamilyRelation,
+    key_of: impl Fn(&quran_morphology::TokenAnalysis) -> Vec<String>,
+    pair_filter: impl Fn(&quran_morphology::TokenAnalysis, &quran_morphology::TokenAnalysis) -> bool,
+) -> Result<usize, MorphologyToolError> {
+    let mut uow = db.write().await.map_err(MorphologyToolError::storage)?;
+    let analyses =
+        uow.quran().list_analyses(dataset_id).await.map_err(MorphologyToolError::storage)?;
+    let roots = uow.quran().list_roots(dataset_id).await.map_err(MorphologyToolError::storage)?;
+    let lemmas = uow.quran().list_lemmas(dataset_id).await.map_err(MorphologyToolError::storage)?;
+    let tokens = family_tokens_from_rows(analyses, roots, lemmas);
+    let relations = typed_relation_rows(dataset_id, &tokens, relation, key_of, pair_filter)?;
     let count = relations.len();
     uow.quran().insert_family_relations(relations).await.map_err(MorphologyToolError::storage)?;
     uow.commit().await.map_err(MorphologyToolError::storage)?;
     Ok(count)
 }
 
-/// Build same-form family relations (G-05, RED stub).
+/// Build `same_form` family relations: distinct tokens with an identical
+/// surface form (G-05).
 pub async fn build_same_form_relations(
-    _db: &SqliteDatabase,
-    _dataset_id: &str,
+    db: &SqliteDatabase,
+    dataset_id: &str,
 ) -> Result<usize, MorphologyToolError> {
-    Ok(0)
+    build_typed_relations(
+        db,
+        dataset_id,
+        quran_morphology::FamilyRelation::SameForm,
+        |analysis| vec![analysis.surface.clone()],
+        |_, _| true,
+    )
+    .await
 }
 
-/// Build same-lemma family relations (G-05, RED stub).
+/// Build `same_lemma` family relations: distinct tokens with an identical
+/// lemma (G-05).
 pub async fn build_same_lemma_relations(
-    _db: &SqliteDatabase,
-    _dataset_id: &str,
+    db: &SqliteDatabase,
+    dataset_id: &str,
 ) -> Result<usize, MorphologyToolError> {
-    Ok(0)
+    build_typed_relations(
+        db,
+        dataset_id,
+        quran_morphology::FamilyRelation::SameLemma,
+        |analysis| vec![analysis.lemma.clone()],
+        |_, _| true,
+    )
+    .await
 }
 
-/// Build same-stem family relations (G-05, RED stub).
+/// Build `same_stem` family relations: distinct tokens with an identical
+/// stem (G-05).
 pub async fn build_same_stem_relations(
-    _db: &SqliteDatabase,
-    _dataset_id: &str,
+    db: &SqliteDatabase,
+    dataset_id: &str,
 ) -> Result<usize, MorphologyToolError> {
-    Ok(0)
+    build_typed_relations(
+        db,
+        dataset_id,
+        quran_morphology::FamilyRelation::SameStem,
+        |analysis| vec![analysis.stem.clone()],
+        |_, _| true,
+    )
+    .await
 }
 
-/// Build derivational family relations (G-05, RED stub).
+/// Build `same_root` family relations: every distinct token pair sharing a
+/// root, not just adjacent analyses (G-05, widens the windows(2) builder).
+pub async fn build_same_root_relations(
+    db: &SqliteDatabase,
+    dataset_id: &str,
+) -> Result<usize, MorphologyToolError> {
+    build_typed_relations(
+        db,
+        dataset_id,
+        quran_morphology::FamilyRelation::SameRoot,
+        |analysis| vec![analysis.root.clone()],
+        |_, _| true,
+    )
+    .await
+}
+
+/// Build `derived` family relations: distinct tokens sharing a root but
+/// carrying different lemmas (a root yields distinct lexemes) (G-05).
 pub async fn build_derived_relations(
-    _db: &SqliteDatabase,
-    _dataset_id: &str,
+    db: &SqliteDatabase,
+    dataset_id: &str,
 ) -> Result<usize, MorphologyToolError> {
-    Ok(0)
+    build_typed_relations(
+        db,
+        dataset_id,
+        quran_morphology::FamilyRelation::Derived,
+        |analysis| vec![analysis.root.clone()],
+        |left, right| left.lemma != right.lemma,
+    )
+    .await
 }
 
-/// Build inflectional family relations (G-05, RED stub).
+/// Build `inflectional` family relations: distinct tokens sharing a lemma but
+/// carrying different stems (one lexeme, distinct stem allomorphs) (G-05).
 pub async fn build_inflectional_relations(
-    _db: &SqliteDatabase,
-    _dataset_id: &str,
+    db: &SqliteDatabase,
+    dataset_id: &str,
 ) -> Result<usize, MorphologyToolError> {
-    Ok(0)
+    build_typed_relations(
+        db,
+        dataset_id,
+        quran_morphology::FamilyRelation::Inflectional,
+        |analysis| vec![analysis.lemma.clone()],
+        |left, right| left.stem != right.stem,
+    )
+    .await
 }
 
-/// Build affix family relations (G-05, RED stub).
+/// Build `affix` family relations: distinct tokens sharing a non-empty
+/// declared prefix or suffix morpheme (G-05).
 pub async fn build_affix_relations(
-    _db: &SqliteDatabase,
-    _dataset_id: &str,
+    db: &SqliteDatabase,
+    dataset_id: &str,
 ) -> Result<usize, MorphologyToolError> {
-    Ok(0)
+    build_typed_relations(
+        db,
+        dataset_id,
+        quran_morphology::FamilyRelation::Affix,
+        |analysis| {
+            analysis
+                .segments
+                .iter()
+                .filter(|segment| matches!(segment.kind.as_str(), "prefix" | "suffix"))
+                .filter(|segment| !segment.surface.trim().is_empty())
+                .map(|segment| format!("{}:{}", segment.kind, segment.surface))
+                .collect()
+        },
+        |_, _| true,
+    )
+    .await
 }
 
 /// `quran.word_family` read path (T84): relations for one member.
