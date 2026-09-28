@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Quran Search & Linguistics
 status: executing
-stopped_at: Completed 03-06-PLAN.md
-last_updated: "2026-09-28T05:36:41.057Z"
+stopped_at: Completed 03-07-PLAN.md
+last_updated: "2026-09-28T06:13:30.704Z"
 last_activity: 2026-09-28
 last_activity_desc: Phase 03 execution started
-state_head: 8d172be549d67e8d6f6cc14ed9189690eee99330
+state_head: 4745df73a483bf006f8dc4f200a5a654587af6f2
 progress:
   total_phases: 12
   completed_phases: 1
   total_plans: 20
-  completed_plans: 17
+  completed_plans: 18
   percent: 8
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-23)
 ## Current Position
 
 Phase: 03 (Quran Search & Linguistics) — EXECUTING
-Plan: 7 of 8
+Plan: 8 of 8
 Status: Ready to execute
 Last activity: 2026-09-28 — Phase 03 execution started
 
@@ -76,6 +76,7 @@ Progress: [█░░░░░░░░░] 8%
 | Phase 03 P04 | 18 min | 3 tasks | 4 files |
 | Phase 03 P05 | 1h 50m | 2 tasks | 12 files |
 | Phase 03 P06 | 27 min | 3 tasks | 10 files |
+| Phase 03 P07 | 28 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -132,6 +133,9 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-06: Activation promotion no longer re-upserts the dataset row (which hardcoded license_status Unspecified / license_json {}): it calls set_dataset_state(active), and the import-side upsert is skipped when the existing row is already active, so a validated dataset's evidence can never be silently downgraded (T-03-22).
 - [Phase 03]: 03-06: The permissive allowlist is the permissive half of domain::LicenseStatus (PublicDomain/OpenLicense/PermissionGranted/UserOwned); Unspecified/metadata_only/pending_license_review/Unknown/empty and any unrecognized status are refused, and redistribution_allowed is the binding bundling gate. The gate code is append-only QAI-MORPH-6 mapping to exit::VALIDATION.
 - [Phase 03]: 03-06: OD-11 stays BLOCKED and is implemented as a gate rather than resolved: the qac entry in fixtures/quran/morphology/license-matrix.json is pending_license_review/redistribution_allowed:false and QAC ships only via user-supplied import until licenses/qac/ is captured per licenses/README.md; the gate validates license evidence structurally, not the truth of the captured terms.
+- [Phase 03]: 03-07: G-08 closed by an end-to-end doctor soak (import+activate -> forms -> index -> morphology import+activate -> search per mode). 'All 19 green' is realized as 19 stable ids with no failure: the token-level index (quran.fts.token_index) stays skipped by design (no backend), never a silent pass/false fail. The drift case produces QAI-IDX-0101 through the SearchHit stale-index warning after a v2 edition is activated while the serving generation still points at v1, and doctor reports quran.index.drift as warn (read-only, never repairs).
+- [Phase 03]: 03-07: G-06 closed by fixtures/quran/performance/budgets.json — a machine-readable table codifying ADR-0207's concatenated p99<=150ms, the plan 17.1 p50/p99 rows, and fixture_bound_ms=2000, each with applies_to + rationale. search_latency.rs loads it (include_str!), gates the fixture runs against fixture_bound_ms and asserts it is not loosened; the full-corpus rows are recorded OD-11-dependent and never executed on the 14-ayah fixture.
+- [Phase 03]: 03-07: G-11/D-13 closed by extending QuranBackend with backend_search/backend_root/backend_lemma/backend_morphology/backend_family (default typed-unsupported so no backend is forced to implement them) and registering 7 tool names. ReaderToolBackend builds attributed envelopes: quran.search carries normalization_rules from the served hit's NormalizationTrace (I9) plus canonical sources, the lexicon tools carry dataset attribution, and an unavailable dataset surfaces the typed QAI-MORPH-0004 backend error rather than an empty result.
 
 ### Pending Todos
 
@@ -153,6 +157,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-28T05:36:29.154Z
-Stopped at: Completed 03-06-PLAN.md
+Last session: 2026-09-28T06:13:30.610Z
+Stopped at: Completed 03-07-PLAN.md
 Resume file: None
