@@ -1,0 +1,102 @@
+{
+  "format": "qai.graph.concept-seed-v1",
+  "version": "v1",
+  "edition_scope": "test-min",
+  "synthetic_test_only": true,
+  "owner_gates": {
+    "OD-11": "BLOCKED — morphology dataset/license owner sign-off pending; word-root links stay synthetic-only",
+    "OD-12": "BLOCKED — linguist ratification of normalization/root conventions pending (ADR-0210/0215 not accepted)",
+    "ratification": "P4-X01 through P4-X05 pending owner ratification; seed content is mechanics-only until scholar review"
+  },
+  "attribution_policy": "Every entry is tracer-synthetic, curated by the Phase 4 plan author, reviewed_by pending-scholar. Nothing here claims scholarly authority; production seeds require scholar curation through the annotation workflow (D-04).",
+  "concepts": [
+    {
+      "id": "concept:mercy",
+      "label": "mercy",
+      "kind": "theme",
+      "synthetic_test_only": true,
+      "attribution": {
+        "source": "tracer-synthetic",
+        "curator": "phase-4-tracer",
+        "reviewed_by": "pending-scholar"
+      },
+      "description": "Synthetic placeholder for the mercy theme used to exercise MENTIONS_CONCEPT edges."
+    },
+    {
+      "id": "concept:guidance",
+      "label": "guidance",
+      "kind": "theme",
+      "synthetic_test_only": true,
+      "attribution": {
+        "source": "tracer-synthetic",
+        "curator": "phase-4-tracer",
+        "reviewed_by": "pending-scholar"
+      },
+      "description": "Synthetic placeholder for the guidance theme used to exercise concept-link review."
+    },
+    {
+      "id": "concept:patience",
+      "label": "patience",
+      "kind": "theme",
+      "synthetic_test_only": true,
+      "attribution": {
+        "source": "tracer-synthetic",
+        "curator": "phase-4-tracer",
+        "reviewed_by": "pending-scholar"
+      },
+      "description": "Synthetic placeholder for the patience theme used to exercise disputed assertions."
+    }
+  ],
+  "persons": [
+    {
+      "id": "entity:person:moses",
+      "label": "Moses",
+      "kind": "person",
+      "synthetic_test_only": true,
+      "attribution": {
+        "source": "tracer-synthetic",
+        "curator": "phase-4-tracer",
+        "reviewed_by": "pending-scholar"
+      },
+      "description": "Synthetic placeholder entity for REFERS_TO edges; identity review belongs to roadmap Phase 7."
+    },
+    {
+      "id": "entity:person:mary",
+      "label": "Mary",
+      "kind": "person",
+      "synthetic_test_only": true,
+      "attribution": {
+        "source": "tracer-synthetic",
+        "curator": "phase-4-tracer",
+        "reviewed_by": "pending-scholar"
+      },
+      "description": "Synthetic placeholder entity for REFERS_TO edges; identity review belongs to roadmap Phase 7."
+    }
+  ],
+  "places": [
+    {
+      "id": "entity:place:egypt",
+      "label": "Egypt",
+      "kind": "place",
+      "synthetic_test_only": true,
+      "attribution": {
+        "source": "tracer-synthetic",
+        "curator": "phase-4-tracer",
+        "reviewed_by": "pending-scholar"
+      },
+      "description": "Synthetic placeholder entity for REFERS_TO edges."
+    },
+    {
+      "id": "entity:place:midian",
+      "label": "Midian",
+      "kind": "place",
+      "synthetic_test_only": true,
+      "attribution": {
+        "source": "tracer-synthetic",
+        "curator": "phase-4-tracer",
+        "reviewed_by": "pending-scholar"
+      },
+      "description": "Synthetic placeholder entity for REFERS_TO edges."
+    }
+  ]
+}

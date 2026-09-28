@@ -11,5 +11,16 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 
+# Conformance-only SQLite wiring (plan 04-01/04-02): the backend-generic
+# suite constructs the application-layer SqliteGraphStore beside
+# MemGraphStore. These edges exist in test targets only; production code
+# keeps the port direction application -> quran-graph.
+[dev-dependencies]
+application = { path = "../application" }
+storage-sqlite = { path = "../storage-sqlite" }
+sqlx = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true }
+
 [lints]
 workspace = true

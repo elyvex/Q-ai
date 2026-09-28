@@ -80,6 +80,10 @@ pub const EDGE_VOCABULARY: &[&str] = &[
     "CONTRASTS_WITH",
     "PARALLELS",
     "EXPLAINS",
+    "TRANSLATES",
+    "RELATED_TO",
+    "SUPPORTED_BY",
+    "DISPUTED_BY",
     "HAS_LEMMA",
     "HAS_ROOT",
     "HAS_STEM",
@@ -176,6 +180,11 @@ pub enum AssertionKind {
 }
 
 /// Review decisions. Mirrors the `graph_assertions.decision` list.
+///
+/// `Disputed` marks live scholarly disagreement: the assertion stays
+/// effective for traversal and export (never tombstoned) while the dispute
+/// is visible to consumers. Corrections still supersede; rejections still
+/// tombstone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AssertionDecision {
@@ -183,6 +192,7 @@ pub enum AssertionDecision {
     Accepted,
     Rejected,
     Superseded,
+    Disputed,
 }
 
 /// Provenance layers. Mirrors `graph_assertions.provenance_layer` (`B` for
@@ -470,7 +480,11 @@ mod tests {
         assert!(!is_allowed_edge("PRECEDES"));
         assert!(!is_allowed_edge("FOLLOWS"));
         assert!(!is_allowed_edge("contains"));
-        assert_eq!(EDGE_VOCABULARY.len(), 15);
+        assert!(is_allowed_edge("TRANSLATES"));
+        assert!(is_allowed_edge("RELATED_TO"));
+        assert!(is_allowed_edge("SUPPORTED_BY"));
+        assert!(is_allowed_edge("DISPUTED_BY"));
+        assert_eq!(EDGE_VOCABULARY.len(), 19);
     }
 
     #[test]
@@ -504,6 +518,8 @@ mod tests {
         };
         assert!(mk(AssertionDecision::Accepted).is_effective());
         assert!(mk(AssertionDecision::Pending).is_effective());
+        assert!(mk(AssertionDecision::Disputed).is_effective());
+        assert!(!mk(AssertionDecision::Disputed).is_tombstoned());
         assert!(mk(AssertionDecision::Rejected).is_tombstoned());
         assert!(mk(AssertionDecision::Superseded).is_tombstoned());
     }

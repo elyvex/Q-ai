@@ -345,10 +345,7 @@ fn parse_decision(raw: String) -> Result<AssertionDecision, GraphError> {
         "accepted" => Ok(AssertionDecision::Accepted),
         "rejected" => Ok(AssertionDecision::Rejected),
         "superseded" => Ok(AssertionDecision::Superseded),
-        // Migration 0022 admits 'disputed' rows before the model gains the
-        // variant (plan 04-02): read them as pending (effective, never
-        // tombstoned) so stored rows stay openable across the plan boundary.
-        "disputed" => Ok(AssertionDecision::Pending),
+        "disputed" => Ok(AssertionDecision::Disputed),
         other => Err(build_failed("open", format!("unknown assertion decision '{other}'"))),
     }
 }

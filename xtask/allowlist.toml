@@ -103,8 +103,12 @@ workspace = { allow = ["domain", "quran-core"] }
 
 # quran-graph: GraphStore port, traversal, structural projection (D4.1–D4.2).
 # No backend query-language leaks; no llm/embeddings/retrieval/vector store.
+# The application/storage-sqlite workspace edges below are DEV-ONLY
+# (conformance test target constructs the SQLite adapter beside the
+# reference backend; testkit precedent). Production code keeps the port
+# direction application -> quran-graph.
 [quran-graph]
-workspace = { allow = ["domain", "quran-core"] }
+workspace = { allow = ["domain", "quran-core", "application", "storage-sqlite"] }
 
 # --- Phase 1 (FND-07) external dependency policy ---
 # Registry/git edges are explicit per crate and fail closed (D-02, D-03).
@@ -224,7 +228,9 @@ allow = ["serde", "serde_json", "thiserror"]
 [quran-morphology.external.git]
 allow = []
 
+# sqlx/tempfile/tokio below are DEV-ONLY (conformance SQLite rows); see the
+# workspace note above.
 [quran-graph.external.registry]
-allow = ["serde", "serde_json", "thiserror"]
+allow = ["serde", "serde_json", "thiserror", "sqlx", "tempfile", "tokio"]
 [quran-graph.external.git]
 allow = []
