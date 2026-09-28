@@ -304,7 +304,7 @@ pub fn dispatch(cli: Cli) -> i32 {
             match r {
                 Ok(rt) => {
                     let db_path = cfg.storage.sqlite.path.clone();
-                    let result = rt.block_on(async {
+                    rt.block_on(async {
                         // Readiness gate (D-05): a missing or pending database
                         // fails startup with the explicit remedy; serve never
                         // creates state or applies migrations.
@@ -316,43 +316,102 @@ pub fn dispatch(cli: Cli) -> i32 {
                                     readiness.remedy(),
                                     readiness.next_command()
                                 );
-                                return Err(match readiness {
+                                return match readiness {
                                     application::db::DatabaseReadiness::Unreadable { .. } => {
                                         exit_code::INTERNAL
                                     }
                                     _ => exit_code::VALIDATION,
-                                });
+                                };
                             }
                         }
-                        let reader = std::sync::Arc::new(
-                            application::quran_cli::open_reader(&db_path).await.map_err(|e| {
+                        let reader = match application::quran_cli::open_reader(&db_path).await {
+                            Ok(reader) => std::sync::Arc::new(reader),
+                            Err(e) => {
                                 eprintln!("cannot open database: {e}");
-                                exit_code::INTERNAL
-                            })?,
-                        );
+                                return exit_code::INTERNAL;
+                            }
+                        };
                         let tools = std::sync::Arc::new(
                             application::quran_tools::ReaderToolBackend::registry(reader.clone()),
                         );
                         let api = std::sync::Arc::new(server::api::ReaderBackend::new(reader));
-                        let search = std::sync::Arc::new(
-                            application::quran_search_api::SearchApiService::open(&db_path)
-                                .await
-                                .map_err(|e| {
+                        let search = match application::quran_search_api::SearchApiService::open(
+                            &db_path,
+                        )
+                        .await
+                        {
+                            Ok(search) => std::sync::Arc::new(search),
+                            Err(e) => {
                                 eprintln!("cannot open search backend: {e}");
-                                exit_code::INTERNAL
-                            })?,
-                        );
-                        server::api::serve(&bind, server::api::AppState { tools, api, search })
-                            .await
-                            .map_err(|e| {
-                                eprintln!("serve failed: {e}");
-                                exit_code::INTERNAL
-                            })
-                    });
-                    match result {
-                        Ok(()) => exit_code::OK,
-                        Err(code) => code,
-                    }
+                                return exit_code::INTERNAL;
+                            }
+                        };
+                        // Long-lived worker host (D-13): the serve process
+                        // owns durable execution; one-shot commands only
+                        // enqueue. The host task is always awaited below —
+                        // never detached (T-04-HOST).
+                        let host_db =
+                            match application::job_queue::open_host_database(&db_path).await {
+                                Ok(db) => db,
+                                Err(e) => {
+                                    eprintln!("cannot open job host database: {e}");
+                                    return exit_code::INTERNAL;
+                                }
+                            };
+                        let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+                        let host = tokio::spawn(application::job_queue::run_worker_host(
+                            host_db,
+                            "qai-serve",
+                            shutdown_rx,
+                        ));
+                        // One lifetime select over the server future and the
+                        // shutdown signal: whichever ends first, stop claiming
+                        // new work, join the worker to its durable terminal
+                        // state, and only then return (D-14, D-16).
+                        tokio::select! {
+                            served = server::api::serve(
+                                &bind,
+                                server::api::AppState { tools, api, search },
+                            ) => {
+                                let _ = shutdown_tx.send(true);
+                                let joined = match host.await {
+                                    Ok(joined) => joined,
+                                    Err(e) => {
+                                        eprintln!("worker host panicked: {e}");
+                                        return exit_code::INTERNAL;
+                                    }
+                                };
+                                if let Err(e) = joined {
+                                    eprintln!("worker host failed: {e}");
+                                    return exit_code::INTERNAL;
+                                }
+                                if let Err(e) = served {
+                                    eprintln!("serve failed: {e}");
+                                    return exit_code::INTERNAL;
+                                }
+                                exit_code::OK
+                            }
+                            _ = shutdown_signal() => {
+                                let _ = shutdown_tx.send(true);
+                                match host.await {
+                                    Ok(Ok(processed)) => {
+                                        println!(
+                                            "serve shut down; worker host joined ({processed} processed)"
+                                        );
+                                        exit_code::OK
+                                    }
+                                    Ok(Err(e)) => {
+                                        eprintln!("worker host failed during shutdown: {e}");
+                                        exit_code::INTERNAL
+                                    }
+                                    Err(e) => {
+                                        eprintln!("worker host panicked during shutdown: {e}");
+                                        exit_code::INTERNAL
+                                    }
+                                }
+                            }
+                        }
+                    })
                 }
                 Err(code) => code,
             }
@@ -825,6 +884,25 @@ fn handle_db(action: DbAction, cfg: &Config, json: bool) -> i32 {
                 }
             }
         }
+    }
+}
+
+/// Wait for a process shutdown signal: SIGINT everywhere, plus SIGTERM on
+/// unix (service managers stop with TERM; operators interrupt with INT).
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        let mut terminate =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .expect("SIGTERM handler");
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = terminate.recv() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
     }
 }
 
