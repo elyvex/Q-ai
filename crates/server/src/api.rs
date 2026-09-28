@@ -155,6 +155,9 @@ pub struct AppState {
     pub api: Arc<dyn QuranApiBackend>,
     /// Read-only search backend (P2-T51).
     pub search: Arc<dyn application::quran_search_api::SearchBackend>,
+    /// Read-only lexicon backend (SC3/SC4, D-10/D-13): word family and
+    /// root/lemma frequency.
+    pub lexicon: Arc<dyn application::quran_lexicon_api::LexiconBackend>,
 }
 
 fn empty_meta() -> Meta {
@@ -1176,6 +1179,142 @@ async fn search_regex_handler(
     }
 }
 
+// ─── Lexicon surfaces (SC3/SC4, G-02/G-10, D-10/D-13) ───────────────────
+//
+// Word family and root/lemma frequency are read-only lexicon capabilities.
+// They reuse the shared router layers (1 MiB body limit, 30 s timeout,
+// concurrency 128 — T-03-20), validate their selectors before any storage
+// read (T-03-18), and never answer an unavailable capability with a 200
+// envelope: a missing dataset maps to a typed error status (T-03-21).
+
+#[derive(Debug, Deserialize)]
+struct FamilyBody {
+    /// Member kind (`token`).
+    kind: String,
+    /// Member id (`token:<surah>:<ayah>:<position>`).
+    id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct RootFrequencyBody {
+    /// Root as stored by the active dataset.
+    root: String,
+    /// Counting profile recorded in the rules block.
+    profile: Option<String>,
+    /// Multi-analysis handling (`single-source` default).
+    mode: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LemmaFrequencyBody {
+    /// Lemma as stored by the active dataset.
+    lemma: String,
+    /// Counting profile recorded in the rules block.
+    profile: Option<String>,
+    /// Multi-analysis handling (`single-source` default).
+    mode: Option<String>,
+}
+
+fn lexicon_error_status(error: &application::quran_lexicon_api::LexiconApiError) -> StatusCode {
+    use application::quran_lexicon_api::LexiconApiError as E;
+    match error {
+        // An unavailable capability is a state problem, not an empty result:
+        // 404 mirrors the CLI's `UnavailableDataset` → `NOT_FOUND` mapping.
+        E::UnavailableDataset { .. } => StatusCode::NOT_FOUND,
+        E::InvalidInput { .. } | E::Unsupported { .. } => StatusCode::BAD_REQUEST,
+        E::Storage(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+fn lexicon_error_response(error: application::quran_lexicon_api::LexiconApiError) -> Response {
+    use storage::error::Diagnostic as _;
+    json_response(
+        lexicon_error_status(&error),
+        &ErrorBody {
+            error: ErrorDetail {
+                code: error.code().to_string(),
+                summary: error.summary(),
+                location: error.location(),
+                why: error.cause_chain(),
+                remedy: error.remedy(),
+                next_command: error.next_command(),
+            },
+        },
+        None,
+        false,
+    )
+}
+
+/// Lexicon results carry no edition-scoped quote, so the envelope meta names
+/// the tool and the wall-clock time only (attribution travels on the payload:
+/// every family member and every frequency report carries its dataset).
+fn lexicon_meta(tool: &str, started: Instant) -> Meta {
+    Meta {
+        execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
+        reproducibility: serde_json::json!({ "tool": tool }),
+        ..empty_meta()
+    }
+}
+
+fn lexicon_response<T: Serialize>(tool: &str, data: T, started: Instant) -> Response {
+    json_response(
+        StatusCode::OK,
+        &Envelope { api_version: API_VERSION, data, meta: lexicon_meta(tool, started) },
+        None,
+        false,
+    )
+}
+
+async fn lexicon_family_handler(
+    State(state): State<AppState>,
+    Json(body): Json<FamilyBody>,
+) -> Response {
+    use application::quran_lexicon_api::FamilyArgs;
+    let started = Instant::now();
+    let args = match FamilyArgs::new(body.kind, body.id) {
+        Ok(args) => args,
+        Err(error) => return lexicon_error_response(error),
+    };
+    match state.lexicon.word_family(args).await {
+        Ok(relations) => lexicon_response("quran.word_family", relations, started),
+        Err(error) => lexicon_error_response(error),
+    }
+}
+
+async fn lexicon_root_frequency_handler(
+    State(state): State<AppState>,
+    Json(body): Json<RootFrequencyBody>,
+) -> Response {
+    use application::quran_lexicon_api::RootFrequencyArgs;
+    let started = Instant::now();
+    let args =
+        match RootFrequencyArgs::new(body.root, body.profile.as_deref(), body.mode.as_deref()) {
+            Ok(args) => args,
+            Err(error) => return lexicon_error_response(error),
+        };
+    match state.lexicon.root_frequency(args).await {
+        Ok(report) => lexicon_response("quran.count.root_frequency", report, started),
+        Err(error) => lexicon_error_response(error),
+    }
+}
+
+async fn lexicon_lemma_frequency_handler(
+    State(state): State<AppState>,
+    Json(body): Json<LemmaFrequencyBody>,
+) -> Response {
+    use application::quran_lexicon_api::LemmaFrequencyArgs;
+    let started = Instant::now();
+    let args =
+        match LemmaFrequencyArgs::new(body.lemma, body.profile.as_deref(), body.mode.as_deref()) {
+            Ok(args) => args,
+            Err(error) => return lexicon_error_response(error),
+        };
+    match state.lexicon.lemma_frequency(args).await {
+        Ok(report) => lexicon_response("quran.count.lemma_frequency", report, started),
+        Err(error) => lexicon_error_response(error),
+    }
+}
+
 async fn debug_reader_handler(
     State(state): State<AppState>,
     Path((edition, surah)): Path<(String, u16)>,
@@ -1325,6 +1464,9 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/quran/search/phrase", post(search_phrase_handler))
         .route("/api/v1/quran/search/concatenated", post(search_concatenated_handler))
         .route("/api/v1/quran/search/regex", post(search_regex_handler))
+        .route("/api/v1/quran/family", post(lexicon_family_handler))
+        .route("/api/v1/quran/count/root-frequency", post(lexicon_root_frequency_handler))
+        .route("/api/v1/quran/count/lemma-frequency", post(lexicon_lemma_frequency_handler))
         .route("/debug/read/{edition}/{surah}", get(debug_reader_handler))
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .layer(tower_http::limit::RequestBodyLimitLayer::new(1024 * 1024))

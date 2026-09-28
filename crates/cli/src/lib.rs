@@ -346,6 +346,19 @@ pub fn dispatch(cli: Cli) -> i32 {
                                 return exit_code::INTERNAL;
                             }
                         };
+                        // Lexicon backend (SC3/SC4, D-10/D-13): the same
+                        // read-only database handle, served through the
+                        // `quran_lexicon_api` trait seam.
+                        let lexicon =
+                            match application::quran_lexicon_api::LexiconApiService::open(&db_path)
+                                .await
+                            {
+                                Ok(lexicon) => std::sync::Arc::new(lexicon),
+                                Err(e) => {
+                                    eprintln!("cannot open lexicon backend: {e}");
+                                    return exit_code::INTERNAL;
+                                }
+                            };
                         // Long-lived worker host (D-13): the serve process
                         // owns durable execution; one-shot commands only
                         // enqueue. The host task is always awaited below —
@@ -371,7 +384,7 @@ pub fn dispatch(cli: Cli) -> i32 {
                         tokio::select! {
                             served = server::api::serve(
                                 &bind,
-                                server::api::AppState { tools, api, search },
+                                server::api::AppState { tools, api, search, lexicon },
                             ) => {
                                 let _ = shutdown_tx.send(true);
                                 let joined = match host.await {

@@ -252,11 +252,97 @@ impl application::quran_search_api::SearchBackend for FakeSearch {
     }
 }
 
+/// Lexicon backend stub: the sentinel selectors stand in for the two dataset
+/// states a real deployment reaches — a registered synthetic lexicon and no
+/// active dataset at all (`UnavailableDataset`, never an empty result).
+struct FakeLexicon;
+
+fn lexicon_frequency_report(
+    target: &str,
+    mode: application::quran_counting::MultiAnalysisHandling,
+    count: u64,
+) -> application::quran_counting::FrequencyReport {
+    application::quran_counting::FrequencyReport {
+        target: target.to_string(),
+        rules: application::quran_counting::CountingRules {
+            profile: application::quran_lexicon_api::DEFAULT_PROFILE.to_string(),
+            profile_version: "1.0.0".to_string(),
+            datasets: vec!["test-morph@0.1.0".to_string()],
+            multi_analysis_handling: mode,
+            window: None,
+            exclusions: Vec::new(),
+        },
+        count,
+        by_surah: std::collections::BTreeMap::from([(1, count)]),
+        checksum: format!("sha256:{}", "ab".repeat(32)),
+    }
+}
+
+#[async_trait::async_trait]
+impl application::quran_lexicon_api::LexiconBackend for FakeLexicon {
+    async fn word_family(
+        &self,
+        args: application::quran_lexicon_api::FamilyArgs,
+    ) -> Result<
+        Vec<application::quran_morphology::FamilyMemberView>,
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        use application::quran_lexicon_api::LexiconApiError;
+        match args.id.as_str() {
+            // The no-active-dataset path: a typed capability error, never an
+            // empty relation list (T-03-21).
+            "token:1:1:1" => {
+                Err(LexiconApiError::UnavailableDataset { capability: "word family".to_string() })
+            }
+            _ => Ok(vec![application::quran_morphology::FamilyMemberView {
+                id: "token:1:1:2".to_string(),
+                kind: "token".to_string(),
+                relation: "same_root".to_string(),
+                explanation: "shares root r-1 with the queried token".to_string(),
+                dataset: Some("test-morph@0.1.0".to_string()),
+            }]),
+        }
+    }
+
+    async fn root_frequency(
+        &self,
+        args: application::quran_lexicon_api::RootFrequencyArgs,
+    ) -> Result<
+        application::quran_counting::FrequencyReport,
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        use application::quran_lexicon_api::LexiconApiError;
+        if args.root == "tst-gone" {
+            return Err(LexiconApiError::UnavailableDataset {
+                capability: "root frequency".to_string(),
+            });
+        }
+        Ok(lexicon_frequency_report(&args.root, args.mode, 64))
+    }
+
+    async fn lemma_frequency(
+        &self,
+        args: application::quran_lexicon_api::LemmaFrequencyArgs,
+    ) -> Result<
+        application::quran_counting::FrequencyReport,
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        use application::quran_lexicon_api::LexiconApiError;
+        if args.lemma == "tst-gone" {
+            return Err(LexiconApiError::UnavailableDataset {
+                capability: "lemma frequency".to_string(),
+            });
+        }
+        Ok(lexicon_frequency_report(&args.lemma, args.mode, 127))
+    }
+}
+
 fn test_state() -> AppState {
     AppState {
         tools: Arc::new(ToolRegistry::new(Arc::new(FakeBackend))),
         api: Arc::new(FakeApi),
         search: Arc::new(FakeSearch),
+        lexicon: Arc::new(FakeLexicon),
     }
 }
 
@@ -855,5 +941,128 @@ async fn search_sse_streams_hits_then_terminal_totals() {
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_envelope(&body_json(&body));
+    handle.abort();
+}
+
+// ─── Lexicon routes (SC3/SC4, G-02/G-10, D-10/D-13) ────────────────────
+
+#[tokio::test]
+async fn lexicon_family_route_returns_attributed_relations() {
+    let (addr, handle) = serve_once().await;
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/family",
+        &serde_json::json!({"kind": "token", "id": "token:1:1:2"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let value = body_json(&body);
+    assert_envelope(&value);
+    // SC3: typed relations with a mandatory explanation AND dataset
+    // attribution on every member (T-03-19).
+    let relations = value["data"].as_array().expect("family relations array");
+    assert_eq!(relations.len(), 1);
+    assert_eq!(relations[0]["relation"], "same_root");
+    assert_eq!(relations[0]["kind"], "token");
+    assert_eq!(relations[0]["dataset"], "test-morph@0.1.0");
+    assert!(
+        !relations[0]["explanation"].as_str().unwrap_or_default().trim().is_empty(),
+        "explanation is mandatory: {}",
+        relations[0]
+    );
+    assert_eq!(value["meta"]["reproducibility"]["tool"], "quran.word_family");
+    handle.abort();
+}
+
+#[tokio::test]
+async fn lexicon_family_route_never_returns_an_empty_envelope() {
+    let (addr, handle) = serve_once().await;
+    // No active dataset is a typed capability error (QAI-MORPH-0004's HTTP
+    // analogue), never a 200 with an empty relation list (T-03-21).
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/family",
+        &serde_json::json!({"kind": "token", "id": "token:1:1:1"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let value = body_json(&body);
+    assert_eq!(value["error"]["code"], "QAI-LEX-0004");
+    assert!(value.get("data").is_none(), "an unavailable capability carries no data: {value}");
+
+    // An empty selector is a coded 400 before any storage read (T-03-18).
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/family",
+        &serde_json::json!({"kind": "  ", "id": "token:1:1:2"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body_json(&body)["error"]["code"], "QAI-LEX-0002");
+    handle.abort();
+}
+
+#[tokio::test]
+async fn lexicon_count_routes_return_the_counting_rules_block() {
+    let (addr, handle) = serve_once().await;
+    // SC4 at the HTTP level: the report carries the CountingRules block
+    // (dataset attribution + the requested multi-analysis handling) and a
+    // reproducibility checksum, never a bare number.
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/count/root-frequency",
+        &serde_json::json!({"root": "r-1", "mode": "all-analyses"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let value = body_json(&body);
+    assert_envelope(&value);
+    assert_eq!(value["data"]["rules"]["datasets"][0], "test-morph@0.1.0");
+    assert_eq!(value["data"]["rules"]["multi_analysis_handling"], "AllAnalyses");
+    assert_eq!(value["data"]["rules"]["profile"], "L3.diacritics");
+    assert_eq!(value["data"]["count"], 64);
+    assert!(!value["data"]["checksum"].as_str().unwrap_or_default().is_empty());
+    assert_eq!(value["meta"]["reproducibility"]["tool"], "quran.count.root_frequency");
+
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/count/lemma-frequency",
+        &serde_json::json!({"lemma": "lem-1"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let value = body_json(&body);
+    assert_eq!(value["data"]["rules"]["datasets"][0], "test-morph@0.1.0");
+    // The default mode is the CLI's default (single-source) convention.
+    assert_eq!(value["data"]["rules"]["multi_analysis_handling"], "SingleSource");
+    assert_eq!(value["data"]["count"], 127);
+
+    // An unknown mode is a coded 400 from the shared CLI/API parser.
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/count/root-frequency",
+        &serde_json::json!({"root": "r-1", "mode": "sideways"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body_json(&body)["error"]["code"], "QAI-LEX-0002");
+    handle.abort();
+}
+
+#[tokio::test]
+async fn lexicon_count_routes_are_typed_when_the_dataset_is_unavailable() {
+    let (addr, handle) = serve_once().await;
+    for path in ["/api/v1/quran/count/root-frequency", "/api/v1/quran/count/lemma-frequency"] {
+        let body = if path.ends_with("root-frequency") {
+            serde_json::json!({"root": "tst-gone"})
+        } else {
+            serde_json::json!({"lemma": "tst-gone"})
+        };
+        let (status, body) = post_json(&addr, path, &body).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{path} must not answer 200 without a dataset");
+        let value = body_json(&body);
+        assert_eq!(value["error"]["code"], "QAI-LEX-0004", "{path}");
+        assert!(value.get("data").is_none(), "{path}: no empty 200 envelope");
+    }
     handle.abort();
 }

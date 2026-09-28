@@ -2447,7 +2447,10 @@ pub async fn cmd_count_frequency(db_path: &str, target: &str, profile: &str) -> 
 }
 
 /// Parse the `--mode` flag into a multi-analysis handling policy.
-fn parse_multi_analysis_mode(
+///
+/// Shared with the HTTP lexicon surface ([`crate::quran_lexicon_api`]) so an
+/// API count and a CLI count are described by the same convention.
+pub fn parse_multi_analysis_mode(
     mode: &str,
 ) -> Result<super::quran_counting::MultiAnalysisHandling, String> {
     use super::quran_counting::MultiAnalysisHandling as M;
