@@ -465,10 +465,64 @@ async fn compare_and_unavailable_tools() {
         !json.contains("resolution") && !json.contains("winner") && !json.contains("synthesis")
     );
 
-    // L7 affix backend answers with its mandatory label (no dataset needed
-    // for the heuristic path — here a dataset IS active, so empty scan).
-    let hits = affix_search(&db, "ويت", "L7.affix").await.unwrap();
+    // G-09: with a dataset active but no populated morpheme index, affix
+    // search fails closed with a typed capability error (never a silent empty).
+    let err = affix_search(&db, "ويت", "L7.affix").await.unwrap_err();
+    assert!(matches!(err, MorphologyToolError::UnavailableDataset { .. }));
+    use storage::error::Diagnostic as _;
+    assert_eq!(err.code().to_string(), "QAI-MORPH-0004");
+    assert!(err.to_string().contains("affix/morpheme index"), "{err}");
+}
+
+/// G-09: `affix_search` never returns a silent empty for an active dataset.
+/// The dataset path fails closed with a typed capability error; the labeled
+/// L7 heuristic still answers (and stays labeled) when no dataset is active.
+#[tokio::test]
+async fn affix_search_typed_unavailable() {
+    use application::quran_morphology::MorphologyToolError;
+    use storage::error::Diagnostic as _;
+    let (dir, db) = ready_db().await;
+
+    // No active dataset: the labeled L7 heuristic answers over stored forms.
+    let pool = read_pool(&dir).await;
+    let sample: String = sqlx::query_scalar("SELECT affix_stripped FROM quran_token_forms LIMIT 1")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+    assert!(!sample.is_empty(), "forms rebuild must populate affix_stripped");
+    let probe: String = sample.chars().take(2).collect();
+    let hits = affix_search(&db, &probe, "L7.affix").await.expect("L7 heuristic answers");
+    assert!(!hits.is_empty(), "L7 heuristic must return results for {probe:?}");
     assert!(hits.iter().all(|h| h.backend == "Heuristic (pattern-based)"));
+
+    // Without a dataset the L7 profile is required.
+    let err = affix_search(&db, &probe, "other").await.unwrap_err();
+    assert!(matches!(err, MorphologyToolError::UnavailableDataset { .. }));
+    assert_eq!(err.code().to_string(), "QAI-MORPH-0004");
+
+    // Active dataset without a populated morpheme index: typed error, code
+    // QAI-MORPH-0004, message naming the missing capability.
+    let doc = family_document(&db).await;
+    run_morphology_import(&db, &import_params(doc, "batch-affix"), &AtomicBool::new(false), |_| {})
+        .await
+        .unwrap();
+    activate_morphology(
+        &db,
+        &MorphologyActivateParams {
+            batch_id: "batch-affix".to_string(),
+            approval_id: "appr-morph".to_string(),
+            invoked_by: PRINCIPAL.to_string(),
+        },
+        &principal(),
+    )
+    .await
+    .unwrap();
+
+    let err = affix_search(&db, &probe, "L7.affix").await.unwrap_err();
+    assert!(matches!(err, MorphologyToolError::UnavailableDataset { .. }));
+    assert_eq!(err.code().to_string(), "QAI-MORPH-0004");
+    assert!(err.to_string().contains("affix/morpheme index"), "{err}");
 }
 
 /// P2-T72/T66: cancel at every checkpoint preserves state; retry succeeds.
