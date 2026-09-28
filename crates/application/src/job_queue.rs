@@ -296,6 +296,53 @@ pub fn build_worker(
     Worker::new(queue, registry, owner)
 }
 
+// ─── Long-lived worker host (D-13) ─────────────────────────────────
+//
+// `qai serve` owns durable execution through this composition; one-shot
+// commands only enqueue. Only existing handlers are registered (D-04) and
+// unknown kinds follow the worker dead-letter policy (T-04-SCOPE).
+
+/// Default production handler registry: every existing application job
+/// handler against the same database handle.
+///
+/// Registration only wires the existing execution seams — feature behavior,
+/// approval gates, and canonical boundaries are unchanged.
+pub fn build_default_registry(db: &Arc<SqliteDatabase>) -> HandlerRegistry {
+    HandlerRegistry::new()
+        .register(Arc::new(crate::quran::QuranImportHandler::new(db.clone())))
+        .register(Arc::new(crate::quran_forms::FormsRebuildHandler::new(db.clone())))
+        .register(Arc::new(crate::quran_index::IndexBuildHandler::new(db.clone())))
+        .register(Arc::new(crate::quran_morphology::MorphologyImportHandler::new(db.clone())))
+}
+
+/// Open the host database without creating or migrating (D-05).
+///
+/// The serve composition gates on `DatabaseReadiness::Current` first; this
+/// existence check is the backstop so the host can never materialize state
+/// on its own.
+pub async fn open_host_database(db_path: &str) -> Result<Arc<SqliteDatabase>, JobError> {
+    if std::fs::symlink_metadata(db_path).is_err() {
+        return Err(JobError::Storage(format!(
+            "no database at {db_path}; run `qai db migrate` first"
+        )));
+    }
+    SqliteDatabase::new(db_path, 4, true).await.map(Arc::new).map_err(to_err)
+}
+
+/// Long-lived worker host: default registry plus the shutdown-aware worker
+/// loop. Recovers interrupted leases on start, polls claims at a bounded
+/// interval, propagates typed errors, and joins before returning — never a
+/// detached task.
+pub async fn run_worker_host(
+    db: Arc<SqliteDatabase>,
+    owner: impl Into<String>,
+    shutdown: tokio::sync::watch::Receiver<bool>,
+) -> Result<u32, JobError> {
+    let registry = build_default_registry(&db);
+    let worker = build_worker(db, registry, owner);
+    worker.run_until_shutdown(shutdown).await
+}
+
 // ─── Operator job controls (D-15, D-16) ─────────────────────────────
 
 /// Operator-facing job control failure with a centralized exit mapping.
