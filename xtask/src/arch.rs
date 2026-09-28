@@ -171,8 +171,16 @@ mod tests {
         let toml = r#"
             [domain]
             workspace = { allow = [] }
+            [domain.external.registry]
+            allow = ["serde"]
+            [domain.external.git]
+            allow = []
             [cli]
             workspace = { allow = ["application", "config", "observability"] }
+            [cli.external.registry]
+            allow = ["serde"]
+            [cli.external.git]
+            allow = []
         "#;
         toml::from_str(toml).unwrap()
     }
@@ -249,20 +257,151 @@ mod tests {
     }
 
     #[test]
+    fn external_policy_is_explicit_per_crate_and_source_class() {
+        // FND-07: the checked-in policy names registry and git allowances
+        // separately; an absent rule stays empty and fail closed.
+        let allow = allowlist();
+        assert!(allow.registry_allow("domain").contains("serde"));
+        assert!(allow.git_allow("domain").is_empty());
+        assert!(allow.registry_allow("cli").contains("serde"));
+        assert!(allow.git_allow("cli").is_empty());
+        assert!(allow.registry_allow("no-such-crate").is_empty());
+        assert!(allow.git_allow("no-such-crate").is_empty());
+    }
+
+    #[test]
+    fn forbidden_registry_edge_is_detected() {
+        // FND-07: a registry edge whose name is not in the per-crate
+        // registry allow set fails closed with a stable message.
+        let meta = meta(
+            vec!["#domain@0.0.0"],
+            vec![package(
+                "#domain@0.0.0",
+                "domain",
+                vec![("tokio", Some("registry+https://github.com/rust-lang/crates.io-index"))],
+            )],
+        );
+        let bad = violations(&meta, &allowlist());
+        assert_eq!(
+            bad,
+            vec!["domain -> tokio (registry source registry+https://github.com/rust-lang/crates.io-index) : forbidden external dependency edge (not in allowlist)".to_string()],
+        );
+    }
+
+    #[test]
+    fn allowed_git_edge_passes() {
+        // A git dependency passes only when the policy names it.
+        let toml = r#"
+            [tool]
+            workspace = { allow = [] }
+            [tool.external.registry]
+            allow = []
+            [tool.external.git]
+            allow = ["qai-schema"]
+        "#;
+        let allow: Allowlist = toml::from_str(toml).unwrap();
+        let meta = meta(
+            vec!["#tool@0.0.0"],
+            vec![package(
+                "#tool@0.0.0",
+                "tool",
+                vec![("qai-schema", Some("git+https://github.com/example/qai-schema?rev=abc123"))],
+            )],
+        );
+        let bad = violations(&meta, &allow);
+        assert!(bad.is_empty(), "expected no violations, got: {bad:?}");
+    }
+
+    #[test]
+    fn forbidden_git_edge_is_detected() {
+        // `serde` is registry-allowed for `cli`, but no git source is
+        // allowed: the same name via a git source fails closed, proving
+        // registry and git classes stay distinct.
+        let meta = meta(
+            vec!["#cli@0.0.0"],
+            vec![package(
+                "#cli@0.0.0",
+                "cli",
+                vec![("serde", Some("git+https://github.com/serde-rs/serde?rev=abc123"))],
+            )],
+        );
+        let bad = violations(&meta, &allowlist());
+        assert_eq!(
+            bad,
+            vec!["cli -> serde (git source git+https://github.com/serde-rs/serde?rev=abc123) : forbidden external dependency edge (not in allowlist)".to_string()],
+        );
+    }
+
+    #[test]
+    fn mixed_path_and_external_edges_report_only_the_offending_edge() {
+        // One allowed path edge plus one forbidden registry edge yields
+        // exactly the external violation — no more, no less.
+        let meta = meta(
+            vec!["#cli@0.0.0", "#application@0.0.0"],
+            vec![
+                package(
+                    "#cli@0.0.0",
+                    "cli",
+                    vec![
+                        ("application", None),
+                        ("tokio", Some("registry+https://github.com/rust-lang/crates.io-index")),
+                    ],
+                ),
+                package("#application@0.0.0", "application", vec![]),
+            ],
+        );
+        let bad = violations(&meta, &allowlist());
+        assert_eq!(bad.len(), 1, "got: {bad:?}");
+        assert!(bad[0].starts_with("cli -> tokio (registry"), "got: {bad:?}");
+    }
+
+    #[test]
+    fn unrecognized_source_scheme_fails_closed() {
+        // A source that is neither path, registry, nor git is never
+        // treated as allowed merely because its name is absent from the
+        // path-only rule.
+        let meta = meta(
+            vec!["#cli@0.0.0"],
+            vec![package(
+                "#cli@0.0.0",
+                "cli",
+                vec![("serde", Some("sparse+https://example.invalid/index/"))],
+            )],
+        );
+        let bad = violations(&meta, &allowlist());
+        assert_eq!(bad.len(), 1, "got: {bad:?}");
+        assert!(bad[0].starts_with("cli -> serde (unknown source"), "got: {bad:?}");
+    }
+
+    #[test]
     fn unrecognized_crate_fails_closed() {
         // A crate not in the allowlist (tui) with ANY path dependency is flagged;
-        // a path dep in cli NOT in {application,config,observability} is flagged.
+        // a path dep in cli NOT in {application,config,observability} is flagged;
+        // registry and git edges are fail-closed for unrecognized crates too,
+        // and a recognized crate rejects an unlisted external name per class.
+        let reg = Some("registry+https://github.com/rust-lang/crates.io-index");
         let meta = meta(
             vec!["#domain@0.0.0", "#cli@0.0.0", "#tui@0.0.0"],
             vec![
                 package("#domain@0.0.0", "domain", vec![("cli", None)]),
-                package("#cli@0.0.0", "cli", vec![("tui", None)]),
-                package("#tui@0.0.0", "tui", vec![("domain", None)]),
+                package("#cli@0.0.0", "cli", vec![("tui", None), ("tokio", reg)]),
+                package(
+                    "#tui@0.0.0",
+                    "tui",
+                    vec![
+                        ("domain", None),
+                        ("serde", reg),
+                        ("qai-schema", Some("git+https://github.com/example/qai-schema?rev=abc123")),
+                    ],
+                ),
             ],
         );
         let bad = violations(&meta, &allowlist());
         assert!(bad.iter().any(|v| v.starts_with("cli -> tui")), "got: {bad:?}");
         assert!(bad.iter().any(|v| v.starts_with("tui -> domain")), "got: {bad:?}");
+        assert!(bad.iter().any(|v| v.starts_with("cli -> tokio (registry")), "got: {bad:?}");
+        assert!(bad.iter().any(|v| v.starts_with("tui -> serde (registry")), "got: {bad:?}");
+        assert!(bad.iter().any(|v| v.starts_with("tui -> qai-schema (git")), "got: {bad:?}");
     }
 
     #[test]
