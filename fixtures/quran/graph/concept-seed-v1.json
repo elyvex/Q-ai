@@ -9,6 +9,48 @@
     "ratification": "P4-X01 through P4-X05 pending owner ratification; seed content is mechanics-only until scholar review"
   },
   "attribution_policy": "Every entry is tracer-synthetic, curated by the Phase 4 plan author, reviewed_by pending-scholar. Nothing here claims scholarly authority; production seeds require scholar curation through the annotation workflow (D-04).",
+  "links": [
+    {
+      "src": "ayah:1:1",
+      "edge": "MENTIONS_CONCEPT",
+      "dst": "concept:mercy",
+      "evidence": { "source": "tracer-synthetic", "span": "ayah:1:1" },
+      "source_location": "concept-seed-v1.json:links[0]",
+      "synthetic_test_only": true
+    },
+    {
+      "src": "ayah:1:1",
+      "edge": "MENTIONS_CONCEPT",
+      "dst": "concept:guidance",
+      "evidence": { "source": "tracer-synthetic", "span": "ayah:1:1" },
+      "source_location": "concept-seed-v1.json:links[1]",
+      "synthetic_test_only": true
+    },
+    {
+      "src": "ayah:1:2",
+      "edge": "MENTIONS_CONCEPT",
+      "dst": "concept:patience",
+      "evidence": { "source": "tracer-synthetic", "span": "ayah:1:2" },
+      "source_location": "concept-seed-v1.json:links[2]",
+      "synthetic_test_only": true
+    },
+    {
+      "src": "ayah:2:1",
+      "edge": "REFERS_TO",
+      "dst": "entity:place:egypt",
+      "evidence": { "source": "tracer-synthetic", "span": "ayah:2:1" },
+      "source_location": "concept-seed-v1.json:links[3]",
+      "synthetic_test_only": true
+    },
+    {
+      "src": "ayah:2:1",
+      "edge": "REFERS_TO",
+      "dst": "entity:person:moses",
+      "evidence": { "source": "tracer-synthetic", "span": "ayah:2:1" },
+      "source_location": "concept-seed-v1.json:links[4]",
+      "synthetic_test_only": true
+    }
+  ],
   "concepts": [
     {
       "id": "concept:mercy",
