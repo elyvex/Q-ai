@@ -305,6 +305,25 @@ pub fn dispatch(cli: Cli) -> i32 {
                 Ok(rt) => {
                     let db_path = cfg.storage.sqlite.path.clone();
                     let result = rt.block_on(async {
+                        // Readiness gate (D-05): a missing or pending database
+                        // fails startup with the explicit remedy; serve never
+                        // creates state or applies migrations.
+                        match application::db::database_readiness(&cfg, &migrations_dir()).await {
+                            application::db::DatabaseReadiness::Current { .. } => {}
+                            readiness => {
+                                eprintln!(
+                                    "cannot serve: database is not ready ({readiness:?}); remedy: {}; next: {}",
+                                    readiness.remedy(),
+                                    readiness.next_command()
+                                );
+                                return Err(match readiness {
+                                    application::db::DatabaseReadiness::Unreadable { .. } => {
+                                        exit_code::INTERNAL
+                                    }
+                                    _ => exit_code::VALIDATION,
+                                });
+                            }
+                        }
                         let reader = std::sync::Arc::new(
                             application::quran_cli::open_reader(&db_path).await.map_err(|e| {
                                 eprintln!("cannot open database: {e}");
