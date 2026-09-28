@@ -21,6 +21,16 @@ use tools::{AnalysisSource, ToolError, ToolResult, reproducibility};
 pub const GET_AYAH_VERSION: SemVer = SemVer::new(1, 0, 0);
 /// Tool versions (§12 tool plan).
 pub const GET_CONTEXT_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions (§12 tool plan; D-13 lexicon surface).
+pub const SEARCH_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions (§12 tool plan; D-13 lexicon surface).
+pub const ROOT_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions (§12 tool plan; D-13 lexicon surface).
+pub const LEMMA_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions (§12 tool plan; D-13 lexicon surface).
+pub const MORPHOLOGY_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions (§12 tool plan; D-13 lexicon surface).
+pub const FAMILY_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
 
 /// Edition + generation metadata behind one backend read.
 #[derive(Debug, Clone)]
@@ -60,6 +70,48 @@ pub trait QuranBackend: Send + Sync {
         reference: &QuranRef,
         spec: &ContextSpec,
     ) -> Result<(ContextView, BackendMeta), ToolError>;
+
+    /// `quran.search` (D-13): normalized search with normalization rules and
+    /// attribution on the envelope. Backends that do not serve search return a
+    /// typed backend error.
+    async fn backend_search(
+        &self,
+        _params: &SearchToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        Err(unsupported("quran.search"))
+    }
+
+    /// `quran.root` (D-13): root-grouped occurrences with dataset attribution.
+    async fn backend_root(
+        &self,
+        _params: &RootToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        Err(unsupported("quran.root"))
+    }
+
+    /// `quran.lemma` (D-13): lemma-grouped occurrences with dataset attribution.
+    async fn backend_lemma(
+        &self,
+        _params: &LemmaToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        Err(unsupported("quran.lemma"))
+    }
+
+    /// `quran.morphology` (D-13): all analyses of one token, attributed.
+    async fn backend_morphology(
+        &self,
+        _params: &MorphologyToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        Err(unsupported("quran.morphology"))
+    }
+
+    /// `quran.family` (D-13): explained family relations, attributed.
+    async fn backend_family(
+        &self,
+        _params: &FamilyToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        Err(unsupported("quran.family"))
+    }
 }
 
 /// Parameters for `quran.get_ayah`.
@@ -107,6 +159,63 @@ fn default_after() -> u16 {
 
 fn default_max() -> u16 {
     11
+}
+
+/// Parameters for `quran.search` (D-13): normalized search over the serving
+/// index. An empty/whitespace query is a typed invalid-input error, never an
+/// empty result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchToolParams {
+    /// Query text.
+    pub text: String,
+    /// Edition `slug@version` (defaults to the indexed edition).
+    #[serde(default)]
+    pub edition: Option<String>,
+    /// Result cap (defaults to 20).
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+/// Parameters for `quran.root` (D-13).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RootToolParams {
+    /// Root surface to group by.
+    pub root: String,
+}
+
+/// Parameters for `quran.lemma` (D-13).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LemmaToolParams {
+    /// Lemma surface to group by.
+    pub lemma: String,
+}
+
+/// Parameters for `quran.morphology` (D-13).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MorphologyToolParams {
+    /// Surah number.
+    pub surah: u16,
+    /// Ayah number.
+    pub ayah: u32,
+    /// Token position within the ayah.
+    pub position: u32,
+}
+
+/// Parameters for `quran.family` (D-13).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FamilyToolParams {
+    /// Member kind (`token`, `root`, `lemma`, …).
+    pub kind: String,
+    /// Member id.
+    pub id: String,
+}
+
+/// A typed backend error for a tool a backend does not serve.
+fn unsupported(tool: &'static str) -> ToolError {
+    ToolError::Backend {
+        code: "QAI-QUR-0310".to_string(),
+        detail: format!("{tool} is not supported by this backend"),
+    }
 }
 
 /// Serializable boundary argument.
@@ -261,6 +370,77 @@ impl ToolRegistry {
         };
         Ok((result, meta))
     }
+
+    /// `quran.search` (D-13): a non-empty query is required — an empty query is
+    /// a typed invalid-input error, never an empty result.
+    pub async fn search(
+        &self,
+        params: SearchToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        if params.text.trim().is_empty() {
+            return Err(ToolError::InvalidInput {
+                tool: "quran.search",
+                detail: "query text must not be empty".to_string(),
+            });
+        }
+        self.backend.backend_search(&params).await
+    }
+
+    /// `quran.root` (D-13): a non-empty root is required.
+    pub async fn root(
+        &self,
+        params: RootToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        if params.root.trim().is_empty() {
+            return Err(ToolError::InvalidInput {
+                tool: "quran.root",
+                detail: "root must not be empty".to_string(),
+            });
+        }
+        self.backend.backend_root(&params).await
+    }
+
+    /// `quran.lemma` (D-13): a non-empty lemma is required.
+    pub async fn lemma(
+        &self,
+        params: LemmaToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        if params.lemma.trim().is_empty() {
+            return Err(ToolError::InvalidInput {
+                tool: "quran.lemma",
+                detail: "lemma must not be empty".to_string(),
+            });
+        }
+        self.backend.backend_lemma(&params).await
+    }
+
+    /// `quran.morphology` (D-13): surah/ayah/position must be non-zero.
+    pub async fn morphology(
+        &self,
+        params: MorphologyToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        if params.surah == 0 || params.ayah == 0 || params.position == 0 {
+            return Err(ToolError::InvalidInput {
+                tool: "quran.morphology",
+                detail: "surah, ayah and position must all be >= 1".to_string(),
+            });
+        }
+        self.backend.backend_morphology(&params).await
+    }
+
+    /// `quran.family` (D-13): non-empty kind and id are required.
+    pub async fn family(
+        &self,
+        params: FamilyToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        if params.kind.trim().is_empty() || params.id.trim().is_empty() {
+            return Err(ToolError::InvalidInput {
+                tool: "quran.family",
+                detail: "family needs a non-empty kind and id".to_string(),
+            });
+        }
+        self.backend.backend_family(&params).await
+    }
 }
 
 #[cfg(test)]
@@ -325,9 +505,89 @@ mod tests {
     }
 
     #[test]
-    fn registry_lists_both_tools() {
+    fn registry_lists_all_tools() {
         let registry = ToolRegistry::new(Arc::new(FakeBackend));
-        assert_eq!(registry.tool_names(), ["quran.get_ayah", "quran.get_context"]);
+        assert_eq!(
+            registry.tool_names(),
+            [
+                "quran.get_ayah",
+                "quran.get_context",
+                "quran.search",
+                "quran.root",
+                "quran.lemma",
+                "quran.morphology",
+                "quran.family",
+            ]
+        );
+    }
+
+    /// D-13 / ASSUMPTION (empty fallback edge): every new selector tool rejects
+    /// an empty input as a typed invalid-input error, never an empty result.
+    #[tokio::test]
+    async fn empty_selector_tools_are_typed_invalid_input() {
+        let registry = ToolRegistry::new(Arc::new(FakeBackend));
+        let err = registry
+            .search(SearchToolParams { text: "   ".into(), edition: None, limit: None })
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::InvalidInput { tool: "quran.search", .. }));
+        let err = registry.root(RootToolParams { root: String::new() }).await.unwrap_err();
+        assert!(matches!(err, ToolError::InvalidInput { tool: "quran.root", .. }));
+        let err = registry.lemma(LemmaToolParams { lemma: "  ".into() }).await.unwrap_err();
+        assert!(matches!(err, ToolError::InvalidInput { tool: "quran.lemma", .. }));
+        let err = registry
+            .morphology(MorphologyToolParams { surah: 1, ayah: 1, position: 0 })
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::InvalidInput { tool: "quran.morphology", .. }));
+        let err = registry
+            .family(FamilyToolParams { kind: String::new(), id: "x".into() })
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::InvalidInput { tool: "quran.family", .. }));
+    }
+
+    /// D-13 / T-03-29: every new tool result is emitted with attribution
+    /// (`analysis_sources`) and, where a normalization trace applies,
+    /// `normalization_rules`.
+    #[tokio::test]
+    async fn new_tools_return_attributed_envelopes() {
+        let registry = ToolRegistry::new(Arc::new(FakeBackend));
+        let search = registry
+            .search(SearchToolParams { text: "ويت".into(), edition: None, limit: None })
+            .await
+            .unwrap();
+        assert_eq!(search.tool_name, "quran.search");
+        assert!(!search.analysis_sources.is_empty(), "search must attribute its sources");
+        assert!(!search.normalization_rules.is_empty(), "search must carry its rule trace");
+
+        for (tool, result) in [
+            ("quran.root", registry.root(RootToolParams { root: "root-1".into() }).await.unwrap()),
+            (
+                "quran.lemma",
+                registry.lemma(LemmaToolParams { lemma: "lem-1".into() }).await.unwrap(),
+            ),
+            (
+                "quran.morphology",
+                registry
+                    .morphology(MorphologyToolParams { surah: 1, ayah: 1, position: 1 })
+                    .await
+                    .unwrap(),
+            ),
+            (
+                "quran.family",
+                registry
+                    .family(FamilyToolParams { kind: "token".into(), id: "token:1:1:1".into() })
+                    .await
+                    .unwrap(),
+            ),
+        ] {
+            assert_eq!(result.tool_name, tool);
+            assert!(
+                !result.analysis_sources.is_empty(),
+                "{tool} must attribute its dataset source"
+            );
+        }
     }
 
     #[tokio::test]
