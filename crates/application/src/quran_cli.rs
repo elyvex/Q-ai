@@ -3279,6 +3279,140 @@ fn graph_error_exit(error: &quran_graph::GraphError) -> i32 {
     }
 }
 
+/// Render a [`quran_graph::GraphError`] with its stable `QAI-GRAPH-*` code,
+/// remedy, and next command (never a bare message without the code).
+fn graph_error_output(error: &quran_graph::GraphError) -> CommandOutput {
+    use quran_graph::Diagnostic as _;
+    CommandOutput::err(graph_error_exit(error), error.render_human())
+}
+
+/// Map a read-service failure to the operator surface. Graph errors render
+/// through the `QAI-GRAPH-*` human form; morphology errors carry their
+/// `QAI-MORPH-*` code, so the word-root dataset gate stays a typed exit 5
+/// with `QAI-MORPH-0004` in the message.
+fn graph_api_output(error: &super::quran_graph_api::GraphApiError) -> CommandOutput {
+    use super::quran_graph_api::GraphApiError as E;
+    match error {
+        E::Graph(inner) => graph_error_output(inner),
+        E::Morphology(inner) => {
+            use storage::error::Diagnostic as _;
+            CommandOutput::err(tool_exit(inner), format!("[{}] {inner}", inner.code()))
+        }
+    }
+}
+
+/// Operator-supplied budget overrides for graph reads. `None` keeps the
+/// `QueryBudgets::default()` value; explicit out-of-range values fail
+/// pre-flight (never clamp).
+#[derive(Debug, Clone, Default)]
+pub struct GraphBudgets {
+    /// Max distinct nodes collected per query.
+    pub max_nodes: Option<usize>,
+    /// Max edge relaxations performed per query.
+    pub max_edges: Option<usize>,
+    /// Max paths returned per path query.
+    pub max_paths: Option<usize>,
+    /// Max neighbors expanded per single node visit.
+    pub max_fanout: Option<usize>,
+    /// Wall-clock budget in milliseconds.
+    pub timeout_ms: Option<u64>,
+}
+
+/// Fold per-verb `--hops` plus budget flags into one [`quran_graph::QueryBudgets`].
+fn graph_budgets(hops: usize, flags: &GraphBudgets) -> quran_graph::QueryBudgets {
+    let defaults = quran_graph::QueryBudgets::default();
+    quran_graph::QueryBudgets {
+        max_hops: hops,
+        max_nodes: flags.max_nodes.unwrap_or(defaults.max_nodes),
+        max_edges: flags.max_edges.unwrap_or(defaults.max_edges),
+        max_paths: flags.max_paths.unwrap_or(defaults.max_paths),
+        max_fanout: flags.max_fanout.unwrap_or(defaults.max_fanout),
+        timeout_ms: flags.timeout_ms.unwrap_or(defaults.timeout_ms),
+    }
+}
+
+/// Path search mode selector (`--mode reachability|shortest|paths`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GraphPathMode {
+    /// Two-node reachability check (min-hop proof, never a path render).
+    Reachability,
+    /// Shortest min-hop path between two nodes.
+    Shortest,
+    /// Up-to-K ranked paths between two nodes.
+    Paths,
+}
+
+impl GraphPathMode {
+    /// Parse the `--mode` selector. Unknown spellings are usage errors
+    /// (validated before any I/O).
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw {
+            "reachability" => Some(Self::Reachability),
+            "shortest" => Some(Self::Shortest),
+            "paths" => Some(Self::Paths),
+            _ => None,
+        }
+    }
+
+    /// Mode name for JSON output.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Reachability => "reachability",
+            Self::Shortest => "shortest",
+            Self::Paths => "paths",
+        }
+    }
+}
+
+/// Parse one `--step` (`EDGE[:Kind]`) into a typed pattern step. Unknown
+/// predicates and malformed steps are [`quran_graph::GraphError::PatternRejected`],
+/// never silent skips; the full pattern is re-validated before any I/O.
+fn parse_pattern_step(raw: &str) -> Result<quran_graph::PatternStep, quran_graph::GraphError> {
+    let reject = |detail: String| quran_graph::GraphError::PatternRejected { detail };
+    let (edge, kind) = match raw.split_once(':') {
+        Some((edge, kind)) => (edge, Some(kind)),
+        None => (raw, None),
+    };
+    if edge.is_empty() {
+        return Err(reject(format!("empty edge in pattern step `{raw}`")));
+    }
+    let node_kind = match kind {
+        None => None,
+        Some(name) => Some(match name.to_lowercase().as_str() {
+            "edition" => quran_graph::NodeKind::Edition,
+            "surah" => quran_graph::NodeKind::Surah,
+            "ayah" => quran_graph::NodeKind::Ayah,
+            "token" => quran_graph::NodeKind::Token,
+            "division" => quran_graph::NodeKind::Division,
+            "root" => quran_graph::NodeKind::Root,
+            "lemma" => quran_graph::NodeKind::Lemma,
+            "concept" => quran_graph::NodeKind::Concept,
+            "entity" => quran_graph::NodeKind::Entity,
+            "annotation" => quran_graph::NodeKind::Annotation,
+            _ => {
+                return Err(reject(format!(
+                    "unknown node kind `{name}` in pattern step `{raw}`; \
+                     use edition, surah, ayah, token, division, root, lemma, \
+                     concept, entity, or annotation"
+                )));
+            }
+        }),
+    };
+    Ok(quran_graph::PatternStep { edge: edge.to_string(), node_kind })
+}
+
+/// Append the truncation marker plus the verbatim reason to human output.
+/// Truncation is never masked as an empty list: the marker plus a non-empty
+/// reason always render together.
+fn push_truncation(human: &mut String, truncated: bool, reason: &Option<String>) {
+    if truncated {
+        human.push_str(" (truncated)");
+    }
+    if let Some(detail) = reason {
+        human.push_str(&format!("\nincomplete: {detail}"));
+    }
+}
+
 /// `qai quran graph inspect`: manifest plus node/edge counts, from a
 /// projection file or from the active SQLite projection (`--db`).
 ///
@@ -3379,18 +3513,24 @@ pub async fn cmd_graph_neighbors(
     use_db: bool,
     node: &str,
     hops: usize,
+    budgets: &GraphBudgets,
 ) -> CommandOutput {
     match (file, use_db) {
-        (Some(path), false) => neighbors_graph_file(path, node, hops),
-        (None, true) => neighbors_graph_db(db_path, node, hops).await,
+        (Some(path), false) => neighbors_graph_file(path, node, hops, budgets),
+        (None, true) => neighbors_graph_db(db_path, node, hops, budgets).await,
         _ => CommandOutput::err(exit::USAGE, "specify exactly one of --file or --db".to_string()),
     }
 }
 
 /// File-backed neighbors: the fixture/debug path (unchanged semantics, typed
 /// error mapping).
-fn neighbors_graph_file(file: &str, node: &str, hops: usize) -> CommandOutput {
-    use quran_graph::{AuthzScope, EdgeFilter, GraphStore, QueryBudgets};
+fn neighbors_graph_file(
+    file: &str,
+    node: &str,
+    hops: usize,
+    budgets: &GraphBudgets,
+) -> CommandOutput {
+    use quran_graph::{AuthzScope, EdgeFilter, GraphStore};
     let graph = match read_graph_file(file) {
         Ok(graph) => graph,
         Err(message) => return CommandOutput::err(exit::NOT_FOUND, message),
@@ -3399,25 +3539,28 @@ fn neighbors_graph_file(file: &str, node: &str, hops: usize) -> CommandOutput {
         Ok(store) => store,
         Err(error) => return CommandOutput::err(exit::VALIDATION, error),
     };
-    let budgets = QueryBudgets { max_hops: hops, ..QueryBudgets::default() };
+    let qb = graph_budgets(hops, budgets);
     let cancel = std::sync::atomic::AtomicBool::new(false);
     let scope = AuthzScope::all_visible();
-    match store.neighbors(node, &EdgeFilter::any(), &budgets, &cancel, &scope) {
-        Ok(result) => json_or_err(
-            format!(
-                "neighbors of {node}: {} node(s), {} edge(s){}",
+    match store.neighbors(node, &EdgeFilter::any(), &qb, &cancel, &scope) {
+        Ok(result) => {
+            let mut human = format!(
+                "neighbors of {node}: {} node(s), {} edge(s)",
                 result.nodes.len(),
                 result.edges.len(),
-                if result.truncated { " (truncated)" } else { "" }
-            ),
-            &serde_json::json!({
-                "nodes": result.nodes,
-                "edges": result.edges,
-                "truncated": result.truncated,
-                "incomplete_reason": result.incomplete_reason,
-            }),
-        ),
-        Err(error) => CommandOutput::err(graph_error_exit(&error), error.to_string()),
+            );
+            push_truncation(&mut human, result.truncated, &result.incomplete_reason);
+            json_or_err(
+                human,
+                &serde_json::json!({
+                    "nodes": result.nodes,
+                    "edges": result.edges,
+                    "truncated": result.truncated,
+                    "incomplete_reason": result.incomplete_reason,
+                }),
+            )
+        }
+        Err(error) => graph_error_output(&error),
     }
 }
 
@@ -3428,35 +3571,37 @@ fn neighbors_graph_file(file: &str, node: &str, hops: usize) -> CommandOutput {
 /// hash. Graph records carry refs and hashes only; display text never flows
 /// from graph rows. A hit that no longer resolves fails closed (never a
 /// fabricated quotation).
-async fn neighbors_graph_db(db_path: &str, node: &str, hops: usize) -> CommandOutput {
-    use quran_graph::{AuthzScope, EdgeFilter, GraphStore, QueryBudgets};
+async fn neighbors_graph_db(
+    db_path: &str,
+    node: &str,
+    hops: usize,
+    budgets: &GraphBudgets,
+) -> CommandOutput {
+    use super::quran_graph_api::{GraphApiService, GraphBackend as _, NeighborsArgs, ReadOptions};
     use storage::Database as _;
-    let db = match open_db(db_path).await {
-        Ok(db) => db,
-        Err(error) => return open_error_output(error),
+    let service = match GraphApiService::open(db_path).await {
+        Ok(service) => service,
+        Err(error) => return graph_error_output(&error),
     };
-    let store = match super::quran_graph_store::SqliteGraphStore::open_active(
-        &db,
-        quran_graph::STRUCTURAL_PROJECTION_ID,
-    )
-    .await
+    let output = match service
+        .neighbors(NeighborsArgs {
+            node: node.to_string(),
+            options: ReadOptions {
+                budgets: graph_budgets(hops, budgets),
+                ..ReadOptions::default()
+            },
+        })
+        .await
     {
-        Ok(store) => store,
-        Err(error) => return CommandOutput::err(graph_error_exit(&error), error.to_string()),
+        Ok(output) => output,
+        Err(error) => return graph_api_output(&error),
     };
-    let budgets = QueryBudgets { max_hops: hops, ..QueryBudgets::default() };
-    let cancel = std::sync::atomic::AtomicBool::new(false);
-    let scope = AuthzScope::all_visible();
-    let result = match store.neighbors(node, &EdgeFilter::any(), &budgets, &cancel, &scope) {
-        Ok(result) => result,
-        Err(error) => return CommandOutput::err(graph_error_exit(&error), error.to_string()),
-    };
-    let manifest = store.manifest().clone();
-    let build_row_id = store.projection_row_id().to_string();
-    drop(store);
+    let manifest = service.manifest().clone();
+    let build_row_id = manifest.id.clone();
 
     // Staleness is advisory, never a failure: the manifest pins the
     // generation the projection was built from.
+    let db = service.database();
     let mut uow = match db.write().await {
         Ok(uow) => uow,
         Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
@@ -3471,9 +3616,9 @@ async fn neighbors_graph_db(db_path: &str, node: &str, hops: usize) -> CommandOu
     let stale = active_generation
         .is_some_and(|generation| manifest.corpus_generation != generation.max(0) as u64);
 
-    let reader = super::quran_reader::QuranReaderService::new(Arc::new(db));
+    let reader = super::quran_reader::QuranReaderService::new(db.clone());
     let mut quotations = Vec::new();
-    for hit in &result.nodes {
+    for hit in &output.nodes {
         if hit.kind != quran_graph::NodeKind::Ayah {
             continue;
         }
@@ -3522,12 +3667,12 @@ async fn neighbors_graph_db(db_path: &str, node: &str, hops: usize) -> CommandOu
     }
 
     let mut human = format!(
-        "neighbors of {node}: {} node(s), {} edge(s){}{}",
-        result.nodes.len(),
-        result.edges.len(),
-        if result.truncated { " (truncated)" } else { "" },
+        "neighbors of {node}: {} node(s), {} edge(s){}",
+        output.nodes.len(),
+        output.edges.len(),
         if stale { " (stale projection)" } else { "" }
     );
+    push_truncation(&mut human, output.truncated, &output.incomplete_reason);
     for quotation in &quotations {
         human.push_str(&format!(
             "\n  {} -> {}",
@@ -3535,16 +3680,14 @@ async fn neighbors_graph_db(db_path: &str, node: &str, hops: usize) -> CommandOu
             quotation["reference"].as_str().unwrap_or("?")
         ));
     }
-    if let Some(reason) = &result.incomplete_reason {
-        human.push_str(&format!("\nincomplete: {reason}"));
-    }
     json_or_err(
         human,
         &serde_json::json!({
-            "nodes": result.nodes,
-            "edges": result.edges,
-            "truncated": result.truncated,
-            "incomplete_reason": result.incomplete_reason,
+            "nodes": output.nodes,
+            "edges": output.edges,
+            "truncated": output.truncated,
+            "incomplete_reason": output.incomplete_reason,
+            "explanation": output.explanation,
             "quotations": quotations,
             "manifest": {
                 "projection_id": manifest.projection_id,
@@ -3568,9 +3711,113 @@ fn parse_ayah_stable_id(stable_id: &str) -> Option<(u16, u32)> {
     Some((surah, ayah))
 }
 
-/// `qai quran graph path` (bounded, deterministic).
-pub async fn cmd_graph_path(file: &str, from: &str, to: &str, hops: usize) -> CommandOutput {
-    use quran_graph::{AuthzScope, GraphStore, QueryBudgets};
+/// `qai quran graph path`: reachability, shortest, or up-to-K paths between
+/// two nodes (budgeted, deterministic), from a projection file or from the
+/// active SQLite projection (`--db`).
+///
+/// Exactly one of `--file` or `--db` is required; both absent or both
+/// present is a usage error.
+#[allow(clippy::too_many_arguments)]
+pub async fn cmd_graph_path(
+    db_path: &str,
+    file: Option<&str>,
+    use_db: bool,
+    from: &str,
+    to: &str,
+    hops: usize,
+    mode: &str,
+    k: Option<usize>,
+    budgets: &GraphBudgets,
+) -> CommandOutput {
+    let mode = match GraphPathMode::parse(mode) {
+        Some(mode) => mode,
+        None => {
+            return CommandOutput::err(
+                exit::USAGE,
+                format!("unknown path mode `{mode}`; use reachability, shortest, or paths"),
+            );
+        }
+    };
+    match (file, use_db) {
+        (Some(path), false) => path_file(path, from, to, hops, mode, k, budgets),
+        (None, true) => path_db(db_path, from, to, hops, mode, k, budgets).await,
+        _ => CommandOutput::err(exit::USAGE, "specify exactly one of --file or --db".to_string()),
+    }
+}
+
+/// SQLite-backed path search through the read service.
+async fn path_db(
+    db_path: &str,
+    from: &str,
+    to: &str,
+    hops: usize,
+    mode: GraphPathMode,
+    k: Option<usize>,
+    budgets: &GraphBudgets,
+) -> CommandOutput {
+    use super::quran_graph_api::{GraphApiService, GraphBackend as _, PathArgs, PathsArgs};
+    let service = match GraphApiService::open(db_path).await {
+        Ok(service) => service,
+        Err(error) => return graph_error_output(&error),
+    };
+    let qb = graph_budgets(hops, budgets);
+    let options = || super::quran_graph_api::ReadOptions {
+        budgets: qb.clone(),
+        ..super::quran_graph_api::ReadOptions::default()
+    };
+    match mode {
+        GraphPathMode::Reachability => match service
+            .reachability(PathArgs {
+                from: from.to_string(),
+                to: to.to_string(),
+                options: options(),
+            })
+            .await
+        {
+            Ok(output) => render_reachability(from, to, &output),
+            Err(error) => graph_api_output(&error),
+        },
+        GraphPathMode::Shortest => match service
+            .shortest_path(PathArgs {
+                from: from.to_string(),
+                to: to.to_string(),
+                options: options(),
+            })
+            .await
+        {
+            Ok(output) => render_shortest(from, to, &output),
+            Err(error) => graph_api_output(&error),
+        },
+        GraphPathMode::Paths => {
+            let k = k.unwrap_or(qb.max_paths);
+            match service
+                .paths(PathsArgs {
+                    from: from.to_string(),
+                    to: to.to_string(),
+                    k,
+                    options: options(),
+                })
+                .await
+            {
+                Ok(output) => render_paths(from, to, k, &output),
+                Err(error) => graph_api_output(&error),
+            }
+        }
+    }
+}
+
+/// File-backed path search: the fixture/debug path over the staged
+/// reference backend with the same mode shapes as `--db`.
+fn path_file(
+    file: &str,
+    from: &str,
+    to: &str,
+    hops: usize,
+    mode: GraphPathMode,
+    k: Option<usize>,
+    budgets: &GraphBudgets,
+) -> CommandOutput {
+    use quran_graph::AuthzScope;
     let graph = match read_graph_file(file) {
         Ok(graph) => graph,
         Err(message) => return CommandOutput::err(exit::NOT_FOUND, message),
@@ -3579,50 +3826,412 @@ pub async fn cmd_graph_path(file: &str, from: &str, to: &str, hops: usize) -> Co
         Ok(store) => store,
         Err(error) => return CommandOutput::err(exit::VALIDATION, error),
     };
-    let budgets = QueryBudgets { max_hops: hops, ..QueryBudgets::default() };
+    let qb = graph_budgets(hops, budgets);
     let cancel = std::sync::atomic::AtomicBool::new(false);
     let scope = AuthzScope::all_visible();
-    match store.bounded_paths(from, to, hops, &budgets, &cancel, &scope) {
-        Ok(result) => json_or_err(
-            format!(
-                "paths {from} -> {to}: {} ({} hop budget){}",
-                result.paths.len(),
-                hops,
-                if result.truncated { " (truncated)" } else { "" }
-            ),
-            &serde_json::json!({
-                "paths": result.paths,
-                "truncated": result.truncated,
-                "incomplete_reason": result.incomplete_reason,
-            }),
-        ),
-        Err(error) => CommandOutput::err(exit::NOT_FOUND, error.to_string()),
+    match mode {
+        GraphPathMode::Reachability => {
+            match quran_graph::traverse::min_hops(&store, from, to, &qb, &cancel, &scope) {
+                Ok(outcome) => {
+                    let (reachable, hops) = if outcome.truncated {
+                        (None, None)
+                    } else {
+                        (Some(outcome.hops.is_some()), outcome.hops)
+                    };
+                    let output = super::quran_graph_api::ReachabilityOutput {
+                        reachable,
+                        hops,
+                        explanation: explain_file_read(
+                            &graph.manifest,
+                            &store,
+                            Some(from.to_string()),
+                            Some(to.to_string()),
+                            &[],
+                            &[],
+                            &[],
+                            &qb,
+                            outcome.truncated,
+                            outcome.incomplete_reason.clone(),
+                        ),
+                    };
+                    render_reachability(from, to, &output)
+                }
+                Err(error) => graph_error_output(&error),
+            }
+        }
+        GraphPathMode::Shortest | GraphPathMode::Paths => {
+            let k = if mode == GraphPathMode::Shortest { 1 } else { k.unwrap_or(qb.max_paths) };
+            if let Err(error) = super::quran_graph_api::validate_k(k, &qb) {
+                return graph_error_output(&error);
+            }
+            match quran_graph::traverse::up_to_k_paths(&store, from, to, k, &qb, &cancel, &scope) {
+                Ok(result) => {
+                    let node_ids: Vec<String> = result
+                        .paths
+                        .first()
+                        .map(|found| found.node_ids.clone())
+                        .unwrap_or_default();
+                    let edges: Vec<quran_graph::GraphEdge> =
+                        result.paths.first().map(|found| found.edges.clone()).unwrap_or_default();
+                    if mode == GraphPathMode::Shortest {
+                        let output = super::quran_graph_api::ShortestOutput {
+                            path: result.paths.first().cloned(),
+                            explanation: explain_file_read(
+                                &graph.manifest,
+                                &store,
+                                Some(from.to_string()),
+                                Some(to.to_string()),
+                                &node_ids,
+                                &edges,
+                                &result.paths,
+                                &qb,
+                                result.truncated,
+                                result.incomplete_reason.clone(),
+                            ),
+                        };
+                        render_shortest(from, to, &output)
+                    } else {
+                        let output = super::quran_graph_api::PathsOutput {
+                            paths: result.paths.clone(),
+                            truncated: result.truncated,
+                            incomplete_reason: result.incomplete_reason.clone(),
+                            explanation: explain_file_read(
+                                &graph.manifest,
+                                &store,
+                                Some(from.to_string()),
+                                Some(to.to_string()),
+                                &[],
+                                &[],
+                                &result.paths,
+                                &qb,
+                                result.truncated,
+                                result.incomplete_reason.clone(),
+                            ),
+                        };
+                        render_paths(from, to, k, &output)
+                    }
+                }
+                Err(error) => graph_error_output(&error),
+            }
+        }
     }
 }
 
-/// `qai quran graph root-family`: lexicon-gated ranked ayahs.
+/// Explain a file-backed read with the same payload contract as the
+/// service: snapshot from the file manifest, per-edge provenance against
+/// the staged store (no authority table, so asserted edges report the
+/// gap), and the effective direction-agnostic filter for path modes.
+#[allow(clippy::too_many_arguments)]
+fn explain_file_read(
+    manifest: &quran_graph::ProjectionManifest,
+    store: &quran_graph::MemGraphStore,
+    start: Option<String>,
+    end: Option<String>,
+    nodes: &[String],
+    edges: &[quran_graph::GraphEdge],
+    paths: &[quran_graph::GraphPath],
+    budgets: &quran_graph::QueryBudgets,
+    truncated: bool,
+    incomplete_reason: Option<String>,
+) -> super::quran_graph_api::Explanation {
+    use super::quran_graph_api as api;
+    let lookup = |edge: &quran_graph::GraphEdge| {
+        edge.assertion_id.as_deref().and_then(|id| store.get_assertion(id))
+    };
+    api::Explanation {
+        start,
+        end,
+        nodes: nodes.to_vec(),
+        edges: edges.iter().map(|edge| api::explain_edge_with(edge, lookup(edge))).collect(),
+        paths: paths
+            .iter()
+            .map(|path| api::PathExplanation {
+                node_ids: path.node_ids.clone(),
+                edges: path
+                    .edges
+                    .iter()
+                    .map(|edge| api::explain_edge_with(edge, lookup(edge)))
+                    .collect(),
+            })
+            .collect(),
+        applied_filters: api::AppliedFilters {
+            budgets: budgets.clone(),
+            edge_types: None,
+            direction: "both".to_string(),
+            authz: api::describe_authz(&quran_graph::AuthzScope::all_visible()),
+        },
+        snapshot: api::SnapshotIdentity::from(manifest),
+        truncated,
+        incomplete_reason,
+        duration_ms: 0,
+    }
+}
+
+fn render_reachability(
+    from: &str,
+    to: &str,
+    output: &super::quran_graph_api::ReachabilityOutput,
+) -> CommandOutput {
+    let status = match (output.reachable, output.explanation.truncated) {
+        (Some(true), _) => format!("yes ({} hop(s))", output.hops.unwrap_or(0)),
+        (Some(false), _) => "no (complete search)".to_string(),
+        (None, _) => "unknown (truncated)".to_string(),
+    };
+    let mut human = format!("reachable {from} -> {to}: {status}");
+    push_truncation(
+        &mut human,
+        output.explanation.truncated,
+        &output.explanation.incomplete_reason,
+    );
+    json_or_err(
+        human,
+        &serde_json::json!({
+            "mode": "reachability",
+            "from": from,
+            "to": to,
+            "reachable": output.reachable,
+            "hops": output.hops,
+            "truncated": output.explanation.truncated,
+            "incomplete_reason": output.explanation.incomplete_reason,
+            "explanation": output.explanation,
+        }),
+    )
+}
+
+fn render_shortest(
+    from: &str,
+    to: &str,
+    output: &super::quran_graph_api::ShortestOutput,
+) -> CommandOutput {
+    let status = match (&output.path, output.explanation.truncated) {
+        (Some(path), _) => {
+            format!("{} hop(s): {}", path.edges.len(), path.node_ids.join(" -> "))
+        }
+        (None, false) => "no path (complete search)".to_string(),
+        (None, true) => "unknown (truncated)".to_string(),
+    };
+    let mut human = format!("shortest {from} -> {to}: {status}");
+    push_truncation(
+        &mut human,
+        output.explanation.truncated,
+        &output.explanation.incomplete_reason,
+    );
+    json_or_err(
+        human,
+        &serde_json::json!({
+            "mode": "shortest",
+            "from": from,
+            "to": to,
+            "path": output.path,
+            "no_path_proven": output.no_path_proven(),
+            "truncated": output.explanation.truncated,
+            "incomplete_reason": output.explanation.incomplete_reason,
+            "explanation": output.explanation,
+        }),
+    )
+}
+
+fn render_paths(
+    from: &str,
+    to: &str,
+    k: usize,
+    output: &super::quran_graph_api::PathsOutput,
+) -> CommandOutput {
+    let mut human = format!(
+        "paths {from} -> {to}: {} of up to {k} ({} hop budget)",
+        output.paths.len(),
+        output.explanation.applied_filters.budgets.max_hops,
+    );
+    push_truncation(&mut human, output.truncated, &output.incomplete_reason);
+    for (index, path) in output.paths.iter().enumerate() {
+        human.push_str(&format!("\n  {}. {}", index + 1, path.node_ids.join(" -> ")));
+    }
+    json_or_err(
+        human,
+        &serde_json::json!({
+            "mode": "paths",
+            "from": from,
+            "to": to,
+            "k": k,
+            "paths": output.paths,
+            "no_path_proven": output.no_path_proven(),
+            "truncated": output.truncated,
+            "incomplete_reason": output.incomplete_reason,
+            "explanation": output.explanation,
+        }),
+    )
+}
+
+/// `qai quran graph subgraph`: bounded multi-seed subgraph over the active
+/// SQLite projection (unknown seeds are skipped; all-unknown is
+/// complete-empty, never an error).
+pub async fn cmd_graph_subgraph(
+    db_path: &str,
+    seeds: &[String],
+    hops: usize,
+    budgets: &GraphBudgets,
+) -> CommandOutput {
+    use super::quran_graph_api::{GraphApiService, GraphBackend as _, ReadOptions, SubgraphArgs};
+    if seeds.is_empty() {
+        return CommandOutput::err(exit::USAGE, "provide at least one --seed".to_string());
+    }
+    let service = match GraphApiService::open(db_path).await {
+        Ok(service) => service,
+        Err(error) => return graph_error_output(&error),
+    };
+    let output = match service
+        .subgraph(SubgraphArgs {
+            seeds: seeds.to_vec(),
+            options: ReadOptions {
+                budgets: graph_budgets(hops, budgets),
+                ..ReadOptions::default()
+            },
+        })
+        .await
+    {
+        Ok(output) => output,
+        Err(error) => return graph_api_output(&error),
+    };
+    let mut human = format!(
+        "subgraph of {} seed(s): {} node(s), {} edge(s)",
+        seeds.len(),
+        output.nodes.len(),
+        output.edges.len(),
+    );
+    push_truncation(&mut human, output.truncated, &output.incomplete_reason);
+    json_or_err(
+        human,
+        &serde_json::json!({
+            "seeds": seeds,
+            "nodes": output.nodes,
+            "edges": output.edges,
+            "truncated": output.truncated,
+            "incomplete_reason": output.incomplete_reason,
+            "explanation": output.explanation,
+        }),
+    )
+}
+
+/// `qai quran graph pattern`: typed pattern query from seeds over the
+/// active SQLite projection. Steps are `EDGE[:Kind]`; unknown predicates
+/// and malformed steps are validation failures, never silent skips.
+pub async fn cmd_graph_pattern(
+    db_path: &str,
+    seeds: &[String],
+    steps: &[String],
+    hops: usize,
+    budgets: &GraphBudgets,
+) -> CommandOutput {
+    use super::quran_graph_api::{GraphApiService, GraphBackend as _, PatternArgs, ReadOptions};
+    if seeds.is_empty() {
+        return CommandOutput::err(exit::USAGE, "provide at least one --seed".to_string());
+    }
+    if steps.is_empty() {
+        return CommandOutput::err(exit::USAGE, "provide at least one --step".to_string());
+    }
+    let mut typed = Vec::with_capacity(steps.len());
+    for raw in steps {
+        match parse_pattern_step(raw) {
+            Ok(step) => typed.push(step),
+            Err(error) => return graph_error_output(&error),
+        }
+    }
+    let pattern = quran_graph::Pattern::new(typed);
+    if let Err(error) = quran_graph::validate_pattern(&pattern) {
+        return graph_error_output(&error);
+    }
+    let service = match GraphApiService::open(db_path).await {
+        Ok(service) => service,
+        Err(error) => return graph_error_output(&error),
+    };
+    let output = match service
+        .pattern(PatternArgs {
+            pattern,
+            seeds: seeds.to_vec(),
+            options: ReadOptions {
+                budgets: graph_budgets(hops, budgets),
+                ..ReadOptions::default()
+            },
+        })
+        .await
+    {
+        Ok(output) => output,
+        Err(error) => return graph_api_output(&error),
+    };
+    let mut human = format!(
+        "pattern [{}] from {} seed(s): {} node(s), {} edge(s)",
+        steps.join(", "),
+        seeds.len(),
+        output.nodes.len(),
+        output.edges.len(),
+    );
+    push_truncation(&mut human, output.truncated, &output.incomplete_reason);
+    json_or_err(
+        human,
+        &serde_json::json!({
+            "steps": steps,
+            "seeds": seeds,
+            "nodes": output.nodes,
+            "edges": output.edges,
+            "truncated": output.truncated,
+            "incomplete_reason": output.incomplete_reason,
+            "explanation": output.explanation,
+        }),
+    )
+}
+
+/// `qai quran graph root-family`: lexicon-gated ranked ayahs (no active
+/// dataset is the typed `QAI-MORPH-0004` unavailable error, never an empty
+/// family). Ranking is shared with the read service, so both surfaces agree.
 pub async fn cmd_graph_root_family(db_path: &str, root: &str, limit: usize) -> CommandOutput {
     use super::quran_morphology::root_search;
+    let start = std::time::Instant::now();
     let db = match open_db(db_path).await {
         Ok(db) => db,
         Err(error) => return open_error_output(error),
     };
     match root_search(&db, root).await {
-        Ok((dataset, mut occurrences)) => {
-            occurrences.sort_by_key(|o| (o.surah, o.ayah, o.position));
-            occurrences.dedup_by_key(|o| (o.surah, o.ayah));
-            occurrences.truncate(limit.max(1));
+        Ok((dataset, occurrences)) => {
+            let (ayahs, cap) = super::quran_graph_api::rank_family_ayahs(occurrences, limit);
+            let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
             json_or_err(
-                format!("root family {root}: {} ranked ayah(s) in {dataset}", occurrences.len()),
-                &serde_json::json!({"dataset": dataset, "ayahs": occurrences}),
+                format!("root family {root}: {} ranked ayah(s) in {dataset}", ayahs.len()),
+                &serde_json::json!({
+                    "dataset": dataset,
+                    "ayahs": ayahs,
+                    "limit": cap,
+                    "duration_ms": duration_ms,
+                }),
             )
         }
-        Err(error) => CommandOutput::err(tool_exit(&error), error.to_string()),
+        Err(error) => {
+            use storage::error::Diagnostic as _;
+            CommandOutput::err(tool_exit(&error), format!("[{}] {error}", error.code()))
+        }
     }
 }
 
-/// `qai quran graph export`: Graph JSON with identities + truncation flags.
-pub async fn cmd_graph_export(file: &str, out: Option<&str>) -> CommandOutput {
+/// `qai quran graph export`: Graph JSON with identities + truncation flags,
+/// from a projection file or from the active SQLite projection (`--db`,
+/// policy-filtered so only effective assertions for kept edges ship).
+///
+/// Exactly one of `--file` or `--db` is required; both absent or both
+/// present is a usage error.
+pub async fn cmd_graph_export(
+    db_path: &str,
+    file: Option<&str>,
+    use_db: bool,
+    out: Option<&str>,
+) -> CommandOutput {
+    match (file, use_db) {
+        (Some(path), false) => export_graph_file(path, out),
+        (None, true) => export_graph_db(db_path, out).await,
+        _ => CommandOutput::err(exit::USAGE, "specify exactly one of --file or --db".to_string()),
+    }
+}
+
+/// File-backed export: the fixture/debug path (unchanged semantics).
+fn export_graph_file(file: &str, out: Option<&str>) -> CommandOutput {
     use quran_graph::export_json;
     let graph = match read_graph_file(file) {
         Ok(graph) => graph,
@@ -3640,6 +4249,52 @@ pub async fn cmd_graph_export(file: &str, out: Option<&str>) -> CommandOutput {
         None => {
             CommandOutput::ok(format!("exported {} nodes as Graph JSON", graph.nodes.len()), json)
         }
+    }
+}
+
+/// SQLite-backed export over the active structural projection: the full
+/// pinned sets through the pre-serialization policy filter, serialized
+/// with the complete notice (bounded reads with truncation travel through
+/// subgraph/pattern exports in plan 04-05 surfaces).
+async fn export_graph_db(db_path: &str, out: Option<&str>) -> CommandOutput {
+    use super::quran_graph_annotations::visible_export_sets;
+    use quran_graph::{ExportNotice, export_json_with_notice};
+    let service = match super::quran_graph_api::GraphApiService::open(db_path).await {
+        Ok(service) => service,
+        Err(error) => return graph_error_output(&error),
+    };
+    let (nodes, edges, assertions) = service.export_sets();
+    let (nodes, edges, traveling) = visible_export_sets(&nodes, &edges, &assertions);
+    let manifest = service.manifest().clone();
+    let json =
+        export_json_with_notice(&nodes, &edges, &traveling, &manifest, &ExportNotice::complete());
+    match out {
+        Some(path) => {
+            let text = serde_json::to_string_pretty(&json).unwrap_or_default();
+            if let Err(error) = std::fs::write(path, text) {
+                return CommandOutput::err(exit::INTERNAL, format!("write {path}: {error}"));
+            }
+            CommandOutput::ok(
+                format!(
+                    "exported {} nodes, {} edges, {} assertions to {path} (projection {})",
+                    nodes.len(),
+                    edges.len(),
+                    traveling.len(),
+                    manifest.projection_id,
+                ),
+                json,
+            )
+        }
+        None => CommandOutput::ok(
+            format!(
+                "exported {} nodes, {} edges, {} assertions as Graph JSON (projection {})",
+                nodes.len(),
+                edges.len(),
+                traveling.len(),
+                manifest.projection_id,
+            ),
+            json,
+        ),
     }
 }
 

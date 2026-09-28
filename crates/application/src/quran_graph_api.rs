@@ -465,35 +465,31 @@ impl GraphApiService {
         self.store.manifest()
     }
 
+    /// The read pool behind this service (for reader-resolved quotations and
+    /// staleness probes that travel beside read results).
+    pub fn database(&self) -> &Arc<SqliteDatabase> {
+        &self.db
+    }
+
+    /// The full pinned node/edge/assertion sets for export surfaces.
+    /// Deterministic order (stable-ID, then assertion-ID).
+    pub fn export_sets(&self) -> (Vec<quran_graph::GraphNode>, Vec<GraphEdge>, Vec<Assertion>) {
+        self.store.export_sets()
+    }
+
     /// Look up an authority record by ID for provenance rendering.
     fn assertion(&self, id: &str) -> Option<&Assertion> {
         self.store.get_assertion(id)
     }
 
     fn explain_edge(&self, edge: &GraphEdge) -> EdgeExplanation {
-        let provenance = match edge.assertion_id.as_deref() {
-            None => ProvenanceExplanation::Structural {
-                input_version: edge
-                    .attrs
-                    .get("input_version")
-                    .and_then(serde_json::Value::as_str)
-                    .map(str::to_string),
-            },
-            Some(id) => match self.assertion(id) {
-                Some(record) => ProvenanceExplanation::Asserted {
-                    id: id.to_string(),
-                    reviewer: record.reviewer.clone(),
-                    decision: decision_name(record.decision),
-                    decided_at: record.decided_at.clone(),
-                },
-                None => ProvenanceExplanation::UnknownAssertion { id: id.to_string() },
-            },
-        };
-        EdgeExplanation {
-            src: edge.src.clone(),
-            edge: edge.edge.clone(),
-            dst: edge.dst.clone(),
-            provenance,
+        let assertion_id = edge.assertion_id.as_deref();
+        let assertion = assertion_id.and_then(|id| self.assertion(id));
+        // Structural edges pass `None`; asserted edges resolve (or report
+        // the gap when the authority row is missing).
+        match (assertion_id, assertion) {
+            (None, _) => explain_edge_with(edge, None),
+            (Some(_), record) => explain_edge_with(edge, record),
         }
     }
 
@@ -539,6 +535,92 @@ impl GraphApiService {
             duration_ms,
         }
     }
+}
+
+/// Authz scope descriptor: shape only, never assertion IDs. Shared with
+/// file-backed CLI reads so both surfaces name scopes identically.
+pub fn describe_authz(authz: &AuthzScope) -> String {
+    authz_descriptor(authz)
+}
+
+/// Expansion-direction descriptor shared with file-backed CLI reads.
+pub fn describe_direction(filter: &EdgeFilter) -> String {
+    direction_name(filter)
+}
+
+/// Explain one edge against an already-resolved authority record (`None`
+/// for structural edges or file-backed reads without an authority table).
+/// Unknown IDs (a `Some` assertion ID with no record) are reported
+/// explicitly, never hidden and never invented.
+pub fn explain_edge_with(edge: &GraphEdge, assertion: Option<&Assertion>) -> EdgeExplanation {
+    let provenance = match edge.assertion_id.as_deref() {
+        None => ProvenanceExplanation::Structural {
+            input_version: edge
+                .attrs
+                .get("input_version")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string),
+        },
+        Some(id) => match assertion {
+            Some(record) => ProvenanceExplanation::Asserted {
+                id: id.to_string(),
+                reviewer: record.reviewer.clone(),
+                decision: decision_name(record.decision),
+                decided_at: record.decided_at.clone(),
+            },
+            None => ProvenanceExplanation::UnknownAssertion { id: id.to_string() },
+        },
+    };
+    EdgeExplanation {
+        src: edge.src.clone(),
+        edge: edge.edge.clone(),
+        dst: edge.dst.clone(),
+        provenance,
+    }
+}
+
+/// Validate a requested up-to-K count against the path budget before any
+/// I/O: K beyond `max_paths` is a pre-flight error (T-04-07), never a
+/// silent cap. Shared by the service and file-backed CLI reads.
+///
+/// # Errors
+///
+/// Returns [`GraphError::BudgetExceeded`] when `k` is zero or exceeds
+/// `budgets.max_paths`.
+pub fn validate_k(k: usize, budgets: &QueryBudgets) -> Result<(), GraphError> {
+    if k == 0 {
+        return Err(GraphError::BudgetExceeded { detail: "k must be at least 1".to_string() });
+    }
+    if k > budgets.max_paths {
+        return Err(GraphError::BudgetExceeded {
+            detail: format!(
+                "k {} exceeds max_paths {}; raise max_paths explicitly or request fewer paths",
+                k, budgets.max_paths
+            ),
+        });
+    }
+    Ok(())
+}
+
+/// Rank root occurrences into deduplicated ayahs: sorted by
+/// `(surah, ayah, position)`, one entry per ayah, capped at `limit`
+/// (clamped to `>= 1`). The single implementation behind the service and
+/// the CLI verb, so both surfaces rank identically.
+///
+/// Returns the ranked ayahs plus the applied cap.
+pub fn rank_family_ayahs(
+    mut occurrences: Vec<quran_morphology::RootOccurrence>,
+    limit: usize,
+) -> (Vec<RankedAyah>, usize) {
+    let cap = limit.max(1);
+    occurrences.sort_by_key(|hit| (hit.surah, hit.ayah, hit.position));
+    occurrences.dedup_by_key(|hit| (hit.surah, hit.ayah));
+    occurrences.truncate(cap);
+    let ayahs = occurrences
+        .into_iter()
+        .map(|hit| RankedAyah { surah: hit.surah, ayah: hit.ayah, position: hit.position })
+        .collect();
+    (ayahs, cap)
 }
 
 fn decision_name(decision: quran_graph::AssertionDecision) -> String {
@@ -678,23 +760,10 @@ impl GraphBackend for GraphApiService {
     async fn paths(&self, args: PathsArgs) -> Result<PathsOutput, GraphApiError> {
         let start = Instant::now();
         args.options.budgets.check()?;
-        if args.k == 0 {
-            return Err(
-                GraphError::BudgetExceeded { detail: "k must be at least 1".to_string() }.into()
-            );
-        }
         // Requesting more paths than the budget allows is a pre-flight
         // error (T-04-07), never a silent cap: the caller must either raise
         // max_paths explicitly or accept fewer paths.
-        if args.k > args.options.budgets.max_paths {
-            return Err(GraphError::BudgetExceeded {
-                detail: format!(
-                    "k {} exceeds max_paths {}; raise max_paths explicitly or request fewer paths",
-                    args.k, args.options.budgets.max_paths
-                ),
-            }
-            .into());
-        }
+        validate_k(args.k, &args.options.budgets)?;
         let result = quran_graph::traverse::up_to_k_paths(
             &self.store,
             &args.from,
@@ -796,19 +865,13 @@ impl GraphBackend for GraphApiService {
         // The same service the CLI verb calls, so both surfaces resolve
         // through the active-dataset gate with the typed unavailable error
         // (never heuristics, never an empty family).
-        let (dataset, mut occurrences) =
-            quran_morphology::root_search(&self.db, &args.root).await?;
-        occurrences.sort_by_key(|hit| (hit.surah, hit.ayah, hit.position));
-        occurrences.dedup_by_key(|hit| (hit.surah, hit.ayah));
-        occurrences.truncate(args.limit.max(1));
+        let (dataset, occurrences) = quran_morphology::root_search(&self.db, &args.root).await?;
+        let (ayahs, cap) = rank_family_ayahs(occurrences, args.limit);
         Ok(RootFamilyOutput {
             root: args.root,
             dataset,
-            ayahs: occurrences
-                .into_iter()
-                .map(|hit| RankedAyah { surah: hit.surah, ayah: hit.ayah, position: hit.position })
-                .collect(),
-            limit: args.limit.max(1),
+            ayahs,
+            limit: cap,
             duration_ms: elapsed_ms(start),
         })
     }

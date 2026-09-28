@@ -87,6 +87,10 @@ fn quran_graph_snapshots() {
     assert!(doc["nodes"].as_array().is_some_and(|nodes| !nodes.is_empty()), "{doc}");
     assert!(doc["edges"].as_array().is_some_and(|edges| !edges.is_empty()), "{doc}");
 
+    // Read companion segment (D-09/D-11/D-14): neighbors, all three path
+    // modes, subgraph, pattern, export, and one verbatim truncation.
+    guard.run_segments(&["tests/quran/graph_s2.trycmd"]);
+
     // Inspect reads the manifest back from SQLite with its generation stamp.
     let out = qai_out(guard.dir.path(), &["quran", "graph", "inspect", "--db"]);
     assert!(out.status.success(), "inspect --db: {}", String::from_utf8_lossy(&out.stderr));
@@ -128,11 +132,199 @@ fn quran_graph_snapshots() {
     let out =
         qai_out(guard.dir.path(), &["quran", "graph", "neighbors", "--db", "--node", "ayah:9:99"]);
     assert_eq!(out.status.code(), Some(5), "unknown node is not found");
+    let human = String::from_utf8_lossy(&out.stdout);
+    assert!(human.contains("QAI-GRAPH-0004"), "typed code renders: {human}");
     let out = qai_out(
         guard.dir.path(),
         &["quran", "graph", "neighbors", "--db", "--node", "ayah:1:1", "--hops", "0"],
     );
     assert_eq!(out.status.code(), Some(3), "out-of-range hops are a validation error");
+
+    // All three path modes resolve the active projection with per-edge
+    // provenance in JSON.
+    let out = qai_out(
+        guard.dir.path(),
+        &[
+            "quran",
+            "graph",
+            "path",
+            "--db",
+            "--mode",
+            "reachability",
+            "--from",
+            "ayah:1:1",
+            "--to",
+            "ayah:1:3",
+            "--json",
+        ],
+    );
+    assert!(out.status.success(), "reachability: {}", String::from_utf8_lossy(&out.stderr));
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).expect("one JSON document");
+    assert_eq!(doc["mode"], "reachability", "{doc}");
+    assert_eq!(doc["reachable"], true, "{doc}");
+    assert_eq!(doc["hops"], 2, "{doc}");
+    assert_eq!(doc["truncated"], false, "{doc}");
+    assert_eq!(doc["explanation"]["snapshot"]["projection_id"], "quran-structural-v1", "{doc}");
+
+    let out = qai_out(
+        guard.dir.path(),
+        &[
+            "quran", "graph", "path", "--db", "--mode", "shortest", "--from", "ayah:1:1", "--to",
+            "ayah:1:3", "--json",
+        ],
+    );
+    assert!(out.status.success(), "shortest: {}", String::from_utf8_lossy(&out.stderr));
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).expect("one JSON document");
+    assert_eq!(doc["mode"], "shortest", "{doc}");
+    assert_eq!(
+        doc["path"]["node_ids"],
+        serde_json::json!(["ayah:1:1", "surah:1", "ayah:1:3"]),
+        "{doc}"
+    );
+    assert_eq!(doc["no_path_proven"], false, "{doc}");
+    let edges = doc["explanation"]["paths"][0]["edges"].as_array().cloned().unwrap_or_default();
+    assert_eq!(edges.len(), 2, "every traversed edge is explained: {doc}");
+    for edge in &edges {
+        assert_eq!(edge["provenance"]["kind"], "structural", "{edge}");
+        assert!(edge["provenance"]["input_version"].is_string(), "{edge}");
+    }
+
+    let out = qai_out(
+        guard.dir.path(),
+        &[
+            "quran",
+            "graph",
+            "path",
+            "--db",
+            "--mode",
+            "paths",
+            "--paths",
+            "3",
+            "--from",
+            "token:1:1:1",
+            "--to",
+            "token:1:1:3",
+            "--json",
+        ],
+    );
+    assert!(out.status.success(), "up-to-K: {}", String::from_utf8_lossy(&out.stderr));
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).expect("one JSON document");
+    assert_eq!(doc["paths"].as_array().map(Vec::len), Some(3), "{doc}");
+    assert_eq!(doc["truncated"], false, "{doc}");
+
+    // Unknown path endpoints are not-found; K beyond max-paths and unknown
+    // modes fail before any I/O.
+    let out = qai_out(
+        guard.dir.path(),
+        &[
+            "quran",
+            "graph",
+            "path",
+            "--db",
+            "--mode",
+            "shortest",
+            "--from",
+            "ayah:1:1",
+            "--to",
+            "ayah:9:99",
+        ],
+    );
+    assert_eq!(out.status.code(), Some(5), "unknown path endpoint is not found");
+    let out = qai_out(
+        guard.dir.path(),
+        &[
+            "quran", "graph", "path", "--db", "--mode", "paths", "--paths", "11", "--from",
+            "ayah:1:1", "--to", "ayah:1:2",
+        ],
+    );
+    assert_eq!(out.status.code(), Some(3), "K beyond max-paths is a pre-flight error");
+    let out = qai_out(
+        guard.dir.path(),
+        &["quran", "graph", "path", "--db", "--mode", "bogus", "--from", "a", "--to", "b"],
+    );
+    assert_eq!(out.status.code(), Some(2), "unknown mode is a usage error");
+
+    // Subgraph plus pattern resolve the active projection with budgets from
+    // flags; unknown predicates are validation failures.
+    let out =
+        qai_out(guard.dir.path(), &["quran", "graph", "subgraph", "--seed", "ayah:1:1", "--json"]);
+    assert!(out.status.success(), "subgraph: {}", String::from_utf8_lossy(&out.stderr));
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).expect("one JSON document");
+    assert!(!doc["nodes"].as_array().cloned().unwrap_or_default().is_empty(), "{doc}");
+    assert!(!doc["edges"].as_array().cloned().unwrap_or_default().is_empty(), "{doc}");
+    assert_eq!(doc["truncated"], false, "{doc}");
+    assert_eq!(doc["explanation"]["snapshot"]["corpus_generation"], 1, "{doc}");
+    let out = qai_out(
+        guard.dir.path(),
+        &["quran", "graph", "subgraph", "--seed", "ayah:1:1", "--hops", "0"],
+    );
+    assert_eq!(out.status.code(), Some(3), "out-of-range subgraph hops are validation");
+    let out = qai_out(guard.dir.path(), &["quran", "graph", "subgraph"]);
+    assert_eq!(out.status.code(), Some(2), "missing seeds are a usage error");
+
+    let out = qai_out(
+        guard.dir.path(),
+        &["quran", "graph", "pattern", "--seed", "ayah:1:1", "--step", "NEXT", "--json"],
+    );
+    assert!(out.status.success(), "pattern: {}", String::from_utf8_lossy(&out.stderr));
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).expect("one JSON document");
+    assert!(
+        doc["nodes"]
+            .as_array()
+            .is_some_and(|nodes| { nodes.iter().any(|node| node["stable_id"] == "ayah:1:2") }),
+        "NEXT reaches ayah:1:2: {doc}"
+    );
+    let out = qai_out(
+        guard.dir.path(),
+        &["quran", "graph", "pattern", "--seed", "ayah:1:1", "--step", "PRECEDES"],
+    );
+    assert_eq!(out.status.code(), Some(3), "unknown pattern edge is a validation error");
+    let out = qai_out(
+        guard.dir.path(),
+        &["quran", "graph", "pattern", "--seed", "ayah:1:1", "--step", "NEXT:Nope"],
+    );
+    assert_eq!(out.status.code(), Some(3), "unknown pattern kind is a validation error");
+
+    // Truncated reads carry the flag plus the verbatim reason in JSON, never
+    // an empty list masquerading as absence.
+    let out = qai_out(
+        guard.dir.path(),
+        &[
+            "quran",
+            "graph",
+            "neighbors",
+            "--db",
+            "--node",
+            "ayah:1:1",
+            "--max-nodes",
+            "1",
+            "--json",
+        ],
+    );
+    assert!(out.status.success(), "truncated read: {}", String::from_utf8_lossy(&out.stderr));
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).expect("one JSON document");
+    assert_eq!(doc["truncated"], true, "{doc}");
+    assert!(
+        doc["incomplete_reason"].as_str().is_some_and(|reason| reason.contains("node budget")),
+        "verbatim reason renders: {doc}"
+    );
+
+    // Export resolves the active projection through the policy filter with
+    // the version marker and counts.
+    let out = qai_out(guard.dir.path(), &["quran", "graph", "export", "--db", "--json"]);
+    assert!(out.status.success(), "export: {}", String::from_utf8_lossy(&out.stderr));
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).expect("one JSON document");
+    assert_eq!(doc["format"], "quran-graph-json-v1", "{doc}");
+    assert_eq!(doc["counts"]["nodes"], 84, "{doc}");
+    assert_eq!(doc["counts"]["edges"], 142, "{doc}");
+    assert_eq!(doc["truncation"]["truncated"], false, "{doc}");
+
+    // Word-root reads without an active dataset are the typed unavailable
+    // capability (exit 5 with the morphology diagnostic code).
+    let out = qai_out(guard.dir.path(), &["quran", "graph", "root-family", "ktb"]);
+    assert_eq!(out.status.code(), Some(5), "unavailable word-root capability is not found");
+    let human = String::from_utf8_lossy(&out.stdout);
+    assert!(human.contains("QAI-MORPH-0004"), "morphology diagnostic code renders: {human}");
 
     // Review management verbs (D-06/D-11): propose then suggest then accept
     // then correct, each audited, against the host-backed database.

@@ -214,6 +214,12 @@ impl SqliteGraphStore {
     pub fn get_assertion(&self, id: &str) -> Option<&Assertion> {
         self.inner.get_assertion(id)
     }
+
+    /// The full pinned node/edge/assertion sets in deterministic order
+    /// (export surfaces; traversal filtering stays in the port operations).
+    pub fn export_sets(&self) -> (Vec<GraphNode>, Vec<GraphEdge>, Vec<Assertion>) {
+        self.inner.dump()
+    }
 }
 
 impl GraphStore for SqliteGraphStore {

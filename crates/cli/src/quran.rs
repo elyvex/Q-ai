@@ -5,7 +5,7 @@
 //! touches storage directly. Human output avoids volatile ids (snapshot
 //! determinism); `--json` emits full structures.
 
-use clap::Subcommand;
+use clap::{Args, Subcommand};
 
 use crate::exit_code;
 
@@ -675,6 +675,28 @@ pub enum MorphologyAction {
     },
 }
 
+/// Shared budget flags for graph reads (`None` keeps the
+/// `QueryBudgets::default()` value; explicit out-of-range values fail
+/// pre-flight, never clamp).
+#[derive(Args, Clone, Debug, Default)]
+pub struct GraphBudgetFlags {
+    /// Max distinct nodes collected per query.
+    #[arg(long)]
+    pub max_nodes: Option<usize>,
+    /// Max edge relaxations performed per query.
+    #[arg(long)]
+    pub max_edges: Option<usize>,
+    /// Max paths returned per path query.
+    #[arg(long)]
+    pub max_paths: Option<usize>,
+    /// Max neighbors expanded per single node visit.
+    #[arg(long)]
+    pub max_fanout: Option<usize>,
+    /// Wall-clock budget in milliseconds.
+    #[arg(long)]
+    pub timeout_ms: Option<u64>,
+}
+
 /// Knowledge-graph subcommands (build/inspect/neighbors backed by SQLite;
 /// file flags keep working for the fixture/debug path).
 #[allow(clippy::large_enum_variant)]
@@ -709,12 +731,19 @@ pub enum GraphAction {
         /// Max hops from the node.
         #[arg(long, default_value_t = 1)]
         hops: usize,
+        /// Budget overrides.
+        #[command(flatten)]
+        budgets: GraphBudgetFlags,
     },
-    /// Bounded path search between two nodes (budgeted).
+    /// Path search between two nodes: reachability, shortest, or up-to-K
+    /// ranked paths (budgeted, explicit truncation).
     Path {
         /// Projection JSON file.
         #[arg(long)]
-        file: String,
+        file: Option<String>,
+        /// Use the active SQLite projection instead of a file.
+        #[arg(long, default_value_t = false)]
+        db: bool,
         /// Source stable id.
         #[arg(long)]
         from: String,
@@ -724,6 +753,43 @@ pub enum GraphAction {
         /// Max hops.
         #[arg(long, default_value_t = 4)]
         hops: usize,
+        /// Search mode (`reachability`, `shortest`, or `paths`).
+        #[arg(long, default_value = "paths")]
+        mode: String,
+        /// Requested path count for `--mode paths` (defaults to the
+        /// `max-paths` budget; beyond it is a pre-flight error).
+        #[arg(long)]
+        paths: Option<usize>,
+        /// Budget overrides.
+        #[command(flatten)]
+        budgets: GraphBudgetFlags,
+    },
+    /// Bounded multi-seed subgraph over the active SQLite projection.
+    Subgraph {
+        /// Seed stable id (repeat for multiple seeds).
+        #[arg(long)]
+        seed: Vec<String>,
+        /// Max hops from the seeds.
+        #[arg(long, default_value_t = 4)]
+        hops: usize,
+        /// Budget overrides.
+        #[command(flatten)]
+        budgets: GraphBudgetFlags,
+    },
+    /// Typed pattern query from seeds over the active SQLite projection.
+    Pattern {
+        /// Seed stable id (repeat for multiple seeds).
+        #[arg(long)]
+        seed: Vec<String>,
+        /// Pattern step `EDGE[:Kind]` (repeat for multiple steps).
+        #[arg(long)]
+        step: Vec<String>,
+        /// Max hops from the seeds.
+        #[arg(long, default_value_t = 4)]
+        hops: usize,
+        /// Budget overrides.
+        #[command(flatten)]
+        budgets: GraphBudgetFlags,
     },
     /// Root-family ranked ayahs (lexicon-gated; needs an active dataset).
     RootFamily {
@@ -737,7 +803,10 @@ pub enum GraphAction {
     Export {
         /// Projection JSON file.
         #[arg(long)]
-        file: String,
+        file: Option<String>,
+        /// Use the active SQLite projection instead of a file.
+        #[arg(long, default_value_t = false)]
+        db: bool,
         /// Output path (defaults to stdout).
         #[arg(long)]
         out: Option<String>,
@@ -1178,24 +1247,85 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
             GraphAction::Inspect { file, db } => {
                 application::quran_cli::cmd_graph_inspect(db_path, file.as_deref(), db).await
             }
-            GraphAction::Neighbors { file, db, node, hops } => {
+            GraphAction::Neighbors { file, db, node, hops, budgets } => {
                 application::quran_cli::cmd_graph_neighbors(
                     db_path,
                     file.as_deref(),
                     db,
                     &node,
                     hops,
+                    &application::quran_cli::GraphBudgets {
+                        max_nodes: budgets.max_nodes,
+                        max_edges: budgets.max_edges,
+                        max_paths: budgets.max_paths,
+                        max_fanout: budgets.max_fanout,
+                        timeout_ms: budgets.timeout_ms,
+                    },
                 )
                 .await
             }
-            GraphAction::Path { file, from, to, hops } => {
-                application::quran_cli::cmd_graph_path(&file, &from, &to, hops).await
+            GraphAction::Path { file, db, from, to, hops, mode, paths, budgets } => {
+                application::quran_cli::cmd_graph_path(
+                    db_path,
+                    file.as_deref(),
+                    db,
+                    &from,
+                    &to,
+                    hops,
+                    &mode,
+                    paths,
+                    &application::quran_cli::GraphBudgets {
+                        max_nodes: budgets.max_nodes,
+                        max_edges: budgets.max_edges,
+                        max_paths: budgets.max_paths,
+                        max_fanout: budgets.max_fanout,
+                        timeout_ms: budgets.timeout_ms,
+                    },
+                )
+                .await
+            }
+            GraphAction::Subgraph { seed, hops, budgets } => {
+                application::quran_cli::cmd_graph_subgraph(
+                    db_path,
+                    &seed,
+                    hops,
+                    &application::quran_cli::GraphBudgets {
+                        max_nodes: budgets.max_nodes,
+                        max_edges: budgets.max_edges,
+                        max_paths: budgets.max_paths,
+                        max_fanout: budgets.max_fanout,
+                        timeout_ms: budgets.timeout_ms,
+                    },
+                )
+                .await
+            }
+            GraphAction::Pattern { seed, step, hops, budgets } => {
+                application::quran_cli::cmd_graph_pattern(
+                    db_path,
+                    &seed,
+                    &step,
+                    hops,
+                    &application::quran_cli::GraphBudgets {
+                        max_nodes: budgets.max_nodes,
+                        max_edges: budgets.max_edges,
+                        max_paths: budgets.max_paths,
+                        max_fanout: budgets.max_fanout,
+                        timeout_ms: budgets.timeout_ms,
+                    },
+                )
+                .await
             }
             GraphAction::RootFamily { root, limit } => {
                 application::quran_cli::cmd_graph_root_family(db_path, &root, limit).await
             }
-            GraphAction::Export { file, out } => {
-                application::quran_cli::cmd_graph_export(&file, out.as_deref()).await
+            GraphAction::Export { file, db, out } => {
+                application::quran_cli::cmd_graph_export(
+                    db_path,
+                    file.as_deref(),
+                    db,
+                    out.as_deref(),
+                )
+                .await
             }
             GraphAction::Review { action } => match action {
                 ReviewAction::Propose {

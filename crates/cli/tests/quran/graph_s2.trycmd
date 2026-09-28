@@ -1,0 +1,63 @@
+# Phase 4 read CLI acceptance — graph queries with provenance (D-09/D-11/D-14).
+#
+# Segment 2 of 2 (host-backed, D-13): runs after the Rust runner activates
+# the edition and builds the structural projection. Every verb resolves the
+# active projection with its generation stamp, threads QueryBudgets from
+# flags, and renders truncation with the reason verbatim — never as an
+# empty list.
+
+```console
+$ qai quran graph neighbors --db --node ayah:1:1
+neighbors of ayah:1:1: 8 node(s), 7 edge(s)
+  ayah:1:1 -> quran:test-edition-min@0.1.0:1:1
+  ayah:1:2 -> quran:test-edition-min@0.1.0:1:2
+
+```
+
+```console
+$ qai quran graph path --db --mode reachability --from ayah:1:1 --to ayah:1:3
+reachable ayah:1:1 -> ayah:1:3: yes (2 hop(s))
+
+```
+
+```console
+$ qai quran graph path --db --mode shortest --from ayah:1:1 --to ayah:1:3
+shortest ayah:1:1 -> ayah:1:3: 2 hop(s): ayah:1:1 -> surah:1 -> ayah:1:3
+
+```
+
+```console
+$ qai quran graph path --db --mode paths --paths 3 --from token:1:1:1 --to token:1:1:3
+paths token:1:1:1 -> token:1:1:3: 3 of up to 3 (4 hop budget)
+  1. token:1:1:1 -> ayah:1:1 -> token:1:1:3
+  2. token:1:1:1 -> token:1:1:2 -> token:1:1:3
+  3. token:1:1:1 -> ayah:1:1 -> token:1:1:2 -> token:1:1:3
+
+```
+
+```console
+$ qai quran graph subgraph --seed ayah:1:1
+subgraph of 1 seed(s): 34 node(s), 53 edge(s)
+
+```
+
+```console
+$ qai quran graph pattern --seed ayah:1:1 --step NEXT
+pattern [NEXT] from 1 seed(s): 2 node(s), 1 edge(s)
+
+```
+
+```console
+$ qai quran graph export --db
+exported 84 nodes, 142 edges, 0 assertions as Graph JSON (projection quran-structural-v1)
+
+```
+
+```console
+$ qai quran graph neighbors --db --node ayah:1:1 --max-nodes 1
+neighbors of ayah:1:1: 1 node(s), 7 edge(s) (truncated)
+incomplete: neighbor nodes exceed node budget 1
+  ayah:1:1 -> quran:test-edition-min@0.1.0:1:1
+
+```
+

@@ -114,6 +114,29 @@ impl MemGraphStore {
         self.out_edges.entry(edge.src.clone()).or_default().push(edge.clone());
         self.in_edges.entry(edge.dst.clone()).or_default().push(edge);
     }
+
+    /// Dump the full staged node/edge/assertion sets in deterministic order
+    /// (export surfaces; traversal filtering stays in the port operations).
+    /// Nodes sort by stable ID, edges by `(src, edge, dst, assertion_id)`,
+    /// assertions by ID.
+    pub fn dump(&self) -> (Vec<GraphNode>, Vec<GraphEdge>, Vec<Assertion>) {
+        let nodes: Vec<GraphNode> = self.nodes.values().cloned().collect();
+        let mut edges: Vec<GraphEdge> =
+            self.out_edges.values().flat_map(|list| list.iter().cloned()).collect();
+        edges.sort_by(|a, b| {
+            (&a.src, &a.edge, &a.dst, &a.assertion_id).cmp(&(
+                &b.src,
+                &b.edge,
+                &b.dst,
+                &b.assertion_id,
+            ))
+        });
+        edges.dedup_by(|a, b| {
+            a.src == b.src && a.edge == b.edge && a.dst == b.dst && a.assertion_id == b.assertion_id
+        });
+        let assertions: Vec<Assertion> = self.assertions.values().cloned().collect();
+        (nodes, edges, assertions)
+    }
 }
 
 fn neighbor_of(edge: &GraphEdge, outgoing: bool) -> &str {
