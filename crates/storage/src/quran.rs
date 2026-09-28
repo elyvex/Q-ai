@@ -1261,6 +1261,63 @@ pub trait QuranRepository: Send + Sync {
         Err(StorageError::StorageUnavailable)
     }
 
+    /// Exact count of analyses matching a normalized root in one dataset
+    /// (`quran.count` root frequency, SC4: exact SQL aggregation, never FTS).
+    async fn count_analyses_for_root(
+        &self,
+        _dataset_id: &str,
+        _root_normalized: &str,
+    ) -> Result<i64, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Per-surah analysis counts for a normalized root (distribution).
+    async fn count_analyses_for_root_by_surah(
+        &self,
+        _dataset_id: &str,
+        _root_normalized: &str,
+    ) -> Result<Vec<(i64, u64)>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Count of distinct canonical tokens carrying at least one analysis of a
+    /// normalized root (`OneVotePerToken` multi-analysis handling).
+    async fn count_distinct_tokens_for_root(
+        &self,
+        _dataset_id: &str,
+        _root_normalized: &str,
+    ) -> Result<i64, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Exact count of analyses matching a lemma in one dataset (SC4).
+    async fn count_analyses_for_lemma(
+        &self,
+        _dataset_id: &str,
+        _lemma: &str,
+    ) -> Result<i64, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Per-surah analysis counts for a lemma (distribution).
+    async fn count_analyses_for_lemma_by_surah(
+        &self,
+        _dataset_id: &str,
+        _lemma: &str,
+    ) -> Result<Vec<(i64, u64)>, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
+    /// Count of distinct canonical tokens carrying at least one analysis of a
+    /// lemma (`OneVotePerToken` multi-analysis handling).
+    async fn count_distinct_tokens_for_lemma(
+        &self,
+        _dataset_id: &str,
+        _lemma: &str,
+    ) -> Result<i64, StorageError> {
+        Err(StorageError::StorageUnavailable)
+    }
+
     /// Roots of a dataset in lemma order (browse).
     async fn list_roots(&self, _dataset_id: &str) -> Result<Vec<LexiconRootRow>, StorageError> {
         Err(StorageError::StorageUnavailable)

@@ -2503,6 +2503,143 @@ impl QuranRepository for SqliteQuranRepository {
         Ok(rows.iter().map(decode_analysis).collect())
     }
 
+    async fn count_analyses_for_root(
+        &self,
+        dataset_id: &str,
+        root_normalized: &str,
+    ) -> Result<i64, StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query_scalar(
+            "SELECT COUNT(*) FROM quran_token_analyses a
+             JOIN quran_roots r ON a.root_id = r.id
+             WHERE a.dataset_id = ? AND r.root_normalized = ?",
+        )
+        .bind(dataset_id)
+        .bind(root_normalized)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)
+        .map(|count: i64| count.max(0))
+    }
+
+    async fn count_analyses_for_root_by_surah(
+        &self,
+        dataset_id: &str,
+        root_normalized: &str,
+    ) -> Result<Vec<(i64, u64)>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT a.surah, COUNT(*) FROM quran_token_analyses a
+             JOIN quran_roots r ON a.root_id = r.id
+             WHERE a.dataset_id = ? AND r.root_normalized = ?
+             GROUP BY a.surah ORDER BY a.surah",
+        )
+        .bind(dataset_id)
+        .bind(root_normalized)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows
+            .iter()
+            .map(|row| {
+                use sqlx::Row as _;
+                (row.get::<i64, _>("surah"), row.get::<i64, _>("COUNT(*)").max(0) as u64)
+            })
+            .collect())
+    }
+
+    async fn count_distinct_tokens_for_root(
+        &self,
+        dataset_id: &str,
+        root_normalized: &str,
+    ) -> Result<i64, StorageError> {
+        // `COUNT(DISTINCT (a, b, c))` is a row-value misuse in SQLite; the
+        // grouped subquery is the exact COUNT(DISTINCT (surah,ayah,pos)).
+        let mut tx = self.tx.lock().await;
+        sqlx::query_scalar(
+            "SELECT COUNT(*) FROM (
+               SELECT 1 FROM quran_token_analyses a
+               JOIN quran_roots r ON a.root_id = r.id
+               WHERE a.dataset_id = ? AND r.root_normalized = ?
+               GROUP BY a.surah, a.ayah, a.token_position
+             )",
+        )
+        .bind(dataset_id)
+        .bind(root_normalized)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)
+        .map(|count: i64| count.max(0))
+    }
+
+    async fn count_analyses_for_lemma(
+        &self,
+        dataset_id: &str,
+        lemma: &str,
+    ) -> Result<i64, StorageError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query_scalar(
+            "SELECT COUNT(*) FROM quran_token_analyses a
+             JOIN quran_lemmas l ON a.lemma_id = l.id
+             WHERE a.dataset_id = ? AND l.lemma = ?",
+        )
+        .bind(dataset_id)
+        .bind(lemma)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)
+        .map(|count: i64| count.max(0))
+    }
+
+    async fn count_analyses_for_lemma_by_surah(
+        &self,
+        dataset_id: &str,
+        lemma: &str,
+    ) -> Result<Vec<(i64, u64)>, StorageError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query(
+            "SELECT a.surah, COUNT(*) FROM quran_token_analyses a
+             JOIN quran_lemmas l ON a.lemma_id = l.id
+             WHERE a.dataset_id = ? AND l.lemma = ?
+             GROUP BY a.surah ORDER BY a.surah",
+        )
+        .bind(dataset_id)
+        .bind(lemma)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(rows
+            .iter()
+            .map(|row| {
+                use sqlx::Row as _;
+                (row.get::<i64, _>("surah"), row.get::<i64, _>("COUNT(*)").max(0) as u64)
+            })
+            .collect())
+    }
+
+    async fn count_distinct_tokens_for_lemma(
+        &self,
+        dataset_id: &str,
+        lemma: &str,
+    ) -> Result<i64, StorageError> {
+        // See `count_distinct_tokens_for_root` for the row-value rationale.
+        let mut tx = self.tx.lock().await;
+        sqlx::query_scalar(
+            "SELECT COUNT(*) FROM (
+               SELECT 1 FROM quran_token_analyses a
+               JOIN quran_lemmas l ON a.lemma_id = l.id
+               WHERE a.dataset_id = ? AND l.lemma = ?
+               GROUP BY a.surah, a.ayah, a.token_position
+             )",
+        )
+        .bind(dataset_id)
+        .bind(lemma)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)
+        .map(|count: i64| count.max(0))
+    }
+
     async fn list_roots(&self, dataset_id: &str) -> Result<Vec<LexiconRootRow>, StorageError> {
         let mut tx = self.tx.lock().await;
         let rows = sqlx::query(
