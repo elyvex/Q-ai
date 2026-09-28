@@ -7,28 +7,41 @@
 //! emit fixed disclaimers verbatim. Counts are rule-relative: `hapax`
 //! states its profile prominently.
 //!
-//! Morphology-gated targets (roots, lemmas, multi-analysis modes) return
-//! typed [`CountingError::UnavailableDataset`] naming the missing capability
-//! (AC-P2-01 fallback) — never guessed data.
+//! Root/lemma frequency aggregate exactly over the active lexicon's analyses
+//! (exact SQL `COUNT(*)` / grouped-subquery token counts, never FTS
+//! frequencies) and report the active `<slug>@<version>` dataset plus the
+//! caller-selected [`MultiAnalysisHandling`] mode. With no active dataset they
+//! return the typed [`CountingError::UnavailableDataset`] naming the missing
+//! capability (AC-P2-01 fallback) — never guessed data, never an empty report.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use storage::Database as _;
 use storage::error::StorageError;
-use storage::quran::FormColumn;
+use storage::quran::{FormColumn, TokenAnalysisRow};
 use storage_sqlite::SqliteDatabase;
 
 /// Error namespace for counting tools.
 pub const CODE_PREFIX: &str = "QAI-CNT";
 
 /// How competing analyses are handled in a count (ADR-0211).
+///
+/// The counting convention is code-implemented but **not linguist-ratified**
+/// (OD-12 BLOCKED). Semantics are asserted behaviourally on the synthetic
+/// lexicon only; no dataset-supplied analysis is ever treated as authoritative
+/// (I11/ADR-0209 — there is no `is_correct`/`is_primary` winner).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum MultiAnalysisHandling {
-    /// Single-source forms only (current capability: stored derived forms).
+    /// Single-source baseline: a token is counted once **only when exactly one
+    /// of its analyses matches the target**. Tokens with competing matching
+    /// analyses are excluded, and the excluded count is recorded in
+    /// `CountingRules::exclusions` (suppression is never silent, ADR-0209).
     SingleSource,
-    /// All dataset analyses, one vote each (needs an active lexicon).
+    /// Every dataset analysis matching the target is one occurrence
+    /// (one vote per analysis).
     AllAnalyses,
-    /// One vote per token regardless of analysis count (needs lexicon).
+    /// Every matching canonical token is one occurrence, regardless of how
+    /// many of its analyses match (one vote per token).
     OneVotePerToken,
 }
 
@@ -184,21 +197,50 @@ fn normalize_target(profile: &str, target: &str) -> Result<String, CountingError
 }
 
 fn rules_for(profile: &str, window: Option<String>) -> Result<CountingRules, CountingError> {
+    let (_id, version) = resolve_profile(profile)?;
+    Ok(rules_for_with(
+        profile,
+        &version,
+        window,
+        vec!["stored-forms".to_string()],
+        MultiAnalysisHandling::SingleSource,
+    ))
+}
+
+/// Resolve a profile id to its registry id + latest ladder version.
+fn resolve_profile(
+    profile: &str,
+) -> Result<(quran_normalization::ProfileId, String), CountingError> {
     let registry = crate::quran_normalize::builtin_registry();
     let id = quran_normalization::ProfileId::parse(profile)
         .map_err(|_| CountingError::UnknownProfile(profile.to_string()))?;
     let version = registry
         .latest(id)
         .map_err(|_| CountingError::UnknownProfile(profile.to_string()))?
-        .version;
-    Ok(CountingRules {
+        .version
+        .to_string();
+    Ok((id, version))
+}
+
+/// Build a rules block from explicit inputs so `datasets` and
+/// `multi_analysis_handling` are caller-selectable (G-07). Field order is fixed
+/// by the struct: it is the checksum input.
+#[must_use]
+pub fn rules_for_with(
+    profile: &str,
+    version: &str,
+    window: Option<String>,
+    datasets: Vec<String>,
+    mode: MultiAnalysisHandling,
+) -> CountingRules {
+    CountingRules {
         profile: profile.to_string(),
         profile_version: version.to_string(),
-        datasets: vec!["stored-forms".to_string()],
-        multi_analysis_handling: MultiAnalysisHandling::SingleSource,
+        datasets,
+        multi_analysis_handling: mode,
         window,
         exclusions: Vec::new(),
-    })
+    }
 }
 
 fn checksum(canonical: &str) -> String {
@@ -713,25 +755,189 @@ pub async fn near_duplicate_passages(
     Ok((rules, hits))
 }
 
-/// Morphology-gated root counting (needs an active lexicon). The active
-/// dataset id and the caller-selected multi-analysis mode flow into the rules.
-pub async fn root_frequency(
-    _db: &SqliteDatabase,
-    _root: &str,
-    _profile: &str,
-    _mode: MultiAnalysisHandling,
-) -> Result<FrequencyReport, CountingError> {
-    Err(CountingError::UnavailableDataset { capability: "root frequency".to_string() })
+/// Resolve the active lexicon dataset id (`<slug>@<version>`), or the typed
+/// no-dataset fallback naming the capability (AC-P2-01, never guessed data).
+async fn active_dataset_id(db: &SqliteDatabase, capability: &str) -> Result<String, CountingError> {
+    let mut uow = db.write().await.map_err(CountingError::storage)?;
+    let active = uow.quran().active_dataset().await.map_err(CountingError::storage)?;
+    uow.rollback().await.map_err(CountingError::storage)?;
+    active
+        .map(|dataset| dataset.id)
+        .ok_or_else(|| CountingError::UnavailableDataset { capability: capability.to_string() })
 }
 
-/// Lemma frequency (lexicon-gated).
-pub async fn lemma_frequency(
-    _db: &SqliteDatabase,
-    _lemma: &str,
-    _profile: &str,
-    _mode: MultiAnalysisHandling,
+/// Trim a lexicon count target and reject the empty string.
+fn lexicon_target(target: &str) -> Result<String, CountingError> {
+    let trimmed = target.trim();
+    if trimmed.is_empty() {
+        return Err(CountingError::EmptyTarget);
+    }
+    Ok(trimmed.to_string())
+}
+
+/// Distinct canonical tokens per surah from matching analysis rows
+/// (`OneVotePerToken`: at most one vote per (surah, ayah, position)).
+fn distinct_tokens_by_surah(rows: &[TokenAnalysisRow]) -> BTreeMap<i64, u64> {
+    let mut seen: BTreeSet<(i64, i64, i64)> = BTreeSet::new();
+    let mut by_surah: BTreeMap<i64, u64> = BTreeMap::new();
+    for row in rows {
+        if seen.insert((row.surah, row.ayah, row.token_position)) {
+            *by_surah.entry(row.surah).or_insert(0) += 1;
+        }
+    }
+    by_surah
+}
+
+/// Single-source tokens per surah: only tokens with exactly one matching
+/// analysis count; ambiguous tokens are excluded and reported (ADR-0209).
+fn single_analysis_tokens_by_surah(rows: &[TokenAnalysisRow]) -> (BTreeMap<i64, u64>, usize) {
+    let mut per_token: BTreeMap<(i64, i64, i64), usize> = BTreeMap::new();
+    for row in rows {
+        *per_token.entry((row.surah, row.ayah, row.token_position)).or_insert(0) += 1;
+    }
+    let mut by_surah: BTreeMap<i64, u64> = BTreeMap::new();
+    let mut excluded = 0usize;
+    for ((surah, _, _), analyses) in per_token {
+        if analyses == 1 {
+            *by_surah.entry(surah).or_insert(0) += 1;
+        } else {
+            excluded += 1;
+        }
+    }
+    (by_surah, excluded)
+}
+
+/// Assemble a lexicon [`FrequencyReport`] (count matches the breakdown sum).
+fn lexicon_report(
+    target: String,
+    rules: CountingRules,
+    count: u64,
+    by_surah: BTreeMap<i64, u64>,
+) -> FrequencyReport {
+    let canonical = format!("{}|{}|{}|{}", target, rules.canonical_json(), count, by_surah.len());
+    FrequencyReport { target, rules, count, by_surah, checksum: checksum(&canonical) }
+}
+
+/// `quran.count` root frequency (SC4/G-01): exact SQL aggregation over the
+/// active lexicon's analyses, never FTS frequencies. The mode selects which
+/// rows count as one occurrence; with no active dataset the result stays a
+/// typed [`CountingError::UnavailableDataset`] (never an empty report).
+pub async fn root_frequency(
+    db: &SqliteDatabase,
+    root: &str,
+    profile: &str,
+    mode: MultiAnalysisHandling,
 ) -> Result<FrequencyReport, CountingError> {
-    Err(CountingError::UnavailableDataset { capability: "lemma frequency".to_string() })
+    let target = lexicon_target(root)?;
+    let (_id, version) = resolve_profile(profile)?;
+    let dataset_id = active_dataset_id(db, "root frequency").await?;
+    let (count, by_surah, excluded) = {
+        let mut uow = db.write().await.map_err(CountingError::storage)?;
+        let result = match mode {
+            MultiAnalysisHandling::AllAnalyses => {
+                let total = uow
+                    .quran()
+                    .count_analyses_for_root(&dataset_id, &target)
+                    .await
+                    .map_err(CountingError::storage)?;
+                let parts = uow
+                    .quran()
+                    .count_analyses_for_root_by_surah(&dataset_id, &target)
+                    .await
+                    .map_err(CountingError::storage)?;
+                (total.max(0) as u64, parts.into_iter().collect(), 0usize)
+            }
+            MultiAnalysisHandling::OneVotePerToken => {
+                let total = uow
+                    .quran()
+                    .count_distinct_tokens_for_root(&dataset_id, &target)
+                    .await
+                    .map_err(CountingError::storage)?;
+                let rows = uow
+                    .quran()
+                    .analyses_for_root(&dataset_id, &target)
+                    .await
+                    .map_err(CountingError::storage)?;
+                (total.max(0) as u64, distinct_tokens_by_surah(&rows), 0usize)
+            }
+            MultiAnalysisHandling::SingleSource => {
+                let rows = uow
+                    .quran()
+                    .analyses_for_root(&dataset_id, &target)
+                    .await
+                    .map_err(CountingError::storage)?;
+                let (by_surah, excluded) = single_analysis_tokens_by_surah(&rows);
+                (by_surah.values().sum(), by_surah, excluded)
+            }
+        };
+        uow.rollback().await.map_err(CountingError::storage)?;
+        result
+    };
+    let mut rules = rules_for_with(profile, &version, None, vec![dataset_id], mode);
+    if excluded > 0 {
+        rules.exclusions.push(format!("{excluded} multi-analysis token(s) excluded"));
+    }
+    Ok(lexicon_report(target, rules, count, by_surah))
+}
+
+/// `quran.count` lemma frequency (SC4/G-01): the lemma analogue of
+/// [`root_frequency`], over the active lexicon's lemma joins.
+pub async fn lemma_frequency(
+    db: &SqliteDatabase,
+    lemma: &str,
+    profile: &str,
+    mode: MultiAnalysisHandling,
+) -> Result<FrequencyReport, CountingError> {
+    let target = lexicon_target(lemma)?;
+    let (_id, version) = resolve_profile(profile)?;
+    let dataset_id = active_dataset_id(db, "lemma frequency").await?;
+    let (count, by_surah, excluded) = {
+        let mut uow = db.write().await.map_err(CountingError::storage)?;
+        let result = match mode {
+            MultiAnalysisHandling::AllAnalyses => {
+                let total = uow
+                    .quran()
+                    .count_analyses_for_lemma(&dataset_id, &target)
+                    .await
+                    .map_err(CountingError::storage)?;
+                let parts = uow
+                    .quran()
+                    .count_analyses_for_lemma_by_surah(&dataset_id, &target)
+                    .await
+                    .map_err(CountingError::storage)?;
+                (total.max(0) as u64, parts.into_iter().collect(), 0usize)
+            }
+            MultiAnalysisHandling::OneVotePerToken => {
+                let total = uow
+                    .quran()
+                    .count_distinct_tokens_for_lemma(&dataset_id, &target)
+                    .await
+                    .map_err(CountingError::storage)?;
+                let rows = uow
+                    .quran()
+                    .analyses_for_lemma(&dataset_id, &target)
+                    .await
+                    .map_err(CountingError::storage)?;
+                (total.max(0) as u64, distinct_tokens_by_surah(&rows), 0usize)
+            }
+            MultiAnalysisHandling::SingleSource => {
+                let rows = uow
+                    .quran()
+                    .analyses_for_lemma(&dataset_id, &target)
+                    .await
+                    .map_err(CountingError::storage)?;
+                let (by_surah, excluded) = single_analysis_tokens_by_surah(&rows);
+                (by_surah.values().sum(), by_surah, excluded)
+            }
+        };
+        uow.rollback().await.map_err(CountingError::storage)?;
+        result
+    };
+    let mut rules = rules_for_with(profile, &version, None, vec![dataset_id], mode);
+    if excluded > 0 {
+        rules.exclusions.push(format!("{excluded} multi-analysis token(s) excluded"));
+    }
+    Ok(lexicon_report(target, rules, count, by_surah))
 }
 
 /// Unusual-usage mining (lexicon-gated: needs analysis distributions).

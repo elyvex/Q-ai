@@ -385,9 +385,14 @@ async fn root_lemma_frequency() {
     assert!(root.checksum.starts_with("sha256:"));
     assert_eq!(root.by_surah.values().sum::<u64>(), root.count, "breakdown sums to total");
 
-    let lemma = lemma_frequency(&db, "lem-mixed", "L3.diacritics", MultiAnalysisHandling::SingleSource)
-        .await;
-    assert!(lemma.is_ok(), "lemma frequency must answer over the active dataset: {:?}", lemma.err());
+    let lemma =
+        lemma_frequency(&db, "lem-mixed", "L3.diacritics", MultiAnalysisHandling::SingleSource)
+            .await;
+    assert!(
+        lemma.is_ok(),
+        "lemma frequency must answer over the active dataset: {:?}",
+        lemma.err()
+    );
     let lemma = lemma.unwrap();
     assert!(lemma.count > 0);
     assert_eq!(lemma.rules.datasets, vec![dataset.clone()]);
@@ -411,7 +416,11 @@ async fn multi_analysis_modes() {
     let (_dir, db) = ready_morph_db().await;
     let single =
         root_frequency(&db, "tst-root", "L3.diacritics", MultiAnalysisHandling::SingleSource).await;
-    assert!(single.is_ok(), "single-source count must answer over the active dataset: {:?}", single.err());
+    assert!(
+        single.is_ok(),
+        "single-source count must answer over the active dataset: {:?}",
+        single.err()
+    );
     let single = single.unwrap();
     let all =
         root_frequency(&db, "tst-root", "L3.diacritics", MultiAnalysisHandling::AllAnalyses).await;
