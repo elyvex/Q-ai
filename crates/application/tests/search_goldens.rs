@@ -405,8 +405,8 @@ async fn all_concatenated_search_goldens_pass() {
                     &db,
                     &data_dir,
                     &base_params(&row.input, MatchMode::Substring),
-                    false,
-                    3,
+                    row.allow_cross_ayah,
+                    row.max_ayah_span,
                 )
                 .await
                 .unwrap_or_else(|e| panic!("golden {i} concatenated {:?}: {e}", row.input));
