@@ -176,15 +176,14 @@ fn free_port() -> u16 {
 fn readyz_ok(port: u16) -> bool {
     use std::io::{Read, Write};
     let addr: std::net::SocketAddr = format!("127.0.0.1:{port}").parse().unwrap();
-    let Ok(mut stream) = std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(200)) else {
+    let Ok(mut stream) =
+        std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(200))
+    else {
         return false;
     };
     stream.set_read_timeout(Some(std::time::Duration::from_secs(2))).ok();
-    if write!(
-        stream,
-        "GET /readyz HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
-    )
-    .is_err()
+    if write!(stream, "GET /readyz HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+        .is_err()
     {
         return false;
     }
@@ -220,7 +219,11 @@ impl ServeGuard {
         let start = std::time::Instant::now();
         let budget = std::time::Duration::from_secs(20);
         while !readyz_ok(guard.port) {
-            assert!(start.elapsed() < budget, "qai serve never became ready on {port}", port = guard.port);
+            assert!(
+                start.elapsed() < budget,
+                "qai serve never became ready on {port}",
+                port = guard.port
+            );
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
         guard
@@ -314,7 +317,11 @@ fn serve_hosts_the_worker_and_shuts_down_joined() {
 
     // Staging landed through the host: the edition validates from storage.
     let out = qai_out(guard.dir.path(), &["quran", "validate", "test-edition-min@0.1.0"]);
-    assert!(out.status.success(), "staged edition validates: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "staged edition validates: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 
     // Signal-driven joined shutdown: SIGINT exits 0 after the worker joins.
     let status = guard.shutdown_graceful(std::time::Duration::from_secs(15));
