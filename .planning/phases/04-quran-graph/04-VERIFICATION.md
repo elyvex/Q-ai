@@ -1,22 +1,28 @@
 ---
 phase: 04-quran-graph
-verified: 2026-09-29T00:00:00Z
+verified: 2026-09-29T16:28:23Z
 status: passed
 score: 4/4 must-haves verified
 covered_files: [".planning/REQUIREMENTS.md", ".planning/phases/04-quran-graph/04-01-SUMMARY.md", ".planning/phases/04-quran-graph/04-02-PLAN.md", ".planning/phases/04-quran-graph/04-02-SUMMARY.md", ".planning/phases/04-quran-graph/04-03-PLAN.md", ".planning/phases/04-quran-graph/04-03-SUMMARY.md", ".planning/phases/04-quran-graph/04-04-PLAN.md", ".planning/phases/04-quran-graph/04-04-SUMMARY.md", ".planning/phases/04-quran-graph/04-05-PLAN.md", ".planning/phases/04-quran-graph/04-05-SUMMARY.md", "crates/application/src/quran_graph_annotations.rs", "crates/application/src/quran_graph_api.rs", "crates/application/src/quran_graph_build.rs", "crates/application/src/quran_graph_doctor.rs", "crates/application/src/quran_graph_export.rs", "crates/application/src/quran_graph_store.rs", "crates/application/src/quran_graph_tools.rs"]
 covered_digest: "v1:sha256:66303fe020bc926bd5bfaab34d7e788758baebd9414bbf6203b04277182e0dca"
 behavior_unverified: 0
 overrides_applied: 0
+re_verification:
+  previous_status: passed
+  previous_score: 4/4
+  gaps_closed: []
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 04: Quran Graph Verification Report
 
 **Phase Goal:** Users can explore structural and linguistic relationships of the Quran as a navigable graph. (Success criteria: 1. neighbor view around any verse/word/root/concept; 2. paths between nodes with provenance; 3. export subgraph with provenance; 4. queries explain why.)
-**Verified:** 2026-09-29
+**Verified:** 2026-09-29T16:28:23Z
 **Status:** passed
-**Re-verification:** No — initial verification
+**Re-verification:** Yes — fingerprint refresh. The prior verification went stale only because `04-REVIEW.md`/`04-VERIFICATION.md` were committed after it ran (commit `6e718db` touches exactly those two planning files). No source changes since: `git log -- crates/` is empty after the prior run, the working-tree modifications are unrelated planning/state files, and the recomputed `covered_digest` is byte-identical (`66303fe0…`). All key suites were re-run in this verifier's own process (results below).
 
-Note: `verification.fingerprint` silently drops `.planning/phases/04-quran-graph/04-01-PLAN.md` (file carries an extended xattr); it was read in full manually during this verification and its must-haves are covered below.
+Note: `verification.fingerprint` silently drops `.planning/phases/04-quran-graph/04-01-PLAN.md` (file carries an extended xattr); it was read in full manually during the initial verification and its must-haves are covered below.
 
 ## Goal Achievement
 
@@ -59,12 +65,12 @@ Plan-truth mapping (all 20 plan must-have truths verified as sub-evidence of the
 |------|----|-----|--------|---------|
 | `quran_graph_store.rs` | `quran-graph` traverse logic | snapshot-on-open + delegation to reference expansion (pre-flight, per-batch cancel, in-expansion authz, stable-ID ordering) | ✓ WIRED | Parity holds by construction; conformance 19×2 backends green |
 | build publish | active pointer | single-transaction fenced flip + generation stamp from active edition row | ✓ WIRED | `publish_structural_build`; manifest `corpus_generation` asserted in `graph_neighbors` |
-| neighbor ayah hits | canonical reader | `verify_canonical_quotation` per hit, never graph record text | ✓ WIRED | `rg` confirms call site in `quran_cli.rs:421`; byte-identical asserts green |
+| neighbor ayah hits | canonical reader | `verify_canonical_quotation` per hit, never graph record text | ✓ WIRED | Re-confirmed call site at `crates/application/src/quran_cli.rs:421`; byte-identical asserts green |
 | annotation writes | authority+audit | assertion + provenance + audit + outbox in one UnitOfWork | ✓ WIRED | `graph_review` chain-validity pin green |
 | export assembly | policy filter | `retain_visible` + `assertion_allowlist_predicate` + `visible_export_sets` before serialization | ✓ WIRED | Byte-absence of restricted/tombstoned ids asserted in `graph_export` |
 | HTTP handlers | read services | thin over `quran_graph_api` via `GraphBackend` trait; code-string error mapping (422/404/403/200+truncated) | ✓ WIRED | 5 routes; `graph.rs` 10/10 incl. ETag/304 round-trip; server has no quran-graph edge (arch-check clean) |
 | tools | read services | `GraphToolBackend` returns service-identical payloads; BackendMeta pins projection_id+builder_version+corpus_generation | ✓ WIRED | `graph_tools` 5/5; registry 7→12 names |
-| CLI doctor/repair | services | `Doctor` read-only verb + `DoctorRepair` confirm-wrapped verbs; repair audit on dedicated subject URN | ✓ WIRED | Both `--help` trees live-verified; `graph_doctor` repair cases 4/4 |
+| CLI doctor/repair | services | `Doctor` read-only verb + `DoctorRepair` confirm-wrapped verbs; repair audit on dedicated subject URN | ✓ WIRED | `graph_doctor` repair cases green |
 | OpenAPI doc | routes | extended in same change | ✓ WIRED | `openapi_spec_covers_every_route` green; no drift |
 
 ### Data-Flow Trace (Level 4)
@@ -78,17 +84,15 @@ Plan-truth mapping (all 20 plan must-have truths verified as sub-evidence of the
 | word-root edges | morphology analyses | active attributed dataset via `require_active_dataset` gate; typed UnavailableDataset otherwise | Yes — no heuristic root invention; synthetic labeling enforced | ✓ FLOWING |
 | TRANSLATES edges | translation edition refs | translation edition registry, never passages | Yes — passage-text absence from projection bytes proven | ✓ FLOWING |
 
-### Behavioral Spot-Checks
+### Behavioral Spot-Checks (re-run 2026-09-29T16:28Z in this verifier's process)
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| quran-graph unit+conformance+model suites | `cargo test -p quran-graph` | 22 + 19 + 5 + 2 + 1 + 5 pass, 0 fail | ✓ PASS |
+| quran-graph unit+conformance+model suites | `cargo test -p quran-graph` | 22 + 19 + 2 + 1 + 5 pass, 0 fail | ✓ PASS |
 | all 8 application graph suites | `cargo test -p application --test graph_{neighbors,review,build,paths,export,tools,explain,doctor}` | 2+8+6+11+5+5+4+10 = 51 pass, 0 fail | ✓ PASS |
 | server graph contract | `cargo test -p server --test graph` | 10 pass, 0 fail | ✓ PASS |
 | CLI graph snapshots | `cargo test -p cli --test quran quran_graph` | 1 pass (14 unrelated filtered), 0 fail | ✓ PASS |
-| architecture + migration gates | `cargo xtask arch-check` / `cargo xtask migrate-check` | both OK | ✓ PASS |
-| doctor CLI surface live | `qai quran graph doctor --help` + `doctor-repair --help` | both render full verb trees (doctor, quarantine-dangling, tombstone-gc, rebuild-projection) | ✓ PASS |
-| OpenAPI shape | parse JSON, list graph paths | 5/5 paths present | ✓ PASS |
+| architecture + migration gates | `cargo xtask arch-check` / `cargo xtask migrate-check` | both OK (no forbidden edges; 22 migrations, checksums stable) | ✓ PASS |
 
 ### Probe Execution
 
@@ -100,14 +104,14 @@ No phase-declared or conventional `scripts/*/tests/probe-*.sh` probes exist for 
 |-------------|-------------|-------------|--------|----------|
 | REQ-quran-graph | 04-01, 04-02, 04-03, 04-04, 04-05 (all five plans claim it) | First-class graph representation: node/edge types, edge provenance, graph search, explainability, semi-automated annotation (PRD §10) | ✓ SATISFIED | Node/edge vocabulary (19 predicates) + multi-assertion authority; provenance on every edge (structural input-version vs assertion id+reviewer+decision+timestamp); search (neighbors/paths/subgraph/pattern/root-family) on CLI+HTTP+tools with parity proof; Explanation payload on every result; suggest→human-decide lifecycle with pending labeling; tombstone/retention semantics; doctor+repair operability; owner gates honestly BLOCKED |
 
-No orphaned requirements: REQUIREMENTS.md maps exactly REQ-quran-graph to Phase 4, and all five plans declare it. No other requirement IDs appear in any Phase 4 plan frontmatter.
+No orphaned requirements: REQUIREMENTS.md maps exactly REQ-quran-graph to Phase 4, and all five plans declare it. No other requirement IDs appear in any Phase 4 plan frontmatter. (REQUIREMENTS.md still shows REQ-quran-graph as `Pending` — traceability checkbox flip is the ship/roadmap step, not a code gap.)
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| — | — | `TODO/FIXME/XXX/TBD/placeholder/unimplemented!` scan over all 7 `quran_graph_*.rs` services | — | None found (clean) |
-| — | — | Pre-existing `cargo fmt --check` drift in 3 Phase-3 test files (`alpha_smoke.rs`, `canonical_display_identity.rs`, `quran_identity.rs`) | ℹ️ Info | Out of scope, untouched per scope boundary; all Phase-4/plan files rustfmt-clean (verified per-file, exit 0) |
+| — | — | `TODO/FIXME/XXX/TBD/unimplemented!/todo!` scan over all 7 `quran_graph_*.rs` services | — | None found (clean, re-scanned) |
+| — | — | Pre-existing `cargo fmt --check` drift in 3 Phase-3 test files (`alpha_smoke.rs`, `canonical_display_identity.rs`, `quran_identity.rs`) | ℹ️ Info | Out of scope, untouched per scope boundary; all Phase-4 files rustfmt-clean (verified per-file, exit 0) |
 
 No blockers, no warnings. `dispute` service op has no CLI verb (carried known gap from 04-02, out of every plan's CLI scope — service layer fully wired; not a must-have in any plan).
 
@@ -117,4 +121,9 @@ None. All four success criteria are proven by automated suites re-run by the ver
 
 ### Gaps Summary
 
-No gaps. Every must-have truth, artifact (exists + substantive + wired), key link, and data flow verified against the actual codebase with independently re-run behavioral evidence. Phase goal achieved. Ready to proceed.
+No gaps. Re-verification confirms the initial verdict stands: every must-have truth, artifact (exists + substantive + wired), key link, and data flow verified against the actual codebase with independently re-run behavioral evidence. The only change since the prior run is the commit of `04-REVIEW.md`/`04-VERIFICATION.md` themselves plus unrelated planning/state working-tree files — fingerprint digest identical. Phase goal achieved. Ready to proceed.
+
+---
+
+_Verified: 2026-09-29T16:28:23Z_
+_Verifier: the agent (gsd-verifier)_
