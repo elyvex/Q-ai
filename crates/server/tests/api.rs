@@ -44,6 +44,8 @@ fn test_meta() -> BackendMeta {
         script: "uthmani".into(),
         riwayah: None,
         numbering_scheme: "hafs".into(),
+        projection_id: String::new(),
+        builder_version: String::new(),
     }
 }
 

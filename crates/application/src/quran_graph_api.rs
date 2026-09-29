@@ -380,6 +380,8 @@ pub struct GraphSnapshotMeta {
     pub edition_slug: String,
     /// Active edition version.
     pub edition_version: String,
+    /// Active edition row id (for tool-edition attribution).
+    pub edition_id: String,
     /// Active edition text hash (`sha256:<hex>`) for ETags.
     pub text_hash: String,
     /// Active corpus generation.
@@ -410,6 +412,7 @@ async fn active_snapshot_meta(db: &SqliteDatabase) -> Result<GraphSnapshotMeta, 
                 Some(ed) => GraphSnapshotMeta {
                     edition_slug: ed.slug,
                     edition_version: ed.version,
+                    edition_id: row.edition_id,
                     text_hash: ed.text_hash,
                     corpus_generation: generation,
                 },
@@ -423,7 +426,7 @@ async fn active_snapshot_meta(db: &SqliteDatabase) -> Result<GraphSnapshotMeta, 
 /// Per-edge provenance: structural edges point at corpus input versions,
 /// asserted edges point at review records. Unknown assertion IDs are
 /// reported explicitly, never hidden and never invented.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ProvenanceExplanation {
     /// Deterministic structural edge; provenance lives in the edge attrs.
@@ -444,6 +447,15 @@ pub enum ProvenanceExplanation {
         /// Decision timestamp, when decided.
         #[serde(default)]
         decided_at: Option<String>,
+        /// Producing algorithm, for layer-D (computational) suggestions.
+        #[serde(default)]
+        algorithm: Option<String>,
+        /// Algorithm version, for layer-D suggestions.
+        #[serde(default)]
+        algorithm_version: Option<String>,
+        /// Attributed confidence metadata, for layer-D suggestions.
+        #[serde(default)]
+        confidence: Option<f64>,
     },
     /// The edge points at an assertion ID with no authority record. The
     /// edge stays visible under an unrestricted scope (port semantics); the
@@ -455,7 +467,7 @@ pub enum ProvenanceExplanation {
 }
 
 /// One traversed edge with its type and provenance.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct EdgeExplanation {
     /// Source stable ID.
     pub src: String,
@@ -468,7 +480,7 @@ pub struct EdgeExplanation {
 }
 
 /// One ordered path with node IDs plus explained edges.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PathExplanation {
     /// Stable IDs from source to destination, inclusive.
     pub node_ids: Vec<String>,
@@ -513,7 +525,7 @@ impl From<&ProjectionManifest> for SnapshotIdentity {
 }
 
 /// Full explainability payload (D-14) attached to every read result.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Explanation {
     /// Start node, when the read has one.
     #[serde(default)]
@@ -845,6 +857,9 @@ pub fn explain_edge_with(edge: &GraphEdge, assertion: Option<&Assertion>) -> Edg
                 reviewer: record.reviewer.clone(),
                 decision: decision_name(record.decision),
                 decided_at: record.decided_at.clone(),
+                algorithm: record.algorithm.clone(),
+                algorithm_version: record.algorithm_version.clone(),
+                confidence: record.confidence,
             },
             None => ProvenanceExplanation::UnknownAssertion { id: id.to_string() },
         },

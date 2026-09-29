@@ -176,6 +176,7 @@ fn fake_snapshot() -> application::quran_graph_api::GraphSnapshotMeta {
     application::quran_graph_api::GraphSnapshotMeta {
         edition_slug: "test".into(),
         edition_version: "0.1.0".into(),
+        edition_id: "ed-1".into(),
         text_hash: "sha256:ab".into(),
         corpus_generation: 7,
     }

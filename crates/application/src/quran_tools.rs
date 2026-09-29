@@ -85,6 +85,9 @@ async fn meta_from_edition(
             quran_core::NumberingScheme::Kufi => "kufi".to_string(),
             quran_core::NumberingScheme::Custom(name) => name.clone(),
         },
+        // Reader tools serve canonical text, not a graph projection.
+        projection_id: String::new(),
+        builder_version: String::new(),
     })
 }
 

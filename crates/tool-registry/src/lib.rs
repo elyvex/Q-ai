@@ -31,6 +31,16 @@ pub const LEMMA_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
 pub const MORPHOLOGY_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
 /// Tool versions (§12 tool plan; D-13 lexicon surface).
 pub const FAMILY_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions (§12 tool plan; Phase 4 graph surface, D-12).
+pub const GRAPH_NEIGHBORS_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions (§12 tool plan; Phase 4 graph surface, D-12).
+pub const GRAPH_PATH_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions (§12 tool plan; Phase 4 graph surface, D-12).
+pub const GRAPH_SUBGRAPH_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions (§12 tool plan; Phase 4 graph surface, D-12).
+pub const GRAPH_PATTERN_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions (§12 tool plan; Phase 4 graph surface, D-12).
+pub const GRAPH_ROOT_FAMILY_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
 
 /// Edition + generation metadata behind one backend read.
 #[derive(Debug, Clone)]
@@ -51,6 +61,12 @@ pub struct BackendMeta {
     pub riwayah: Option<String>,
     /// Verse-numbering scheme.
     pub numbering_scheme: String,
+    /// Graph projection family served (`quran-structural-v1`, …; empty when
+    /// the tool does not read a graph projection).
+    pub projection_id: String,
+    /// Builder name + version of the serving projection build (empty when
+    /// the tool does not read a graph projection).
+    pub builder_version: String,
 }
 
 /// The reader surface tools need. Implemented by `application` for the real
@@ -111,6 +127,49 @@ pub trait QuranBackend: Send + Sync {
         _params: &FamilyToolParams,
     ) -> Result<ToolResult<serde_json::Value>, ToolError> {
         Err(unsupported("quran.family"))
+    }
+
+    /// `quran.graph_neighbors` (D-12): bounded neighbors with per-edge
+    /// provenance. Backends that do not serve the graph return a typed
+    /// backend error.
+    async fn backend_graph_neighbors(
+        &self,
+        _params: &GraphNeighborsParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        Err(unsupported("quran.graph_neighbors"))
+    }
+
+    /// `quran.graph_path` (D-12): reachability, shortest, or up-to-K paths.
+    async fn backend_graph_path(
+        &self,
+        _params: &GraphPathParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        Err(unsupported("quran.graph_path"))
+    }
+
+    /// `quran.graph_subgraph` (D-12): bounded multi-seed subgraph.
+    async fn backend_graph_subgraph(
+        &self,
+        _params: &GraphSubgraphParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        Err(unsupported("quran.graph_subgraph"))
+    }
+
+    /// `quran.graph_pattern` (D-12): typed pattern query from seeds.
+    async fn backend_graph_pattern(
+        &self,
+        _params: &GraphPatternParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        Err(unsupported("quran.graph_pattern"))
+    }
+
+    /// `quran.graph_root_family` (D-12): ranked ayahs from the active
+    /// morphology dataset (lexicon-gated).
+    async fn backend_graph_root_family(
+        &self,
+        _params: &GraphRootFamilyParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        Err(unsupported("quran.graph_root_family"))
     }
 }
 
@@ -210,6 +269,123 @@ pub struct FamilyToolParams {
     pub id: String,
 }
 
+/// Optional per-field budget overrides for the graph tools (D-12).
+/// Primitives only — this crate must not name `quran-graph` types
+/// (`arch-check`): the application layer folds these into budgets.
+/// `None` keeps the surface default; explicit values fail pre-flight,
+/// never clamp.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct GraphBudgetsParams {
+    /// Maximum traversal depth in hops.
+    #[serde(default)]
+    pub max_hops: Option<usize>,
+    /// Maximum distinct nodes collected per query.
+    #[serde(default)]
+    pub max_nodes: Option<usize>,
+    /// Maximum edge relaxations performed per query.
+    #[serde(default)]
+    pub max_edges: Option<usize>,
+    /// Maximum paths returned per path query.
+    #[serde(default)]
+    pub max_paths: Option<usize>,
+    /// Maximum neighbors expanded per single node visit.
+    #[serde(default)]
+    pub max_fanout: Option<usize>,
+    /// Wall-clock budget in milliseconds.
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
+}
+
+/// Parameters for `quran.graph_neighbors` (D-12).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphNeighborsParams {
+    /// Stable node id to open around.
+    pub node: String,
+    /// Allowed edge predicates (`None` admits every allowlisted predicate).
+    #[serde(default)]
+    pub edge_types: Option<Vec<String>>,
+    /// Expansion direction (`both` default; `outgoing`|`incoming`).
+    #[serde(default)]
+    pub direction: Option<String>,
+    /// Budget overrides.
+    #[serde(default)]
+    pub budgets: GraphBudgetsParams,
+}
+
+/// Parameters for `quran.graph_path` (D-12).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphPathParams {
+    /// Source stable id.
+    pub from: String,
+    /// Destination stable id.
+    pub to: String,
+    /// Search mode (`reachability`|`shortest`|`paths`; default `paths`).
+    #[serde(default)]
+    pub mode: Option<String>,
+    /// Requested path count for `paths` mode (defaults to the `max_paths`
+    /// budget; beyond it is a pre-flight error).
+    #[serde(default)]
+    pub paths: Option<usize>,
+    /// Allowed edge predicates (recorded; path modes expand
+    /// direction-agnostic by traversal design).
+    #[serde(default)]
+    pub edge_types: Option<Vec<String>>,
+    /// Expansion direction (recorded; path modes expand direction-agnostic).
+    #[serde(default)]
+    pub direction: Option<String>,
+    /// Budget overrides.
+    #[serde(default)]
+    pub budgets: GraphBudgetsParams,
+}
+
+/// Parameters for `quran.graph_subgraph` (D-12).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphSubgraphParams {
+    /// Seed stable ids.
+    pub seeds: Vec<String>,
+    /// Allowed edge predicates.
+    #[serde(default)]
+    pub edge_types: Option<Vec<String>>,
+    /// Expansion direction.
+    #[serde(default)]
+    pub direction: Option<String>,
+    /// Budget overrides.
+    #[serde(default)]
+    pub budgets: GraphBudgetsParams,
+}
+
+/// One typed pattern step for `quran.graph_pattern` (D-12).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphPatternStep {
+    /// Edge predicate; must be in the edge vocabulary.
+    pub edge: String,
+    /// Optional node-kind constraint (`ayah`, `token`, `root`, …).
+    #[serde(default)]
+    pub node_kind: Option<String>,
+}
+
+/// Parameters for `quran.graph_pattern` (D-12).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphPatternParams {
+    /// Seed stable ids.
+    pub seeds: Vec<String>,
+    /// Ordered typed steps (`1..=8`; unknown edges reject pre-flight).
+    pub steps: Vec<GraphPatternStep>,
+    /// Budget overrides.
+    #[serde(default)]
+    pub budgets: GraphBudgetsParams,
+}
+
+/// Parameters for `quran.graph_root_family` (D-12).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphRootFamilyParams {
+    /// Normalized root spelling.
+    pub root: String,
+    /// Result cap (default 25, mirroring the CLI verb).
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
 /// A typed backend error for a tool a backend does not serve.
 fn unsupported(tool: &'static str) -> ToolError {
     ToolError::Backend {
@@ -260,7 +436,7 @@ impl ToolRegistry {
 
     /// The full registered tool set (§12 tool plan; D-13): the two direct-read
     /// tools plus the attributed search/lexicon surface.
-    pub const TOOL_NAMES: [&'static str; 7] = [
+    pub const TOOL_NAMES: [&'static str; 12] = [
         "quran.get_ayah",
         "quran.get_context",
         "quran.search",
@@ -268,6 +444,11 @@ impl ToolRegistry {
         "quran.lemma",
         "quran.morphology",
         "quran.family",
+        "quran.graph_neighbors",
+        "quran.graph_path",
+        "quran.graph_subgraph",
+        "quran.graph_pattern",
+        "quran.graph_root_family",
     ];
 
     /// Registered tool names.
@@ -453,6 +634,84 @@ impl ToolRegistry {
         }
         self.backend.backend_family(&params).await
     }
+
+    /// `quran.graph_neighbors` (D-12): a non-empty node is required.
+    pub async fn graph_neighbors(
+        &self,
+        params: GraphNeighborsParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        if params.node.trim().is_empty() {
+            return Err(ToolError::InvalidInput {
+                tool: "quran.graph_neighbors",
+                detail: "node must not be empty".to_string(),
+            });
+        }
+        self.backend.backend_graph_neighbors(&params).await
+    }
+
+    /// `quran.graph_path` (D-12): non-empty endpoints are required; the
+    /// mode selector is validated by the backend before any I/O.
+    pub async fn graph_path(
+        &self,
+        params: GraphPathParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        if params.from.trim().is_empty() || params.to.trim().is_empty() {
+            return Err(ToolError::InvalidInput {
+                tool: "quran.graph_path",
+                detail: "path needs non-empty from and to nodes".to_string(),
+            });
+        }
+        self.backend.backend_graph_path(&params).await
+    }
+
+    /// `quran.graph_subgraph` (D-12): at least one non-empty seed is required.
+    pub async fn graph_subgraph(
+        &self,
+        params: GraphSubgraphParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        if params.seeds.is_empty() || params.seeds.iter().any(|seed| seed.trim().is_empty()) {
+            return Err(ToolError::InvalidInput {
+                tool: "quran.graph_subgraph",
+                detail: "subgraph needs at least one non-empty seed".to_string(),
+            });
+        }
+        self.backend.backend_graph_subgraph(&params).await
+    }
+
+    /// `quran.graph_pattern` (D-12): seeds plus at least one step are
+    /// required; step validation happens in the backend before any I/O.
+    pub async fn graph_pattern(
+        &self,
+        params: GraphPatternParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        if params.seeds.is_empty() || params.seeds.iter().any(|seed| seed.trim().is_empty()) {
+            return Err(ToolError::InvalidInput {
+                tool: "quran.graph_pattern",
+                detail: "pattern needs at least one non-empty seed".to_string(),
+            });
+        }
+        if params.steps.is_empty() {
+            return Err(ToolError::InvalidInput {
+                tool: "quran.graph_pattern",
+                detail: "pattern needs at least one step".to_string(),
+            });
+        }
+        self.backend.backend_graph_pattern(&params).await
+    }
+
+    /// `quran.graph_root_family` (D-12): a non-empty root is required.
+    pub async fn graph_root_family(
+        &self,
+        params: GraphRootFamilyParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        if params.root.trim().is_empty() {
+            return Err(ToolError::InvalidInput {
+                tool: "quran.graph_root_family",
+                detail: "root must not be empty".to_string(),
+            });
+        }
+        self.backend.backend_graph_root_family(&params).await
+    }
 }
 
 #[cfg(test)]
@@ -493,8 +752,20 @@ mod tests {
             script: "uthmani".into(),
             riwayah: None,
             numbering_scheme: "hafs".into(),
+            projection_id: String::new(),
+            builder_version: String::new(),
         };
         (view, meta)
+    }
+
+    /// Graph tools share one attributed envelope shape in these contract
+    /// tests; the application backend pins the real projection build.
+    fn graph_attributed(
+        tool: &str,
+        version: SemVer,
+        query: serde_json::Value,
+    ) -> ToolResult<serde_json::Value> {
+        attributed(tool, version, query)
     }
 
     /// A conformant attributed envelope for the D-13 tools: attribution always
@@ -596,6 +867,64 @@ mod tests {
                 serde_json::to_value(params).unwrap(),
             ))
         }
+
+        /// Graph tools share one attributed envelope shape in these
+        /// contract tests; the application backend (plan 04-04) pins the
+        /// real projection build.
+        async fn backend_graph_neighbors(
+            &self,
+            params: &GraphNeighborsParams,
+        ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+            Ok(graph_attributed(
+                "quran.graph_neighbors",
+                GRAPH_NEIGHBORS_TOOL_VERSION,
+                serde_json::to_value(params).unwrap(),
+            ))
+        }
+
+        async fn backend_graph_path(
+            &self,
+            params: &GraphPathParams,
+        ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+            Ok(graph_attributed(
+                "quran.graph_path",
+                GRAPH_PATH_TOOL_VERSION,
+                serde_json::to_value(params).unwrap(),
+            ))
+        }
+
+        async fn backend_graph_subgraph(
+            &self,
+            params: &GraphSubgraphParams,
+        ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+            Ok(graph_attributed(
+                "quran.graph_subgraph",
+                GRAPH_SUBGRAPH_TOOL_VERSION,
+                serde_json::to_value(params).unwrap(),
+            ))
+        }
+
+        async fn backend_graph_pattern(
+            &self,
+            params: &GraphPatternParams,
+        ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+            Ok(graph_attributed(
+                "quran.graph_pattern",
+                GRAPH_PATTERN_TOOL_VERSION,
+                serde_json::to_value(params).unwrap(),
+            ))
+        }
+
+        async fn backend_graph_root_family(
+            &self,
+            params: &GraphRootFamilyParams,
+        ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+            Ok(graph_attributed(
+                "quran.graph_root_family",
+                GRAPH_ROOT_FAMILY_TOOL_VERSION,
+                serde_json::to_value(params).unwrap(),
+            ))
+        }
     }
 
     #[test]
@@ -611,6 +940,11 @@ mod tests {
                 "quran.lemma",
                 "quran.morphology",
                 "quran.family",
+                "quran.graph_neighbors",
+                "quran.graph_path",
+                "quran.graph_subgraph",
+                "quran.graph_pattern",
+                "quran.graph_root_family",
             ]
         );
     }
