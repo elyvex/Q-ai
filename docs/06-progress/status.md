@@ -1,15 +1,18 @@
 # Progress Status
 
-**Updated:** 2026-09-24
-**Active phase:** Phase 2 — Quran search, normalization, morphology, and counting
-**Related boards:** `docs/03-plan/phases/phase-02-rag/tasks.md` · `docs/03-plan/phases/phase-04-quran-graph/tasks.md`
+**Updated:** 2026-09-29
+**Active phase:** Phase 3.5 — Residual Closure (INSERTED) — `.planning/phases/03.5-residual-closure/`
+**Phase-state authority:** `.planning/STATE.md` + per-phase SUMMARY
+**Task-granularity authority:** `docs/03-plan/phases/*/tasks.md`
+**Evidence authority:** per-phase `done.md` ledgers
 
 ## Summary
 
-The repository has moved beyond the Phase-0 chassis: canonical Quran import/read services,
-normalization, FTS5 search, morphology staging/activation services, counting/discovery
-services, and in-memory graph foundations are implemented. The phase boards are the source
-of truth for completion; partial work is recorded as ◐ rather than counted as ☑.
+Phase 3.5 (Residual Closure) is executing. The legacy boards have been reconciled
+against the live tree (plan 03.5-01): Phase 2 now reads 65/114 ☑ (57%), Phase 4
+reads 0/30 ☑ with 10 ◐ and 3 ⊘. Status pointers in this directory name `.planning/STATE.md`
+as the phase-state authority and the per-phase `tasks.md` boards as the task-granularity
+authority — they no longer duplicate phase-state tables.
 
 ## Gate status
 
@@ -37,9 +40,10 @@ of truth for completion; partial work is recorded as ◐ rather than counted as 
 
 ## Current totals
 
-- **Phase 2:** 58 / 114 tasks ☑ (51%); ◐ rows are partial/synthetic/owner-gated; 0 / 50 ACs and 0 / 14 ADRs are formally accepted.
-- **Graph phase:** 0 / 30 ☑; 10 ◐; M5 (TASK-405/406/407) remains blocked by licensed morphology evidence and the missing graph root-family projection.
+- **Phase 2:** 65 / 114 tasks ☑ (57%); ◐ rows are partial/synthetic/owner-gated; 0 / 50 ACs and 0 / 14 ADRs are formally accepted. Board reconciled 2026-09-29 (plan 03.5-01).
+- **Graph phase:** 0 / 30 ☑; 10 ◐; 3 ⊘; M5 (TASK-405/406/407) remains blocked by licensed morphology evidence and the missing graph root-family projection. See `docs/03-plan/phases/phase-04-quran-graph/tasks.md` for task-level status.
 - **Phase 0 residual:** P0-T56 remains ◐; clean-machine/container runtime verification is still open.
+- **Phase 3.5:** executing (plan 03.5-01) — board reconciliation + documentation set.
 
 ## Next work
 

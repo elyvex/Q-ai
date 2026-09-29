@@ -6,8 +6,8 @@ These instructions apply to all agents working on Q-ai.
 
 1. Read `AGENTS.md` before doing anything.
 2. Follow the reading order in `AGENTS.md` > "Before starting work".
-3. Every task you pick up must map to a TASK-ID under `docs/04-tasks/active/`.
-4. When done, move the task file from `active/` to `completed/`.
+3. Every task you pick up must map to a TASK-ID on the phase `tasks.md` board under `docs/03-plan/phases/` (the work-item system of record). `docs/04-tasks/` is the index of active/completed task files, not the primary board.
+4. When done, update the phase `tasks.md` board and append an entry to the phase `done.md` ledger.
 5. Update the rollup in `docs/06-progress/task-done-rollup.md`.
 6. Record unresolved questions in `docs/05-followups/open-questions.md`.
 7. Record architectural decisions in `docs/02-architecture/decisions/` as ADRs.
@@ -16,7 +16,7 @@ These instructions apply to all agents working on Q-ai.
 ## Document Flow
 
 - **Planning** belongs in `docs/03-plan/`.
-- **Work items** belong in `docs/04-tasks/`.
+- **Work items** belong on the phase `tasks.md` board under `docs/03-plan/phases/` (the system of record); `docs/04-tasks/` is the index of task files.
 - **Unresolved questions** belong in `docs/05-followups/`.
 - **Completed-work summaries** belong in `docs/06-progress/`.
 - **Deep technical knowledge** belongs in `docs/07-technical/`.

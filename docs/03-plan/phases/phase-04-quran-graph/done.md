@@ -1,7 +1,7 @@
 # Phase 3 (dir: phase-04) — Completion Ledger — Quran Knowledge Graph
 
 **Phase:** PRD Phase 3 — Quran Graph (directory numbering unchanged — see `README.md`)
-**Status:** In progress — 0 / 30 ☑ (10 ◐ code-landed-partial, 3 ⊘ M5 blocked) · 0 / 28 acceptance criteria
+**Status:** In progress — 0 / 30 ☑ (10 ◐ code-landed-partial, 3 ⊘ M5 blocked) · 0 / 28 acceptance criteria · reconciled 2026-09-29 (plan 03.5-01)
 **Started:** —
 **Completed:** —
 

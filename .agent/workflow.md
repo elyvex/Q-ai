@@ -13,8 +13,8 @@
 
 ## 2. Plan
 
-- Work items live in `docs/04-tasks/active/`.
-- A task not listed in `docs/04-tasks/` must be created there before work starts.
+- Work items live on the phase `tasks.md` board under `docs/03-plan/phases/` (the system of record). `docs/04-tasks/` is the index of task files.
+- A task not listed on the phase board must be added there before work starts.
 - Each task must have a TASK-ID in its filename.
 
 ## 3. Implement
@@ -25,7 +25,7 @@
 
 ## 4. Complete
 
-- Move the task file from `docs/04-tasks/active/` to `docs/04-tasks/completed/`.
+- Update the phase `tasks.md` board (flip status) and append an entry to the phase `done.md` ledger.
 - Update `docs/06-progress/task-done-rollup.md`.
 - Update `docs/06-progress/status.md`.
 - Update `CHANGELOG.md` when appropriate.

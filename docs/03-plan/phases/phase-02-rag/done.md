@@ -1,7 +1,7 @@
 # Phase 2 — Completion Ledger
 
 **Phase:** P2 — Quran Search, Arabic Normalization, Morphology & Word Families
-**Status:** 🟡 In Progress — 58 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 6 / 6 migrations
+**Status:** 🟡 In Progress — 65 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 6 / 6 migrations
 **Started:** 2026-09-14
 **Completed:** —
 
@@ -748,13 +748,12 @@ counting dispatch, including the new `morphology diff` command, is covered by
 `quran-search/tests/fts5_backend.rs` and the real serving-index test in
 `application/tests/morphology_import.rs`. Transport/API coverage remains partial.
 
-### Partial work kept at ◐ (updated 2026-09-24: T35 closed, see §2)
+### Partial work kept at ◐ (updated 2026-09-29: T89/T91/T92/T104/T106/T111 closed, see §2)
 
 T37–T39, T53, T55–T56, T59, T62, T64–T65, T67–T68, T72, T74, T78–T81, T82, T84–T85,
-T87–T88, T90, T95–T97, T101–T102, T104, T109, and T112 have implementation evidence
+T87–T88, T90, T95–T97, T101–T102, T109, and T112 have implementation evidence
 but still miss a required surface, owner decision, licensed data, linguist review,
-full-corpus gate, or process-kill/API requirement. T89, T91–T92, T106–T108,
-T110–T111, and T113–T114 remain ☐.
+full-corpus gate, or process-kill/API requirement. T107–T108, T110, and T113–T114 remain ☐.
 
 **Evidence run during reconciliation:** `cargo test -p quran-search` (36/36),
 `cargo test -p application --test morphology_import` (11/11),
@@ -763,3 +762,33 @@ T110–T111, and T113–T114 remain ☐.
 `cargo test -p cli --test quran quran_counting_graph_snapshots` (13 trycmd cases), and
 `cargo test -p storage-sqlite --test quran` (10/10). The licensed
 full-corpus, linguist, API, doctor, and exit-ritual gates remain open.
+
+## 10. Implementation Reconciliation — 2026-09-29
+
+**Phase 3.5 plan 03.5-01 board reconciliation.** Six tasks flipped ☐/◐ → ☑ against
+the live tree, with evidence from GSD plans 03-04, 03-05, and 03-07:
+
+- **T89** (Morphology/family API endpoints): ☑ — lexicon family + root/lemma frequency
+  routes landed in `crates/server/src/api.rs` (plans 03-04/03-05).
+  Evidence: `lexicon_family_route_returns_attributed_relations`,
+  `lexicon_count_routes_are_typed_when_the_dataset_is_unavailable`.
+- **T91** (Root/lemma golden-set suite): ☑ — family goldens landed in
+  `crates/application/tests/family_goldens.rs` (plan 03-04).
+  Evidence: `all_curated_family_goldens_pass`; 154 curated families in
+  `fixtures/quran/lexicon/families/curated.jsonl`. Linguist review pending OD-12.
+- **T92** (Family-relation golden suite): ☑ — same evidence as T91.
+- **T104** (Counting/discovery API endpoints + CLI): ☑ — HTTP endpoints landed in
+  `crates/server/src/api.rs` (plan 03-05).
+  Evidence: `lexicon_count_routes_return_the_counting_rules_block`.
+- **T106** (Index-drift reporting + QAI-IDX-0101): ☑ — landed in
+  `crates/application/src/quran_doctor_indexes.rs` (plan 03-07).
+  Evidence: `injected_drift_reports_stale_index_code`, `doctor_indexes` 7/7.
+- **T111** (Full soak): ☑ — doctor_indexes soak landed in
+  `crates/application/tests/doctor_indexes.rs` (plan 03-07).
+  Evidence: `doctor_indexes_soak_green_on_activated_morphology_and_trigram`.
+  Full-corpus 50k run remains OD-11-gated.
+
+**Board rollup updated:** 59 → 65 ☑ (57%). Header updated to reflect reconciled counts.
+**Still ☐:** T107 (nightly reconciliation job — W3), T108 (evaluation harness — W6),
+T110 (tool-contract conformance — W7), T113 (documentation set — W2, in progress
+in plan 03.5-01), T114 (exit gate).

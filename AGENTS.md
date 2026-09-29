@@ -49,6 +49,7 @@ Agent-critical files at the repo root:
 4. Read the active phase plan under `docs/03-plan/phases/`.
 5. Read `docs/06-progress/status.md`.
 6. Check `docs/05-followups/open-questions.md`.
+7. The phase `tasks.md` board under `docs/03-plan/phases/` is the work-item system of record. `docs/04-tasks/` is the index of task files, not the primary board.
 
 ---
 
@@ -80,7 +81,7 @@ When completing a task:
 1. Implement it.
 2. Run tests.
 3. Run lint/checks.
-4. Update the task document.
+4. Update the phase `tasks.md` board row and append a `done.md` ledger entry.
 5. Update phase progress.
 6. Update `docs/06-progress/task-done-rollup.md`.
 7. Add important follow-ups to `docs/05-followups/`.

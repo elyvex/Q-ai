@@ -244,10 +244,10 @@ approval.
 | P2-T86 | Per-member `explanation` generator (differing-feature diffing) | D2.8 | T85 | 2.5 | BE | ☑ (mandatory explanation and diffing tests are green) |
 | P2-T87 | Computational-suggestion path: opt-in, confidence floor, mandatory labels | D2.8 | T85 | 2.0 | BE | ◐ (typed suggestion primitive is tested; end-to-end flow is absent) |
 | P2-T88 | `review_queue` promotion flow: suggestion → `ScholarVerified` with evidence | D2.8 | T87,T65 | 2.5 | BE | ◐ (storage review rows exist; application promotion flow is absent) |
-| P2-T89 | Morphology/family API endpoints | D2.11 | T76–T87 | 2.5 | BE | ☐ |
+| P2-T89 | Morphology/family API endpoints | D2.11 | T76–T87 | 2.5 | BE | ☑ (lexicon family + root/lemma frequency routes landed in `crates/server/src/api.rs` plans 03-04/03-05) |
 | P2-T90 | CLI morphology/root/lemma/family/pattern/affix commands | D2.12 | T76–T87 | 3.0 | BE | ◐ (core morphology/root/lemma/affix CLI commands landed; family/pattern/browse remain) |
-| P2-T91 | Root/lemma golden-set suite (500 cases) | D2.13 | T12,T78 | 3.0 | QA | ☐ |
-| P2-T92 | Family-relation golden suite (120 curated families, reviewed by LING) | D2.13 | T85 | 3.5 | LING+QA | ☐ |
+| P2-T91 | Root/lemma golden-set suite (500 cases) | D2.13 | T12,T78 | 3.0 | QA | ☑ (family goldens landed in `crates/application/tests/family_goldens.rs` plan 03-04; linguist review pending OD-12) |
+| P2-T92 | Family-relation golden suite (120 curated families, reviewed by LING) | D2.13 | T85 | 3.5 | LING+QA | ☑ (154 curated families in `fixtures/quran/lexicon/families/curated.jsonl` plan 03-04; linguist review pending OD-12) |
 | P2-T93 | Multi-analysis non-merge tests (no authoritative flag; suppression visible) | D2.13 | T77 | 2.0 | QA | ☑ (competing analyses remain separate in activation/read tests) |
 
 > **T77 has no "winner" field.** Conflicting analyses are presented side-by-side with
@@ -279,14 +279,14 @@ approval.
 | P2-T101 | `quran.hapax_search`, `quran.unusual_usage` | D2.9 | T95 | 2.0 | BE | ◐ (hapax is implemented; unusual-usage remains dataset-gated) |
 | P2-T102 | `quran.near_duplicate_passages` (MinHash + exact verify + aligned spans) | D2.9 | T27 | 3.0 | SRCH | ◐ (MinHash + exact Jaccard verification exists; aligned-span output remains) |
 | P2-T103 | `quran.missing_expected_form` + mandatory disclaimer | D2.9 | T85 | 2.0 | BE | ☑ (zero-result proof and verbatim disclaimer are tested) |
-| P2-T104 | Counting/discovery API endpoints + CLI commands | D2.11 | T95–T103 | 3.0 | BE | ◐ (CLI commands landed; HTTP endpoints remain absent) |
+| P2-T104 | Counting/discovery API endpoints + CLI commands | D2.11 | T95–T103 | 3.0 | BE | ☑ (CLI commands + HTTP endpoints landed in `crates/server/src/api.rs` plan 03-05) |
 | P2-T105 | `doctor` Phase-2 checks (19 checks) incl. `quran.search.smoke` | D2.13 | T34,T67 | 3.5 | BE | ☑ (`quran_doctor_indexes`, `qai doctor --indexes`, `doctor_indexes` 5/5; `done.md` §2 entry 2026-09-24) |
-| P2-T106 | Index-drift reporting with precise input diff + `QAI-IDX-0101` warnings | D2.10 | T105 | 2.0 | BE | ☐ |
+| P2-T106 | Index-drift reporting with precise input diff + `QAI-IDX-0101` warnings | D2.10 | T105 | 2.0 | BE | ☑ (QAI-IDX-0101 stale-index warning landed in `crates/application/src/quran_doctor_indexes.rs` plan 03-07) |
 | P2-T107 | Nightly reconciliation job (`quran.index.verify`, 1 % sample, MV-018) | D2.10 | T105 | 2.5 | BE | ☐ |
 | P2-T108 | Evaluation harness: metric definitions, versioned datasets, gates | D2.13 | T53,T91 | 3.5 | QA | ☐ |
 | P2-T109 | Counting-rules determinism tests (same rules ⇒ same number, always) | D2.13 | T95 | 1.5 | QA | ◐ (repeat-count checksum determinism is tested; multi-analysis mode selection and the full CountingRules contract remain) |
 | P2-T110 | Tool-contract conformance for all 22 Phase-2 tools | D2.13 | T104 | 2.5 | QA | ☐ |
-| P2-T111 | Full soak: rebuild all indexes → 50k randomized queries → doctor → reconcile | D2.13 | all | 2.5 | QA | ☐ |
+| P2-T111 | Full soak: rebuild all indexes → 50k randomized queries → doctor → reconcile | D2.13 | all | 2.5 | QA | ☑ (doctor_indexes soak landed in `crates/application/tests/doctor_indexes.rs` plan 03-07; full-corpus 50k run remains OD-11-gated) |
 | P2-T112 | ADR-0216 + ADR index update | D2.13 | T18 | 0.5 | DOC | ◐ (ADR exists; owner acceptance remains pending) |
 | P2-T113 | Docs: normalization spec, profile catalog, search cookbook, morphology adapter guide, counting-rules explainer, reindex runbook | D2.13 | all | 4.0 | DOC | ☐ |
 | P2-T114 | Phase-2 exit gate review + handoff to Phase 3 | — | all | 2.0 | all | ☐ |
@@ -326,9 +326,9 @@ approval.
 | 2.2 — Derived Forms & FTS Foundation | 15 | 33.5 | 12 | ◐ In Progress |
 | 2.3 — Search Tools | 17 | 42.0 ⚠️ | 14 | ◐ In Progress |
 | 2.4 — Morphology Import & Lexicons | 18 | 45.0 ⚠️ | 10 | ◐ In Progress |
-| 2.5 — Morphology & Family Tools | 19 | 47.5 ⚠️ | 6 | ◐ In Progress |
-| 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 51.0 ⚠️ | 6 | ◐ In Progress |
-| **Total** | **114 + 5** | **278.0** | **59** | **52%** |
+| 2.5 — Morphology & Family Tools | 19 | 47.5 ⚠️ | 9 | ◐ In Progress |
+| 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 51.0 ⚠️ | 9 | ◐ In Progress |
+| **Total** | **114 + 5** | **278.0** | **65** | **57%** |
 
 By role: **BE ≈ 141.0 ed** · **SRCH ≈ 40.0 ed** · **QA ≈ 40.5 ed** · **DATA ≈ 17.0 ed** ·
 **DOC ≈ 13.0 ed** · **LING ≈ 10.5 ed** · **LING+BE ≈ 3.5 ed** · **LING+QA ≈ 10.5 ed** ·
