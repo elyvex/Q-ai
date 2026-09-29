@@ -158,6 +158,9 @@ pub struct AppState {
     /// Read-only lexicon backend (SC3/SC4, D-10/D-13): word family and
     /// root/lemma frequency.
     pub lexicon: Arc<dyn application::quran_lexicon_api::LexiconBackend>,
+    /// Read-only graph backend (D-12): neighbors, path, subgraph, pattern,
+    /// and root-family over the active structural projection.
+    pub graph: Arc<dyn application::quran_graph_api::GraphBackend>,
 }
 
 fn empty_meta() -> Meta {
@@ -1315,6 +1318,442 @@ async fn lexicon_lemma_frequency_handler(
     }
 }
 
+// ─── Graph read surfaces (D-12/D-14) ────────────────────────────────────
+//
+// Every CLI read op has an HTTP route returning the identical result under
+// the versioned Envelope: handlers are thin over the `quran_graph_api` read
+// services (same validation, same budgets, same explainability payload), so
+// CLI/HTTP/tools cannot drift. Read-only only — no mutation route exists
+// under `/api/v1/quran/graph` (D-11 scope fence).
+
+/// Optional per-field budget overrides (`None` keeps the surface default;
+/// explicit values, including 0, fail pre-flight — never clamp).
+#[derive(Debug, Deserialize)]
+struct GraphBudgetsBody {
+    max_hops: Option<usize>,
+    max_nodes: Option<usize>,
+    max_edges: Option<usize>,
+    max_paths: Option<usize>,
+    max_fanout: Option<usize>,
+    timeout_ms: Option<u64>,
+}
+
+fn graph_patch(budgets: Option<GraphBudgetsBody>) -> application::quran_graph_api::BudgetPatch {
+    use application::quran_graph_api::BudgetPatch;
+    match budgets {
+        None => BudgetPatch::default(),
+        Some(body) => BudgetPatch {
+            max_hops: body.max_hops,
+            max_nodes: body.max_nodes,
+            max_edges: body.max_edges,
+            max_paths: body.max_paths,
+            max_fanout: body.max_fanout,
+            timeout_ms: body.timeout_ms,
+        },
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct GraphNeighborsBody {
+    /// Stable node id to open around.
+    node: String,
+    /// Allowed edge predicates (`None` admits every allowlisted predicate).
+    edge_types: Option<Vec<String>>,
+    /// Expansion direction (`both` default; `outgoing`|`incoming`).
+    direction: Option<String>,
+    /// Budget overrides.
+    budgets: Option<GraphBudgetsBody>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GraphPathBody {
+    /// Source stable id.
+    from: String,
+    /// Destination stable id.
+    to: String,
+    /// Search mode (`reachability`|`shortest`|`paths`; default `paths`,
+    /// mirroring the CLI verb).
+    mode: Option<String>,
+    /// Requested path count for `paths` mode (defaults to the `max_paths`
+    /// budget; beyond it is a pre-flight error, mirroring the CLI verb).
+    paths: Option<usize>,
+    /// Allowed edge predicates (recorded; path modes expand
+    /// direction-agnostic by traversal design).
+    edge_types: Option<Vec<String>>,
+    /// Expansion direction (recorded; path modes expand direction-agnostic).
+    direction: Option<String>,
+    /// Budget overrides.
+    budgets: Option<GraphBudgetsBody>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GraphSubgraphBody {
+    /// Seed stable ids (unknown seeds are skipped; all-unknown is a
+    /// complete-empty result, never an error).
+    seeds: Vec<String>,
+    /// Allowed edge predicates.
+    edge_types: Option<Vec<String>>,
+    /// Expansion direction.
+    direction: Option<String>,
+    /// Budget overrides.
+    budgets: Option<GraphBudgetsBody>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GraphPatternBody {
+    /// Seed stable ids.
+    seeds: Vec<String>,
+    /// Ordered typed steps (`1..=8`; unknown edges reject pre-flight).
+    steps: Vec<application::quran_graph_api::PatternStepRequest>,
+    /// Budget overrides.
+    budgets: Option<GraphBudgetsBody>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GraphRootFamilyBody {
+    /// Normalized root spelling.
+    root: String,
+    /// Result cap (default 25, mirroring the CLI verb).
+    limit: Option<usize>,
+}
+
+fn graph_error_status(error: &application::quran_graph_api::GraphApiError) -> StatusCode {
+    use storage::error::Diagnostic as _;
+    // Match on code strings so `server` never names the `quran-graph` error
+    // enum (no new workspace edge, `arch-check`) — the `search_error_status`
+    // precedent above.
+    match error.code().to_string().as_str() {
+        // Pre-flight violations are caller errors, never silent clamps.
+        "QAI-GRAPH-0002" | "QAI-GRAPH-0003" => StatusCode::UNPROCESSABLE_ENTITY,
+        // Unknown projection/node/assertion is a state problem, not a bad query.
+        "QAI-GRAPH-0001" | "QAI-GRAPH-0004" | "QAI-GRAPH-0007" => StatusCode::NOT_FOUND,
+        "QAI-GRAPH-0006" => StatusCode::FORBIDDEN,
+        // An unavailable word-root capability mirrors the CLI's NOT_FOUND
+        // mapping with the morphology diagnostic preserved.
+        "QAI-MORPH-0004" => StatusCode::NOT_FOUND,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+fn graph_error_response(error: application::quran_graph_api::GraphApiError) -> Response {
+    use storage::error::Diagnostic as _;
+    json_response(
+        graph_error_status(&error),
+        &ErrorBody {
+            error: ErrorDetail {
+                code: error.code().to_string(),
+                summary: error.summary(),
+                location: error.location(),
+                why: error.cause_chain(),
+                remedy: error.remedy(),
+                next_command: error.next_command(),
+            },
+        },
+        None,
+        false,
+    )
+}
+
+/// Shared envelope metadata for the graph routes: the active-edition read
+/// context (drives the ETag) plus wall-clock timing. Callers fill in the
+/// `reproducibility` block that pins what answered.
+fn graph_base_meta(
+    snapshot: &application::quran_graph_api::GraphSnapshotMeta,
+    started: Instant,
+) -> Meta {
+    Meta {
+        edition: EditionMeta {
+            slug: snapshot.edition_slug.clone(),
+            version: snapshot.edition_version.clone(),
+            text_hash: snapshot.text_hash.clone(),
+            script: String::new(),
+            riwayah: None,
+            numbering_scheme: String::new(),
+        },
+        corpus_generation: snapshot.corpus_generation,
+        canonical_reference: String::new(),
+        deep_link: String::new(),
+        execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
+        reproducibility: serde_json::Value::Null,
+        warnings: Vec::new(),
+    }
+}
+
+/// Graph successes ride the versioned Envelope with ETag plus
+/// conditional-GET handling through the existing `ok_envelope` contract
+/// (T-04-13): the tag derives from the active-edition read context, and the
+/// reproducibility block pins the answering projection build alongside the
+/// tool name.
+fn graph_response<T: Serialize>(
+    tool: &str,
+    data: T,
+    snapshot: &application::quran_graph_api::GraphSnapshotMeta,
+    projection: Option<(&str, &str)>,
+    started: Instant,
+    headers: &HeaderMap,
+) -> Response {
+    let mut meta = graph_base_meta(snapshot, started);
+    meta.reproducibility = match projection {
+        Some((projection_id, builder_version)) => serde_json::json!({
+            "tool": tool,
+            "projection_id": projection_id,
+            "builder_version": builder_version,
+            "corpus_generation": snapshot.corpus_generation,
+        }),
+        None => serde_json::json!({ "tool": tool }),
+    };
+    ok_envelope(data, meta, headers)
+}
+
+async fn graph_snapshot(
+    state: &AppState,
+) -> Result<application::quran_graph_api::GraphSnapshotMeta, Response> {
+    match state.graph.snapshot_meta().await {
+        Ok(snapshot) => Ok(snapshot),
+        Err(error) => Err(graph_error_response(error)),
+    }
+}
+
+async fn graph_neighbors_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<GraphNeighborsBody>,
+) -> Response {
+    use application::quran_graph_api as api;
+    let started = Instant::now();
+    // CLI parity: neighbors opens one hop by default (`--hops 1`).
+    let options = match api::read_options(
+        graph_patch(body.budgets),
+        1,
+        body.edge_types,
+        body.direction.as_deref(),
+    ) {
+        Ok(options) => options,
+        Err(error) => return graph_error_response(error),
+    };
+    let output = match state.graph.neighbors(api::NeighborsArgs { node: body.node, options }).await
+    {
+        Ok(output) => output,
+        Err(error) => return graph_error_response(error),
+    };
+    let snapshot = match graph_snapshot(&state).await {
+        Ok(snapshot) => snapshot,
+        Err(response) => return response,
+    };
+    let projection = output.explanation.snapshot.projection_id.clone();
+    let builder = output.explanation.snapshot.builder_version.clone();
+    graph_response(
+        "quran.graph.neighbors",
+        output,
+        &snapshot,
+        Some((&projection, &builder)),
+        started,
+        &headers,
+    )
+}
+
+async fn graph_path_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<GraphPathBody>,
+) -> Response {
+    use application::quran_graph_api as api;
+    let started = Instant::now();
+    let mode = match api::parse_path_mode(body.mode.as_deref()) {
+        Ok(mode) => mode,
+        Err(error) => return graph_error_response(error),
+    };
+    let options = match api::read_options(
+        graph_patch(body.budgets),
+        4,
+        body.edge_types,
+        body.direction.as_deref(),
+    ) {
+        Ok(options) => options,
+        Err(error) => return graph_error_response(error),
+    };
+    // CLI parity: `--paths` defaults to the `max_paths` budget; beyond it
+    // the service reports a pre-flight error, never a silent cap.
+    let k = body.paths.unwrap_or(options.budgets.max_paths);
+    match mode {
+        api::PathMode::Reachability => {
+            let output = match state
+                .graph
+                .reachability(api::PathArgs { from: body.from, to: body.to, options })
+                .await
+            {
+                Ok(output) => output,
+                Err(error) => return graph_error_response(error),
+            };
+            let snapshot = match graph_snapshot(&state).await {
+                Ok(snapshot) => snapshot,
+                Err(response) => return response,
+            };
+            let projection = output.explanation.snapshot.projection_id.clone();
+            let builder = output.explanation.snapshot.builder_version.clone();
+            graph_response(
+                "quran.graph.path",
+                output,
+                &snapshot,
+                Some((&projection, &builder)),
+                started,
+                &headers,
+            )
+        }
+        api::PathMode::Shortest => {
+            let output = match state
+                .graph
+                .shortest_path(api::PathArgs { from: body.from, to: body.to, options })
+                .await
+            {
+                Ok(output) => output,
+                Err(error) => return graph_error_response(error),
+            };
+            let snapshot = match graph_snapshot(&state).await {
+                Ok(snapshot) => snapshot,
+                Err(response) => return response,
+            };
+            let projection = output.explanation.snapshot.projection_id.clone();
+            let builder = output.explanation.snapshot.builder_version.clone();
+            graph_response(
+                "quran.graph.path",
+                output,
+                &snapshot,
+                Some((&projection, &builder)),
+                started,
+                &headers,
+            )
+        }
+        api::PathMode::Paths => {
+            let output = match state
+                .graph
+                .paths(api::PathsArgs { from: body.from, to: body.to, k, options })
+                .await
+            {
+                Ok(output) => output,
+                Err(error) => return graph_error_response(error),
+            };
+            let snapshot = match graph_snapshot(&state).await {
+                Ok(snapshot) => snapshot,
+                Err(response) => return response,
+            };
+            let projection = output.explanation.snapshot.projection_id.clone();
+            let builder = output.explanation.snapshot.builder_version.clone();
+            graph_response(
+                "quran.graph.path",
+                output,
+                &snapshot,
+                Some((&projection, &builder)),
+                started,
+                &headers,
+            )
+        }
+    }
+}
+
+async fn graph_subgraph_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<GraphSubgraphBody>,
+) -> Response {
+    use application::quran_graph_api as api;
+    let started = Instant::now();
+    let options = match api::read_options(
+        graph_patch(body.budgets),
+        4,
+        body.edge_types,
+        body.direction.as_deref(),
+    ) {
+        Ok(options) => options,
+        Err(error) => return graph_error_response(error),
+    };
+    let output = match state.graph.subgraph(api::SubgraphArgs { seeds: body.seeds, options }).await
+    {
+        Ok(output) => output,
+        Err(error) => return graph_error_response(error),
+    };
+    let snapshot = match graph_snapshot(&state).await {
+        Ok(snapshot) => snapshot,
+        Err(response) => return response,
+    };
+    let projection = output.explanation.snapshot.projection_id.clone();
+    let builder = output.explanation.snapshot.builder_version.clone();
+    graph_response(
+        "quran.graph.subgraph",
+        output,
+        &snapshot,
+        Some((&projection, &builder)),
+        started,
+        &headers,
+    )
+}
+
+async fn graph_pattern_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<GraphPatternBody>,
+) -> Response {
+    use application::quran_graph_api as api;
+    let started = Instant::now();
+    let pattern = match api::parse_pattern_steps(body.steps) {
+        Ok(pattern) => pattern,
+        Err(error) => return graph_error_response(error),
+    };
+    let options = match api::read_options(graph_patch(body.budgets), 4, None, None) {
+        Ok(options) => options,
+        Err(error) => return graph_error_response(error),
+    };
+    let output =
+        match state.graph.pattern(api::PatternArgs { pattern, seeds: body.seeds, options }).await {
+            Ok(output) => output,
+            Err(error) => return graph_error_response(error),
+        };
+    let snapshot = match graph_snapshot(&state).await {
+        Ok(snapshot) => snapshot,
+        Err(response) => return response,
+    };
+    let projection = output.explanation.snapshot.projection_id.clone();
+    let builder = output.explanation.snapshot.builder_version.clone();
+    graph_response(
+        "quran.graph.pattern",
+        output,
+        &snapshot,
+        Some((&projection, &builder)),
+        started,
+        &headers,
+    )
+}
+
+async fn graph_root_family_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<GraphRootFamilyBody>,
+) -> Response {
+    use application::quran_graph_api as api;
+    let started = Instant::now();
+    // CLI parity: the verb caps at 25 ranked ayahs by default.
+    let limit = body.limit.unwrap_or(25);
+    let output = match state.graph.root_family(api::RootFamilyArgs { root: body.root, limit }).await
+    {
+        Ok(output) => output,
+        Err(error) => return graph_error_response(error),
+    };
+    let snapshot = match graph_snapshot(&state).await {
+        Ok(snapshot) => snapshot,
+        Err(response) => return response,
+    };
+    // Root-family answers from the lexicon, not a projection build: the
+    // reproducibility block names the tool plus the answering dataset.
+    let dataset = output.dataset.clone();
+    let mut meta = graph_base_meta(&snapshot, started);
+    meta.reproducibility = serde_json::json!({
+        "tool": "quran.graph.root_family",
+        "dataset": dataset,
+        "corpus_generation": snapshot.corpus_generation,
+    });
+    ok_envelope(output, meta, &headers)
+}
+
 async fn debug_reader_handler(
     State(state): State<AppState>,
     Path((edition, surah)): Path<(String, u16)>,
@@ -1467,6 +1906,11 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/quran/family", post(lexicon_family_handler))
         .route("/api/v1/quran/count/root-frequency", post(lexicon_root_frequency_handler))
         .route("/api/v1/quran/count/lemma-frequency", post(lexicon_lemma_frequency_handler))
+        .route("/api/v1/quran/graph/neighbors", post(graph_neighbors_handler))
+        .route("/api/v1/quran/graph/path", post(graph_path_handler))
+        .route("/api/v1/quran/graph/subgraph", post(graph_subgraph_handler))
+        .route("/api/v1/quran/graph/pattern", post(graph_pattern_handler))
+        .route("/api/v1/quran/graph/root-family", post(graph_root_family_handler))
         .route("/debug/read/{edition}/{surah}", get(debug_reader_handler))
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .layer(tower_http::limit::RequestBodyLimitLayer::new(1024 * 1024))

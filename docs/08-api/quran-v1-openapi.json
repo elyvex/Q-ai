@@ -1253,6 +1253,565 @@
           }
         }
       }
+    },
+    "/api/v1/quran/graph/neighbors": {
+      "post": {
+        "operationId": "graphNeighbors",
+        "description": "Bounded neighbors around one node (D-12 read parity with the CLI verb). Truncated expansions stay 200 with truncated:true plus a reason.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "node"
+                ],
+                "properties": {
+                  "node": {
+                    "type": "string"
+                  },
+                  "edge_types": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Allowed edge predicates (null admits every allowlisted predicate)"
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "both",
+                      "outgoing",
+                      "incoming"
+                    ],
+                    "description": "Expansion direction (default both)"
+                  },
+                  "budgets": {
+                    "type": "object",
+                    "description": "Per-field budget overrides; explicit values fail pre-flight, never clamp",
+                    "properties": {
+                      "max_hops": {
+                        "type": "integer"
+                      },
+                      "max_nodes": {
+                        "type": "integer"
+                      },
+                      "max_edges": {
+                        "type": "integer"
+                      },
+                      "max_paths": {
+                        "type": "integer"
+                      },
+                      "max_fanout": {
+                        "type": "integer"
+                      },
+                      "timeout_ms": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "envelope of NeighborsOutput",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "422": {
+              "description": "pre-flight violation diagnostic",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Diagnostic"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "404": {
+              "description": "unknown node, projection, or dataset diagnostic",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Diagnostic"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "403": {
+              "description": "denied scope diagnostic",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Diagnostic"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quran/graph/path": {
+      "post": {
+        "operationId": "graphPath",
+        "description": "Two-node path search: reachability, shortest, or up-to-K ranked paths (mode selector mirrors the CLI verb). No path requires completeness: truncated searches report unknown, never absence.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "to"
+                ],
+                "properties": {
+                  "from": {
+                    "type": "string"
+                  },
+                  "to": {
+                    "type": "string"
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "reachability",
+                      "shortest",
+                      "paths"
+                    ]
+                  },
+                  "paths": {
+                    "type": "integer",
+                    "description": "Requested path count for paths mode (defaults to the max_paths budget)"
+                  },
+                  "edge_types": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Allowed edge predicates (null admits every allowlisted predicate)"
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "both",
+                      "outgoing",
+                      "incoming"
+                    ],
+                    "description": "Expansion direction (default both)"
+                  },
+                  "budgets": {
+                    "type": "object",
+                    "description": "Per-field budget overrides; explicit values fail pre-flight, never clamp",
+                    "properties": {
+                      "max_hops": {
+                        "type": "integer"
+                      },
+                      "max_nodes": {
+                        "type": "integer"
+                      },
+                      "max_edges": {
+                        "type": "integer"
+                      },
+                      "max_paths": {
+                        "type": "integer"
+                      },
+                      "max_fanout": {
+                        "type": "integer"
+                      },
+                      "timeout_ms": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "envelope of ReachabilityOutput, ShortestOutput, or PathsOutput",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "422": {
+              "description": "pre-flight violation diagnostic",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Diagnostic"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "404": {
+              "description": "unknown node, projection, or dataset diagnostic",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Diagnostic"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "403": {
+              "description": "denied scope diagnostic",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Diagnostic"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quran/graph/subgraph": {
+      "post": {
+        "operationId": "graphSubgraph",
+        "description": "Bounded multi-seed subgraph (D-12 read parity with the CLI verb). Unknown seeds are skipped; all-unknown is a complete-empty result.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "seeds"
+                ],
+                "properties": {
+                  "seeds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "edge_types": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Allowed edge predicates (null admits every allowlisted predicate)"
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "both",
+                      "outgoing",
+                      "incoming"
+                    ],
+                    "description": "Expansion direction (default both)"
+                  },
+                  "budgets": {
+                    "type": "object",
+                    "description": "Per-field budget overrides; explicit values fail pre-flight, never clamp",
+                    "properties": {
+                      "max_hops": {
+                        "type": "integer"
+                      },
+                      "max_nodes": {
+                        "type": "integer"
+                      },
+                      "max_edges": {
+                        "type": "integer"
+                      },
+                      "max_paths": {
+                        "type": "integer"
+                      },
+                      "max_fanout": {
+                        "type": "integer"
+                      },
+                      "timeout_ms": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "envelope of SubgraphOutput",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "422": {
+              "description": "pre-flight violation diagnostic",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Diagnostic"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "404": {
+              "description": "unknown node, projection, or dataset diagnostic",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Diagnostic"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "403": {
+              "description": "denied scope diagnostic",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Diagnostic"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quran/graph/pattern": {
+      "post": {
+        "operationId": "graphPattern",
+        "description": "Typed pattern query from seeds (D-12 read parity with the CLI verb). Steps are allowlisted edge predicates with optional node-kind constraints; raw query text is never accepted.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "seeds",
+                  "steps"
+                ],
+                "properties": {
+                  "seeds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "steps": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "edge"
+                      ],
+                      "properties": {
+                        "edge": {
+                          "type": "string"
+                        },
+                        "node_kind": {
+                          "type": "string",
+                          "enum": [
+                            "edition",
+                            "surah",
+                            "ayah",
+                            "token",
+                            "division",
+                            "root",
+                            "lemma",
+                            "concept",
+                            "entity",
+                            "annotation"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "budgets": {
+                    "type": "object",
+                    "description": "Per-field budget overrides; explicit values fail pre-flight, never clamp",
+                    "properties": {
+                      "max_hops": {
+                        "type": "integer"
+                      },
+                      "max_nodes": {
+                        "type": "integer"
+                      },
+                      "max_edges": {
+                        "type": "integer"
+                      },
+                      "max_paths": {
+                        "type": "integer"
+                      },
+                      "max_fanout": {
+                        "type": "integer"
+                      },
+                      "timeout_ms": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "envelope of PatternOutput",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "422": {
+              "description": "pre-flight violation diagnostic",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Diagnostic"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "404": {
+              "description": "unknown node, projection, or dataset diagnostic",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Diagnostic"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "403": {
+              "description": "denied scope diagnostic",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Diagnostic"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quran/graph/root-family": {
+      "post": {
+        "operationId": "graphRootFamily",
+        "description": "Root-family ranked ayahs from the active morphology dataset (lexicon-gated; no projection build required). No active dataset is 404 with QAI-MORPH-0004, never an empty family.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "root"
+                ],
+                "properties": {
+                  "root": {
+                    "type": "string"
+                  },
+                  "limit": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "envelope of RootFamilyOutput",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "422": {
+              "description": "pre-flight violation diagnostic",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Diagnostic"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "404": {
+              "description": "unknown node, projection, or dataset diagnostic",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Diagnostic"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "403": {
+              "description": "denied scope diagnostic",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Diagnostic"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

@@ -343,6 +343,110 @@ fn test_state() -> AppState {
         api: Arc::new(FakeApi),
         search: Arc::new(FakeSearch),
         lexicon: Arc::new(FakeLexicon),
+        graph: Arc::new(DisabledGraph),
+    }
+}
+
+/// Graph backend stub for the API contract tests: the graph routes are
+/// pinned by the dedicated `tests/graph.rs` suite, so this state refuses
+/// every graph read with a typed rejection (never a panic, never empty).
+struct DisabledGraph;
+
+#[async_trait::async_trait]
+impl application::quran_graph_api::GraphBackend for DisabledGraph {
+    async fn neighbors(
+        &self,
+        _args: application::quran_graph_api::NeighborsArgs,
+    ) -> Result<
+        application::quran_graph_api::NeighborsOutput,
+        application::quran_graph_api::GraphApiError,
+    > {
+        Err(application::quran_graph_api::GraphApiError::rejected(
+            "graph backend disabled in API contract tests",
+        ))
+    }
+
+    async fn reachability(
+        &self,
+        _args: application::quran_graph_api::PathArgs,
+    ) -> Result<
+        application::quran_graph_api::ReachabilityOutput,
+        application::quran_graph_api::GraphApiError,
+    > {
+        Err(application::quran_graph_api::GraphApiError::rejected(
+            "graph backend disabled in API contract tests",
+        ))
+    }
+
+    async fn shortest_path(
+        &self,
+        _args: application::quran_graph_api::PathArgs,
+    ) -> Result<
+        application::quran_graph_api::ShortestOutput,
+        application::quran_graph_api::GraphApiError,
+    > {
+        Err(application::quran_graph_api::GraphApiError::rejected(
+            "graph backend disabled in API contract tests",
+        ))
+    }
+
+    async fn paths(
+        &self,
+        _args: application::quran_graph_api::PathsArgs,
+    ) -> Result<
+        application::quran_graph_api::PathsOutput,
+        application::quran_graph_api::GraphApiError,
+    > {
+        Err(application::quran_graph_api::GraphApiError::rejected(
+            "graph backend disabled in API contract tests",
+        ))
+    }
+
+    async fn subgraph(
+        &self,
+        _args: application::quran_graph_api::SubgraphArgs,
+    ) -> Result<
+        application::quran_graph_api::SubgraphOutput,
+        application::quran_graph_api::GraphApiError,
+    > {
+        Err(application::quran_graph_api::GraphApiError::rejected(
+            "graph backend disabled in API contract tests",
+        ))
+    }
+
+    async fn pattern(
+        &self,
+        _args: application::quran_graph_api::PatternArgs,
+    ) -> Result<
+        application::quran_graph_api::PatternOutput,
+        application::quran_graph_api::GraphApiError,
+    > {
+        Err(application::quran_graph_api::GraphApiError::rejected(
+            "graph backend disabled in API contract tests",
+        ))
+    }
+
+    async fn root_family(
+        &self,
+        _args: application::quran_graph_api::RootFamilyArgs,
+    ) -> Result<
+        application::quran_graph_api::RootFamilyOutput,
+        application::quran_graph_api::GraphApiError,
+    > {
+        Err(application::quran_graph_api::GraphApiError::rejected(
+            "graph backend disabled in API contract tests",
+        ))
+    }
+
+    async fn snapshot_meta(
+        &self,
+    ) -> Result<
+        application::quran_graph_api::GraphSnapshotMeta,
+        application::quran_graph_api::GraphApiError,
+    > {
+        Err(application::quran_graph_api::GraphApiError::rejected(
+            "graph backend disabled in API contract tests",
+        ))
     }
 }
 
@@ -425,6 +529,11 @@ async fn openapi_spec_covers_every_route() {
         "/api/v1/quran/search/phrase",
         "/api/v1/quran/search/concatenated",
         "/api/v1/quran/search/regex",
+        "/api/v1/quran/graph/neighbors",
+        "/api/v1/quran/graph/path",
+        "/api/v1/quran/graph/subgraph",
+        "/api/v1/quran/graph/pattern",
+        "/api/v1/quran/graph/root-family",
         "/debug/read/{edition}/{surah}",
     ] {
         assert!(paths.contains_key(path), "spec missing {path}");

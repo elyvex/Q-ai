@@ -368,6 +368,13 @@ pub fn dispatch(cli: Cli) -> i32 {
                                     return exit_code::INTERNAL;
                                 }
                             };
+                        // Graph backend (D-12): a file-backed long-lived handle;
+                        // the active structural projection opens per request,
+                        // so a missing build is a per-request 404, never a
+                        // serve-time failure.
+                        let graph = std::sync::Arc::new(
+                            application::quran_graph_api::FileGraphBackend::structural(&db_path),
+                        );
                         // Long-lived worker host (D-13): the serve process
                         // owns durable execution; one-shot commands only
                         // enqueue. The host task is always awaited below —
@@ -393,7 +400,7 @@ pub fn dispatch(cli: Cli) -> i32 {
                         tokio::select! {
                             served = server::api::serve(
                                 &bind,
-                                server::api::AppState { tools, api, search, lexicon },
+                                server::api::AppState { tools, api, search, lexicon, graph },
                             ) => {
                                 let _ = shutdown_tx.send(true);
                                 let joined = match host.await {

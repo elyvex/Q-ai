@@ -31,13 +31,14 @@ use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
 use async_trait::async_trait;
+use storage::Database as _;
 use storage_sqlite::SqliteDatabase;
 
 use crate::quran_graph_store::SqliteGraphStore;
 use crate::quran_morphology::{self, MorphologyToolError};
 use quran_graph::{
-    Assertion, AuthzScope, EdgeFilter, GraphEdge, GraphError, GraphPath, GraphStore, Pattern,
-    ProjectionManifest, QueryBudgets, validate_pattern,
+    Assertion, AuthzScope, Direction, EdgeFilter, GraphEdge, GraphError, GraphPath, GraphStore,
+    NodeKind, Pattern, PatternStep, ProjectionManifest, QueryBudgets, validate_pattern,
 };
 
 /// Read-service failures: graph errors plus the typed morphology-dataset
@@ -52,6 +53,92 @@ pub enum GraphApiError {
     /// active-dataset gate for word-root reads.
     #[error(transparent)]
     Morphology(#[from] MorphologyToolError),
+}
+
+impl GraphApiError {
+    /// Selector rejection for surfaces that cannot name [`GraphError`]
+    /// variants (no `quran-graph` edge): unknown path modes, directions,
+    /// node kinds, and other malformed selectors. Always `QAI-GRAPH-0003`.
+    pub fn rejected(detail: impl Into<String>) -> Self {
+        Self::Graph(GraphError::PatternRejected { detail: detail.into() })
+    }
+
+    /// Unknown-node error for surface fakes (`QAI-GRAPH-0004`).
+    pub fn unknown_node(stable_id: impl Into<String>) -> Self {
+        Self::Graph(GraphError::NodeNotFound { stable_id: stable_id.into() })
+    }
+
+    /// Access-denied error for surface fakes (`QAI-GRAPH-0006`). The detail
+    /// must describe the refusal without leaking hidden content.
+    pub fn access_denied(detail: impl Into<String>) -> Self {
+        Self::Graph(GraphError::AuthzDenied { detail: detail.into() })
+    }
+}
+
+impl storage::error::Diagnostic for GraphApiError {
+    fn code(&self) -> storage::error::DiagnosticCode {
+        match self {
+            Self::Graph(inner) => {
+                // Mirrors `quran_graph::error::codes` numbering so the HTTP
+                // status map and the CLI human form stay on one code set.
+                let number = match inner {
+                    GraphError::UnknownProjection { .. } => 1,
+                    GraphError::BudgetExceeded { .. } => 2,
+                    GraphError::PatternRejected { .. } => 3,
+                    GraphError::NodeNotFound { .. } => 4,
+                    GraphError::BuildFailed { .. } => 5,
+                    GraphError::AuthzDenied { .. } => 6,
+                    GraphError::UnknownAssertion { .. } => 7,
+                };
+                storage::error::DiagnosticCode::new("QAI-GRAPH", number)
+            }
+            Self::Morphology(inner) => inner.code(),
+        }
+    }
+
+    fn summary(&self) -> String {
+        self.to_string()
+    }
+
+    fn location(&self) -> Option<String> {
+        match self {
+            Self::Graph(inner) => {
+                use quran_graph::error::Diagnostic as _;
+                inner.location()
+            }
+            Self::Morphology(inner) => inner.location(),
+        }
+    }
+
+    fn cause_chain(&self) -> Vec<String> {
+        match self {
+            Self::Graph(inner) => {
+                use quran_graph::error::Diagnostic as _;
+                inner.cause_chain()
+            }
+            Self::Morphology(inner) => inner.cause_chain(),
+        }
+    }
+
+    fn remedy(&self) -> Option<String> {
+        match self {
+            Self::Graph(inner) => {
+                use quran_graph::error::Diagnostic as _;
+                inner.remedy()
+            }
+            Self::Morphology(inner) => inner.remedy(),
+        }
+    }
+
+    fn next_command(&self) -> Option<String> {
+        match self {
+            Self::Graph(inner) => {
+                use quran_graph::error::Diagnostic as _;
+                inner.next_command()
+            }
+            Self::Morphology(inner) => inner.next_command(),
+        }
+    }
 }
 
 /// Shared read guards carried by every graph args struct: budgets validated
@@ -144,6 +231,193 @@ pub struct RootFamilyArgs {
     pub root: String,
     /// Result cap (`>= 1` after clamping).
     pub limit: usize,
+}
+
+/// Optional per-field budget overrides for the HTTP/tool surfaces. Mirrors
+/// [`crate::quran_cli::GraphBudgets`]: `None` keeps the default; explicit
+/// values (including 0) fail pre-flight, never clamp — so boundary values
+/// behave identically across surfaces.
+#[derive(Debug, Clone, Default)]
+pub struct BudgetPatch {
+    /// Maximum traversal depth in hops.
+    pub max_hops: Option<usize>,
+    /// Maximum distinct nodes collected per query.
+    pub max_nodes: Option<usize>,
+    /// Maximum edge relaxations performed per query.
+    pub max_edges: Option<usize>,
+    /// Maximum paths returned per path query.
+    pub max_paths: Option<usize>,
+    /// Maximum neighbors expanded per single node visit.
+    pub max_fanout: Option<usize>,
+    /// Wall-clock budget in milliseconds.
+    pub timeout_ms: Option<u64>,
+}
+
+impl BudgetPatch {
+    /// Fold into concrete budgets. `default_hops` is the surface default
+    /// when `max_hops` is absent (CLI verbs use their `--hops` default:
+    /// neighbors 1, path/subgraph/pattern 4).
+    pub fn into_budgets(self, default_hops: usize) -> QueryBudgets {
+        let defaults = QueryBudgets::default();
+        QueryBudgets {
+            max_hops: self.max_hops.unwrap_or(default_hops),
+            max_nodes: self.max_nodes.unwrap_or(defaults.max_nodes),
+            max_edges: self.max_edges.unwrap_or(defaults.max_edges),
+            max_paths: self.max_paths.unwrap_or(defaults.max_paths),
+            max_fanout: self.max_fanout.unwrap_or(defaults.max_fanout),
+            timeout_ms: self.timeout_ms.unwrap_or(defaults.timeout_ms),
+        }
+    }
+}
+
+/// Build [`ReadOptions`] from surface primitives, running the same
+/// pre-flight validation as the read services: out-of-range budgets and
+/// unknown direction spellings are typed [`GraphError`]s before any I/O.
+pub fn read_options(
+    patch: BudgetPatch,
+    default_hops: usize,
+    edge_types: Option<Vec<String>>,
+    direction: Option<&str>,
+) -> Result<ReadOptions, GraphApiError> {
+    let budgets = patch.into_budgets(default_hops);
+    budgets.check().map_err(GraphApiError::Graph)?;
+    let direction = match direction {
+        None | Some("both") => Direction::Both,
+        Some("outgoing") => Direction::Outgoing,
+        Some("incoming") => Direction::Incoming,
+        Some(other) => {
+            return Err(GraphApiError::rejected(format!(
+                "unknown direction '{other}'; use both|outgoing|incoming"
+            )));
+        }
+    };
+    Ok(ReadOptions {
+        budgets,
+        filter: EdgeFilter { edge_types, direction },
+        authz: AuthzScope::all_visible(),
+        cancel: Arc::new(AtomicBool::new(false)),
+    })
+}
+
+/// Path search mode selector shared by the CLI and HTTP surfaces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PathMode {
+    /// Two-node reachability check (min-hop proof, never a path render).
+    Reachability,
+    /// Shortest min-hop path between two nodes.
+    Shortest,
+    /// Up-to-K ranked paths between two nodes.
+    Paths,
+}
+
+/// Parse a path `mode` selector (`reachability`|`shortest`|`paths`,
+/// default `paths` mirroring the CLI verb). Unknown spellings are
+/// [`GraphApiError::rejected`] before any I/O.
+pub fn parse_path_mode(raw: Option<&str>) -> Result<PathMode, GraphApiError> {
+    match raw {
+        None | Some("paths") => Ok(PathMode::Paths),
+        Some("reachability") => Ok(PathMode::Reachability),
+        Some("shortest") => Ok(PathMode::Shortest),
+        Some(other) => Err(GraphApiError::rejected(format!(
+            "unknown path mode '{other}'; use reachability|shortest|paths"
+        ))),
+    }
+}
+
+/// One HTTP/tool pattern step: an edge predicate plus an optional
+/// node-kind constraint (`EDGE[:Kind]`, the CLI `--step` spelling split
+/// into fields).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PatternStepRequest {
+    /// Edge predicate; must be in the edge vocabulary.
+    pub edge: String,
+    /// Optional node-kind constraint (`ayah`, `token`, `root`, …).
+    pub node_kind: Option<String>,
+}
+
+fn parse_node_kind(raw: &str) -> Result<NodeKind, GraphApiError> {
+    match raw {
+        "edition" => Ok(NodeKind::Edition),
+        "surah" => Ok(NodeKind::Surah),
+        "ayah" => Ok(NodeKind::Ayah),
+        "token" => Ok(NodeKind::Token),
+        "division" => Ok(NodeKind::Division),
+        "root" => Ok(NodeKind::Root),
+        "lemma" => Ok(NodeKind::Lemma),
+        "concept" => Ok(NodeKind::Concept),
+        "entity" => Ok(NodeKind::Entity),
+        "annotation" => Ok(NodeKind::Annotation),
+        _ => Err(GraphApiError::rejected(format!(
+            "unknown node kind '{raw}'; use edition|surah|ayah|token|division|root|lemma|concept|entity|annotation"
+        ))),
+    }
+}
+
+/// Build a validated [`Pattern`] from surface step requests: unknown kinds
+/// and edges are typed rejections before any I/O (the service re-validates
+/// before execution, so direct service callers keep the same guarantee).
+pub fn parse_pattern_steps(steps: Vec<PatternStepRequest>) -> Result<Pattern, GraphApiError> {
+    let mut parsed = Vec::with_capacity(steps.len());
+    for req in steps {
+        let step = match req.node_kind.as_deref() {
+            None => PatternStep::edge(req.edge),
+            Some(kind) => PatternStep::edge_to(req.edge, parse_node_kind(kind)?),
+        };
+        parsed.push(step);
+    }
+    let pattern = Pattern::new(parsed);
+    validate_pattern(&pattern).map_err(GraphApiError::Graph)?;
+    Ok(pattern)
+}
+
+/// Active-edition read context for HTTP envelopes and ETags: edition
+/// identity plus the active corpus generation. A fresh database with no
+/// active edition degrades to empty identity (no ETag), never a fabricated
+/// edition.
+#[derive(Debug, Clone, Default)]
+pub struct GraphSnapshotMeta {
+    /// Active edition slug.
+    pub edition_slug: String,
+    /// Active edition version.
+    pub edition_version: String,
+    /// Active edition text hash (`sha256:<hex>`) for ETags.
+    pub text_hash: String,
+    /// Active corpus generation.
+    pub corpus_generation: u64,
+}
+
+fn snapshot_storage_error(error: storage::error::StorageError) -> GraphApiError {
+    GraphApiError::Graph(GraphError::BuildFailed {
+        stage: "snapshot-meta".to_string(),
+        detail: error.to_string(),
+    })
+}
+
+async fn active_snapshot_meta(db: &SqliteDatabase) -> Result<GraphSnapshotMeta, GraphApiError> {
+    let mut uow = db.write().await.map_err(snapshot_storage_error)?;
+    let active = uow.quran().get_active().await.map_err(snapshot_storage_error)?;
+    let meta = match active {
+        None => GraphSnapshotMeta::default(),
+        Some(row) => {
+            let edition =
+                uow.quran().get_edition(&row.edition_id).await.map_err(snapshot_storage_error)?;
+            let generation = u64::try_from(row.corpus_generation).unwrap_or(0);
+            match edition {
+                None => GraphSnapshotMeta {
+                    corpus_generation: generation,
+                    ..GraphSnapshotMeta::default()
+                },
+                Some(ed) => GraphSnapshotMeta {
+                    edition_slug: ed.slug,
+                    edition_version: ed.version,
+                    text_hash: ed.text_hash,
+                    corpus_generation: generation,
+                },
+            }
+        }
+    };
+    uow.rollback().await.map_err(snapshot_storage_error)?;
+    Ok(meta)
 }
 
 /// Per-edge provenance: structural edges point at corpus input versions,
@@ -422,6 +696,10 @@ pub trait GraphBackend: Send + Sync {
     async fn pattern(&self, args: PatternArgs) -> Result<PatternOutput, GraphApiError>;
     /// Root-family ranked ayahs (lexicon-gated).
     async fn root_family(&self, args: RootFamilyArgs) -> Result<RootFamilyOutput, GraphApiError>;
+    /// Active-edition read context for HTTP envelopes and ETags: edition
+    /// identity plus the active corpus generation. Faked in surface
+    /// contract tests.
+    async fn snapshot_meta(&self) -> Result<GraphSnapshotMeta, GraphApiError>;
 }
 
 /// Live read backend over one pinned projection build plus the active
@@ -874,5 +1152,88 @@ impl GraphBackend for GraphApiService {
             limit: cap,
             duration_ms: elapsed_ms(start),
         })
+    }
+
+    async fn snapshot_meta(&self) -> Result<GraphSnapshotMeta, GraphApiError> {
+        active_snapshot_meta(&self.db).await
+    }
+}
+
+/// Long-lived read backend over a database file (HTTP serve wiring): opens
+/// the active structural projection per request, so rebuilds between
+/// requests are picked up and a missing build is a per-request typed error
+/// (never a serve-time failure). `root_family` is lexicon-gated and needs
+/// no projection build.
+pub struct FileGraphBackend {
+    db_path: String,
+}
+
+impl FileGraphBackend {
+    /// Read through the active structural projection (the default read scope
+    /// every CLI verb resolves).
+    pub fn structural(db_path: &str) -> Self {
+        Self { db_path: db_path.to_string() }
+    }
+
+    async fn service(&self) -> Result<GraphApiService, GraphApiError> {
+        GraphApiService::open(&self.db_path).await.map_err(GraphApiError::Graph)
+    }
+
+    async fn database(&self) -> Result<SqliteDatabase, GraphApiError> {
+        SqliteDatabase::new(&self.db_path, 4, true).await.map_err(|error| {
+            GraphApiError::Graph(GraphError::BuildFailed {
+                stage: "open".to_string(),
+                detail: error.to_string(),
+            })
+        })
+    }
+}
+
+#[async_trait]
+impl GraphBackend for FileGraphBackend {
+    async fn neighbors(&self, args: NeighborsArgs) -> Result<NeighborsOutput, GraphApiError> {
+        self.service().await?.neighbors(args).await
+    }
+
+    async fn reachability(&self, args: PathArgs) -> Result<ReachabilityOutput, GraphApiError> {
+        self.service().await?.reachability(args).await
+    }
+
+    async fn shortest_path(&self, args: PathArgs) -> Result<ShortestOutput, GraphApiError> {
+        self.service().await?.shortest_path(args).await
+    }
+
+    async fn paths(&self, args: PathsArgs) -> Result<PathsOutput, GraphApiError> {
+        self.service().await?.paths(args).await
+    }
+
+    async fn subgraph(&self, args: SubgraphArgs) -> Result<SubgraphOutput, GraphApiError> {
+        self.service().await?.subgraph(args).await
+    }
+
+    async fn pattern(&self, args: PatternArgs) -> Result<PatternOutput, GraphApiError> {
+        self.service().await?.pattern(args).await
+    }
+
+    async fn root_family(&self, args: RootFamilyArgs) -> Result<RootFamilyOutput, GraphApiError> {
+        // The lexicon-gated read needs no projection build: same service
+        // call the CLI verb and `GraphApiService` make, over a per-request
+        // handle.
+        let start = Instant::now();
+        let db = self.database().await?;
+        let (dataset, occurrences) = quran_morphology::root_search(&db, &args.root).await?;
+        let (ayahs, cap) = rank_family_ayahs(occurrences, args.limit);
+        Ok(RootFamilyOutput {
+            root: args.root,
+            dataset,
+            ayahs,
+            limit: cap,
+            duration_ms: elapsed_ms(start),
+        })
+    }
+
+    async fn snapshot_meta(&self) -> Result<GraphSnapshotMeta, GraphApiError> {
+        let db = self.database().await?;
+        active_snapshot_meta(&db).await
     }
 }
