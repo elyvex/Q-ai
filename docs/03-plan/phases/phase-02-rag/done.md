@@ -792,3 +792,32 @@ the live tree, with evidence from GSD plans 03-04, 03-05, and 03-07:
 **Still ☐:** T107 (nightly reconciliation job — W3), T108 (evaluation harness — W6),
 T110 (tool-contract conformance — W7), T113 (documentation set — W2, in progress
 in plan 03.5-01), T114 (exit gate).
+
+## 11. Implementation Reconciliation — 2026-09-29 (plan 03.5-02)
+
+**Phase 3.5 plan 03.5-02 counting surface completion.** Seven tasks flipped ◐ → ☑ against
+the live tree, with evidence from plan 03.5-02:
+
+- **T95** (frequency): ☑ — exact stored-form SQL + all three multi-analysis modes green in
+  `counting.rs`; CLI verb + HTTP route landed in plan 03.5-02.
+  Evidence: `frequency_exact_and_deterministic`, `multi_analysis_modes`.
+- **T96** (distribution): ☑ — surah partition + single-source warning green in `counting.rs`;
+  CLI verb + HTTP route landed in plan 03.5-02.
+  Evidence: `distribution_and_numeric_report`.
+- **T97** (cooccurrence): ☑ — token windows + cross-ayah flags green in `counting.rs`;
+  CLI verb + HTTP route landed in plan 03.5-02.
+  Evidence: `cooccurrence_and_collocation`.
+- **T101** (hapax + unusual-usage): ☑ — hapax green in `counting.rs`; unusual-usage
+  lexicon-gated with typed QAI-CNT-0005; both CLI verbs + HTTP routes landed in plan 03.5-02.
+  Evidence: `hapax_is_profile_relative`, `unusual_usage_is_lexicon_gated`.
+- **T102** (near-duplicates): ☑ — MinHash + exact Jaccard verification green in `counting.rs`;
+  CLI verb + HTTP route landed in plan 03.5-02.
+  Evidence: `near_duplicates_verified`.
+- **T104** (counting API + CLI): ☑ — all 13 counting services have CLI verbs + HTTP routes;
+  fail-closed parity proven by tests; plan 03.5-02.
+  Evidence: `counting_graph_s3.trycmd`, `interval_analysis_reachable_and_deterministic`.
+- **T109** (counting determinism): ☑ — multi-analysis mode selection + full CountingRules
+  contract + interval/unusual-usage determinism green in `counting.rs`; plan 03.5-02.
+  Evidence: `multi_analysis_modes`, `interval_analysis_reachable_and_deterministic`.
+
+**Board rollup updated:** 65 → 72 ☑ (63%).

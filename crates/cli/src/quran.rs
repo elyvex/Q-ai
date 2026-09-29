@@ -566,6 +566,22 @@ pub enum CountAction {
         #[arg(long, default_value = "single-source")]
         mode: String,
     },
+    /// Interval analysis between occurrences (disclaimer included).
+    Interval {
+        /// Target text.
+        target: String,
+        /// Counting profile.
+        #[arg(long, default_value = "L3.diacritics")]
+        profile: String,
+    },
+    /// Unusual-usage mining (lexicon-gated; disclaimer attached).
+    UnusualUsage {
+        /// Target text.
+        target: String,
+        /// Counting profile.
+        #[arg(long, default_value = "L3.diacritics")]
+        profile: String,
+    },
 }
 
 /// Morphology dataset subcommands (import/activate separation).
@@ -1226,6 +1242,12 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
             CountAction::LemmaFrequency { lemma, profile, mode } => {
                 application::quran_cli::cmd_count_lemma_frequency(db_path, &lemma, &profile, &mode)
                     .await
+            }
+            CountAction::Interval { target, profile } => {
+                application::quran_cli::cmd_count_interval(db_path, &target, &profile).await
+            }
+            CountAction::UnusualUsage { target, profile } => {
+                application::quran_cli::cmd_count_unusual_usage(db_path, &target, &profile).await
             }
         },
         QuranAction::Freq { target, profile, mode } => {

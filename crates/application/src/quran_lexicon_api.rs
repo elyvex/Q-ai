@@ -245,6 +245,76 @@ pub trait LexiconBackend: Send + Sync {
         &self,
         args: LemmaFrequencyArgs,
     ) -> Result<FrequencyReport, LexiconApiError>;
+    /// `quran.count.frequency`: exact token frequency under a profile.
+    async fn count_frequency(
+        &self,
+        target: &str,
+        profile: &str,
+    ) -> Result<FrequencyReport, LexiconApiError>;
+    /// `quran.count.distribution`: frequency partitioned by surah.
+    async fn count_distribution(
+        &self,
+        target: &str,
+        profile: &str,
+    ) -> Result<quran_counting::DistributionReport, LexiconApiError>;
+    /// `quran.count.occurrences`: first/last occurrence + interval.
+    async fn count_occurrences(
+        &self,
+        target: &str,
+        profile: &str,
+    ) -> Result<quran_counting::OccurrenceSpan, LexiconApiError>;
+    /// `quran.count.hapax`: hapax legomena under a profile.
+    async fn count_hapax(
+        &self,
+        profile: &str,
+        limit: usize,
+    ) -> Result<quran_counting::HapaxReport, LexiconApiError>;
+    /// `quran.count.cooccurrence`: token-window co-occurrence.
+    async fn count_cooccurrence(
+        &self,
+        target: &str,
+        profile: &str,
+        window: usize,
+        limit: usize,
+    ) -> Result<(quran_counting::CountingRules, Vec<quran_counting::CooccurrenceHit>), LexiconApiError>;
+    /// `quran.count.collocation`: association measures.
+    async fn count_collocation(
+        &self,
+        target: &str,
+        profile: &str,
+        window: usize,
+        limit: usize,
+    ) -> Result<(quran_counting::CountingRules, Vec<quran_counting::CollocationHit>), LexiconApiError>;
+    /// `quran.count.numeric_report`: checksum + no-interpretation note.
+    async fn count_numeric_report(
+        &self,
+        target: &str,
+        profile: &str,
+    ) -> Result<quran_counting::NumericReport, LexiconApiError>;
+    /// `quran.count.missing_form`: proves a zero under stated rules.
+    async fn count_missing_form(
+        &self,
+        target: &str,
+        profile: &str,
+    ) -> Result<quran_counting::MissingFormReport, LexiconApiError>;
+    /// `quran.count.near_duplicates`: MinHash candidates + exact verify.
+    async fn count_near_duplicates(
+        &self,
+        threshold: f64,
+        limit: usize,
+    ) -> Result<(quran_counting::CountingRules, Vec<quran_counting::NearDuplicateHit>), LexiconApiError>;
+    /// `quran.count.interval`: interval analysis between occurrences.
+    async fn count_interval(
+        &self,
+        target: &str,
+        profile: &str,
+    ) -> Result<quran_counting::OccurrenceSpan, LexiconApiError>;
+    /// `quran.count.unusual_usage`: unusual-usage mining (lexicon-gated).
+    async fn count_unusual_usage(
+        &self,
+        target: &str,
+        profile: &str,
+    ) -> Result<quran_counting::NumericReport, LexiconApiError>;
 }
 
 /// Live backend over a database file.
@@ -289,5 +359,97 @@ impl LexiconBackend for LexiconApiService {
         args: LemmaFrequencyArgs,
     ) -> Result<FrequencyReport, LexiconApiError> {
         Ok(quran_counting::lemma_frequency(&self.db, &args.lemma, &args.profile, args.mode).await?)
+    }
+
+    async fn count_frequency(
+        &self,
+        target: &str,
+        profile: &str,
+    ) -> Result<FrequencyReport, LexiconApiError> {
+        Ok(quran_counting::frequency(&self.db, target, profile).await?)
+    }
+
+    async fn count_distribution(
+        &self,
+        target: &str,
+        profile: &str,
+    ) -> Result<quran_counting::DistributionReport, LexiconApiError> {
+        Ok(quran_counting::distribution(&self.db, target, profile).await?)
+    }
+
+    async fn count_occurrences(
+        &self,
+        target: &str,
+        profile: &str,
+    ) -> Result<quran_counting::OccurrenceSpan, LexiconApiError> {
+        Ok(quran_counting::first_last_occurrence(&self.db, target, profile).await?)
+    }
+
+    async fn count_hapax(
+        &self,
+        profile: &str,
+        limit: usize,
+    ) -> Result<quran_counting::HapaxReport, LexiconApiError> {
+        Ok(quran_counting::hapax_search(&self.db, profile, limit).await?)
+    }
+
+    async fn count_cooccurrence(
+        &self,
+        target: &str,
+        profile: &str,
+        window: usize,
+        limit: usize,
+    ) -> Result<(quran_counting::CountingRules, Vec<quran_counting::CooccurrenceHit>), LexiconApiError> {
+        Ok(quran_counting::cooccurrence(&self.db, target, profile, window, limit).await?)
+    }
+
+    async fn count_collocation(
+        &self,
+        target: &str,
+        profile: &str,
+        window: usize,
+        limit: usize,
+    ) -> Result<(quran_counting::CountingRules, Vec<quran_counting::CollocationHit>), LexiconApiError> {
+        Ok(quran_counting::collocation(&self.db, target, profile, window, limit).await?)
+    }
+
+    async fn count_numeric_report(
+        &self,
+        target: &str,
+        profile: &str,
+    ) -> Result<quran_counting::NumericReport, LexiconApiError> {
+        Ok(quran_counting::numeric_report(&self.db, target, profile).await?)
+    }
+
+    async fn count_missing_form(
+        &self,
+        target: &str,
+        profile: &str,
+    ) -> Result<quran_counting::MissingFormReport, LexiconApiError> {
+        Ok(quran_counting::missing_expected_form(&self.db, target, profile).await?)
+    }
+
+    async fn count_near_duplicates(
+        &self,
+        threshold: f64,
+        limit: usize,
+    ) -> Result<(quran_counting::CountingRules, Vec<quran_counting::NearDuplicateHit>), LexiconApiError> {
+        Ok(quran_counting::near_duplicate_passages(&self.db, threshold, limit).await?)
+    }
+
+    async fn count_interval(
+        &self,
+        target: &str,
+        profile: &str,
+    ) -> Result<quran_counting::OccurrenceSpan, LexiconApiError> {
+        Ok(quran_counting::interval_analysis(&self.db, target, profile).await?)
+    }
+
+    async fn count_unusual_usage(
+        &self,
+        target: &str,
+        profile: &str,
+    ) -> Result<quran_counting::NumericReport, LexiconApiError> {
+        Ok(quran_counting::unusual_usage(&self.db, target, profile).await?)
     }
 }

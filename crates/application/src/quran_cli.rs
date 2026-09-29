@@ -2702,6 +2702,41 @@ pub async fn cmd_count_near_duplicates(
     }
 }
 
+/// `qai quran count interval-analysis`.
+pub async fn cmd_count_interval(db_path: &str, target: &str, profile: &str) -> CommandOutput {
+    use super::quran_counting::interval_analysis;
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return open_error_output(error),
+    };
+    match interval_analysis(&db, target, profile).await {
+        Ok(report) => json_or_err(
+            format!(
+                "first {:?}, last {:?}, span {:?}\n{}",
+                report.first, report.last, report.ayah_span, report.disclaimer
+            ),
+            &report,
+        ),
+        Err(error) => CommandOutput::err(counting_exit(&error), error.to_string()),
+    }
+}
+
+/// `qai quran count unusual-usage` (lexicon-gated).
+pub async fn cmd_count_unusual_usage(db_path: &str, target: &str, profile: &str) -> CommandOutput {
+    use super::quran_counting::unusual_usage;
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return open_error_output(error),
+    };
+    match unusual_usage(&db, target, profile).await {
+        Ok(report) => json_or_err(
+            format!("{}: {}\n{}", report.frequency.target, report.frequency.count, report.note),
+            &report,
+        ),
+        Err(error) => CommandOutput::err(counting_exit(&error), error.to_string()),
+    }
+}
+
 // ─── Morphology commands (import/activate separation, T69/T90) ──────────
 
 fn morphology_exit(error: &super::quran_morphology::MorphologyJobError) -> i32 {

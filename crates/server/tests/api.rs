@@ -337,6 +337,219 @@ impl application::quran_lexicon_api::LexiconBackend for FakeLexicon {
         }
         Ok(lexicon_frequency_report(&args.lemma, args.mode, 127))
     }
+
+    async fn count_frequency(
+        &self,
+        target: &str,
+        _profile: &str,
+    ) -> Result<
+        application::quran_counting::FrequencyReport,
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        use application::quran_counting::{CountingRules, MultiAnalysisHandling};
+        Ok(application::quran_counting::FrequencyReport {
+            target: target.to_string(),
+            rules: CountingRules {
+                profile: "L3.diacritics".to_string(),
+                profile_version: "1.0.0".to_string(),
+                datasets: vec!["stored-forms".to_string()],
+                multi_analysis_handling: MultiAnalysisHandling::SingleSource,
+                window: None,
+                exclusions: vec![],
+            },
+            count: 42,
+            by_surah: std::collections::BTreeMap::from([(1, 42)]),
+            checksum: "sha256:fake".to_string(),
+        })
+    }
+
+    async fn count_distribution(
+        &self,
+        target: &str,
+        profile: &str,
+    ) -> Result<
+        application::quran_counting::DistributionReport,
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        let freq = self.count_frequency(target, profile).await?;
+        Ok(application::quran_counting::DistributionReport {
+            frequency: freq,
+            partition_provenance: "partitions keyed by surah number".to_string(),
+            warnings: vec![],
+        })
+    }
+
+    async fn count_occurrences(
+        &self,
+        target: &str,
+        _profile: &str,
+    ) -> Result<
+        application::quran_counting::OccurrenceSpan,
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        use application::quran_counting::{CountingRules, MultiAnalysisHandling, INTERVAL_DISCLAIMER};
+        Ok(application::quran_counting::OccurrenceSpan {
+            first: Some((1, 1)),
+            last: Some((2, 5)),
+            ayah_span: Some(10),
+            rules: CountingRules {
+                profile: "L3.diacritics".to_string(),
+                profile_version: "1.0.0".to_string(),
+                datasets: vec!["stored-forms".to_string()],
+                multi_analysis_handling: MultiAnalysisHandling::SingleSource,
+                window: None,
+                exclusions: vec![],
+            },
+            disclaimer: INTERVAL_DISCLAIMER.to_string(),
+        })
+    }
+
+    async fn count_hapax(
+        &self,
+        _profile: &str,
+        _limit: usize,
+    ) -> Result<
+        application::quran_counting::HapaxReport,
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        use application::quran_counting::{CountingRules, MultiAnalysisHandling};
+        Ok(application::quran_counting::HapaxReport {
+            profile: "L3.diacritics".to_string(),
+            rules: CountingRules {
+                profile: "L3.diacritics".to_string(),
+                profile_version: "1.0.0".to_string(),
+                datasets: vec!["stored-forms".to_string()],
+                multi_analysis_handling: MultiAnalysisHandling::SingleSource,
+                window: None,
+                exclusions: vec![],
+            },
+            hapax: vec![("fake-hapax".to_string(), 1)],
+        })
+    }
+
+    async fn count_cooccurrence(
+        &self,
+        _target: &str,
+        _profile: &str,
+        _window: usize,
+        _limit: usize,
+    ) -> Result<
+        (application::quran_counting::CountingRules, Vec<application::quran_counting::CooccurrenceHit>),
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        use application::quran_counting::{CountingRules, MultiAnalysisHandling};
+        Ok((
+            CountingRules {
+                profile: "L3.diacritics".to_string(),
+                profile_version: "1.0.0".to_string(),
+                datasets: vec!["stored-forms".to_string()],
+                multi_analysis_handling: MultiAnalysisHandling::SingleSource,
+                window: Some("token:3".to_string()),
+                exclusions: vec![],
+            },
+            vec![],
+        ))
+    }
+
+    async fn count_collocation(
+        &self,
+        _target: &str,
+        _profile: &str,
+        _window: usize,
+        _limit: usize,
+    ) -> Result<
+        (application::quran_counting::CountingRules, Vec<application::quran_counting::CollocationHit>),
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        use application::quran_counting::{CountingRules, MultiAnalysisHandling};
+        Ok((
+            CountingRules {
+                profile: "L3.diacritics".to_string(),
+                profile_version: "1.0.0".to_string(),
+                datasets: vec!["stored-forms".to_string()],
+                multi_analysis_handling: MultiAnalysisHandling::SingleSource,
+                window: Some("token:3".to_string()),
+                exclusions: vec![],
+            },
+            vec![],
+        ))
+    }
+
+    async fn count_numeric_report(
+        &self,
+        target: &str,
+        profile: &str,
+    ) -> Result<
+        application::quran_counting::NumericReport,
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        let freq = self.count_frequency(target, profile).await?;
+        Ok(application::quran_counting::NumericReport {
+            frequency: freq,
+            note: application::quran_counting::NO_INTERPRETATION_NOTE.to_string(),
+        })
+    }
+
+    async fn count_missing_form(
+        &self,
+        target: &str,
+        profile: &str,
+    ) -> Result<
+        application::quran_counting::MissingFormReport,
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        let freq = self.count_frequency(target, profile).await?;
+        Ok(application::quran_counting::MissingFormReport {
+            target: freq.target,
+            rules: freq.rules,
+            count: 0,
+            disclaimer: application::quran_counting::MISSING_FORM_DISCLAIMER.to_string(),
+        })
+    }
+
+    async fn count_near_duplicates(
+        &self,
+        _threshold: f64,
+        _limit: usize,
+    ) -> Result<
+        (application::quran_counting::CountingRules, Vec<application::quran_counting::NearDuplicateHit>),
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        use application::quran_counting::{CountingRules, MultiAnalysisHandling};
+        Ok((
+            CountingRules {
+                profile: "L6.skeleton".to_string(),
+                profile_version: "1.0.0".to_string(),
+                datasets: vec!["stored-skeletons".to_string()],
+                multi_analysis_handling: MultiAnalysisHandling::SingleSource,
+                window: None,
+                exclusions: vec![],
+            },
+            vec![],
+        ))
+    }
+
+    async fn count_interval(
+        &self,
+        target: &str,
+        profile: &str,
+    ) -> Result<
+        application::quran_counting::OccurrenceSpan,
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        self.count_occurrences(target, profile).await
+    }
+
+    async fn count_unusual_usage(
+        &self,
+        target: &str,
+        profile: &str,
+    ) -> Result<
+        application::quran_counting::NumericReport,
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        self.count_numeric_report(target, profile).await
+    }
 }
 
 fn test_state() -> AppState {

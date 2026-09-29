@@ -263,6 +263,31 @@ async fn morphology_gated_targets_unavailable() {
     }
 }
 
+/// P2-T109: interval_analysis is reachable and deterministic.
+#[tokio::test]
+async fn interval_analysis_reachable_and_deterministic() {
+    let (_dir, db) = ready_db().await;
+    let target = sample_form(&db).await;
+    let first = interval_analysis(&db, &target, "L3.diacritics").await.unwrap();
+    assert!(first.first.is_some() && first.last.is_some());
+    assert_eq!(first.disclaimer, INTERVAL_DISCLAIMER);
+    let second = interval_analysis(&db, &target, "L3.diacritics").await.unwrap();
+    assert_eq!(second.first, first.first);
+    assert_eq!(second.last, first.last);
+    assert_eq!(second.ayah_span, first.ayah_span);
+    assert_eq!(second.rules, first.rules);
+}
+
+/// P2-T109: unusual_usage is lexicon-gated and fails closed without a dataset.
+#[tokio::test]
+async fn unusual_usage_is_lexicon_gated() {
+    use storage::error::Diagnostic as _;
+    let (_dir, db) = ready_db().await;
+    let err = unusual_usage(&db, "ويت", "L3.diacritics").await.unwrap_err();
+    assert_eq!(err.code().to_string(), "QAI-CNT-0005");
+    assert!(err.remedy().unwrap().contains("morphology"));
+}
+
 // ─── 03-03: lexicon root/lemma frequency + selectable multi-analysis ───
 
 const MORPH_SLUG: &str = "test-morph";

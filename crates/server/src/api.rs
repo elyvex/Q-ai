@@ -1218,6 +1218,102 @@ struct LemmaFrequencyBody {
     mode: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct FrequencyBody {
+    /// Target text to count.
+    target: String,
+    /// Counting profile.
+    profile: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DistributionBody {
+    /// Target text.
+    target: String,
+    /// Counting profile.
+    profile: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OccurrencesBody {
+    /// Target text.
+    target: String,
+    /// Counting profile.
+    profile: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct HapaxBody {
+    /// Counting profile.
+    profile: Option<String>,
+    /// Result cap.
+    limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CooccurrenceBody {
+    /// Target text.
+    target: String,
+    /// Counting profile.
+    profile: Option<String>,
+    /// Window radius in tokens.
+    window: Option<usize>,
+    /// Result cap.
+    limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CollocationBody {
+    /// Target text.
+    target: String,
+    /// Counting profile.
+    profile: Option<String>,
+    /// Window radius in tokens.
+    window: Option<usize>,
+    /// Result cap.
+    limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+struct NumericReportBody {
+    /// Target text.
+    target: String,
+    /// Counting profile.
+    profile: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MissingFormBody {
+    /// Target text expected to be absent.
+    target: String,
+    /// Counting profile.
+    profile: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct NearDuplicatesBody {
+    /// Jaccard threshold in [0,1].
+    threshold: Option<f64>,
+    /// Result cap.
+    limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+struct IntervalBody {
+    /// Target text.
+    target: String,
+    /// Counting profile.
+    profile: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct UnusualUsageBody {
+    /// Target text.
+    target: String,
+    /// Counting profile.
+    profile: Option<String>,
+}
+
 fn lexicon_error_status(error: &application::quran_lexicon_api::LexiconApiError) -> StatusCode {
     use application::quran_lexicon_api::LexiconApiError as E;
     match error {
@@ -1314,6 +1410,155 @@ async fn lexicon_lemma_frequency_handler(
         };
     match state.lexicon.lemma_frequency(args).await {
         Ok(report) => lexicon_response("quran.count.lemma_frequency", report, started),
+        Err(error) => lexicon_error_response(error),
+    }
+}
+
+// ─── Count HTTP routes (D-10 parity: thin wrappers over the same services) ──
+
+async fn count_frequency_handler(
+    State(state): State<AppState>,
+    Json(body): Json<FrequencyBody>,
+) -> Response {
+    let started = Instant::now();
+    let profile = body.profile.as_deref().unwrap_or("L3.diacritics");
+    match state.lexicon.count_frequency(&body.target, profile).await {
+        Ok(report) => lexicon_response("quran.count.frequency", report, started),
+        Err(error) => lexicon_error_response(error),
+    }
+}
+
+async fn count_distribution_handler(
+    State(state): State<AppState>,
+    Json(body): Json<DistributionBody>,
+) -> Response {
+    let started = Instant::now();
+    let profile = body.profile.as_deref().unwrap_or("L3.diacritics");
+    match state.lexicon.count_distribution(&body.target, profile).await {
+        Ok(report) => lexicon_response("quran.count.distribution", report, started),
+        Err(error) => lexicon_error_response(error),
+    }
+}
+
+async fn count_occurrences_handler(
+    State(state): State<AppState>,
+    Json(body): Json<OccurrencesBody>,
+) -> Response {
+    let started = Instant::now();
+    let profile = body.profile.as_deref().unwrap_or("L3.diacritics");
+    match state.lexicon.count_occurrences(&body.target, profile).await {
+        Ok(report) => lexicon_response("quran.count.occurrences", report, started),
+        Err(error) => lexicon_error_response(error),
+    }
+}
+
+async fn count_hapax_handler(
+    State(state): State<AppState>,
+    Json(body): Json<HapaxBody>,
+) -> Response {
+    let started = Instant::now();
+    let profile = body.profile.as_deref().unwrap_or("L3.diacritics");
+    let limit = body.limit.unwrap_or(100);
+    match state.lexicon.count_hapax(profile, limit).await {
+        Ok(report) => lexicon_response("quran.count.hapax", report, started),
+        Err(error) => lexicon_error_response(error),
+    }
+}
+
+async fn count_cooccurrence_handler(
+    State(state): State<AppState>,
+    Json(body): Json<CooccurrenceBody>,
+) -> Response {
+    let started = Instant::now();
+    let profile = body.profile.as_deref().unwrap_or("L3.diacritics");
+    let window = body.window.unwrap_or(3);
+    let limit = body.limit.unwrap_or(25);
+    match state.lexicon.count_cooccurrence(&body.target, profile, window, limit).await {
+        Ok((rules, hits)) => {
+            let data = serde_json::json!({"rules": rules, "hits": hits});
+            lexicon_response("quran.count.cooccurrence", data, started)
+        }
+        Err(error) => lexicon_error_response(error),
+    }
+}
+
+async fn count_collocation_handler(
+    State(state): State<AppState>,
+    Json(body): Json<CollocationBody>,
+) -> Response {
+    let started = Instant::now();
+    let profile = body.profile.as_deref().unwrap_or("L3.diacritics");
+    let window = body.window.unwrap_or(3);
+    let limit = body.limit.unwrap_or(25);
+    match state.lexicon.count_collocation(&body.target, profile, window, limit).await {
+        Ok((rules, hits)) => {
+            let data = serde_json::json!({"rules": rules, "hits": hits});
+            lexicon_response("quran.count.collocation", data, started)
+        }
+        Err(error) => lexicon_error_response(error),
+    }
+}
+
+async fn count_numeric_report_handler(
+    State(state): State<AppState>,
+    Json(body): Json<NumericReportBody>,
+) -> Response {
+    let started = Instant::now();
+    let profile = body.profile.as_deref().unwrap_or("L3.diacritics");
+    match state.lexicon.count_numeric_report(&body.target, profile).await {
+        Ok(report) => lexicon_response("quran.count.numeric_report", report, started),
+        Err(error) => lexicon_error_response(error),
+    }
+}
+
+async fn count_missing_form_handler(
+    State(state): State<AppState>,
+    Json(body): Json<MissingFormBody>,
+) -> Response {
+    let started = Instant::now();
+    let profile = body.profile.as_deref().unwrap_or("L3.diacritics");
+    match state.lexicon.count_missing_form(&body.target, profile).await {
+        Ok(report) => lexicon_response("quran.count.missing_form", report, started),
+        Err(error) => lexicon_error_response(error),
+    }
+}
+
+async fn count_near_duplicates_handler(
+    State(state): State<AppState>,
+    Json(body): Json<NearDuplicatesBody>,
+) -> Response {
+    let started = Instant::now();
+    let threshold = body.threshold.unwrap_or(0.8);
+    let limit = body.limit.unwrap_or(25);
+    match state.lexicon.count_near_duplicates(threshold, limit).await {
+        Ok((rules, hits)) => {
+            let data = serde_json::json!({"rules": rules, "hits": hits});
+            lexicon_response("quran.count.near_duplicates", data, started)
+        }
+        Err(error) => lexicon_error_response(error),
+    }
+}
+
+async fn count_interval_handler(
+    State(state): State<AppState>,
+    Json(body): Json<IntervalBody>,
+) -> Response {
+    let started = Instant::now();
+    let profile = body.profile.as_deref().unwrap_or("L3.diacritics");
+    match state.lexicon.count_interval(&body.target, profile).await {
+        Ok(report) => lexicon_response("quran.count.interval", report, started),
+        Err(error) => lexicon_error_response(error),
+    }
+}
+
+async fn count_unusual_usage_handler(
+    State(state): State<AppState>,
+    Json(body): Json<UnusualUsageBody>,
+) -> Response {
+    let started = Instant::now();
+    let profile = body.profile.as_deref().unwrap_or("L3.diacritics");
+    match state.lexicon.count_unusual_usage(&body.target, profile).await {
+        Ok(report) => lexicon_response("quran.count.unusual_usage", report, started),
         Err(error) => lexicon_error_response(error),
     }
 }
@@ -1906,6 +2151,17 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/quran/family", post(lexicon_family_handler))
         .route("/api/v1/quran/count/root-frequency", post(lexicon_root_frequency_handler))
         .route("/api/v1/quran/count/lemma-frequency", post(lexicon_lemma_frequency_handler))
+        .route("/api/v1/quran/count/frequency", post(count_frequency_handler))
+        .route("/api/v1/quran/count/distribution", post(count_distribution_handler))
+        .route("/api/v1/quran/count/occurrences", post(count_occurrences_handler))
+        .route("/api/v1/quran/count/hapax", post(count_hapax_handler))
+        .route("/api/v1/quran/count/cooccurrence", post(count_cooccurrence_handler))
+        .route("/api/v1/quran/count/collocation", post(count_collocation_handler))
+        .route("/api/v1/quran/count/numeric-report", post(count_numeric_report_handler))
+        .route("/api/v1/quran/count/missing-form", post(count_missing_form_handler))
+        .route("/api/v1/quran/count/near-duplicates", post(count_near_duplicates_handler))
+        .route("/api/v1/quran/count/interval", post(count_interval_handler))
+        .route("/api/v1/quran/count/unusual-usage", post(count_unusual_usage_handler))
         .route("/api/v1/quran/graph/neighbors", post(graph_neighbors_handler))
         .route("/api/v1/quran/graph/path", post(graph_path_handler))
         .route("/api/v1/quran/graph/subgraph", post(graph_subgraph_handler))

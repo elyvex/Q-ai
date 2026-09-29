@@ -1,0 +1,28 @@
+# Phase 3.5 CLI acceptance — counting surface completion (W4, D-3.5-06).
+#
+# Segment 3 of 3 (host-backed, D-13): the segment-2 database has an active
+# edition with derived forms. This segment proves the two previously
+# unsurfaced counting verbs (interval-analysis, unusual-usage) are reachable
+# from the CLI, and that a capped result carries its truncation notice.
+
+```console
+$ qai quran count interval-analysis ويت --profile L3.diacritics
+? 0
+first Some((1, 1)), last Some((2, 5)), span Some(10)
+Intervals describe ayah positions only; no chronological or interpretive claim is made.
+
+```
+
+```console
+$ qai quran count unusual-usage ويت --profile L3.diacritics
+? 5
+error: dataset unavailable for unusual usage mining: import and activate a morphology dataset first
+
+```
+
+```console
+$ qai quran count hapax --profile L3.diacritics --limit 1
+? 0
+profile L3.diacritics: [..] hapax form(s) [truncated: 1 of [..]]
+
+```

@@ -164,6 +164,153 @@ impl application::quran_lexicon_api::LexiconBackend for FakeLexicon {
             detail: "unused".to_string(),
         })
     }
+
+    async fn count_frequency(
+        &self,
+        _target: &str,
+        _profile: &str,
+    ) -> Result<
+        application::quran_counting::FrequencyReport,
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        Err(application::quran_lexicon_api::LexiconApiError::Unsupported {
+            detail: "unused".to_string(),
+        })
+    }
+
+    async fn count_distribution(
+        &self,
+        _target: &str,
+        _profile: &str,
+    ) -> Result<
+        application::quran_counting::DistributionReport,
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        Err(application::quran_lexicon_api::LexiconApiError::Unsupported {
+            detail: "unused".to_string(),
+        })
+    }
+
+    async fn count_occurrences(
+        &self,
+        _target: &str,
+        _profile: &str,
+    ) -> Result<
+        application::quran_counting::OccurrenceSpan,
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        Err(application::quran_lexicon_api::LexiconApiError::Unsupported {
+            detail: "unused".to_string(),
+        })
+    }
+
+    async fn count_hapax(
+        &self,
+        _profile: &str,
+        _limit: usize,
+    ) -> Result<
+        application::quran_counting::HapaxReport,
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        Err(application::quran_lexicon_api::LexiconApiError::Unsupported {
+            detail: "unused".to_string(),
+        })
+    }
+
+    async fn count_cooccurrence(
+        &self,
+        _target: &str,
+        _profile: &str,
+        _window: usize,
+        _limit: usize,
+    ) -> Result<
+        (application::quran_counting::CountingRules, Vec<application::quran_counting::CooccurrenceHit>),
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        Err(application::quran_lexicon_api::LexiconApiError::Unsupported {
+            detail: "unused".to_string(),
+        })
+    }
+
+    async fn count_collocation(
+        &self,
+        _target: &str,
+        _profile: &str,
+        _window: usize,
+        _limit: usize,
+    ) -> Result<
+        (application::quran_counting::CountingRules, Vec<application::quran_counting::CollocationHit>),
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        Err(application::quran_lexicon_api::LexiconApiError::Unsupported {
+            detail: "unused".to_string(),
+        })
+    }
+
+    async fn count_numeric_report(
+        &self,
+        _target: &str,
+        _profile: &str,
+    ) -> Result<
+        application::quran_counting::NumericReport,
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        Err(application::quran_lexicon_api::LexiconApiError::Unsupported {
+            detail: "unused".to_string(),
+        })
+    }
+
+    async fn count_missing_form(
+        &self,
+        _target: &str,
+        _profile: &str,
+    ) -> Result<
+        application::quran_counting::MissingFormReport,
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        Err(application::quran_lexicon_api::LexiconApiError::Unsupported {
+            detail: "unused".to_string(),
+        })
+    }
+
+    async fn count_near_duplicates(
+        &self,
+        _threshold: f64,
+        _limit: usize,
+    ) -> Result<
+        (application::quran_counting::CountingRules, Vec<application::quran_counting::NearDuplicateHit>),
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        Err(application::quran_lexicon_api::LexiconApiError::Unsupported {
+            detail: "unused".to_string(),
+        })
+    }
+
+    async fn count_interval(
+        &self,
+        _target: &str,
+        _profile: &str,
+    ) -> Result<
+        application::quran_counting::OccurrenceSpan,
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        Err(application::quran_lexicon_api::LexiconApiError::Unsupported {
+            detail: "unused".to_string(),
+        })
+    }
+
+    async fn count_unusual_usage(
+        &self,
+        _target: &str,
+        _profile: &str,
+    ) -> Result<
+        application::quran_counting::NumericReport,
+        application::quran_lexicon_api::LexiconApiError,
+    > {
+        Err(application::quran_lexicon_api::LexiconApiError::Unsupported {
+            detail: "unused".to_string(),
+        })
+    }
 }
 
 /// Graph backend stub: sentinel selectors stand in for the dataset states a
