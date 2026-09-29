@@ -264,7 +264,7 @@ async fn parallel_asserted_edges_keep_their_own_provenance() {
         assert_eq!(explained.node_ids.last().map(String::as_str), Some("ayah:1:2"));
         for edge in &explained.edges {
             match &edge.provenance {
-                ProvenanceExplanation::Asserted { id, reviewer, decision, decided_at } => {
+                ProvenanceExplanation::Asserted { id, reviewer, decision, decided_at, .. } => {
                     asserted_ids.push(id);
                     assert_eq!(reviewer.as_deref(), Some("tracer-scholar"));
                     assert_eq!(decision, "accepted");
