@@ -16,9 +16,14 @@ use std::sync::atomic::AtomicBool;
 
 use application::quran::activate_edition;
 use application::quran_doctor::CheckLevel;
-use application::quran_graph_annotations::{DecideInput, ProposeInput, propose, reject};
+use application::quran_graph_annotations::{
+    DecideInput, ProposeInput, accept, dispute, propose, reject,
+};
 use application::quran_graph_build::{collect_structural_input, publish_structural_build};
-use application::quran_graph_doctor::{GRAPH_CHECK_IDS, run_quran_graph_checks};
+use application::quran_graph_doctor::{
+    GRAPH_CHECK_IDS, RebuildInput, RepairInput, TombstoneGcInput, repair_quarantine_dangling,
+    repair_rebuild_projection, repair_tombstone_gc, run_quran_graph_checks,
+};
 use application::quran_graph_store::SqliteGraphStore;
 use quran_corpus::import::{ImportInput, ImportOptions, ImportProgress, run_import};
 use quran_graph::{AssertionKind, AuthzScope, EdgeFilter, GraphStore, QueryBudgets};
@@ -389,4 +394,292 @@ async fn doctor_run_leaves_state_untouched() {
     let after_bytes = std::fs::read(&path).expect("db file reads");
     assert_eq!(before_counts, after_counts, "doctor mutates no rows");
     assert_eq!(before_bytes, after_bytes, "doctor leaves database bytes identical");
+}
+
+// ─── Explicit confirmed repair (D-08/D-11, T-04-15) ───
+
+fn repair_input(confirmed: bool) -> RepairInput {
+    RepairInput { invoked_by: OPERATOR.to_string(), confirmed }
+}
+
+fn propose_at(id: &str, src: &str, edge: &str, dst: &str) -> ProposeInput {
+    ProposeInput {
+        id: Some(id.to_string()),
+        kind: AssertionKind::Annotation,
+        src: src.to_string(),
+        edge: edge.to_string(),
+        dst: dst.to_string(),
+        // Distinct evidence per claim: identical triples under different ids
+        // reuse the existing row (content-addressed conflict reuse), so each
+        // repair specimen carries its own evidence.
+        evidence: serde_json::json!({"source": "graph-doctor-repair-test", "id": id}),
+        source_id: "graph-doctor-repair-test".to_string(),
+        source_location: format!("graph_doctor.rs#{id}"),
+        author: REVIEWER.to_string(),
+        invoked_by: OPERATOR.to_string(),
+        projection_id: PROJECTION.to_string(),
+        edition_id: EDITION.to_string(),
+        dataset_scope: String::new(),
+    }
+}
+
+async fn repair_audit_count(path: &str, operation: &str) -> i64 {
+    let pool = pool(path).await;
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM audit_events
+         WHERE action = 'doctor_repair_executed' AND subject_urn = ?",
+    )
+    .bind(format!("quran-graph-repair:{operation}"))
+    .fetch_one(&pool)
+    .await
+    .expect("audit reads");
+    pool.close().await;
+    count
+}
+
+async fn repair_audit_after(path: &str, operation: &str) -> String {
+    let pool = pool(path).await;
+    let after: String = sqlx::query_scalar(
+        "SELECT after_json FROM audit_events
+         WHERE action = 'doctor_repair_executed' AND subject_urn = ?
+         ORDER BY sequence DESC LIMIT 1",
+    )
+    .bind(format!("quran-graph-repair:{operation}"))
+    .fetch_one(&pool)
+    .await
+    .expect("audit reads");
+    pool.close().await;
+    after
+}
+
+async fn backdate_decision(path: &str, id: &str, decided_at: &str) {
+    let pool = pool(path).await;
+    sqlx::query("UPDATE graph_assertions SET decided_at = ? WHERE id = ?")
+        .bind(decided_at)
+        .bind(id)
+        .execute(&pool)
+        .await
+        .expect("backdate writes");
+    pool.close().await;
+}
+
+async fn insert_dangling_specimen(path: &str, id: &str) {
+    let row_id = active_build_row(path, PROJECTION).await;
+    let pool = pool(path).await;
+    sqlx::query(
+        "INSERT INTO graph_edges
+            (id, projection_row_id, src_stable_id, edge, dst_stable_id,
+             assertion_id, budgets_json, attrs_json, created_at)
+         VALUES (?, ?, 'ayah:1:1', 'NEXT', 'ayah:999:999',
+                 NULL, '{}', '{}', '2026-09-29T00:00:00Z')",
+    )
+    .bind(id)
+    .bind(&row_id)
+    .execute(&pool)
+    .await
+    .expect("specimen inserts");
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn repair_refuses_without_confirmation() {
+    let (_dir, path) = built_db().await;
+    let before = table_counts(&path);
+
+    let denied = repair_quarantine_dangling(&path, repair_input(false)).await;
+    assert!(
+        denied
+            .expect_err("quarantine without confirmation refuses")
+            .to_string()
+            .contains("without explicit confirmation"),
+        "refusal names the confirmation gate"
+    );
+    let denied = repair_tombstone_gc(
+        &path,
+        TombstoneGcInput { invoked_by: OPERATOR.to_string(), confirmed: false, retention_days: 90 },
+    )
+    .await;
+    assert!(
+        denied
+            .expect_err("gc without confirmation refuses")
+            .to_string()
+            .contains("without explicit confirmation"),
+        "refusal names the confirmation gate"
+    );
+    let denied = repair_rebuild_projection(
+        &path,
+        RebuildInput {
+            invoked_by: OPERATOR.to_string(),
+            confirmed: false,
+            projection: PROJECTION.to_string(),
+            seed_file: None,
+        },
+    )
+    .await;
+    assert!(
+        denied
+            .expect_err("rebuild without confirmation refuses")
+            .to_string()
+            .contains("without explicit confirmation"),
+        "refusal names the confirmation gate"
+    );
+
+    assert_eq!(before, table_counts(&path), "refused repairs mutate nothing");
+    assert_eq!(repair_audit_count(&path, "quarantine-dangling").await, 0, "refusal audits nothing");
+}
+
+#[tokio::test]
+async fn repair_quarantine_removes_dangling_edges_and_doctor_turns_green() {
+    let (_dir, path) = built_db().await;
+    insert_dangling_specimen(&path, "specimen-repair-1").await;
+
+    let found = checks(&path, true).await;
+    let (status, _) = status_of(&found, "quran.graph.dangling_edges");
+    assert_eq!(status, CheckLevel::Fail, "specimen fails before repair");
+
+    let report =
+        repair_quarantine_dangling(&path, repair_input(true)).await.expect("quarantine repairs");
+    assert_eq!(report.operation, "quarantine-dangling");
+    assert_eq!(report.edges_removed, 1, "one dangling edge quarantined");
+    assert_eq!(report.assertions_removed, 0, "quarantine never touches authority");
+    assert!(
+        report.summary.contains("1 before, 0 after"),
+        "summary carries before-and-after counts: {}",
+        report.summary
+    );
+    assert!(report.audit_sequence >= 1, "repair emits an audit event");
+
+    // Audit emission: one event on the repair subject carrying the removed row.
+    assert_eq!(repair_audit_count(&path, "quarantine-dangling").await, 1);
+    let after = repair_audit_after(&path, "quarantine-dangling").await;
+    assert!(after.contains("specimen-repair-1"), "audit records the removed edge: {after}");
+
+    // Post-repair doctor is green on the dangling check.
+    let found = checks(&path, true).await;
+    let (status, summary) = status_of(&found, "quran.graph.dangling_edges");
+    assert_eq!(status, CheckLevel::Pass, "adjacency clean after quarantine: {summary}");
+}
+
+#[tokio::test]
+async fn repair_tombstone_gc_collects_only_old_tombstones() {
+    let (_dir, path) = built_db().await;
+    // One old tombstone (past retention), one young tombstone, and one live
+    // row per surviving decision — distinct triples so no two proposals
+    // collapse under content-addressed reuse.
+    propose(&path, propose_at("gc-old-1", "ayah:1:1", "PARALLELS", "ayah:1:2"))
+        .await
+        .expect("propose");
+    reject(&path, decide("gc-old-1")).await.expect("reject tombstones");
+    backdate_decision(&path, "gc-old-1", "2020-01-01T00:00:00Z").await;
+
+    propose(&path, propose_at("gc-young-1", "ayah:1:2", "PARALLELS", "ayah:1:3"))
+        .await
+        .expect("propose");
+    reject(&path, decide("gc-young-1")).await.expect("reject tombstones");
+
+    propose(&path, propose_at("gc-pending-1", "ayah:2:1", "RELATED_TO", "ayah:2:2"))
+        .await
+        .expect("pending stays");
+    propose(&path, propose_at("gc-accepted-1", "ayah:3:1", "SUPPORTED_BY", "ayah:3:2"))
+        .await
+        .expect("propose");
+    accept(&path, decide("gc-accepted-1")).await.expect("accept decides");
+    propose(&path, propose_at("gc-disputed-1", "ayah:1:1", "RELATED_TO", "ayah:1:3"))
+        .await
+        .expect("propose");
+    dispute(&path, decide("gc-disputed-1")).await.expect("dispute decides");
+
+    let report = repair_tombstone_gc(
+        &path,
+        TombstoneGcInput { invoked_by: OPERATOR.to_string(), confirmed: true, retention_days: 30 },
+    )
+    .await
+    .expect("gc collects");
+    assert_eq!(report.operation, "tombstone-gc");
+    assert_eq!(report.assertions_removed, 1, "only the backdated tombstone is due");
+    assert!(
+        report.summary.contains("older than 30 day(s)"),
+        "summary names the retention gate: {}",
+        report.summary
+    );
+    assert!(
+        report.records["collected"][0]["id"] == serde_json::json!("gc-old-1"),
+        "records name the collected row: {}",
+        report.records
+    );
+
+    // Retention refusal: the young tombstone plus every live row survives.
+    for (id, decision) in [
+        ("gc-young-1", quran_graph::AssertionDecision::Rejected),
+        ("gc-pending-1", quran_graph::AssertionDecision::Pending),
+        ("gc-accepted-1", quran_graph::AssertionDecision::Accepted),
+        ("gc-disputed-1", quran_graph::AssertionDecision::Disputed),
+    ] {
+        let kept = application::quran_graph_annotations::get_assertion(&path, id)
+            .await
+            .expect("survivor retained");
+        assert_eq!(kept.decision, decision, "{id} survives the collection");
+    }
+    assert!(
+        report.live_rows_refused >= 3,
+        "report counts the refused live rows: {}",
+        report.summary
+    );
+    // The collected row is gone from authority.
+    assert!(
+        application::quran_graph_annotations::get_assertion(&path, "gc-old-1").await.is_err(),
+        "collected tombstone leaves authority"
+    );
+
+    // Audit emission on the GC subject.
+    assert_eq!(repair_audit_count(&path, "tombstone-gc").await, 1);
+    let after = repair_audit_after(&path, "tombstone-gc").await;
+    assert!(after.contains("gc-old-1"), "audit records the collection: {after}");
+
+    // Doctor stays honest after GC: no dangling edges left behind.
+    let found = checks(&path, true).await;
+    let (status, summary) = status_of(&found, "quran.graph.dangling_edges");
+    assert_eq!(status, CheckLevel::Pass, "gc leaves no dangling adjacency: {summary}");
+}
+
+#[tokio::test]
+async fn repair_rebuild_preserves_authority_and_doctor_stays_green() {
+    let (_dir, path) = built_db().await;
+    propose(&path, propose_at("rebuild-keep-1", "ayah:1:1", "PARALLELS", "ayah:1:2"))
+        .await
+        .expect("propose");
+    accept(&path, decide("rebuild-keep-1")).await.expect("accept decides");
+
+    let report = repair_rebuild_projection(
+        &path,
+        RebuildInput {
+            invoked_by: OPERATOR.to_string(),
+            confirmed: true,
+            projection: PROJECTION.to_string(),
+            seed_file: None,
+        },
+    )
+    .await
+    .expect("rebuild republishes");
+    assert_eq!(report.operation, "rebuild-projection");
+    assert!(
+        report.summary.contains("authority preserved"),
+        "summary says authority is preserved: {}",
+        report.summary
+    );
+    assert!(report.records["build_row_id"].is_string(), "records carry the new build row");
+
+    // Authority-preserving rebuild: the accepted assertion survives with its
+    // decision, and doctor is green on the rebuilt projection.
+    let kept = application::quran_graph_annotations::get_assertion(&path, "rebuild-keep-1")
+        .await
+        .expect("authority survives rebuild");
+    assert_eq!(kept.decision, quran_graph::AssertionDecision::Accepted);
+    assert_eq!(repair_audit_count(&path, "rebuild-projection").await, 1);
+
+    let found = checks(&path, false).await;
+    let (status, summary) = status_of(&found, "quran.graph.structural.current");
+    assert_eq!(status, CheckLevel::Pass, "rebuilt projection is current: {summary}");
+    let (status, _) = status_of(&found, "quran.graph.dangling_edges");
+    assert_eq!(status, CheckLevel::Pass, "rebuilt adjacency has no dangling edges");
 }

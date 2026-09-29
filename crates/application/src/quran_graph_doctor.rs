@@ -798,3 +798,439 @@ pub async fn run_quran_graph_checks(
     debug_assert!(checks.iter().map(|check| check.id).collect::<Vec<_>>() == GRAPH_CHECK_IDS);
     Ok(checks)
 }
+
+// ─── Explicit confirmed repair (D-08/D-11, T-04-15) ───
+//
+// Doctor itself never repairs: every function below requires explicit
+// confirmation (`confirmed: true`, wired to `--yes` / APPROVE at the CLI),
+// emits one [`audit::AuditAction::DoctorRepairExecuted`] audit event, and
+// returns before-and-after counts. Tombstone GC removes only Rejected and
+// Superseded assertion rows older than the stated retention and refuses to
+// touch pending, accepted, or disputed rows by construction (the decision
+// filter is in the SQL, not in a comment).
+
+/// Confirmation plus operator identity shared by every repair command.
+#[derive(Debug, Clone)]
+pub struct RepairInput {
+    /// Recording operator principal (FK-checked, never invented).
+    pub invoked_by: String,
+    /// Explicit confirmation (`--yes` / APPROVE at the CLI).
+    pub confirmed: bool,
+}
+
+/// Tombstone-GC input: confirmation plus the age gate in days.
+#[derive(Debug, Clone)]
+pub struct TombstoneGcInput {
+    /// Recording operator principal (FK-checked, never invented).
+    pub invoked_by: String,
+    /// Explicit confirmation (`--yes` / APPROVE at the CLI).
+    pub confirmed: bool,
+    /// Only tombstoned rows with `decided_at` older than this many days are
+    /// collected; younger tombstones are retained.
+    pub retention_days: u32,
+}
+
+/// Rebuild input: confirmation plus the projection family to republish.
+#[derive(Debug, Clone)]
+pub struct RebuildInput {
+    /// Recording operator principal (FK-checked, never invented).
+    pub invoked_by: String,
+    /// Explicit confirmation (`--yes` / APPROVE at the CLI).
+    pub confirmed: bool,
+    /// Projection family id (`quran-structural-v1`, `quran-wordroot-v1`,
+    /// or `quran-annotated-v1`).
+    pub projection: String,
+    /// Concept-seed JSON path (required for the annotated family only).
+    pub seed_file: Option<String>,
+}
+
+/// Before-and-after report for one confirmed repair.
+#[derive(Debug, Clone)]
+pub struct RepairReport {
+    /// Repair operation (`quarantine-dangling`, `tombstone-gc`, `rebuild-projection`).
+    pub operation: &'static str,
+    /// Human summary with before-and-after counts.
+    pub summary: String,
+    /// Dangling edges quarantined (quarantine only).
+    pub edges_removed: usize,
+    /// Tombstoned assertions garbage-collected (GC only).
+    pub assertions_removed: usize,
+    /// Live (pending/accepted/disputed) rows the GC refused to touch.
+    pub live_rows_refused: usize,
+    /// Audit sequence of the emitted repair event.
+    pub audit_sequence: i64,
+    /// Full machine records (removed rows, rebuilt manifest).
+    pub records: serde_json::Value,
+}
+
+fn build_failed(stage: &str, detail: String) -> quran_graph::GraphError {
+    quran_graph::GraphError::BuildFailed { stage: stage.to_string(), detail }
+}
+
+fn require_confirmed(
+    operation: &'static str,
+    confirmed: bool,
+) -> Result<(), quran_graph::GraphError> {
+    if confirmed {
+        return Ok(());
+    }
+    Err(build_failed(
+        "confirm",
+        format!(
+            "refusing {operation} without explicit confirmation; rerun with --yes (or APPROVE)"
+        ),
+    ))
+}
+
+fn open_write_pool(db_path: &str) -> Result<sqlx::sqlite::SqlitePool, quran_graph::GraphError> {
+    if std::fs::symlink_metadata(db_path).is_err() {
+        return Err(build_failed(
+            "open",
+            format!("no database at '{db_path}'; run `qai db migrate`"),
+        ));
+    }
+    let options = sqlx::sqlite::SqliteConnectOptions::new()
+        .filename(db_path)
+        .create_if_missing(false)
+        .foreign_keys(true)
+        .busy_timeout(std::time::Duration::from_secs(5));
+    Ok(sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect_lazy_with(options))
+}
+
+async fn ensure_operator(
+    db_path: &str,
+    invoked_by: &str,
+) -> Result<String, quran_graph::GraphError> {
+    if invoked_by.trim().is_empty() {
+        return Err(build_failed(
+            "principal",
+            "invoked_by must be non-empty (never invented)".to_string(),
+        ));
+    }
+    // Guard before `SqliteDatabase::new`: the creating constructor would
+    // otherwise materialize an empty database file on a typo'd path.
+    if std::fs::symlink_metadata(db_path).is_err() {
+        return Err(build_failed(
+            "open",
+            format!("no database at '{db_path}'; run `qai db migrate`"),
+        ));
+    }
+    let at = domain::Timestamp::now().to_string();
+    let db = SqliteDatabase::new(db_path, 4, true)
+        .await
+        .map_err(|error| build_failed("open", error.to_string()))?;
+    crate::quran::ensure_principal(&db, invoked_by, "graph doctor operator", &at)
+        .await
+        .map_err(|error| build_failed("principal", error.to_string()))?;
+    Ok(at)
+}
+
+async fn repair_audit_sequence(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+) -> Result<i64, quran_graph::GraphError> {
+    sqlx::query_scalar("SELECT MAX(sequence) FROM audit_events")
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(|error| build_failed("audit", error.to_string()))
+}
+
+/// Quarantine dangling edges out of every active projection's serving
+/// adjacency (D-08/D-11).
+///
+/// The removed edge rows are recorded verbatim in the repair audit event, so
+/// the quarantine is reviewable and the pre-repair doctor output stays
+/// reproducible from the audit trail. Authority rows are never touched.
+pub async fn repair_quarantine_dangling(
+    db_path: &str,
+    input: RepairInput,
+) -> Result<RepairReport, quran_graph::GraphError> {
+    const OPERATION: &str = "quarantine-dangling";
+    require_confirmed(OPERATION, input.confirmed)?;
+    let at = ensure_operator(db_path, &input.invoked_by).await?;
+    let pool = open_write_pool(db_path)?;
+    let mut tx =
+        pool.begin().await.map_err(|error| build_failed("quarantine", error.to_string()))?;
+    let builds: Vec<(String, String)> = sqlx::query_as(
+        "SELECT id, projection_id FROM graph_projections WHERE status = 'active' ORDER BY projection_id",
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|error| build_failed("quarantine", error.to_string()))?;
+    let mut removed: Vec<serde_json::Value> = Vec::new();
+    let mut before = 0usize;
+    for (row_id, family) in &builds {
+        let edges: Vec<(String, String, String, String, Option<String>)> = sqlx::query_as(
+            "SELECT e.id, e.src_stable_id, e.edge, e.dst_stable_id, e.assertion_id
+             FROM graph_edges e WHERE e.projection_row_id = ?
+               AND (NOT EXISTS (SELECT 1 FROM graph_nodes n
+                                WHERE n.projection_row_id = e.projection_row_id
+                                  AND n.stable_id = e.src_stable_id)
+                    OR NOT EXISTS (SELECT 1 FROM graph_nodes n
+                                   WHERE n.projection_row_id = e.projection_row_id
+                                     AND n.stable_id = e.dst_stable_id))
+             ORDER BY e.src_stable_id, e.edge, e.dst_stable_id",
+        )
+        .bind(row_id)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|error| build_failed("quarantine", error.to_string()))?;
+        before += edges.len();
+        for (id, src, edge, dst, assertion_id) in &edges {
+            removed.push(serde_json::json!({
+                "projection": family,
+                "id": id,
+                "src": src,
+                "edge": edge,
+                "dst": dst,
+                "assertion_id": assertion_id,
+            }));
+        }
+        let ids: Vec<&str> = edges.iter().map(|(id, _, _, _, _)| id.as_str()).collect();
+        for id in ids {
+            sqlx::query("DELETE FROM graph_edges WHERE id = ? AND projection_row_id = ?")
+                .bind(id)
+                .bind(row_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|error| build_failed("quarantine", error.to_string()))?;
+        }
+    }
+    let records = serde_json::json!({"removed": removed, "edges_before": before, "edges_after": 0});
+    super::quran_graph_annotations::append_repair_audit(
+        &mut tx,
+        &input.invoked_by,
+        OPERATION,
+        serde_json::json!({"operation": OPERATION, "removed_count": removed.len(), "records": records}),
+        &at,
+    )
+    .await?;
+    let audit_sequence = repair_audit_sequence(&mut tx).await?;
+    tx.commit().await.map_err(|error| build_failed("quarantine", error.to_string()))?;
+    pool.close().await;
+    Ok(RepairReport {
+        operation: OPERATION,
+        summary: format!(
+            "quarantined {} dangling edge(s) ({} before, 0 after) across {} active projection(s); adjacency clean",
+            removed.len(),
+            before,
+            builds.len()
+        ),
+        edges_removed: removed.len(),
+        assertions_removed: 0,
+        live_rows_refused: 0,
+        audit_sequence,
+        records,
+    })
+}
+
+/// Garbage-collect tombstoned assertions older than the retention gate
+/// (D-08/D-11).
+///
+/// Only `rejected`/`superseded` rows with a non-null `decided_at` older than
+/// `retention_days` are collected; pending, accepted, and disputed rows are
+/// unreachable by construction (the decision filter is in the `DELETE`, and
+/// the report counts the live rows refused). Each collected assertion's
+/// adjacency edges leave with it (they are invisible by tombstone semantics);
+/// authority history younger than retention is retained.
+pub async fn repair_tombstone_gc(
+    db_path: &str,
+    input: TombstoneGcInput,
+) -> Result<RepairReport, quran_graph::GraphError> {
+    const OPERATION: &str = "tombstone-gc";
+    require_confirmed(OPERATION, input.confirmed)?;
+    let at = ensure_operator(db_path, &input.invoked_by).await?;
+    // Retention compares inside SQLite (`julianday` parses the RFC 3339 UTC
+    // `decided_at` values the review writes store): no new date dependency,
+    // no format skew between a host-side cutoff string and stored rows.
+    // A row is due when its age in days strictly exceeds the retention.
+    let retention = f64::from(input.retention_days);
+    let pool = open_write_pool(db_path)?;
+    let mut tx = pool.begin().await.map_err(|error| build_failed("gc", error.to_string()))?;
+    let cutoff_display: String =
+        sqlx::query_scalar("SELECT datetime('now', '-' || CAST(? AS TEXT) || ' days')")
+            .bind(i64::from(input.retention_days))
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|error| build_failed("retention", error.to_string()))?;
+    let due: Vec<(String, String, String)> = sqlx::query_as(
+        "SELECT id, projection_row_id, decision FROM graph_assertions
+         WHERE decision IN ('rejected', 'superseded')
+           AND decided_at IS NOT NULL
+           AND (julianday('now') - julianday(decided_at)) > ?
+         ORDER BY id",
+    )
+    .bind(retention)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|error| build_failed("gc", error.to_string()))?;
+    let live_rows_refused: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM graph_assertions WHERE decision IN ('pending', 'accepted', 'disputed')",
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|error| build_failed("gc", error.to_string()))?;
+    let mut collected: Vec<serde_json::Value> = Vec::new();
+    for (id, row_id, decision) in &due {
+        let edges: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM graph_edges WHERE projection_row_id = ? AND assertion_id = ?",
+        )
+        .bind(row_id)
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|error| build_failed("gc", error.to_string()))?;
+        sqlx::query("DELETE FROM graph_edges WHERE projection_row_id = ? AND assertion_id = ?")
+            .bind(row_id)
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| build_failed("gc", error.to_string()))?;
+        sqlx::query("DELETE FROM graph_assertions WHERE id = ?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| build_failed("gc", error.to_string()))?;
+        collected.push(serde_json::json!({
+            "id": id,
+            "build_row_id": row_id,
+            "decision": decision,
+            "edges_removed": edges,
+        }));
+    }
+    let records = serde_json::json!({
+        "retention_days": input.retention_days,
+        "cutoff": cutoff_display,
+        "collected": collected,
+    });
+    super::quran_graph_annotations::append_repair_audit(
+        &mut tx,
+        &input.invoked_by,
+        OPERATION,
+        serde_json::json!({
+            "operation": OPERATION,
+            "collected_count": collected.len(),
+            "live_rows_refused": live_rows_refused,
+            "records": records,
+        }),
+        &at,
+    )
+    .await?;
+    let audit_sequence = repair_audit_sequence(&mut tx).await?;
+    tx.commit().await.map_err(|error| build_failed("gc", error.to_string()))?;
+    pool.close().await;
+    Ok(RepairReport {
+        operation: OPERATION,
+        summary: format!(
+            "collected {} tombstoned assertion(s) older than {} day(s); refused {} live row(s)",
+            collected.len(),
+            input.retention_days,
+            live_rows_refused
+        ),
+        edges_removed: 0,
+        assertions_removed: collected.len(),
+        live_rows_refused: live_rows_refused.max(0) as usize,
+        audit_sequence,
+        records,
+    })
+}
+
+/// Rebuild one projection through the fenced publish path, preserving
+/// authority (D-08/D-11).
+///
+/// Structural, word-root, and annotated republishers never touch
+/// `graph_assertions` rows: delete-plus-rebuild preserves authority and
+/// re-derives adjacency for effective assertions (AC-P4-03). The repair audit
+/// event records the new build row plus its node/edge counts.
+pub async fn repair_rebuild_projection(
+    db_path: &str,
+    input: RebuildInput,
+) -> Result<RepairReport, quran_graph::GraphError> {
+    const OPERATION: &str = "rebuild-projection";
+    require_confirmed(OPERATION, input.confirmed)?;
+    let at = ensure_operator(db_path, &input.invoked_by).await?;
+    let (build_row_id, node_count, edge_count, family) = if input.projection
+        == quran_graph::STRUCTURAL_PROJECTION_ID
+    {
+        let db = SqliteDatabase::new(db_path, 4, true)
+            .await
+            .map_err(|error| build_failed("open", error.to_string()))?;
+        let collected =
+            super::quran_graph_build::collect_structural_input(&db).await?.ok_or_else(|| {
+                build_failed("collect", "no active edition; import one first".to_string())
+            })?;
+        let report =
+            super::quran_graph_build::publish_structural_build(db_path, &collected).await?;
+        (
+            report.build_row_id,
+            report.node_count,
+            report.edge_count,
+            quran_graph::STRUCTURAL_PROJECTION_ID.to_string(),
+        )
+    } else if input.projection == super::quran_graph_build::WORDROOT_PROJECTION_ID {
+        let db = SqliteDatabase::new(db_path, 4, true)
+            .await
+            .map_err(|error| build_failed("open", error.to_string()))?;
+        let collected = super::quran_graph_build::collect_wordroot_input(&db)
+            .await
+            .map_err(|error| build_failed("collect", error.to_string()))?;
+        let report = super::quran_graph_build::publish_wordroot_build(db_path, &collected).await?;
+        (
+            report.build_row_id,
+            report.node_count,
+            report.edge_count,
+            super::quran_graph_build::WORDROOT_PROJECTION_ID.to_string(),
+        )
+    } else if input.projection == super::quran_graph_build::ANNOTATED_PROJECTION_ID {
+        let seed_file = input.seed_file.as_deref().ok_or_else(|| {
+            build_failed(
+                "collect",
+                "annotated rebuild needs --seed-file pointing at the concept seed JSON".to_string(),
+            )
+        })?;
+        let seed_json = std::fs::read_to_string(seed_file)
+            .map_err(|error| build_failed("collect", format!("read {seed_file}: {error}")))?;
+        let report = super::quran_graph_build::publish_annotated_build(db_path, &seed_json).await?;
+        (
+            report.build_row_id,
+            report.node_count,
+            report.edge_count,
+            super::quran_graph_build::ANNOTATED_PROJECTION_ID.to_string(),
+        )
+    } else {
+        return Err(build_failed(
+            "collect",
+            format!(
+                "unknown projection '{}'; use {}, {}, or {}",
+                input.projection,
+                quran_graph::STRUCTURAL_PROJECTION_ID,
+                super::quran_graph_build::WORDROOT_PROJECTION_ID,
+                super::quran_graph_build::ANNOTATED_PROJECTION_ID,
+            ),
+        ));
+    };
+    let records = serde_json::json!({"projection": family, "build_row_id": build_row_id, "nodes": node_count, "edges": edge_count});
+    let pool = open_write_pool(db_path)?;
+    let mut tx = pool.begin().await.map_err(|error| build_failed("audit", error.to_string()))?;
+    super::quran_graph_annotations::append_repair_audit(
+        &mut tx,
+        &input.invoked_by,
+        OPERATION,
+        serde_json::json!({"operation": OPERATION, "records": records}),
+        &at,
+    )
+    .await?;
+    let audit_sequence = repair_audit_sequence(&mut tx).await?;
+    tx.commit().await.map_err(|error| build_failed("audit", error.to_string()))?;
+    pool.close().await;
+    Ok(RepairReport {
+        operation: OPERATION,
+        summary: format!(
+            "rebuilt {family}: {node_count} nodes, {edge_count} edges; authority preserved"
+        ),
+        edges_removed: 0,
+        assertions_removed: 0,
+        live_rows_refused: 0,
+        audit_sequence,
+        records,
+    })
+}

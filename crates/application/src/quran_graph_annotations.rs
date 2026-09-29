@@ -762,6 +762,32 @@ async fn insert_assertion_row(
     Ok(())
 }
 
+/// Append a doctor-repair audit event inside the caller's transaction
+/// (D-08/D-11, T-04-15).
+///
+/// Repair is recorded with the existing [`audit::AuditAction::DoctorRepairExecuted`]
+/// action: the chain linkage arithmetic is identical to review writes; only
+/// the action and the subject URN (`quran-graph-repair:<operation>`) differ.
+/// `pub(crate)` so the doctor-repair commands share one audit writer instead
+/// of duplicating the chain logic.
+pub(crate) async fn append_repair_audit(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    actor_name: &str,
+    operation: &str,
+    after: serde_json::Value,
+    at: &str,
+) -> Result<(), GraphError> {
+    append_audit(
+        tx,
+        actor_name,
+        audit::AuditAction::DoctorRepairExecuted,
+        &format!("quran-graph-repair:{operation}"),
+        after,
+        at,
+    )
+    .await
+}
+
 /// One new-assertion write: the row plus its provenance, audit, outbox, and
 /// staged edge — a single transaction.
 struct WriteRequest<'a> {

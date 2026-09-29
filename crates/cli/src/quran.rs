@@ -827,6 +827,22 @@ pub enum GraphAction {
         #[command(subcommand)]
         action: ReviewAction,
     },
+    /// Read-only projection health checks (D-08): manifest freshness, drift,
+    /// dangling edges, tombstone invisibility. Never mutates; repair lives
+    /// under `doctor-repair`.
+    Doctor {
+        /// Scan everything (`--deep`); shallow scans bound with a Warn
+        /// naming this flag instead.
+        #[arg(long, default_value_t = false)]
+        deep: bool,
+    },
+    /// Explicit confirmed repair (D-08/D-11 management scope): quarantine,
+    /// tombstone GC, and fenced rebuild. Each operation requires `--yes`
+    /// (or APPROVE on a terminal) and emits an audit event.
+    DoctorRepair {
+        #[command(subcommand)]
+        action: DoctorRepairAction,
+    },
 }
 
 /// Review-queue management subcommands (plan 04-02, D-06/D-11).
@@ -970,6 +986,40 @@ pub enum ReviewAction {
         /// Corrected source location (default: old row's).
         #[arg(long)]
         source_location: Option<String>,
+    },
+}
+
+/// Doctor-repair management subcommands (plan 04-05, D-08/D-11).
+///
+/// Reads and writes go through `application::quran_graph_doctor`; this enum
+/// carries arguments only, never business logic. Every operation is wrapped
+/// in `confirm` at dispatch (explicit `--yes` or terminal APPROVE) and emits
+/// one `doctor_repair_executed` audit event. No HTTP mutation route and no
+/// new mutation agent tool (D-11 scope fence).
+#[derive(Subcommand)]
+pub enum DoctorRepairAction {
+    /// Remove dangling edges from every active projection's serving
+    /// adjacency; authority rows are never touched.
+    QuarantineDangling,
+    /// Garbage-collect rejected/superseded assertions older than the
+    /// retention gate; pending, accepted, and disputed rows are refused by
+    /// construction.
+    TombstoneGc {
+        /// Only tombstones older than this many days are collected
+        /// (default 90).
+        #[arg(long, default_value_t = 90)]
+        retention_days: u32,
+    },
+    /// Republish one projection (`quran-structural-v1`, `quran-wordroot-v1`,
+    /// or `quran-annotated-v1`) through the fenced publish path, preserving
+    /// authority and review history.
+    RebuildProjection {
+        /// Projection family id.
+        #[arg(long)]
+        projection: String,
+        /// Concept-seed JSON path (annotated family only).
+        #[arg(long)]
+        seed_file: Option<String>,
     },
 }
 
@@ -1448,6 +1498,43 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
                             evidence,
                             source_location,
                         },
+                    )
+                    .await
+                }
+            },
+            GraphAction::Doctor { deep } => {
+                // Read-only: no `confirm` wrapper, no write.
+                application::quran_cli::cmd_graph_doctor(db_path, deep).await
+            }
+            GraphAction::DoctorRepair { action } => match action {
+                DoctorRepairAction::QuarantineDangling => {
+                    confirm(
+                        "quarantine dangling graph edges",
+                        "quran-graph",
+                        yes,
+                        application::quran_cli::cmd_graph_doctor_repair_quarantine(db_path),
+                    )
+                    .await
+                }
+                DoctorRepairAction::TombstoneGc { retention_days } => {
+                    confirm(
+                        "garbage-collect tombstoned graph assertions",
+                        "quran-graph",
+                        yes,
+                        application::quran_cli::cmd_graph_doctor_repair_gc(db_path, retention_days),
+                    )
+                    .await
+                }
+                DoctorRepairAction::RebuildProjection { projection, seed_file } => {
+                    confirm(
+                        &format!("rebuild graph projection {projection}"),
+                        "quran-graph",
+                        yes,
+                        application::quran_cli::cmd_graph_doctor_repair_rebuild(
+                            db_path,
+                            &projection,
+                            seed_file.as_deref(),
+                        ),
                     )
                     .await
                 }

@@ -4721,6 +4721,129 @@ pub async fn cmd_graph_review_correct(
         Err(error) => CommandOutput::err(graph_error_exit(&error), error.to_string()),
     }
 }
+
+/// `quran graph doctor`: read-only projection health checks (D-08).
+///
+/// Opens the database read-only and renders the six stable `quran.graph.*`
+/// checks in id order. Any `Fail` exits VALIDATION, otherwise OK — Warn and
+/// Skipped never fail the command. Repair never happens here; the
+/// `doctor-repair` group owns explicit confirmed mutation.
+pub async fn cmd_graph_doctor(db_path: &str, deep: bool) -> CommandOutput {
+    use super::quran_doctor::CheckLevel;
+    let db = match storage_sqlite::SqliteDatabase::open_read_only(db_path).await {
+        Ok(db) => db,
+        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+    };
+    let checks = match super::quran_graph_doctor::run_quran_graph_checks(&db, deep).await {
+        Ok(checks) => checks,
+        Err(err) => return CommandOutput::err(exit::INTERNAL, err.to_string()),
+    };
+    let mut human = String::from("GRAPH DOCTOR\n");
+    for check in &checks {
+        human.push_str(&format!(
+            "[{}] {} — {}\n",
+            check.status.as_str().to_uppercase(),
+            check.id,
+            check.summary
+        ));
+        if let Some(remedy) = &check.remedy {
+            human.push_str(&format!("      remedy: {remedy}\n"));
+        }
+        if let Some(next) = &check.next_command {
+            human.push_str(&format!("      next: {next}\n"));
+        }
+    }
+    let any_fail = checks.iter().any(|check| check.status == CheckLevel::Fail);
+    let json = serde_json::json!({
+        "checks": checks
+            .iter()
+            .map(|check| serde_json::json!({
+                "id": check.id,
+                "status": check.status.as_str(),
+                "summary": check.summary,
+                "remedy": check.remedy,
+                "next_command": check.next_command,
+            }))
+            .collect::<Vec<_>>(),
+    });
+    CommandOutput { exit: if any_fail { exit::VALIDATION } else { exit::OK }, human, json }
+}
+
+/// Render one confirmed repair report: before-and-after counts in human
+/// text, full machine records in JSON (D-08/D-11).
+fn repair_report_output(report: super::quran_graph_doctor::RepairReport) -> CommandOutput {
+    let human = format!("{} (audit #{})\n", report.summary, report.audit_sequence);
+    let json = serde_json::json!({
+        "operation": report.operation,
+        "edges_removed": report.edges_removed,
+        "assertions_removed": report.assertions_removed,
+        "live_rows_refused": report.live_rows_refused,
+        "audit_sequence": report.audit_sequence,
+        "records": report.records,
+    });
+    CommandOutput::ok(human, json)
+}
+
+/// `quran graph doctor-repair quarantine-dangling`: remove dangling edges
+/// from every active projection's serving adjacency (D-08/D-11).
+///
+/// Dispatch wraps this in `confirm`, so `confirmed` is always true here —
+/// the service still refuses `false` by construction (T-04-15).
+pub async fn cmd_graph_doctor_repair_quarantine(db_path: &str) -> CommandOutput {
+    match super::quran_graph_doctor::repair_quarantine_dangling(
+        db_path,
+        super::quran_graph_doctor::RepairInput {
+            invoked_by: LOCAL_PRINCIPAL.to_string(),
+            confirmed: true,
+        },
+    )
+    .await
+    {
+        Ok(report) => repair_report_output(report),
+        Err(error) => graph_error_output(&error),
+    }
+}
+
+/// `quran graph doctor-repair tombstone-gc`: collect tombstoned assertions
+/// older than the retention gate (D-08/D-11).
+pub async fn cmd_graph_doctor_repair_gc(db_path: &str, retention_days: u32) -> CommandOutput {
+    match super::quran_graph_doctor::repair_tombstone_gc(
+        db_path,
+        super::quran_graph_doctor::TombstoneGcInput {
+            invoked_by: LOCAL_PRINCIPAL.to_string(),
+            confirmed: true,
+            retention_days,
+        },
+    )
+    .await
+    {
+        Ok(report) => repair_report_output(report),
+        Err(error) => graph_error_output(&error),
+    }
+}
+
+/// `quran graph doctor-repair rebuild-projection`: republish one projection
+/// through the fenced publish path, preserving authority (D-08/D-11).
+pub async fn cmd_graph_doctor_repair_rebuild(
+    db_path: &str,
+    projection: &str,
+    seed_file: Option<&str>,
+) -> CommandOutput {
+    match super::quran_graph_doctor::repair_rebuild_projection(
+        db_path,
+        super::quran_graph_doctor::RebuildInput {
+            invoked_by: LOCAL_PRINCIPAL.to_string(),
+            confirmed: true,
+            projection: projection.to_string(),
+            seed_file: seed_file.map(str::to_string),
+        },
+    )
+    .await
+    {
+        Ok(report) => repair_report_output(report),
+        Err(error) => graph_error_output(&error),
+    }
+}
 /// Search mode requested on the CLI (one flag family per tool).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SearchCliMode {
