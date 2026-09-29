@@ -128,6 +128,11 @@
       "value_ms": 2000,
       "applies_to": "fixture",
       "rationale": "Fixture harness bound on the 14-ayah synthetic index: guards against orders-of-magnitude regressions, not p99. Carried over unchanged from the pre-existing search_latency harness (never loosened)."
+    },
+    "cold_rebuild_total_ms": {
+      "value_ms": 360000,
+      "applies_to": "full-corpus",
+      "rationale": "P2-T38: cold index rebuild must complete within 6 minutes (360000 ms) end-to-end on reference hardware. OD-11-dependent: requires a licensed corpus to execute."
     }
   }
 }

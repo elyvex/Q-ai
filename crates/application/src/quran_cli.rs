@@ -2322,6 +2322,70 @@ pub async fn cmd_index_verify(db_path: &str, index: Option<&str>) -> CommandOutp
     CommandOutput { exit: if report.ok { exit::OK } else { exit::VALIDATION }, human, json }
 }
 
+/// `qai quran index verify-job` — enqueue a read-only index verification job.
+///
+/// Enqueue-only boundary (D-13): the command enqueues the job and returns
+/// the job id; it never blocks on the job's completion.
+pub async fn cmd_index_verify_job(
+    db_path: &str,
+    index: Option<&str>,
+    deep: bool,
+) -> CommandOutput {
+    use super::quran_index::{IndexVerifyParams, QURAN_INDEX_VERIFY_KIND, QURAN_AYAH_INDEX_ID};
+    use jobs::queue::JobQueue;
+    use storage::repository::JobRecord;
+
+    let db = match open_db(db_path).await {
+        Ok(db) => db,
+        Err(error) => return open_error_output(error),
+    };
+    let index_id = index.unwrap_or(QURAN_AYAH_INDEX_ID);
+    let data_dir = super::quran_index::index_root_for_db(db_path);
+    let params = IndexVerifyParams {
+        index_id: index_id.to_string(),
+        deep,
+        data_dir,
+    };
+    let payload = match serde_json::to_value(&params) {
+        Ok(payload) => payload,
+        Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
+    };
+    let job = JobRecord {
+        id: format!("index-verify-{}", uuid::Uuid::new_v4()),
+        kind: QURAN_INDEX_VERIFY_KIND.to_string(),
+        payload_json: payload.to_string(),
+        idempotency_key: None,
+        state: "Queued".to_string(),
+        priority: 0,
+        attempts: 0,
+        max_attempts: 5,
+        available_at: domain::Timestamp::now().to_string(),
+        lease_owner: None,
+        lease_expires_at: None,
+        checkpoint_json: None,
+        cancel_requested: false,
+        created_by: LOCAL_PRINCIPAL.to_string(),
+    };
+    let queue = super::job_queue::SqliteJobQueue::new(std::sync::Arc::new(db));
+    match queue.enqueue(job).await {
+        Ok(()) => {
+            let human = format!(
+                "queued index verification job {} for index {index_id} (deep: {deep})",
+                job.id
+            );
+            let json = serde_json::json!({
+                "job_id": job.id,
+                "kind": QURAN_INDEX_VERIFY_KIND,
+                "index_id": index_id,
+                "deep": deep,
+                "state": "Queued",
+            });
+            CommandOutput { exit: exit::OK, human, json }
+        }
+        Err(error) => CommandOutput::err(exit::INTERNAL, error.to_string()),
+    }
+}
+
 /// Enforce index-generation retention: `qai quran index gc` (P2-T35).
 pub async fn cmd_index_gc(db_path: &str, index: Option<&str>, keep: usize) -> CommandOutput {
     use super::quran_index::{GcParams, QURAN_AYAH_INDEX_ID, gc_index};

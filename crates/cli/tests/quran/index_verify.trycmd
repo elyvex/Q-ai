@@ -1,0 +1,22 @@
+# Phase 3.5 CLI acceptance — index verification job (W3, D-3.5-09).
+#
+# The index verify job is enqueue-only (D-13): the command enqueues the job
+# and returns the job id; it never blocks on the job's completion.
+
+```console
+$ qai quran index verify-job
+queued index verification job [..] for index quran.ayah.v1 (deep: false)
+
+```
+
+```console
+$ qai quran index verify-job --deep
+queued index verification job [..] for index quran.ayah.v1 (deep: true)
+
+```
+
+```console
+$ qai quran index verify-job --index quran.ayah.v1
+queued index verification job [..] for index quran.ayah.v1 (deep: false)
+
+```

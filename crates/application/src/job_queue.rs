@@ -312,6 +312,7 @@ pub fn build_default_registry(db: &Arc<SqliteDatabase>) -> HandlerRegistry {
         .register(Arc::new(crate::quran::QuranImportHandler::new(db.clone())))
         .register(Arc::new(crate::quran_forms::FormsRebuildHandler::new(db.clone())))
         .register(Arc::new(crate::quran_index::IndexBuildHandler::new(db.clone())))
+        .register(Arc::new(crate::quran_index::IndexVerifyHandler::new(db.clone())))
         .register(Arc::new(crate::quran_morphology::MorphologyImportHandler::new(db.clone())))
 }
 

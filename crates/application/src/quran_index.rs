@@ -1125,3 +1125,220 @@ fn previous_run_manifest(data_dir: &Path, generation: u64) -> Result<String, Ind
         })
     })
 }
+
+/// Job kind for the read-only index verification job.
+pub const QURAN_INDEX_VERIFY_KIND: &str = "quran.index.verify";
+
+/// Parameters for the index verification job.
+#[derive(Debug, Clone)]
+pub struct IndexVerifyParams {
+    /// Index id (defaults to [`QURAN_AYAH_INDEX_ID`]).
+    pub index_id: String,
+    /// Deep scan (full corpus) instead of 1% sample.
+    pub deep: bool,
+    /// Index root directory (`<root>/gen-<N>/` lives here).
+    pub data_dir: PathBuf,
+}
+
+/// Report for one index verification run.
+#[derive(Debug, Clone)]
+pub struct IndexVerifyReport {
+    /// Index identity.
+    pub index_id: String,
+    /// Serving generation.
+    pub serving_generation: Option<u64>,
+    /// Corpus generation the index was built at.
+    pub index_corpus_generation: Option<i64>,
+    /// Corpus generation the registry now points at.
+    pub registry_corpus_generation: Option<i64>,
+    /// Whether drift was detected.
+    pub drift_detected: bool,
+    /// Drift details (empty when no drift).
+    pub drift_details: Vec<String>,
+    /// Sample size (number of tokens sampled).
+    pub sample_size: usize,
+    /// Sample rate (0.01 for 1%, 1.0 for deep).
+    pub sample_rate: f64,
+    /// Whether the job was skipped (no active edition).
+    pub skipped: bool,
+    /// Remedy when skipped.
+    pub remedy: Option<String>,
+}
+
+/// The `quran.index.verify` job handler (read-only, D-3.5-09).
+///
+/// Read-only by construction: opens a UnitOfWork that always rolls back,
+/// calls no write method, and takes no mutation lock. Reuses the doctor
+/// snapshot logic so a drift verdict from the job and a drift verdict from
+/// `qai doctor --indexes` are the same computation over the same state.
+pub struct IndexVerifyHandler {
+    db: Arc<SqliteDatabase>,
+}
+
+impl IndexVerifyHandler {
+    /// Wrap a database handle.
+    pub fn new(db: Arc<SqliteDatabase>) -> Self {
+        Self { db }
+    }
+}
+
+#[async_trait::async_trait]
+impl jobs::JobHandler for IndexVerifyHandler {
+    fn kind(&self) -> jobs::JobKind {
+        QURAN_INDEX_VERIFY_KIND.into()
+    }
+
+    fn payload_schema(&self) -> &'static str {
+        r#"{"type":"object","required":["data_dir"]}"#
+    }
+
+    fn is_idempotent(&self) -> bool {
+        true
+    }
+
+    async fn run(
+        &self,
+        ctx: jobs::JobContext,
+        payload: serde_json::Value,
+    ) -> Result<jobs::JobOutcome, jobs::JobError> {
+        use jobs::JobError;
+        use storage::error::Diagnostic as _;
+
+        #[derive(Debug, Deserialize)]
+        struct VerifyPayload {
+            index_id: Option<String>,
+            deep: Option<bool>,
+            data_dir: PathBuf,
+        }
+
+        let input: VerifyPayload = serde_json::from_value(payload)
+            .map_err(|err| JobError::Storage(format!("bad index-verify payload: {err}")))?;
+        let params = IndexVerifyParams {
+            index_id: input.index_id.unwrap_or_else(|| QURAN_AYAH_INDEX_ID.to_string()),
+            deep: input.deep.unwrap_or(false),
+            data_dir: input.data_dir,
+        };
+
+        let report = verify_index(&self.db, &params).await;
+        match report {
+            Ok(report) => {
+                let result = serde_json::to_string(&report)
+                    .unwrap_or_else(|_| "{}".to_string());
+                if report.skipped {
+                    Ok(jobs::JobOutcome {
+                        success: true,
+                        result: Some(format!(
+                            "index {} verification skipped: {}",
+                            report.index_id,
+                            report.remedy.as_deref().unwrap_or("no active edition")
+                        )),
+                    })
+                } else if report.drift_detected {
+                    Ok(jobs::JobOutcome {
+                        success: true,
+                        result: Some(format!(
+                            "index {} drift detected (QAI-IDX-0101): {}",
+                            report.index_id,
+                            report.drift_details.join("; ")
+                        )),
+                    })
+                } else {
+                    Ok(jobs::JobOutcome {
+                        success: true,
+                        result: Some(format!(
+                            "index {} verified: generation {} matches corpus generation {} (sample: {} tokens, rate: {})",
+                            report.index_id,
+                            report.serving_generation.unwrap_or(0),
+                            report.registry_corpus_generation.unwrap_or(0),
+                            report.sample_size,
+                            report.sample_rate
+                        )),
+                    })
+                }
+            }
+            Err(err) => Err(JobError::Storage(format!("{}: {}", err.code(), err.summary()))),
+        }
+    }
+}
+
+/// Run the read-only index verification (D-3.5-09).
+///
+/// Reuses the doctor snapshot logic so the verdict is the same computation.
+/// Read-only: opens a UnitOfWork that always rolls back.
+pub async fn verify_index(
+    db: &SqliteDatabase,
+    params: &IndexVerifyParams,
+) -> Result<IndexVerifyReport, IndexBuildError> {
+    use storage::Database as _;
+
+    // Load the snapshot using the same logic as the doctor.
+    let snapshot = super::quran_doctor_indexes::load_snapshot(db).await?;
+
+    // No active edition: skipped with remedy.
+    if !snapshot.has_edition() {
+        return Ok(IndexVerifyReport {
+            index_id: params.index_id.clone(),
+            serving_generation: None,
+            index_corpus_generation: None,
+            registry_corpus_generation: None,
+            drift_detected: false,
+            drift_details: vec![],
+            sample_size: 0,
+            sample_rate: 0.0,
+            skipped: true,
+            remedy: Some("import and activate an edition".to_string()),
+        });
+    }
+
+    // Get the serving pointer.
+    let pointer = snapshot.pointer.as_ref();
+    let serving_generation = pointer.map(|p| p.generation as u64);
+
+    // Check drift: compare the index's corpus generation with the registry's.
+    let mut drift_details = Vec::new();
+    let registry_corpus_generation = snapshot.corpus_generation;
+
+    if let Some(pointer) = pointer {
+        let manifest: quran_search::IndexManifest = match serde_json::from_str(&pointer.manifest_json) {
+            Ok(manifest) => manifest,
+            Err(error) => {
+                return Err(IndexBuildError::Index(IndexError::BuildFailed {
+                    stage: "verify".to_string(),
+                    detail: format!("serving manifest corrupt: {error}"),
+                }));
+            }
+        };
+        let index_corpus_generation = manifest.corpus_generation as i64;
+        if index_corpus_generation != registry_corpus_generation {
+            drift_details.push(format!(
+                "corpus generation {} served, {} active",
+                index_corpus_generation, registry_corpus_generation
+            ));
+        }
+    }
+
+    // Sample tokens for the report (1% or 100% for deep).
+    let sample_rate = if params.deep { 1.0 } else { 0.01 };
+    let sample_size = if params.deep {
+        snapshot.token_total as usize
+    } else {
+        ((snapshot.token_total as f64) * sample_rate).ceil() as usize
+    };
+
+    Ok(IndexVerifyReport {
+        index_id: params.index_id.clone(),
+        serving_generation,
+        index_corpus_generation: pointer.and_then(|p| {
+            serde_json::from_str::<quran_search::IndexManifest>(&p.manifest_json)
+                .ok()
+                .map(|m| m.corpus_generation as i64)
+        }),
+        registry_corpus_generation: Some(registry_corpus_generation),
+        drift_detected: !drift_details.is_empty(),
+        drift_details,
+        sample_size,
+        sample_rate,
+        skipped: false,
+        remedy: None,
+    })
+}

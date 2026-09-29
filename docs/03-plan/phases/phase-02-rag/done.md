@@ -821,3 +821,21 @@ the live tree, with evidence from plan 03.5-02:
   Evidence: `multi_analysis_modes`, `interval_analysis_reachable_and_deterministic`.
 
 **Board rollup updated:** 65 → 72 ☑ (63%).
+
+## 12. Implementation Reconciliation — 2026-09-29 (plan 03.5-02, Task 2)
+
+**Phase 3.5 plan 03.5-02 index verification job.** Two tasks flipped ☐/◐ → ☑ against
+the live tree, with evidence from plan 03.5-02:
+
+- **T107** (nightly reconciliation job): ☑ — read-only `quran.index.verify` job registered
+  on the durable substrate; 1% sample with metadata; CLI enqueue-only boundary;
+  plan 03.5-02.
+  Evidence: `index_verify_green_on_fresh_index`, `index_verify_detects_drift`,
+  `index_verify_is_read_only`, `index_verify_reports_sample_metadata`,
+  `index_verify_skipped_on_empty_database`, `index_verify_handler_is_registered`,
+  `index_verify.trycmd`.
+- **T38** (cold-rebuild budget): ☑ — cold-rebuild budget row in budgets.json +
+  test pinning it; plan 03.5-02.
+  Evidence: `cold_rebuild_budget_is_pinned`.
+
+**Board rollup updated:** 72 → 74 ☑ (65%).

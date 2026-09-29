@@ -328,3 +328,25 @@ fn budget_artifact_codifies_adr_0207_and_fixture_bound() {
         .collect();
     assert_eq!(fixture_rows, vec![&"fixture_bound_ms".to_string()]);
 }
+
+/// P2-T38: the cold-rebuild budget is in the machine-readable table and is
+/// gated by a test that asserts it is not loosened.
+#[test]
+fn cold_rebuild_budget_is_pinned() {
+    let doc = budgets();
+    let cold_rebuild_ms = budget_ms(&doc, "cold_rebuild_total_ms");
+    assert_eq!(
+        cold_rebuild_ms, 360000,
+        "the cold-rebuild budget must be 6 minutes (360000 ms)"
+    );
+    let row = &doc["budgets"]["cold_rebuild_total_ms"];
+    assert_eq!(
+        row["applies_to"].as_str().unwrap(),
+        "full-corpus",
+        "cold-rebuild is OD-11-dependent"
+    );
+    assert!(
+        row["rationale"].as_str().is_some_and(|text| text.contains("P2-T38")),
+        "rationale must cite P2-T38"
+    );
+}

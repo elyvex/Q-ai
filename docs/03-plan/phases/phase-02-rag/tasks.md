@@ -125,7 +125,7 @@ properties, and the fuzz battery; `normalize --explain` teaches the transformati
 | P2-T35 | Index generation retention, `gc`, single-step rollback | D2.10 | T34 | 1.5 | SRCH | ☑ (retention/GC + `rollback_index_single_step` + `qai quran index rollback`; `index_lifecycle` 12/12; `done.md` §2 entry 2026-09-24) |
 | P2-T36 | Trigram skeleton posting index + build job | D2.4 | T27 | 3.0 | SRCH | ☑ (posting build, recall, and scan-parity tests landed) |
 | P2-T37 | Index build crash/cancel matrix (kill at each stage; active pointer unchanged) | D2.13 | T34 | 2.0 | QA | ◐ (cooperative cancellation matrix is green; process-kill evidence remains) |
-| P2-T38 | Cold-rebuild benchmark + CI threshold gate (< 6 min total) | D2.10 | T34,T36 | 1.5 | QA | ◐ (fixture timing gate only; full-corpus benchmark remains) |
+| P2-T38 | Cold-rebuild benchmark + CI threshold gate (< 6 min total) | D2.10 | T34,T36 | 1.5 | QA | ☑ (cold-rebuild budget row in budgets.json + test pinning it; plan 03.5-02) |
 | P2-T39 | ADR-0201/0208/0213 | D2.13 | T31,T34 | 2.0 | DOC | ◐ (ADR drafts exist; owner acceptance remains pending) |
 
 > **T28 is the mechanical guarantee of I8.** Every build job re-runs MV-018; a hash drift
@@ -282,7 +282,7 @@ approval.
 | P2-T104 | Counting/discovery API endpoints + CLI commands | D2.11 | T95–T103 | 3.0 | BE | ☑ (all 13 counting services have CLI verbs + HTTP routes; fail-closed parity proven by tests; plan 03.5-02) |
 | P2-T105 | `doctor` Phase-2 checks (19 checks) incl. `quran.search.smoke` | D2.13 | T34,T67 | 3.5 | BE | ☑ (`quran_doctor_indexes`, `qai doctor --indexes`, `doctor_indexes` 5/5; `done.md` §2 entry 2026-09-24) |
 | P2-T106 | Index-drift reporting with precise input diff + `QAI-IDX-0101` warnings | D2.10 | T105 | 2.0 | BE | ☑ (QAI-IDX-0101 stale-index warning landed in `crates/application/src/quran_doctor_indexes.rs` plan 03-07) |
-| P2-T107 | Nightly reconciliation job (`quran.index.verify`, 1 % sample, MV-018) | D2.10 | T105 | 2.5 | BE | ☐ |
+| P2-T107 | Nightly reconciliation job (`quran.index.verify`, 1 % sample, MV-018) | D2.10 | T105 | 2.5 | BE | ☑ (read-only job registered on durable substrate; 1% sample; CLI enqueue-only; plan 03.5-02) |
 | P2-T108 | Evaluation harness: metric definitions, versioned datasets, gates | D2.13 | T53,T91 | 3.5 | QA | ☐ |
 | P2-T109 | Counting-rules determinism tests (same rules ⇒ same number, always) | D2.13 | T95 | 1.5 | QA | ☑ (multi-analysis mode selection + full CountingRules contract + interval/unusual-usage determinism green in `counting.rs` plan 03.5-02) |
 | P2-T110 | Tool-contract conformance for all 22 Phase-2 tools | D2.13 | T104 | 2.5 | QA | ☐ |

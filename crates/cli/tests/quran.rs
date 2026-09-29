@@ -58,6 +58,14 @@ fn quran_counting_graph_snapshots() {
     ]);
 }
 
+/// Phase 3.5 index verification job CLI surface (P2-T107, D-3.5-09):
+/// host-backed segment.
+#[test]
+fn quran_index_verify_snapshots() {
+    let guard = ServeGuard::start();
+    guard.run_segments(&["tests/quran/index_verify.trycmd"]);
+}
+
 /// Phase 4 tracer CLI surface (D-11): host-backed import, then the
 /// SQLite-backed structural slice — build persists the projection, inspect
 /// shows the manifest with its generation stamp, neighbors open a bounded

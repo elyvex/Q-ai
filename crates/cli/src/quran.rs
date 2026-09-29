@@ -424,6 +424,15 @@ pub enum IndexAction {
         #[arg(long)]
         index: Option<String>,
     },
+    /// Enqueue a read-only index verification job (`quran.index.verify`).
+    VerifyJob {
+        /// Index id (default `quran.ayah.v1`).
+        #[arg(long)]
+        index: Option<String>,
+        /// Deep scan (full corpus) instead of 1% sample.
+        #[arg(long, default_value_t = false)]
+        deep: bool,
+    },
     /// Enforce generation retention (default: keep active + previous).
     Gc {
         /// Index id (default `quran.ayah.v1`).
@@ -1187,6 +1196,9 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
             }
             IndexAction::Verify { index } => {
                 application::quran_cli::cmd_index_verify(db_path, index.as_deref()).await
+            }
+            IndexAction::VerifyJob { index, deep } => {
+                application::quran_cli::cmd_index_verify_job(db_path, index.as_deref(), deep).await
             }
             IndexAction::Gc { index, keep } => {
                 application::quran_cli::cmd_index_gc(db_path, index.as_deref(), keep).await
