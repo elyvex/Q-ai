@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundations** - Workspace, config, SQLite, jobs, provenance, audit, CLI skeleton (completed 2026-09-28)
 - [x] **Phase 2: Canonical Quran Core** - Validated import, addressing, tokens, exact lookup, integrity (completed 2026-09-25)
 - [ ] **Phase 3: Quran Search & Linguistics** - Normalization, roots/lemmas, morphology, frequency tools
-- [ ] **Phase 4: Quran Graph** - Graph store, traversal, annotations, visualization
+- [x] **Phase 4: Quran Graph** - Graph store, traversal, annotations, visualization (completed 2026-09-29)
 - [ ] **Phase 5: Rich Quran Experience** - Web GUI, TUI cockpit, research tools, result contract
 - [ ] **Phase 6: Hadith & Tafsir** - Structured records, grading, verse links, tafsir indexing
 - [ ] **Phase 7: Isnad & Narrator Research** - Identity review, chain paths, uncertainty
@@ -145,23 +145,23 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 04-01-PLAN.md — TRACER: structural build → inspect → neighbors → canonical quotation over SQLite, schema fix, vocab, conformance, fixtures
+- [x] 04-01-PLAN.md — TRACER: structural build → inspect → neighbors → canonical quotation over SQLite, schema fix, vocab, conformance, fixtures
 
 **Wave 2** *(blocked on 04-01)*
 
-- [ ] 04-02-PLAN.md — Annotation authority, review queue, word-root/annotated builders, rebuild preservation, review CLI
+- [x] 04-02-PLAN.md — Annotation authority, review queue, word-root/annotated builders, rebuild preservation, review CLI
 
 **Wave 3** *(blocked on 04-02)*
 
-- [ ] 04-03-PLAN.md — Path modes, subgraph, patterns, root-family, CLI read tree, Graph JSON export, DOT/SVG render
+- [x] 04-03-PLAN.md — Path modes, subgraph, patterns, root-family, CLI read tree, Graph JSON export, DOT/SVG render
 
 **Wave 4** *(blocked on 04-03)*
 
-- [ ] 04-04-PLAN.md — HTTP read routes, OpenAPI, typed tools, cross-surface parity, explainability contract
+- [x] 04-04-PLAN.md — HTTP read routes, OpenAPI, typed tools, cross-surface parity, explainability contract
 
 **Wave 5** *(blocked on 04-04: shared lib.rs wiring)*
 
-- [ ] 04-05-PLAN.md — Read-only doctor, explicit repair/GC, owner-gate and deferral ledgers, full phase gate
+- [x] 04-05-PLAN.md — Read-only doctor, explicit repair/GC, owner-gate and deferral ledgers, full phase gate
 
 ### Phase 5: Rich Quran Experience
 
@@ -289,7 +289,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 1. Foundations | 5/5 | Complete    | 2026-09-28 |
 | 2. Canonical Quran Core | 7/7 | Complete    | 2026-09-25 |
 | 3. Quran Search & Linguistics | 8/8 | In Progress|  |
-| 4. Quran Graph | 0/TBD | Not started | - |
+| 4. Quran Graph | 5/5 | Complete    | 2026-09-29 |
 | 5. Rich Quran Experience | 0/TBD | Not started | - |
 | 6. Hadith & Tafsir | 0/TBD | Not started | - |
 | 7. Isnad & Narrator Research | 0/TBD | Not started | - |
