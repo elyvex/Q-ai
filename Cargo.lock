@@ -750,6 +750,23 @@ dependencies = [
 [[package]]
 name = "evaluation"
 version = "0.0.0"
+dependencies = [
+ "application",
+ "domain",
+ "quran-corpus",
+ "quran-morphology",
+ "quran-normalization",
+ "quran-search",
+ "serde",
+ "serde_json",
+ "storage",
+ "storage-sqlite",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tool-registry",
+ "tools",
+]
 
 [[package]]
 name = "event-listener"

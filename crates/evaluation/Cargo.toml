@@ -3,3 +3,22 @@ name = "evaluation"
 version = "0.0.0"
 edition = "2024"
 publish = false
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+tempfile = { workspace = true }
+application = { path = "../application" }
+storage-sqlite = { path = "../storage-sqlite" }
+quran-corpus = { path = "../quran-corpus" }
+quran-normalization = { path = "../quran-normalization" }
+quran-search = { path = "../quran-search" }
+quran-morphology = { path = "../quran-morphology" }
+domain = { path = "../domain" }
+storage = { path = "../storage" }
+tool-registry = { path = "../tool-registry" }
+tools = { path = "../tools" }

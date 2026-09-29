@@ -20,6 +20,7 @@ use quran_search::{
     Diagnostic as IndexDiagnostic, FieldId, Fts5Index, FtsDoc, FullTextIndex, IndexError,
     IndexManifest, SemVer, TokenizerFamily,
 };
+use serde::{Deserialize, Serialize};
 use storage::Database as _;
 use storage::error::StorageError;
 use storage::quran::TokenAnalysisRow;
@@ -1130,7 +1131,7 @@ fn previous_run_manifest(data_dir: &Path, generation: u64) -> Result<String, Ind
 pub const QURAN_INDEX_VERIFY_KIND: &str = "quran.index.verify";
 
 /// Parameters for the index verification job.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexVerifyParams {
     /// Index id (defaults to [`QURAN_AYAH_INDEX_ID`]).
     pub index_id: String,
@@ -1141,7 +1142,7 @@ pub struct IndexVerifyParams {
 }
 
 /// Report for one index verification run.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct IndexVerifyReport {
     /// Index identity.
     pub index_id: String,
@@ -1272,7 +1273,9 @@ pub async fn verify_index(
     use storage::Database as _;
 
     // Load the snapshot using the same logic as the doctor.
-    let snapshot = super::quran_doctor_indexes::load_snapshot(db).await?;
+    let snapshot = super::quran_doctor_indexes::load_snapshot(db)
+        .await
+        .map_err(|e| IndexBuildError::Storage(e.to_string()))?;
 
     // No active edition: skipped with remedy.
     if !snapshot.has_edition() {

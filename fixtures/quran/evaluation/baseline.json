@@ -1,0 +1,38 @@
+{
+  "format": "qai.evaluation-baseline",
+  "format_version": 1,
+  "description": "Committed baseline for the evaluation harness. Each metric records the current measured value with an explicit tolerance. The harness diffs a fresh run against this file; a metric outside tolerance fails, a metric inside tolerance passes.",
+  "scope": "Mechanical regression gate only — not a linguistic quality verdict (ADR-0204/0211 Draft)",
+  "metrics": {
+    "search.golden_agreement": {
+      "value": 1.0,
+      "tolerance": 0.0,
+      "description": "Fraction of golden queries whose reference set matches the service output"
+    },
+    "search.empty_result_rate": {
+      "value": 0.0,
+      "tolerance": 0.0,
+      "description": "Fraction of queries that returned zero hits (must be 0 on the fixture)"
+    },
+    "search.determinism": {
+      "value": 1.0,
+      "tolerance": 0.0,
+      "description": "Fraction of queries whose output is byte-identical across two runs"
+    },
+    "lexicon.attribution_completeness": {
+      "value": 1.0,
+      "tolerance": 0.0,
+      "description": "Fraction of lexicon results that carry dataset attribution"
+    },
+    "lexicon.typed_unavailable": {
+      "value": 1.0,
+      "tolerance": 0.0,
+      "description": "Fraction of no-dataset calls that return the typed QAI-MORPH-0004 error"
+    },
+    "lexicon.determinism": {
+      "value": 1.0,
+      "tolerance": 0.0,
+      "description": "Fraction of lexicon calls whose output is byte-identical across two runs"
+    }
+  }
+}

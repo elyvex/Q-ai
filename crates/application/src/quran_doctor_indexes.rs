@@ -79,25 +79,25 @@ fn skipped(id: &'static str, summary: String, remedy: &str, next: &str) -> Quran
 }
 
 /// Shared read-only snapshot for the 19 checks.
-struct Snapshot {
-    edition_id: String,
-    edition_slug: String,
-    edition_version: String,
-    corpus_generation: i64,
-    ayahs: Vec<storage::quran::AyahRow>,
-    token_total: i64,
-    profiles_db: Vec<storage::quran::NormalizationProfileRow>,
-    token_forms: i64,
-    ayah_forms: i64,
-    pointer: Option<storage::quran::IndexPointerRow>,
-    runs: Vec<storage::quran::IndexBuildRunRow>,
-    datasets: Vec<storage::quran::QuranDatasetRow>,
-    active_dataset: Option<storage::quran::QuranDatasetRow>,
-    pending_reviews: Vec<storage::quran::MorphReviewItemRow>,
+pub struct Snapshot {
+    pub edition_id: String,
+    pub edition_slug: String,
+    pub edition_version: String,
+    pub corpus_generation: i64,
+    pub ayahs: Vec<storage::quran::AyahRow>,
+    pub token_total: i64,
+    pub profiles_db: Vec<storage::quran::NormalizationProfileRow>,
+    pub token_forms: i64,
+    pub ayah_forms: i64,
+    pub pointer: Option<storage::quran::IndexPointerRow>,
+    pub runs: Vec<storage::quran::IndexBuildRunRow>,
+    pub datasets: Vec<storage::quran::QuranDatasetRow>,
+    pub active_dataset: Option<storage::quran::QuranDatasetRow>,
+    pub pending_reviews: Vec<storage::quran::MorphReviewItemRow>,
 }
 
 impl Snapshot {
-    fn has_edition(&self) -> bool {
+    pub fn has_edition(&self) -> bool {
         !self.edition_id.is_empty()
     }
 }
@@ -198,7 +198,7 @@ pub async fn run_index_checks(
     Ok(checks)
 }
 
-async fn load_snapshot(db: &SqliteDatabase) -> Result<Snapshot, storage::error::StorageError> {
+pub async fn load_snapshot(db: &SqliteDatabase) -> Result<Snapshot, storage::error::StorageError> {
     let mut uow = db.write().await?;
     let empty = Snapshot {
         edition_id: String::new(),

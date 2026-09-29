@@ -234,3 +234,16 @@ allow = []
 allow = ["serde", "serde_json", "thiserror", "sqlx", "tempfile", "tokio"]
 [quran-graph.external.git]
 allow = []
+
+# --- Phase 3.5 (Evaluation harness) ---
+# evaluation: versioned dataset loading, metric computation, and report
+# rendering. The library is pure (serde/serde_json/thiserror only); the
+# integration test builds a real searchable database through the application
+# crate (same pattern as quran-graph's dev-only application edge).
+[evaluation]
+workspace = { allow = ["domain", "storage", "storage-sqlite", "quran-core", "quran-corpus", "quran-normalization", "quran-search", "quran-morphology", "tools", "tool-registry", "application"] }
+
+[evaluation.external.registry]
+allow = ["serde", "serde_json", "thiserror", "tokio", "tempfile"]
+[evaluation.external.git]
+allow = []

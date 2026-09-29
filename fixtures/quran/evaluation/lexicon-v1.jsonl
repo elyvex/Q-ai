@@ -1,0 +1,19 @@
+{"header": true, "version": 1, "reviewed_by": "pending-linguist", "reviewed_at": null, "dataset_class": "synthetic_test_only", "note": "Evaluation lexicon dataset: queries derived from the synthetic lexicon deterministic scheme (root=k%3, lemma=k%9). Every row is synthetic_test_only; linguist review pending OD-12."}
+{"tool": "root_search", "input": "root-0", "expected_attribution": "test-morph@0.1.0", "expected_typed_unavailable": true}
+{"tool": "root_search", "input": "root-1", "expected_attribution": "test-morph@0.1.0", "expected_typed_unavailable": true}
+{"tool": "root_search", "input": "root-2", "expected_attribution": "test-morph@0.1.0", "expected_typed_unavailable": true}
+{"tool": "lemma_search", "input": "lem-0", "expected_attribution": "test-morph@0.1.0", "expected_typed_unavailable": true}
+{"tool": "lemma_search", "input": "lem-1", "expected_attribution": "test-morph@0.1.0", "expected_typed_unavailable": true}
+{"tool": "lemma_search", "input": "lem-2", "expected_attribution": "test-morph@0.1.0", "expected_typed_unavailable": true}
+{"tool": "lemma_search", "input": "lem-3", "expected_attribution": "test-morph@0.1.0", "expected_typed_unavailable": true}
+{"tool": "lemma_search", "input": "lem-4", "expected_attribution": "test-morph@0.1.0", "expected_typed_unavailable": true}
+{"tool": "lemma_search", "input": "lem-5", "expected_attribution": "test-morph@0.1.0", "expected_typed_unavailable": true}
+{"tool": "lemma_search", "input": "lem-6", "expected_attribution": "test-morph@0.1.0", "expected_typed_unavailable": true}
+{"tool": "lemma_search", "input": "lem-7", "expected_attribution": "test-morph@0.1.0", "expected_typed_unavailable": true}
+{"tool": "lemma_search", "input": "lem-8", "expected_attribution": "test-morph@0.1.0", "expected_typed_unavailable": true}
+{"tool": "word_family", "input": "token:1:1:1", "expected_attribution": "test-morph@0.1.0", "expected_typed_unavailable": true}
+{"tool": "word_family", "input": "token:1:1:2", "expected_attribution": "test-morph@0.1.0", "expected_typed_unavailable": true}
+{"tool": "word_family", "input": "token:1:1:3", "expected_attribution": "test-morph@0.1.0", "expected_typed_unavailable": true}
+{"tool": "morphology_for_token", "input": "1:1:1", "expected_attribution": "test-morph@0.1.0", "expected_typed_unavailable": true}
+{"tool": "morphology_for_token", "input": "1:1:2", "expected_attribution": "test-morph@0.1.0", "expected_typed_unavailable": true}
+{"tool": "morphology_for_token", "input": "1:1:3", "expected_attribution": "test-morph@0.1.0", "expected_typed_unavailable": true}

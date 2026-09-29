@@ -2367,14 +2367,15 @@ pub async fn cmd_index_verify_job(
         created_by: LOCAL_PRINCIPAL.to_string(),
     };
     let queue = super::job_queue::SqliteJobQueue::new(std::sync::Arc::new(db));
+    let job_id = job.id.clone();
     match queue.enqueue(job).await {
         Ok(()) => {
             let human = format!(
                 "queued index verification job {} for index {index_id} (deep: {deep})",
-                job.id
+                job_id
             );
             let json = serde_json::json!({
-                "job_id": job.id,
+                "job_id": job_id,
                 "kind": QURAN_INDEX_VERIFY_KIND,
                 "index_id": index_id,
                 "deep": deep,
