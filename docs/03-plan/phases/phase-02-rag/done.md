@@ -839,3 +839,41 @@ the live tree, with evidence from plan 03.5-02:
   Evidence: `cold_rebuild_budget_is_pinned`.
 
 **Board rollup updated:** 72 → 74 ☑ (65%).
+
+## 13. Implementation Reconciliation — 2026-10-02 (plan 03.5-03, Tasks 1–2)
+
+**Phase 3.5 plan 03.5-03 evaluation harness, tool conformance, and goldens.**
+Rows flipped ☐ → ☑ against the live tree, with evidence from plan 03.5-03.
+Every golden row stays `reviewed_by: pending-linguist` / `reviewed_at: null` /
+`synthetic_test_only` — no linguistic correctness is asserted while ADR-0210
+and ADR-0215 are Draft (OD-12).
+
+- **T108** (evaluation harness): ☑ — versioned `search-v1`/`lexicon-v1` datasets
+  (header version + `pending-linguist` + `synthetic_test_only`) and a committed
+  `baseline.json` with an explicit `tolerance` per metric; the harness gates only
+  mechanical regressions and labels its own output as not a linguistic verdict.
+  Plan 03.5-03 Task 1.
+  Evidence: `cargo test -p evaluation` (14 tests, incl.
+  `baseline_regression_fails`, `absent_dataset_reports_unavailable_with_remedy`,
+  `unknown_version_is_refused`).
+- **T110** (tool-contract conformance): ☑ — one shared contract over the
+  **twelve** registered `quran.*` names (board count 22 reconciled to 12, D-3.5-08):
+  envelope, reproducibility, attribution, canonical sources, normalization trace,
+  typed-unavailable, truncation-with-reason, and no raw backend error strings.
+  Plan 03.5-03 Task 2.
+  Evidence: `cargo test -p tool-registry` (10 conformance tests, incl.
+  `truncated_results_carry_reason_and_never_claim_absence`,
+  `registered_but_unimplemented_tool_returns_typed_unsupported`).
+- **T91** (root/lemma golden set, 500 cases): ☑ — `fixtures/quran/lexicon/root-lemma-goldens.jsonl`
+  holds exactly 500 cases derived deterministically from the synthetic lexicon scheme
+  (`root = token_index % 3`, `lemma = token_index % 9`) over the 64 fixture tokens;
+  every row resolves through the real service with dataset attribution. Plan 03.5-03 Task 2.
+  Evidence: `all_root_lemma_goldens_pass`.
+- **T92** (family golden set): ☑ — the 154-family curated set in
+  `fixtures/quran/lexicon/families/curated.jsonl` covers all seven typed relation
+  kinds (same_form limited to the four duplicate surface-form pairs the synthetic
+  fixture actually contains — no row is fabricated); runner pinned to
+  `pending-linguist`/`synthetic_test_only`. Plan 03-04, re-affirmed plan 03.5-03 Task 2.
+  Evidence: `all_curated_family_goldens_pass`.
+
+**Board rollup updated:** 74 → 78 ☑ (68%).

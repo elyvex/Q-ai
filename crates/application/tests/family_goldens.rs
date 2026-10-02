@@ -344,3 +344,109 @@ async fn all_curated_family_goldens_pass() {
     let expected: BTreeSet<String> = TYPED_KINDS.iter().map(|k| (*k).to_string()).collect();
     assert_eq!(kinds_seen, expected, "curated set must cover every relation kind");
 }
+
+// ── Root/lemma golden set (P2-T91, D-3.5-08) ────────────────────────────────
+
+const ROOT_LEMMA_GOLDENS: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../fixtures/quran/lexicon/root-lemma-goldens.jsonl"
+);
+
+#[derive(serde::Deserialize)]
+struct RootLemmaGoldenRow {
+    case_id: String,
+    tool: String,
+    input: String,
+    expected_attribution: String,
+    expected_typed_unavailable: bool,
+    synthetic_test_only: bool,
+}
+
+fn load_root_lemma_goldens() -> Vec<RootLemmaGoldenRow> {
+    let text = std::fs::read_to_string(ROOT_LEMMA_GOLDENS).expect("root/lemma golden fixture exists");
+    let mut lines = text.lines();
+    let header: serde_json::Value =
+        serde_json::from_str(lines.next().expect("header present")).expect("header parses");
+    assert_eq!(header["header"], true);
+    assert_eq!(header["reviewed_by"], "pending-linguist");
+    assert!(header["reviewed_at"].is_null(), "root/lemma goldens stay unreviewed (OD-12)");
+    assert_eq!(header["synthetic_test_only"], true);
+    let rows: Vec<RootLemmaGoldenRow> = lines
+        .enumerate()
+        .map(|(i, line)| {
+            serde_json::from_str(line).unwrap_or_else(|e| panic!("root/lemma golden line {i}: {e}"))
+        })
+        .collect();
+    assert_eq!(rows.len(), 500, "root/lemma golden set must hold exactly 500 cases");
+    for row in &rows {
+        assert!(row.synthetic_test_only, "{} must stay synthetic_test_only", row.case_id);
+        // Every row resolves against the active synthetic dataset, so none may
+        // expect typed-unavailable here; the QAI-MORPH-0004 path is covered by
+        // the tool-registry conformance suite (unavailable_dataset case) instead.
+        assert!(!row.expected_typed_unavailable, "{} must resolve, not expect unavailable", row.case_id);
+    }
+    rows
+}
+
+/// Every root/lemma golden row resolves through the real service. Selected by
+/// `-- root_lemma_goldens` (a zero-match filter exits 0).
+#[tokio::test]
+async fn all_root_lemma_goldens_pass() {
+    let rows = load_root_lemma_goldens();
+    let (_dir, db) = ready_db().await;
+    let built_total = build_all_relations(&db).await;
+    assert!(built_total > 0, "family relations must be built");
+
+    let dataset = format!("{SLUG}@{VERSION}");
+    for row in &rows {
+        assert_eq!(
+            row.expected_attribution, dataset,
+            "{}: row pins its synthetic dataset attribution",
+            row.case_id
+        );
+        match row.tool.as_str() {
+            "root_search" => {
+                let (ds, occurrences) = application::quran_morphology::root_search(&db, &row.input)
+                    .await
+                    .unwrap_or_else(|e| panic!("{}: root_search({}) failed: {e}", row.case_id, row.input));
+                assert_eq!(ds, dataset, "{}: dataset attribution", row.case_id);
+                assert!(!occurrences.is_empty(), "{}: root must have occurrences", row.case_id);
+            }
+            "lemma_search" => {
+                let (ds, occurrences) = application::quran_morphology::lemma_search(&db, &row.input)
+                    .await
+                    .unwrap_or_else(|e| panic!("{}: lemma_search({}) failed: {e}", row.case_id, row.input));
+                assert_eq!(ds, dataset, "{}: dataset attribution", row.case_id);
+                assert!(!occurrences.is_empty(), "{}: lemma must have occurrences", row.case_id);
+            }
+            "word_family" => {
+                let (ds, members) = word_family(&db, "token", &row.input)
+                    .await
+                    .unwrap_or_else(|e| panic!("{}: word_family({}) failed: {e}", row.case_id, row.input));
+                assert_eq!(ds, dataset, "{}: dataset attribution", row.case_id);
+                assert!(!members.is_empty(), "{}: token must have family members", row.case_id);
+            }
+            "morphology_for_token" => {
+                let parts: Vec<&str> = row.input.split(':').collect();
+                assert_eq!(
+                    parts.len(),
+                    4,
+                    "{}: morphology input must be token:S:A:P",
+                    row.case_id
+                );
+                assert_eq!(parts[0], "token", "{}: morphology input must name a token", row.case_id);
+                let surah: i64 = parts[1].parse().unwrap();
+                let ayah: i64 = parts[2].parse().unwrap();
+                let position: i64 = parts[3].parse().unwrap();
+                let (ds, analyses) = application::quran_morphology::morphology_for_token(
+                    &db, "test-edition-min", "0.1.0", surah, ayah, position,
+                )
+                .await
+                .unwrap_or_else(|e| panic!("{}: morphology_for_token({}) failed: {e}", row.case_id, row.input));
+                assert_eq!(ds, dataset, "{}: dataset attribution", row.case_id);
+                assert!(!analyses.is_empty(), "{}: token must have analyses", row.case_id);
+            }
+            other => panic!("{}: unknown tool {other}", row.case_id),
+        }
+    }
+}

@@ -421,7 +421,9 @@ fn morph_params(document_text: String) -> MorphologyImportParams {
 async fn search_tool_returns_attributed_envelope() {
     let (_dir, db, reader, data_dir) = searchable_reader().await;
     let registry = ReaderToolBackend::registry_with_index_root(reader, data_dir);
-    assert_eq!(registry.tool_names().len(), 7);
+    // The registry ships all twelve `quran.*` tools (two reads + five D-13
+    // lexicon/search + five graph); the backend only serves the ones it wires.
+    assert_eq!(registry.tool_names().len(), 12);
     assert!(registry.tool_names().contains(&"quran.search"));
 
     let surface = first_token_surface(&db).await;
