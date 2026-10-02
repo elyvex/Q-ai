@@ -318,17 +318,22 @@ approval.
 
 ## 9. Board Rollup
 
-| Sprint | Scope | Tasks | Est (ed) | Done | Status |
-|---|---|---|---|---|---|
-| X — External-lead-time decisions | 5 | — | 0 | ☐ Not Started |
-| 2.0 — Dataset & Linguistic Decisions | 12 | 30.5 | 0 | ☐ Not Started |
-| 2.1 — Normalization Engine | 12 | 28.5 | 11 | ◐ In Progress |
-| 2.2 — Derived Forms & FTS Foundation | 15 | 33.5 | 12 | ◐ In Progress |
-| 2.3 — Search Tools | 17 | 42.0 ⚠️ | 14 | ◐ In Progress |
-| 2.4 — Morphology Import & Lexicons | 18 | 45.0 ⚠️ | 10 | ◐ In Progress |
-| 2.5 — Morphology & Family Tools | 19 | 47.5 ⚠️ | 9 | ◐ In Progress |
-| 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 51.0 ⚠️ | 9 | ◐ In Progress |
-| **Total** | **114 + 5** | **278.0** | **65** | **57%** |
+Reconciled 2026-10-02 (plan 03.5-01 + close verification, plan 03.5-04): the
+counts below are the literal status cells of §1–§8, summed. The pre-reconciliation
+row of `65/57%` was stale; the earlier `78` note in `done.md` was not reflected in
+the table. Verified by enumerating every `P2-Tnnn` row.
+
+| Sprint | Tasks | Est (ed) | ☑ Done | ◐ Partial | ☐ Open | Status |
+|---|---|---|---|---|---|---|
+| §1 X — External-lead-time decisions | 5 | — | 0 | 0 | 5 | ☐ Not Started (owner-gated) |
+| §2 2.0 — Dataset & Linguistic Decisions | 12 | 30.5 | 0 | 0 | 12 | ☐ Not Started (owner-gated) |
+| §3 2.1 — Normalization Engine | 12 | 28.5 | 11 | 1 | 0 | ◐ In Progress |
+| §4 2.2 — Derived Forms & FTS Foundation | 15 | 33.5 | 13 | 2 | 0 | ◐ In Progress |
+| §5 2.3 — Search Tools | 17 | 42.0 ⚠️ | 14 | 3 | 0 | ◐ In Progress |
+| §6 2.4 — Morphology Import & Lexicons | 18 | 45.0 ⚠️ | 10 | 8 | 0 | ◐ In Progress |
+| §7 2.5 — Morphology & Family Tools | 19 | 47.5 ⚠️ | 9 | 10 | 0 | ◐ In Progress |
+| §8 2.6 — Counting, Discovery, Doctor, Evaluation | 21 | 51.0 ⚠️ | 18 | 1 | 2 | ◐ In Progress |
+| **Total (task rows §1–§8)** | **114 + 5** | **278.0** | **75** | **25** | **14** | **66% ☑** |
 
 By role: **BE ≈ 141.0 ed** · **SRCH ≈ 40.0 ed** · **QA ≈ 40.5 ed** · **DATA ≈ 17.0 ed** ·
 **DOC ≈ 13.0 ed** · **LING ≈ 10.5 ed** · **LING+BE ≈ 3.5 ed** · **LING+QA ≈ 10.5 ed** ·

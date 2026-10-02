@@ -1,7 +1,7 @@
 # Phase 2 — Completion Ledger
 
 **Phase:** P2 — Quran Search, Arabic Normalization, Morphology & Word Families
-**Status:** 🟡 In Progress — 65 / 114 tasks · 0 / 50 acceptance criteria · 0 / 14 ADRs · 6 / 6 migrations
+**Status:** 🟡 In Progress — 75 / 114 tasks ☑ (25 ◐ partial, 14 ☐ open) · 0 / 50 acceptance criteria · 0 / 14 ADRs · 6 / 6 migrations
 **Started:** 2026-09-14
 **Completed:** —
 
@@ -926,8 +926,33 @@ remain open with per-OD readiness in the decisions answer log.**
   recorded (deny CI-enforced, walkthrough stays open as non-agent work).
   Plan 03.5-04 Tasks 2–3.
   Evidence: `lookup_performance_smoke` ×4 green, `cargo llvm-cov -p citations`.
+- **Full gate (close):** `cargo test --workspace` = 191 suites, 1162 passed,
+  0 failed (50k soak green); `cargo fmt --all -- --check` clean;
+  `cargo clippy --workspace --all-targets -- -D warnings` clean;
+  `arch-check` / `migrate-check` (22) / `adr-lint` (12) OK.
 - **Close:** evidence matrix W1–W10 in `status.md`; OD re-read logged with
   readiness and zero closures; phase totals restated below.
 
 **Board rollup unchanged:** 78 ☑ (no Phase-2 rows flipped by the close; the
 close records evidence for already-☑ rows and the honest open tail).
+
+## 16. Rollup correction — 2026-10-02 (plan 03.5-04, close verification)
+
+**The §9 Board Rollup and this ledger's running totals had drifted from the
+board's own status cells.** Enumerating every `P2-Tnnn` row in
+`docs/03-plan/phases/phase-02-rag/tasks.md` (§1–§8, 114 rows) gives the
+authoritative counts:
+
+| Status | Rows |
+|---|---|
+| ☑ Done | 75 |
+| ◐ Partial / synthetic / owner-gated | 25 |
+| ☐ Open | 14 |
+| **Total** | **114** (66% ☑) |
+
+Prior claims in this ledger read `59 → 65` (§11) and `74 → 78` (§13) while §9
+still read `65`. The `78` figures were not reflected in the board; §9 has been
+rewritten to the verified per-sprint counts and this ledger's header set to
+75/114. All flips that produced a ☑ remain individually evidenced by the
+per-entry `Evidence:` lines above and in `tasks.md`; this note corrects the
+summary arithmetic only. No row status was changed by the correction.

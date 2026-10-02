@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundations** - Workspace, config, SQLite, jobs, provenance, audit, CLI skeleton (completed 2026-09-28)
 - [x] **Phase 2: Canonical Quran Core** - Validated import, addressing, tokens, exact lookup, integrity (completed 2026-09-25)
 - [x] **Phase 3: Quran Search & Linguistics** - Normalization, roots/lemmas, morphology, frequency tools (completed 2026-09-28)
-- [ ] **Phase 3.5: Residual Closure (INSERTED)** - Engineering remainder of Phases 1-3, status truth restoration, owner-gate readiness
+- [x] **Phase 3.5: Residual Closure (INSERTED)** - Engineering remainder of Phases 1-3, status truth restoration, owner-gate readiness (completed 2026-10-02)
 - [x] **Phase 4: Quran Graph** - Graph store, traversal, annotations, visualization (completed 2026-09-29)
 - [ ] **Phase 5: Rich Quran Experience** - Web GUI, TUI cockpit, research tools, result contract
 - [ ] **Phase 6: Hadith & Tafsir** - Structured records, grading, verse links, tafsir indexing
@@ -144,12 +144,12 @@ Plans:
   4. Linguistics regressions are measurable against a committed versioned dataset, and every shipped tool passes one conformance contract
   5. Every owner decision that remains open is recorded with the exact command that closes it, and none of them is answered
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans executed
 
 - [x] 03.5-01-PLAN.md — W1 board + ledger truth restoration, W2 documentation set and SECURITY.md (wave 1)
 - [x] 03.5-02-PLAN.md — W4 counting/discovery surface, W3 reconciliation job, W8 cold-rebuild budget (wave 2)
 - [x] 03.5-03-PLAN.md — W6 evaluation harness, W7 tool conformance, W5 goldens, W8 full soak (wave 3)
-- [ ] 03.5-04-PLAN.md — W9 Phase-1 hardening, W10 test-gate robustness, phase gate + evidence matrix (wave 4)
+- [x] 03.5-04-PLAN.md — W9 Phase-1 hardening, W10 test-gate robustness, phase gate + evidence matrix (wave 4)
 
 ### Phase 4: Quran Graph
 
@@ -313,7 +313,7 @@ Phase 3.5 is an INSERTED gap-closure phase; it runs after Phase 4 and does not g
 | 1. Foundations | 5/5 | Complete    | 2026-09-28 |
 | 2. Canonical Quran Core | 7/7 | Complete    | 2026-09-25 |
 | 3. Quran Search & Linguistics | 8/8 | Complete (owner gates OD-11/OD-12 open) | 2026-09-28 |
-| 3.5. Residual Closure (INSERTED) | 3/4 | In Progress|  |
+| 3.5. Residual Closure (INSERTED) | 4/4 | Complete (W1–W10 evidence matrix; owner gates OD-01…OD-14 open) | 2026-10-02 |
 | 4. Quran Graph | 5/5 | Complete (M5 blocked on OD-11) | 2026-09-29 |
 | 5. Rich Quran Experience | 0/TBD | Not started | - |
 | 6. Hadith & Tafsir | 0/TBD | Not started | - |

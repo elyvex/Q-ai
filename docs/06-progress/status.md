@@ -9,24 +9,26 @@
 ## Summary
 
 Phase 3.5 (Residual Closure) is closing. The legacy boards were reconciled
-against the live tree (plan 03.5-01): Phase 2 now reads 78/114 ☑ (68%), with
-◐ rows covering partial/synthetic/owner-gated work. All four 03.5 plans are
-complete (reconciliation + docs, counting/index-job, harness/conformance/
-goldens/soak, hardening/gates); the W1–W10 evidence matrix below names the
-proving command for every workstream, and all 14 owner decisions remain open.
+against the live tree (plan 03.5-01) and re-verified at close (plan 03.5-04):
+Phase 2 sums to 75/114 rows ☑ across §1–§8 with 25 ◐ rows covering
+partial/synthetic/owner-gated work. All four 03.5 plans are complete
+(reconciliation + docs, counting/index-job, harness/conformance/goldens/soak,
+hardening/gates); the W1–W10 evidence matrix below names the proving command
+for every workstream, and all 14 owner decisions remain open.
 
 ## Gate status
 
 | Gate | Command | Status |
 |---|---|---|
-| Format | `cargo fmt --all -- --check` | ✅ clean on the verified task surfaces |
-| Lint | `cargo clippy --workspace --all-targets -- -D warnings` | ✅ clean for the verified new crates; full workspace rerun pending |
-| Targeted tests | `cargo test -p quran-normalization -p quran-search -p quran-morphology -p quran-graph` and Phase-2 application suites | ✅ green in the reconciliation pass |
-| Architecture | `cargo run -p xtask -- arch-check` | ✅ OK |
+| Format | `cargo fmt --all -- --check` | ✅ clean (whole tree) |
+| Lint | `cargo clippy --workspace --all-targets -- -D warnings` | ✅ clean, 0 warnings |
+| Tests | `cargo test --workspace` | ✅ **191 suites, 1162 passed, 0 failed**, incl. the 50k soak |
+| Architecture | `cargo run -p xtask -- arch-check` | ✅ OK — no forbidden dependency edges |
 | Migrations | `cargo run -p xtask -- migrate-check` | ✅ OK; 22 migrations, checksums stable |
-| Coverage | `cargo run -p xtask -- coverage-gate <lcov.info>` | ✅ `citations` floor aligned to the published 85% (`cargo llvm-cov -p citations` = 99.5% lines) |
-| Dependency audit | `cargo deny check` | ⏭️ skipped-with-reason: `cargo-deny` is **not installed** in this local environment; the deny gate is enforced by the CI `deny` job (`.github/workflows/ci.yml`), never a local pass |
-| Full workspace | `cargo test --workspace` | ⚠️ not claimed in this pass; existing suite is large and the tree has concurrent work |
+| ADR lint | `cargo run -p xtask -- adr-lint` | ✅ OK — 12 ADRs present, Accepted, complete |
+| Coverage | `cargo llvm-cov -p citations` + `coverage-gate` | ✅ `citations` floor enforced at the published 85%; measured 99.5% lines / 96.7% regions |
+| Dependency audit | `cargo deny check` | ⏭️ skipped-with-reason: `cargo-deny` is **not installed** locally; enforced by the CI `deny` job (`.github/workflows/ci.yml`), never a local pass |
+| OTLP live smoke | `cargo test -p observability --features otlp -- --ignored` | ⏭️ manual gate: needs a live OTLP collector; the test stays `#[ignore]`d by design |
 
 ## Crate / phase status
 
@@ -43,7 +45,7 @@ proving command for every workstream, and all 14 owner decisions remain open.
 
 ## Current totals
 
-- **Phase 2:** 65 / 114 tasks ☑ (57%); ◐ rows are partial/synthetic/owner-gated; 0 / 50 ACs and 0 / 14 ADRs are formally accepted. Board reconciled 2026-09-29 (plan 03.5-01).
+- **Phase 2:** 75 / 114 task rows ☑ (66%); 25 ◐ partial/synthetic/owner-gated; 14 ☐ open. Board rollup reconciled 2026-10-02 (plan 03.5-04) — the §9 table had drifted to 65 while its own rows summed to 75. 0 / 50 ACs and 0 / 14 ADRs are formally accepted.
 - **Graph phase:** 0 / 30 ☑; 10 ◐; 3 ⊘; M5 (TASK-405/406/407) remains blocked by licensed morphology evidence and the missing graph root-family projection. See `docs/03-plan/phases/phase-04-quran-graph/tasks.md` for task-level status.
 - **Phase 0 residual:** P0-T56 remains ◐; clean-machine/container runtime verification is still open.
 - **Phase 3.5:** closing (W1–W10 evidence matrix above; Waves 1–4 complete, full gate running) — boards reconciled, docs + SECURITY.md written, counting parity + index job + harness + conformance + goldens + soak landed, Phase-1 hardening + perf/coverage gates landed.

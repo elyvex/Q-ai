@@ -21,7 +21,7 @@
     {
       "number": "3.5",
       "name": "Residual Closure (INSERTED)",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "number": "4",
@@ -74,5 +74,5 @@
     "label": "Advance to the next step",
     "reason": "Phase 03.5 of 13 · 31% · executing"
   },
-  "updated_at": "2026-10-02T11:07:56.877Z"
+  "updated_at": "2026-10-02T19:21:07.518Z"
 }
