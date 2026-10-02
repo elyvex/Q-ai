@@ -899,3 +899,35 @@ OD-11-gated (`docs/05-followups/phase-3.5-deferrals.md` §1).
   `unavailable_dataset_is_typed_not_empty`, `counting_graph_s4.trycmd`.
 
 **Board rollup unchanged:** 78 ☑ (T111 was already ☑; the row now cites both halves).
+
+## 15. Phase 3.5 close — 2026-10-02 (plan 03.5-04, D-3.5-01)
+
+**Phase 3.5 Residual Closure closes evidence-driven per D-3.5-01: every
+workstream W1 through W10 carries implementation files plus a repeatable
+proving command in `docs/06-progress/status.md` (evidence matrix), the full
+gate table records each step's real result, and all fourteen owner decisions
+remain open with per-OD readiness in the decisions answer log.**
+
+- **W9** (Phase-1 hardening, D-3.5-10): WR-05/06/07/08/09/10/11/12/13 and
+  IN-06/07 fixed with tests (`phase1_foundation` 8/8, `foundation`
+  audit-verify contract, `doctor_json` distinguishability, jobs/audit/
+  provenance suites, both verifier scripts tightened); capability residue
+  WR-01…WR-04 + IN-01…IN-05/08/09 deferred to Phase 12 with per-item
+  unblocking commands (`docs/05-followups/phase-3.5-deferrals.md` §7–§8).
+  Plan 03.5-04 Task 1.
+  Evidence: `deleted_span_reports_missing_sequences_without_tamper_cascade`,
+  `record_approval_rejects_unparseable_actor_with_no_staged_rows`,
+  `doctor_data_dir_cases_are_distinguishable`,
+  `in_memory_backend_drops_result_and_progress_by_contract`.
+- **W10** (gates + close, D-3.5-11): `lookup_performance_smoke` reports median
+  and p95 with sample size over warm repetitions (5 ms bound unchanged, stable
+  across 4 runs); `citations` floor enforced at the published 85%
+  (measured 99.5% lines); FU-TEST-02 done; FU-P1-02 coverage/deny halves
+  recorded (deny CI-enforced, walkthrough stays open as non-agent work).
+  Plan 03.5-04 Tasks 2–3.
+  Evidence: `lookup_performance_smoke` ×4 green, `cargo llvm-cov -p citations`.
+- **Close:** evidence matrix W1–W10 in `status.md`; OD re-read logged with
+  readiness and zero closures; phase totals restated below.
+
+**Board rollup unchanged:** 78 ☑ (no Phase-2 rows flipped by the close; the
+close records evidence for already-☑ rows and the honest open tail).
