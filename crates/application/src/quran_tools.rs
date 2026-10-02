@@ -105,6 +105,41 @@ async fn active_meta(reader: &QuranReaderService) -> Result<BackendMeta, ToolErr
     meta_from_edition(reader, &edition).await
 }
 
+/// Map a `quran.search` edition request to a selector (WR-02).
+///
+/// The tool accepts an optional `slug` or `slug@version`; a bare slug resolves
+/// at its active version, an explicit version pins it.
+fn search_edition_selector(spec: &str) -> Result<EditionSelector, ToolError> {
+    match spec.split_once('@') {
+        Some((slug, version)) if !slug.is_empty() && !version.is_empty() => {
+            let version = version.parse().map_err(|_| ToolError::InvalidInput {
+                tool: "quran.search",
+                detail: format!("edition `{spec}` is not a valid slug@version"),
+            })?;
+            Ok(EditionSelector::Pinned { slug: slug.to_string(), version })
+        }
+        _ => Ok(EditionSelector::Slug(spec.to_string())),
+    }
+}
+
+/// Read metadata for the edition a search request selects (WR-02).
+///
+/// `quran.search` may be asked for a non-active edition; the envelope must
+/// name the same edition the hits come from, never the active pointer.
+async fn search_meta(
+    reader: &QuranReaderService,
+    edition: Option<&str>,
+) -> Result<BackendMeta, ToolError> {
+    match edition {
+        None => active_meta(reader).await,
+        Some(spec) => {
+            let selector = search_edition_selector(spec)?;
+            let edition = reader.get_edition(&selector).await.map_err(tool_error)?;
+            meta_from_edition(reader, &edition).await
+        }
+    }
+}
+
 /// A pinned `quran:<slug>@<version>:<surah>:<ayah>` reference.
 fn pinned_ref(meta: &BackendMeta, surah: i64, ayah: i64) -> String {
     format!("quran:{}@{}:{surah}:{ayah}", meta.edition_slug, meta.edition_version)
@@ -189,7 +224,8 @@ impl QuranBackend for ReaderToolBackend {
         params: &SearchToolParams,
     ) -> Result<ToolResult<serde_json::Value>, ToolError> {
         let started = Instant::now();
-        let meta = active_meta(&self.reader).await?;
+        // WR-02: attribute the envelope to the edition the search will serve.
+        let meta = search_meta(&self.reader, params.edition.as_deref()).await?;
         let search_params = crate::quran_search::SearchParams {
             text: params.text.clone(),
             edition: params.edition.clone(),
@@ -607,4 +643,35 @@ pub async fn tool_get_context(
     params: GetContextParams,
 ) -> Result<(ToolResult<quran_core::ContextView>, tool_registry::BackendMeta), ToolError> {
     ReaderToolBackend::registry(reader.clone()).get_context(params).await
+}
+
+#[cfg(test)]
+mod search_edition_tests {
+    use super::search_edition_selector;
+    use quran_core::EditionSelector;
+
+    #[test]
+    fn bare_slug_selects_the_active_version() {
+        assert_eq!(
+            search_edition_selector("hafs-uthmani").unwrap(),
+            EditionSelector::Slug("hafs-uthmani".to_string())
+        );
+    }
+
+    #[test]
+    fn versioned_spec_pins_the_edition() {
+        match search_edition_selector("hafs-uthmani@1.0.0").unwrap() {
+            EditionSelector::Pinned { slug, version } => {
+                assert_eq!(slug, "hafs-uthmani");
+                assert_eq!(version.to_string(), "1.0.0");
+            }
+            other => panic!("expected a pinned selector, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn invalid_version_is_a_typed_input_error() {
+        let err = search_edition_selector("hafs-uthmani@not-semver").unwrap_err();
+        assert!(matches!(err, tools::ToolError::InvalidInput { tool: "quran.search", .. }));
+    }
 }
