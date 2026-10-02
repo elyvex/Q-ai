@@ -109,6 +109,37 @@ pinned by a contract test.
 
 ---
 
+## 8. Close-out: what unblocks each deferred item (plan 03.5-04, 2026-10-02)
+
+Per deferred item: the exact command, capture step, or owner decision that
+unblocks it. Nothing here is answered — the log records readiness, not
+decisions.
+
+| Deferred item | Unblocked by (command / decision) | Target |
+|---|---|---|
+| Full-corpus 50k soak | Licensed corpus import per `licenses/README.md`, then `cargo test -p application --test soak_full` against the full corpus | Phase 3.5 exit, gated by OD-11 |
+| Full-corpus p99 ≤ 150 ms measurement | Same corpus as above; `fixtures/quran/performance/budgets.json` full-corpus rows | OD-11 |
+| Cold-rebuild 6-minute budget on real data | Timed `qai quran index` rebuild on the licensed corpus vs `budgets.json` cold-rebuild row | Phase 3.5 exit, gated by OD-11 |
+| Linguist sign-off on golden sets | Named Arabic linguist review + acceptance of ADR-0204/0205/0210/0215 | OD-12 |
+| Linguistic quality gates in harness | Same linguist sign-off; harness asserts mechanics only until then | OD-12 |
+| Transliteration surface + L8 fuzzy policy | Deferred scope decision + implementation phase | Later phase (since Phase 3) |
+| Counting tail outside SC core | Linguist ratification of ADR-0209/0211 semantics | OD-12 |
+| WR-01/WR-02 (host liveness, shutdown deadlines) | Fault-injection harness + deadline enforcement in the worker host | Phase 12 |
+| WR-03 (reschedule owner guard) | Owner-identity plumbing on the reschedule path | Phase 12 |
+| WR-04 (dead-letter boolean precision) | Tri-state dead-letter disposition in the queue contract | Phase 12 |
+| IN-01 (read-only verifier UoW flavor) | Explicit `db.read()` snapshot accessor or a documented reason | Phase 12 |
+| IN-02 (`error_json` carries success payloads) | `result_json` schema migration + envelope-key aliasing | Phase 12 |
+| IN-03 (`sequence: 0` sentinel) | `Option<u64>` plumbing through diagnosis rendering | Phase 12 |
+| IN-04 (documentary audit-composition enforcement) | Minter-token gate or softened claim + grep CI check | Phase 12 |
+| IN-05 (`sparse+` scheme classification) | Accept `sparse+` as `Registry` with live-metadata proof | Phase 12 |
+| IN-08 (serve-path creating constructors) | Route serve opens through `open_host_database`-style backstops | Owning phase (serve hardening) |
+| IN-09 (subject URN scheme drift) | Standardize on `urn:qai:<domain>:<id>` | Owning phase (audit follow-up) |
+| FU-P1-02 walkthrough half | Independent human walkthrough (not an agent deliverable) | Owner session |
+| `cargo-deny` local run | `cargo install cargo-deny` or rely on the CI `deny` job (`.github/workflows/ci.yml`) | CI-enforced |
+| OTLP live-endpoint smoke | Live collector + `cargo test -p observability --features otlp builds_a_provider_for_a_valid_endpoint -- --ignored` | Manual gate |
+
+---
+
 *Phase: 3.5-Residual Closure · Deferral ledger created 2026-10-02 by plan
 03.5-03. §7 (WR/IN dispositions) appended 2026-10-02 by plan 03.5-04.
 Append-only; nothing here is silently dropped.*
