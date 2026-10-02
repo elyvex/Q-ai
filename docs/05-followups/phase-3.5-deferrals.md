@@ -87,7 +87,11 @@ Hardening)**.
 | **WR-11** | Doctor read/permission error conflation | **Fixed** — `Unreadable{kind}` reported with its own remedy | — |
 | **WR-12** | Record checker matched tokens as substrings (`C10` satisfied `C1`) | **Fixed** — whole-word fixed-string matching | — |
 | **WR-13** | Preservation checker accepted a base-line deletion on a clean merge | **Fixed** — base-line retention required when ours == base | — |
-| **IN-01…IN-05** | Documented design warts, explicitly-deferred scope | Deferred — as the verification characterized them | Phase 12 / their owning phases |
+| **IN-01** | Read-only verifier holds a write-flavored UoW (`db.write()` on a read-only open) | Deferred — needs an explicit read-snapshot accessor or a documented reason the write flavor is required | Phase 12 |
+| **IN-02** | Success results/dispositions stored under the `error_json` column (no result column in schema) | Deferred — needs a `result_json` schema migration plus envelope-key aliasing | Phase 12 |
+| **IN-03** | `ChainVerificationFailed { sequence: 0 }` sentinel leaks a never-real sequence into operator output | Deferred — needs `Option<u64>` plumbing through the diagnosis rendering | Phase 12 |
+| **IN-04** | Audit-composition enforcement is documentary (`AuditedMutation` bypassable by direct callers) | Deferred — needs a minter-token gate or a softened claim plus grep CI check | Phase 12 |
+| **IN-05** | External-policy gate classifies `sparse+https` sources as `Unknown` (forward-compat brittleness) | Deferred — needs `sparse+` accepted as `Registry` with a live-metadata proof | Phase 12 |
 | **IN-06** | Record checker over-permissive frontmatter / bare-`## ` section / index counting | **Fixed** — delimiter-validated frontmatter, Phase-1-anchored section, entry-count index check | — |
 | **IN-07** | Preservation checker path-encoding collisions, untracked diff noise, tree-wide whitespace gate | **Fixed** — injective `%`-encoding, tracked-only diffs, owned-path whitespace scope | — |
 | **IN-08, IN-09** | Documented design warts, explicitly-deferred scope | Deferred — as the verification characterized them | Phase 12 / their owning phases |
