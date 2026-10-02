@@ -877,3 +877,25 @@ and ADR-0215 are Draft (OD-12).
   Evidence: `all_curated_family_goldens_pass`.
 
 **Board rollup updated:** 74 → 78 ☑ (68%).
+
+## 14. Full soak evidence — 2026-10-02 (plan 03.5-03, Task 3)
+
+**Phase 3.5 plan 03.5-03 50k-query full soak at fixture scale (P2-T111).**
+`crates/application/tests/soak_full.rs` builds the full derived state through
+the doctor's own soak fixture, then runs 50,000 seeded-deterministic queries
+across all five search modes and the full counting + lexicon tool set, with
+per-query invariants (trace, canonical span, byte-identical quotation,
+attribution, complete `CountingRules`, typed-unavailable). Two passes fold an
+identical ordered digest; the graph and index doctor checks end with no
+failure; latency is reported against `budgets.json` without failing on
+fixture-bound timing. Fixture-scale scope with the full corpus unexecuted
+under OD-11 is stated in the test's own report. The full-corpus half stays
+OD-11-gated (`docs/05-followups/phase-3.5-deferrals.md` §1).
+
+- **T111** (full soak, fixture-scale half): ☑ — row already ☑ from the
+  doctor_indexes soak; this entry records the 50k-query evidence.
+  Plan 03.5-03 Task 3.
+  Evidence: `fifty_thousand_query_soak_is_green_and_reproducible`,
+  `unavailable_dataset_is_typed_not_empty`, `counting_graph_s4.trycmd`.
+
+**Board rollup unchanged:** 78 ☑ (T111 was already ☑; the row now cites both halves).
