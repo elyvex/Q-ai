@@ -63,5 +63,48 @@
 
 ---
 
+## 7. Phase-1 hardening residue (W9): WR-01…WR-13 + IN-01…IN-09 dispositions → Phase 12
+
+Per D-3.5-10, the `01-VERIFICATION.md` review findings were split into **fixed
+here** (real precision or fail-closed defects) and **deferred** (genuine future
+capability, where a partial implementation would be a claim this phase cannot
+support). Every identifier the verification listed is accounted for below; none
+was silently dropped. The capability-scope items target **Phase 12 (Production
+Hardening)**.
+
+| Item | Finding | Disposition (plan 03.5-04) | Target |
+|---|---|---|---|
+| **WR-01** | Worker-host liveness under injected faults | Deferred — hardening scope | Phase 12 |
+| **WR-02** | Shutdown deadline enforcement | Deferred — hardening scope | Phase 12 |
+| **WR-03** | Reschedule owner guard | Deferred — hardening scope | Phase 12 |
+| **WR-04** | Dead-letter boolean precision | Deferred — hardening scope | Phase 12 |
+| **WR-05** | Gap report named the survivor, not the missing rows | **Fixed** — names the missing sequence span; a pure deletion no longer taints survivors | — |
+| **WR-06** | Doctor conflated symlink / non-directory cases | **Fixed** — symlink disclosed separately from target type | — |
+| **WR-07** | Doctor/readiness conflated permission failure with missing path | **Fixed** — only `NotFound` names `qai db migrate`; other IO errors surface as themselves | — |
+| **WR-08** | Audit-verify JSON envelope shape differed from human fields | **Fixed** — one stable envelope for every outcome; inapplicable fields are `null`, never absent | — |
+| **WR-09** | In-memory queue dropped result/progress vs SQLite | **Fixed** at the doc boundary — typed persistence contract on the trait + backend; in-memory is lossy by contract (test-only) | — |
+| **WR-10** | `record_approval` defaulted a non-principal actor (fail-open) | **Fixed** — unparseable `decided_by` is a typed error before any staging | — |
+| **WR-11** | Doctor read/permission error conflation | **Fixed** — `Unreadable{kind}` reported with its own remedy | — |
+| **WR-12** | Record checker matched tokens as substrings (`C10` satisfied `C1`) | **Fixed** — whole-word fixed-string matching | — |
+| **WR-13** | Preservation checker accepted a base-line deletion on a clean merge | **Fixed** — base-line retention required when ours == base | — |
+| **IN-01…IN-05** | Documented design warts, explicitly-deferred scope | Deferred — as the verification characterized them | Phase 12 / their owning phases |
+| **IN-06** | Record checker over-permissive frontmatter / bare-`## ` section / index counting | **Fixed** — delimiter-validated frontmatter, Phase-1-anchored section, entry-count index check | — |
+| **IN-07** | Preservation checker path-encoding collisions, untracked diff noise, tree-wide whitespace gate | **Fixed** — injective `%`-encoding, tracked-only diffs, owned-path whitespace scope | — |
+| **IN-08, IN-09** | Documented design warts, explicitly-deferred scope | Deferred — as the verification characterized them | Phase 12 / their owning phases |
+
+**Manual gate (not deferred, not automated here).** The observability
+live-endpoint smoke (`otlp.rs::builds_a_provider_for_a_valid_endpoint`) stays
+`#[ignore]`d: it needs a live OTLP collector. Un-ignoring a test that cannot run
+in CI would turn a manual gate into a false pass; the exporter-boundary scrubbing
+it guards is asserted instead by the per-field scrubbing tests.
+
+**WR-09 boundary note.** Aligning the in-memory backend would mean building a
+second persistence path; SQLite is the production authority and the in-memory
+backend is test-only, so the divergence is documented at the type level and
+pinned by a contract test.
+
+---
+
 *Phase: 3.5-Residual Closure · Deferral ledger created 2026-10-02 by plan
-03.5-03. Append-only; nothing here is silently dropped.*
+03.5-03. §7 (WR/IN dispositions) appended 2026-10-02 by plan 03.5-04.
+Append-only; nothing here is silently dropped.*

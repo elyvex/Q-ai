@@ -654,6 +654,16 @@ pub async fn record_approval(
     request_payload: &str,
     at: &str,
 ) -> Result<(), StorageError> {
+    // WR-10: fail closed on an unparseable actor. The audit chain is the
+    // anti-fabrication control, so a non-principal `decided_by` is a typed
+    // error — never a synthesized `System` actor with a caller-controlled
+    // name. Validated before any staging, so no partial row can survive.
+    let actor = decided_by.parse::<PrincipalId>().map_err(|_| {
+        StorageError::ConstraintViolation {
+            message: format!("decided_by is not a principal id: `{decided_by}`"),
+        }
+    })?;
+    let actor = Actor::Principal { principal_id: actor };
     let mut uow = db.write().await?;
     uow.sources()
         .insert_approval(storage::repository::ApprovalRow {
@@ -669,10 +679,6 @@ pub async fn record_approval(
             decided_at: Some(at.to_string()),
         })
         .await?;
-    let actor = decided_by
-        .parse::<PrincipalId>()
-        .map(|principal_id| Actor::Principal { principal_id })
-        .unwrap_or_else(|_| Actor::System { name: decided_by.to_string() });
     let mut mutation = AuditedMutation::new(
         actor,
         AuditAction::ApprovalGranted,

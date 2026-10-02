@@ -44,7 +44,11 @@ META="$STATE/capture_commit"
 die() { printf 'verify-phase1-preservation: ERROR: %s\n' "$1" >&2; exit 1; }
 info() { printf 'verify-phase1-preservation: %s\n' "$1"; }
 
-sanitize() { printf '%s' "$1" | tr '/ ' '__'; }
+# IN-07(a): collision-free path encoding. The old `tr '/ ' '__'` mapped
+# `a/b` and `a_b` to the same store key, silently aliasing two paths'
+# captured bytes. `%`-encoding is injective and reversible; `%` itself is
+# escaped first so decoding is unambiguous.
+sanitize() { printf '%s' "$1" | sed 's/%/%25/g; s|/|%2F|g; s/ /%20/g'; }
 
 sha256_of() {
   if command -v shasum >/dev/null 2>&1; then
@@ -121,11 +125,12 @@ cmd_capture() {
     fi
     sha=$(sha256_of "$copy") || die "could not hash discovered path: $path"
     mode=$(mode_of "$path")
-    if [ "${status#??}" != "$status" ]; then
-      # both index and worktree columns set (e.g. "??") -> untracked
-      git diff --no-index --binary /dev/null "$path" > "$DIFFS/$key.diff" 2>/dev/null || true
-    else
-      git diff --binary -- "$path" > "$DIFFS/$key.diff" 2>/dev/null || true
+    # IN-07(b): forensic diffs are written for TRACKED paths only, where a
+    # worktree-vs-HEAD diff is small and meaningful. Untracked content is
+    # already preserved byte-complete in BYTES/; a --no-index whole-file
+    # diff would duplicate it as noise, so none is written.
+    if git cat-file -e "HEAD:$path" 2>/dev/null; then
+      git diff --binary HEAD -- "$path" > "$DIFFS/$key.diff" 2>/dev/null || true
     fi
     printf 'present\t%s\t%s\t%s\t%s\n' "$path" "$status" "$mode" "$sha" >> "$MANIFEST"
     printf '%s\t%s\n' "$path" "$(classify "$path")" >> "$CLASSIFIED"
@@ -196,7 +201,24 @@ check_merge() {
   cp "$head_copy" "$tmp/base"
   if [ -f "$cap_copy" ]; then cp "$cap_copy" "$tmp/ours"; else cp "$head_copy" "$tmp/ours"; fi
   cp "$path" "$tmp/theirs"
+  # Snapshot before merging: merge-file rewrites $tmp/ours in place, so the
+  # "we changed nothing" test must be taken now, not after.
+  ours_is_base=0
+  cmp -s "$tmp/ours" "$tmp/base" && ours_is_base=1
   if git merge-file -q "$tmp/ours" "$tmp/base" "$tmp/theirs"; then
+    # WR-13: a clean merge is not proof of retention — when we changed
+    # nothing (ours == base) a third party may have deleted a base hunk and
+    # the merge still exits 0, taking the deletion. Require every base line
+    # to survive in the merged output in that case. (When ours differs from
+    # base our own edits are in flight and merge-file remains the signal.)
+    if [ "$ours_is_base" -eq 1 ]; then
+      sort "$tmp/base" > "$tmp/base.sorted"
+      sort "$tmp/ours" > "$tmp/ours.sorted"
+      if comm -23 "$tmp/base.sorted" "$tmp/ours.sorted" | grep -q .; then
+        rm -rf "$tmp"
+        die "MERGE deletion: base lines lost in $path although we changed nothing"
+      fi
+    fi
     rm -rf "$tmp"
     return 0
   fi
@@ -257,7 +279,30 @@ cmd_check() {
       crates/*) check_one "$path" "$cls"; checked=$((checked + 1)) ;;
     esac
   done < "$CLASSIFIED"
-  git diff --check || die "git diff --check reported whitespace errors"
+  # IN-07(c): scope the whitespace gate to task-owned paths. Tree-wide
+  # `git diff --check` fails on foreign files (observed repeatedly); tracked
+  # manifest paths are checked against HEAD, present untracked paths against
+  # /dev/null. Foreign whitespace is not ours to gate.
+  owned_tracked="$STATE/owned-tracked.txt"
+  : > "$owned_tracked"
+  while IFS="$(printf '\t')" read -r kind path status mode_ sha; do
+    [ -z "$path" ] && continue
+    case "$status" in
+      '??') continue ;;
+    esac
+    if git cat-file -e "HEAD:$path" 2>/dev/null && [ -e "$path" ]; then
+      printf '%s\n' "$path" >> "$owned_tracked"
+    fi
+  done < "$MANIFEST"
+  if [ -s "$owned_tracked" ]; then
+    git diff --check -- $(cat "$owned_tracked") || die "git diff --check reported whitespace errors in owned paths"
+  fi
+  while IFS="$(printf '\t')" read -r kind path status mode_ sha; do
+    [ -z "$path" ] && continue
+    if [ "$status" = "??" ] && [ -e "$path" ]; then
+      git diff --no-index --check /dev/null -- "$path" || die "whitespace errors in untracked owned path: $path"
+    fi
+  done < "$MANIFEST"
   info "check ($mode) passed for $checked path(s)"
 }
 

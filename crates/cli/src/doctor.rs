@@ -237,39 +237,112 @@ fn configuration_file_permissions(cfg: &Config) -> CheckResult {
 
 /// Read-only data-directory check (D-06, T-01-DOCTOR).
 ///
-/// Inspects existence, type, and permission bits only via `symlink_metadata`.
-/// A missing directory is a non-fatal warning naming the explicit
-/// `qai db migrate` creation path; doctor must never `create_dir_all`, write
-/// a probe file, or otherwise mutate the filesystem.
-fn data_dir_writable(cfg: &Config) -> CheckResult {
-    let dir = std::path::PathBuf::from(&cfg.app.data_dir);
-    match std::fs::symlink_metadata(&dir) {
-        Ok(meta) if meta.is_dir() => {
-            if meta.permissions().readonly() {
-                CheckResult::warn(
-                    "data_dir.writable",
-                    format!("data dir {} exists but is read-only", dir.display()),
-                    "choose a writable data directory; doctor does not modify permissions",
-                    "qai --data-dir <path> doctor",
-                )
-            } else {
-                CheckResult::pass(
-                    "data_dir.writable",
-                    format!("data dir exists and is writable ({})", dir.display()),
-                )
-            }
+/// Inspects existence, type, and permission bits only. A missing directory
+/// is a non-fatal warning naming the explicit `qai db migrate` creation path;
+/// doctor must never `create_dir_all`, write a probe file, or otherwise
+/// mutate the filesystem.
+///
+/// Case discipline (WR-06/WR-07/WR-11): type and permission inspection
+/// follows links (`metadata`); link-ness is disclosed separately from the
+/// target's type. Missing, dangling-link, not-a-directory, permission-denied,
+/// and other IO failures are each reported with their own remedy — a
+/// permission failure never names `qai db migrate`. The owner write bit is
+/// reported as the heuristic it is, not as effective access.
+enum DirCase {
+    Missing,
+    DanglingSymlink,
+    NotADirectory { is_symlink: bool },
+    Unreadable { kind: std::io::ErrorKind },
+    Present { is_symlink: bool, owner_readonly: bool },
+}
+
+fn classify_dir(dir: &std::path::Path) -> DirCase {
+    let is_symlink = std::fs::symlink_metadata(dir)
+        .map(|link| link.file_type().is_symlink())
+        .unwrap_or(false);
+    match std::fs::metadata(dir) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound && !is_symlink => DirCase::Missing,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => DirCase::DanglingSymlink,
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+            DirCase::Unreadable { kind: e.kind() }
         }
-        Ok(_) => CheckResult::fail(
-            "data_dir.writable",
-            format!("data dir {} is not a directory", dir.display()),
-            "choose a directory path for the data dir",
-            "qai --data-dir <path> doctor",
+        Err(e) => DirCase::Unreadable { kind: e.kind() },
+        Ok(meta) if !meta.is_dir() => DirCase::NotADirectory { is_symlink },
+        Ok(meta) => DirCase::Present { is_symlink, owner_readonly: meta.permissions().readonly() },
+    }
+}
+
+fn describe_dir(dir: &std::path::Path, is_symlink: bool, what: &str) -> String {
+    if is_symlink {
+        format!("{what} {} is a symlink to a directory", dir.display())
+    } else {
+        format!("{what} {} exists", dir.display())
+    }
+}
+
+fn data_dir_writable(cfg: &Config) -> CheckResult {
+    dir_writable_check(
+        &std::path::PathBuf::from(&cfg.app.data_dir),
+        "data_dir.writable",
+        "data dir",
+        "qai --data-dir <path> doctor",
+        "create it explicitly with `qai db migrate` (doctor never creates paths)",
+        "qai db migrate",
+    )
+}
+
+fn dir_writable_check(
+    dir: &std::path::Path,
+    check_id: &'static str,
+    what: &str,
+    here_command: &str,
+    missing_remedy: &str,
+    missing_command: &str,
+) -> CheckResult {
+    match classify_dir(dir) {
+        DirCase::Missing => CheckResult::warn(
+            check_id,
+            format!("{what} {} does not exist yet", dir.display()),
+            missing_remedy,
+            missing_command,
         ),
-        Err(_) => CheckResult::warn(
-            "data_dir.writable",
-            format!("data dir {} does not exist yet", dir.display()),
-            "create it explicitly with `qai db migrate` (doctor never creates paths)",
-            "qai db migrate",
+        DirCase::DanglingSymlink => CheckResult::fail(
+            check_id,
+            format!("{what} {} is a symlink whose target does not exist", dir.display()),
+            "repair or remove the symlink so it resolves to a directory",
+            here_command,
+        ),
+        DirCase::NotADirectory { is_symlink } => CheckResult::fail(
+            check_id,
+            if is_symlink {
+                format!("{what} {} is a symlink that does not resolve to a directory", dir.display())
+            } else {
+                format!("{what} {} is not a directory", dir.display())
+            },
+            "choose a directory path",
+            here_command,
+        ),
+        DirCase::Unreadable { kind } => CheckResult::warn(
+            check_id,
+            format!("{what} {} cannot be inspected ({kind})", dir.display()),
+            "check filesystem permissions and mount health; this is not a missing-path problem",
+            here_command,
+        ),
+        DirCase::Present { is_symlink, owner_readonly: true } => CheckResult::warn(
+            check_id,
+            format!(
+                "{} with the owner write bit clear (bit heuristic, not effective access)",
+                describe_dir(dir, is_symlink, what)
+            ),
+            "choose a writable directory; doctor does not modify permissions",
+            here_command,
+        ),
+        DirCase::Present { is_symlink, owner_readonly: false } => CheckResult::pass(
+            check_id,
+            format!(
+                "{} with the owner write bit set (bit heuristic, not effective access)",
+                describe_dir(dir, is_symlink, what)
+            ),
         ),
     }
 }
@@ -613,36 +686,14 @@ fn sources_multiple_active_versions(probe: &DbProbe) -> CheckResult {
 }
 
 fn filesystem_object_store_writable(cfg: &Config) -> CheckResult {
-    let root = std::path::PathBuf::from(&cfg.storage.objects.root);
-    match std::fs::symlink_metadata(&root) {
-        Ok(meta) if meta.is_dir() => {
-            if meta.permissions().readonly() {
-                CheckResult::warn(
-                    "filesystem.object_store_writable",
-                    format!("object store root {} exists but is read-only", root.display()),
-                    "choose a writable object store root; doctor does not modify permissions",
-                    "qai config validate",
-                )
-            } else {
-                CheckResult::pass(
-                    "filesystem.object_store_writable",
-                    format!("object store root exists and is writable ({})", root.display()),
-                )
-            }
-        }
-        Ok(_) => CheckResult::fail(
-            "filesystem.object_store_writable",
-            format!("object store root {} is not a directory", root.display()),
-            "choose a directory path for the object store root",
-            "qai config validate",
-        ),
-        Err(_) => CheckResult::warn(
-            "filesystem.object_store_writable",
-            format!("object store root {} does not exist yet", root.display()),
-            "create it explicitly; doctor never creates paths",
-            "qai db migrate",
-        ),
-    }
+    dir_writable_check(
+        &std::path::PathBuf::from(&cfg.storage.objects.root),
+        "filesystem.object_store_writable",
+        "object store root",
+        "qai config validate",
+        "create it explicitly; doctor never creates paths",
+        "qai db migrate",
+    )
 }
 
 fn security_bind_safe(cfg: &Config) -> CheckResult {

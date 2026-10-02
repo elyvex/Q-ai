@@ -277,7 +277,12 @@ impl DatabaseReadiness {
 /// creating or mutating anything (D-05, T-01-MIG).
 pub async fn database_readiness(cfg: &Config, migrations_dir: &Path) -> DatabaseReadiness {
     let path = cfg.storage.sqlite.path.clone();
-    if std::fs::symlink_metadata(&path).is_err() {
+    // WR-07: only an absent path is Missing. A present-but-unreadable file
+    // falls through to the real open, which reports Unreadable with the true
+    // detail — never a `qai db migrate` remedy for a permission failure.
+    if let Err(e) = std::fs::symlink_metadata(&path)
+        && e.kind() == std::io::ErrorKind::NotFound
+    {
         return DatabaseReadiness::Missing { path };
     }
     if let Err(e) = SqliteDatabase::open_read_only(&path).await {

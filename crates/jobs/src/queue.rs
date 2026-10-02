@@ -31,6 +31,12 @@ pub trait JobQueue: Send + Sync {
     -> Result<bool, JobError>;
 
     /// Record a progress update and/or checkpoint.
+    ///
+    /// Persistence contract (WR-09): the SQLite backend persists `progress`
+    /// into `progress_json` and `checkpoint` into `checkpoint_json`. The
+    /// in-memory backend persists `checkpoint` into `checkpoint_json` only —
+    /// a progress-only call stores nothing. Contract tests must not assert
+    /// cross-backend equivalence for progress content.
     async fn checkpoint(
         &self,
         job_id: &str,
@@ -39,6 +45,12 @@ pub trait JobQueue: Send + Sync {
     ) -> Result<(), JobError>;
 
     /// Transition a job to a terminal/recorded state.
+    ///
+    /// Persistence contract (WR-09): the SQLite backend records the terminal
+    /// disposition (plus any result payload) into `error_json`; the
+    /// in-memory backend records the terminal state and clears the lease
+    /// only — `result` is accepted and dropped. `JobRecord` carries no result
+    /// channel, so in-memory contract tests observe state, never content.
     async fn finish(
         &self,
         job_id: &str,
@@ -78,7 +90,8 @@ pub trait JobQueue: Send + Sync {
     /// current lease (T-03-LEASE).
     ///
     /// Returns whether a row was affected: a caller that does not hold the
-    /// lease changes nothing.
+    /// lease changes nothing. Same WR-09 persistence contract as
+    /// [`JobQueue::checkpoint`]: progress alone stores nothing.
     async fn checkpoint_owned(
         &self,
         job_id: &str,
@@ -89,6 +102,9 @@ pub trait JobQueue: Send + Sync {
 
     /// Transition a job to a terminal/recorded state when `owner` holds the
     /// current lease (T-03-LEASE). Returns whether a row was affected.
+    ///
+    /// Same WR-09 persistence contract as [`JobQueue::finish`]: `result` is
+    /// accepted and dropped by the in-memory backend.
     async fn finish_owned(
         &self,
         job_id: &str,
@@ -132,6 +148,14 @@ fn rfc3339_le(a: &str, b: &str) -> bool {
 }
 
 /// An in-memory [`JobQueue`] for tests and local/deterministic runs.
+///
+/// Explicitly lossy (WR-09, test-only backend): terminal results and progress
+/// payloads are NOT persisted — [`JobQueue::finish`]/`finish_owned` record
+/// the terminal state and clear the lease, [`JobQueue::checkpoint`] records
+/// `checkpoint_json` only, and a progress-only call stores nothing. SQLite
+/// (the production authority) persists dispositions into `error_json` and
+/// progress into `progress_json`. Never assert cross-backend equivalence for
+/// result/progress content; `qai job show` output differs by backend.
 #[derive(Default)]
 pub struct InMemoryJobQueue {
     jobs: Mutex<HashMap<String, JobRecord>>,
@@ -489,6 +513,39 @@ mod tests {
         q.claim_next("w1", Duration::from_secs(60)).await.unwrap();
         assert!(q.heartbeat("j2", "w1", Duration::from_secs(60)).await.unwrap());
         assert!(!q.heartbeat("j2", "w2", Duration::from_secs(60)).await.unwrap());
+    }
+
+    /// WR-09 boundary marker: the in-memory backend is explicitly lossy — a
+    /// progress-only checkpoint stores nothing, and a finish records the
+    /// terminal state with a cleared lease while dropping the result. The
+    /// stored row carries no result/progress channel, so content assertions
+    /// belong to SQLite-backed tests only.
+    #[tokio::test]
+    async fn in_memory_backend_drops_result_and_progress_by_contract() {
+        use crate::JobState;
+        let q = InMemoryJobQueue::new();
+        q.enqueue(record("j-lossy", "system.noop_test", "Queued")).await.unwrap();
+        q.claim_next("w1", Duration::from_secs(60)).await.unwrap();
+
+        q.checkpoint("j-lossy", Some("50%".to_string()), None).await.unwrap();
+        let job = q.get("j-lossy").await.unwrap().unwrap();
+        assert!(job.checkpoint_json.is_none(), "progress alone stores nothing");
+
+        q.checkpoint("j-lossy", Some("50%".to_string()), Some("half".to_string()))
+            .await
+            .unwrap();
+        let job = q.get("j-lossy").await.unwrap().unwrap();
+        assert_eq!(job.checkpoint_json.as_deref(), Some("half"));
+
+        q.finish("j-lossy", JobState::Succeeded, Some(r#"{"n":1}"#.to_string()))
+            .await
+            .unwrap();
+        let job = q.get("j-lossy").await.unwrap().unwrap();
+        assert_eq!(job.state, "Succeeded");
+        assert!(job.lease_owner.is_none(), "terminal transition clears the lease");
+        // `result` has no channel on JobRecord: there is nothing to assert it
+        // into, which is exactly the documented loss. Content assertions
+        // belong to SQLite-backed tests (WR-09).
     }
 
     /// 01-03-01 contract: a named checkpoint recorded through the owned

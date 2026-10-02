@@ -748,23 +748,52 @@ fn load_config_file(path: &Path) -> Result<Config, config::ConfigError> {
 /// single authority: no verifier logic is reimplemented here. Human and JSON
 /// carry the same `code`, `summary`, `remedy`, `next_command`, `gaps`, and
 /// `tampered_sequences`, and every invalid chain maps to the centralized
-/// `exit_code::VALIDATION`.
+/// `exit_code::VALIDATION`. The JSON envelope is identical across all three
+/// outcomes (WR-08): `valid`, `code`, `checked_events`, `gaps`,
+/// `tampered_sequences`, `summary`, `remedy`, `next_command` — fields that do
+/// not apply to an outcome are `null`, never absent, so machine consumers
+/// branch on values instead of shapes.
 fn render_audit_verify(path: &str, json: bool) -> i32 {
+    let envelope = |valid: bool,
+                    code: Option<&str>,
+                    checked_events: usize,
+                    gaps: &[u64],
+                    tampered_sequences: &[u64],
+                    summary: &str,
+                    remedy: Option<&str>,
+                    next_command: Option<&str>| {
+        serde_json::json!({
+            "valid": valid,
+            "code": code,
+            "checked_events": checked_events,
+            "gaps": gaps,
+            "tampered_sequences": tampered_sequences,
+            "summary": summary,
+            "remedy": remedy,
+            "next_command": next_command,
+        })
+    };
     match block_on(application::audit_bridge::verify_persisted_audit(path)) {
         Ok(report) => {
             if report.valid {
+                let summary =
+                    format!("audit chain valid: {} events checked", report.checked_events);
                 if json {
                     println!(
                         "{}",
-                        serde_json::json!({
-                            "valid": true,
-                            "checked_events": report.checked_events,
-                            "gaps": report.gaps,
-                            "tampered_sequences": report.tampered_sequences,
-                        })
+                        envelope(
+                            true,
+                            None,
+                            report.checked_events,
+                            &report.gaps,
+                            &report.tampered_sequences,
+                            &summary,
+                            None,
+                            None,
+                        )
                     );
                 } else {
-                    println!("audit chain valid: {} events checked", report.checked_events);
+                    println!("{summary}");
                 }
                 exit_code::OK
             } else if let Some(diagnosis) =
@@ -773,15 +802,16 @@ fn render_audit_verify(path: &str, json: bool) -> i32 {
                 if json {
                     println!(
                         "{}",
-                        serde_json::json!({
-                            "valid": false,
-                            "code": diagnosis.code,
-                            "summary": diagnosis.summary,
-                            "remedy": diagnosis.remedy,
-                            "next_command": diagnosis.next_command,
-                            "gaps": report.gaps,
-                            "tampered_sequences": report.tampered_sequences,
-                        })
+                        envelope(
+                            false,
+                            Some(diagnosis.code),
+                            report.checked_events,
+                            &report.gaps,
+                            &report.tampered_sequences,
+                            &diagnosis.summary,
+                            Some(&diagnosis.remedy),
+                            Some(&diagnosis.next_command),
+                        )
                     );
                 } else {
                     eprintln!("[{}] {}", diagnosis.code, diagnosis.summary);
@@ -801,14 +831,25 @@ fn render_audit_verify(path: &str, json: bool) -> i32 {
             }
         }
         Err(_) => {
+            let summary = "audit verification could not complete";
+            let remedy =
+                "check database availability, migrations, and audit record integrity";
             if json {
                 println!(
-                    r#"{{"valid":false,"error":"audit verification could not complete","remedy":"check database availability, migrations, and audit record integrity"}}"#
+                    "{}",
+                    envelope(
+                        false,
+                        None,
+                        0,
+                        &[],
+                        &[],
+                        summary,
+                        Some(remedy),
+                        Some("qai audit verify"),
+                    )
                 );
             } else {
-                eprintln!(
-                    "audit verification could not complete; check database availability, migrations, and audit record integrity"
-                );
+                eprintln!("{summary}; {remedy}");
             }
             exit_code::GENERIC
         }

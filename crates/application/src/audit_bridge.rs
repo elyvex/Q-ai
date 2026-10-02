@@ -430,7 +430,12 @@ pub async fn verify_persisted_audit(path: &str) -> Result<AuditVerificationRepor
     let mut expected_sequence = Some(1);
     for event in events {
         if Some(event.sequence) != expected_sequence {
-            report.gaps.push(event.sequence);
+            // WR-05: name the MISSING rows, not the survivor after the hole.
+            let from = expected_sequence.unwrap_or(event.sequence);
+            report.gaps.extend(from..event.sequence);
+            // Resync the link across the hole so a pure deletion is not
+            // misdiagnosed as tampering of the surviving rows.
+            previous = event.prev_chain_hash.clone();
         }
         if event.prev_chain_hash != previous
             || HashChainWriter::compute_chain_hash(&previous, &event) != event.chain_hash

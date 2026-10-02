@@ -18,8 +18,8 @@ use application::audit_bridge::{
 };
 use application::quran::{activate_edition, record_approval};
 use application::quran_forms::{RebuildParams, rebuild_forms};
-use audit::{Actor, AuditAction};
-use domain::{PrincipalId, SubjectRef, Timestamp};
+use audit::{Actor, AuditAction, HashChainWriter};
+use domain::{ContentHash, HashAlgorithm, PrincipalId, SubjectRef, Timestamp};
 use quran_corpus::import::{ImportInput, ImportOptions, ImportProgress, run_import};
 use storage::Database as _;
 use storage::repository::ProvenanceRecord;
@@ -280,6 +280,30 @@ async fn audited_mutation_records_approval_with_its_grant_event() {
     uow.rollback().await.unwrap();
 }
 
+/// `record_approval` fails closed on an unparseable actor (WR-10): a
+/// non-principal `decided_by` is a typed error raised before any staging, so
+/// no approval row and no grant event can survive a spoofed attribution.
+#[tokio::test]
+async fn record_approval_rejects_unparseable_actor_with_no_staged_rows() {
+    let (_dir, db, _path) = fixture().await;
+    let err = record_approval(&db, "appr-fnd10", SUBJECT, PRINCIPAL, "not-a-principal", "{}", CREATED_AT)
+        .await
+        .expect_err("a non-principal actor must fail closed");
+    assert!(
+        err.to_string().contains("not a principal id"),
+        "typed actor error expected, got: {err}"
+    );
+
+    let mut uow = db.write().await.unwrap();
+    assert!(
+        uow.sources().get_approval("appr-fnd10").await.unwrap().is_none(),
+        "no approval row may survive a rejected actor"
+    );
+    let events = uow.audit().list_by_subject(SUBJECT).await.unwrap();
+    assert!(events.is_empty(), "no grant event may survive a rejected actor");
+    uow.rollback().await.unwrap();
+}
+
 /// Failure matrix: a failure at EVERY required write boundary — domain write,
 /// provenance insert, outbox allocation, outbox enqueue, audit append, and
 /// commit — leaves zero partial rows and the previous state unchanged (D-10,
@@ -488,6 +512,96 @@ async fn tampered_chain_reports_offending_sequence_with_verify_remedy() {
         diagnose_invalid_audit(&broken).expect("an invalid report maps to a diagnostic");
     assert_eq!(diagnostic.code, "QAI-AUD-0005");
     assert!(!diagnostic.remedy.is_empty(), "recovery guidance must be actionable");
+    assert_eq!(diagnostic.next_command, "qai audit verify");
+}
+
+/// A deleted span reports the MISSING sequences and does not taint the
+/// survivors (WR-05, D-12): chain [1,2,5] — the post-hole survivor of a
+/// 3-4 deletion — reports `gaps == [3, 4]` with an empty tamper list and
+/// maps to `QAI-AUD-0004`, so the operator restores rows 3-4 instead of
+/// chasing an intact row 5 or a tamper that never happened.
+#[tokio::test]
+async fn deleted_span_reports_missing_sequences_without_tamper_cascade() {
+    let (_dir, db, path) = fixture().await;
+    let mut uow = db.write().await.unwrap();
+    audited_source_activation(
+        &mut *uow,
+        VERSION_ID,
+        SCOPE,
+        SUBJECT,
+        &mutation(AuditAction::SourceActivated, SUBJECT),
+    )
+    .await
+    .unwrap();
+    let second = AuditedMutation::new(
+        Actor::Principal { principal_id: principal() },
+        AuditAction::SourceImported,
+        SubjectRef("urn:qai:source:src-fnd4-b".to_string()),
+    );
+    second.stage(&mut *uow).await.unwrap();
+    uow.commit().await.unwrap();
+    let clean = verify_persisted_audit(&path).await.unwrap();
+    assert!(clean.valid, "staged chain must verify before simulating deletion");
+
+    // The survivor's predecessor link: event 2's persisted chain hash.
+    let mut uow = db.write().await.unwrap();
+    let prior = uow.audit().list_by_sequence(2, Some(2)).await.unwrap();
+    assert_eq!(prior.len(), 1, "event 2 must exist");
+    let prev_hex = prior[0]
+        .chain_hash
+        .strip_prefix("sha256:")
+        .expect("chain hashes render as sha256:<hex>")
+        .to_string();
+    let prev_hash = ContentHash { algorithm: HashAlgorithm::Sha256, hex: prev_hex };
+    uow.rollback().await.unwrap();
+
+    // Hand-built sequence-5 survivor, correctly linked to event 2: the only
+    // anomaly is the missing 3-4 span, so no tamper flag may fire.
+    let mut survivor = audit::AuditEvent {
+        id: "00000000-0000-4000-8000-000000000098".parse().unwrap(),
+        sequence: 5,
+        occurred_at: timestamp(),
+        actor: Actor::System { name: "system".to_string() },
+        action: AuditAction::SourceActivated,
+        subject: SubjectRef(SUBJECT.to_string()),
+        outcome: audit::AuditOutcome::Allowed,
+        reason: None,
+        before: None,
+        after: None,
+        request_id: None,
+        prev_chain_hash: prev_hash.clone(),
+        chain_hash: ContentHash { algorithm: HashAlgorithm::Sha256, hex: String::new() },
+    };
+    survivor.chain_hash = HashChainWriter::compute_chain_hash(&prev_hash, &survivor);
+    let mut uow = db.write().await.unwrap();
+    uow.audit()
+        .append(storage::repository::AuditEvent {
+            id: survivor.id.to_string(),
+            sequence: survivor.sequence,
+            occurred_at: survivor.occurred_at.to_string(),
+            actor_kind: "system".into(),
+            actor_id: None,
+            action: "source_activated".into(),
+            subject_urn: SUBJECT.into(),
+            outcome: "allowed".into(),
+            reason: None,
+            before_json: None,
+            after_json: None,
+            request_id: None,
+            prev_chain_hash: format!("sha256:{}", prev_hash.hex),
+            chain_hash: format!("sha256:{}", survivor.chain_hash.hex),
+        })
+        .await
+        .unwrap();
+    uow.commit().await.unwrap();
+
+    let gapped = verify_persisted_audit(&path).await.unwrap();
+    assert!(!gapped.valid, "a missing span must fail verification");
+    assert_eq!(gapped.gaps, vec![3, 4], "the missing sequences are named");
+    assert!(gapped.tampered_sequences.is_empty(), "a pure deletion is not tampering");
+    let diagnostic =
+        diagnose_invalid_audit(&gapped).expect("an invalid report maps to a diagnostic");
+    assert_eq!(diagnostic.code, "QAI-AUD-0004");
     assert_eq!(diagnostic.next_command, "qai audit verify");
 }
 

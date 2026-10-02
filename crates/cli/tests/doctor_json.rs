@@ -78,6 +78,75 @@ fn audit_verify_rejects_corrupt_chain_without_modifying_database() {
     assert_eq!(before, std::fs::read(&path).unwrap());
 }
 
+fn doctor_check(data_dir: &std::path::Path, check_id: &str) -> serde_json::Value {
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_qai"))
+        .env("QAI_DATA_DIR", data_dir)
+        .args(["doctor", "--json"])
+        .output()
+        .expect("run qai doctor");
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout)
+        .expect("doctor --json must be a single JSON document");
+    doc["checks"]
+        .as_array()
+        .expect("top-level checks array")
+        .iter()
+        .find(|check| check["id"] == check_id)
+        .cloned()
+        .unwrap_or_else(|| panic!("check {check_id} present: {doc}"))
+}
+
+/// WR-06/WR-07/WR-11: the data-dir filesystem cases are distinguishable —
+/// a symlink to a healthy directory passes as a symlink (not failed as
+/// "not a directory"), a missing path names migrate, a dangling symlink
+/// fails as dangling, and a non-directory fails as not-a-directory.
+#[test]
+fn doctor_data_dir_cases_are_distinguishable() {
+    let dir = tempfile::tempdir().unwrap();
+
+    // Missing path: warning naming the migrate creation path.
+    let missing = dir.path().join("no-such-dir");
+    let check = doctor_check(&missing, "data_dir.writable");
+    assert_eq!(check["status"], "warn");
+    let text = format!("{} {}", check["summary"], check["remedy"]);
+    assert!(text.contains("does not exist"), "missing case: {check}");
+    assert!(text.contains("migrate"), "missing case names migrate: {check}");
+
+    // Regular file: failure as not-a-directory.
+    let file = dir.path().join("not-a-dir");
+    std::fs::write(&file, b"x").unwrap();
+    let check = doctor_check(&file, "data_dir.writable");
+    assert_eq!(check["status"], "fail");
+    assert!(
+        check["summary"].as_str().unwrap_or_default().contains("not a directory"),
+        "file case: {check}"
+    );
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+        // Symlink to a healthy directory: passes, disclosed as a symlink.
+        let target = dir.path().join("real-dir");
+        std::fs::create_dir(&target).unwrap();
+        let link = dir.path().join("link-dir");
+        symlink(&target, &link).unwrap();
+        let check = doctor_check(&link, "data_dir.writable");
+        assert_eq!(check["status"], "pass", "symlinked dir must not fail: {check}");
+        assert!(
+            check["summary"].as_str().unwrap_or_default().contains("symlink"),
+            "link-ness disclosed: {check}"
+        );
+
+        // Dangling symlink: fails as dangling, not as missing.
+        let dangling = dir.path().join("dangling-dir");
+        symlink(dir.path().join("no-such-target"), &dangling).unwrap();
+        let check = doctor_check(&dangling, "data_dir.writable");
+        assert_eq!(check["status"], "fail");
+        let text = format!("{} {}", check["summary"], check["remedy"]);
+        assert!(text.contains("symlink"), "dangling case names the link: {check}");
+        assert!(!text.contains("migrate"), "dangling case must not name migrate: {check}");
+    }
+}
+
 #[test]
 fn doctor_quran_json_is_a_single_merged_document() {
     let dir = tempfile::tempdir().unwrap();

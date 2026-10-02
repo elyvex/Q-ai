@@ -377,6 +377,20 @@ fn assert_verify_contract(data: &str, expect_code: &str, expect_sequences: &[u64
         serde_json::from_str(&text).expect("audit verify JSON parses as one document");
     assert_eq!(doc["valid"], false);
     assert_eq!(doc["code"], expect_code);
+    // WR-08: one envelope for every outcome — an invalid chain carries every
+    // field (valid/code/checked_events/gaps/tampered_sequences/summary/remedy/next_command).
+    for field in [
+        "valid",
+        "code",
+        "checked_events",
+        "gaps",
+        "tampered_sequences",
+        "summary",
+        "remedy",
+        "next_command",
+    ] {
+        assert!(!doc[field].is_null(), "envelope field {field} must be set: {doc}");
+    }
     let remedy = doc["remedy"].as_str().unwrap_or_default();
     assert!(!remedy.is_empty(), "non-empty remedy expected: {doc}");
     assert_eq!(doc["next_command"], "qai audit verify");
@@ -427,7 +441,7 @@ fn audit_verify_gap_human_and_json() {
     seed_audit_chain(&db_path, 3);
     corrupt_audit_chain(&db_path, "DELETE FROM audit_events WHERE sequence = 2");
 
-    assert_verify_contract(&data, "QAI-AUD-0004", &[3]);
+    assert_verify_contract(&data, "QAI-AUD-0004", &[2]);
 }
 
 #[test]

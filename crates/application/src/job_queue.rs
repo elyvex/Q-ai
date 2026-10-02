@@ -322,7 +322,11 @@ pub fn build_default_registry(db: &Arc<SqliteDatabase>) -> HandlerRegistry {
 /// existence check is the backstop so the host can never materialize state
 /// on its own.
 pub async fn open_host_database(db_path: &str) -> Result<Arc<SqliteDatabase>, JobError> {
-    if std::fs::symlink_metadata(db_path).is_err() {
+    // WR-07: only an absent file names migrate. Any other metadata failure
+    // falls through to the real open so the true IO error surfaces.
+    if let Err(e) = std::fs::symlink_metadata(db_path)
+        && e.kind() == std::io::ErrorKind::NotFound
+    {
         return Err(JobError::Storage(format!(
             "no database at {db_path}; run `qai db migrate` first"
         )));
@@ -395,7 +399,11 @@ fn control_err(e: storage::error::StorageError) -> JobControlError {
 /// Open the control database, refusing to create state (D-05): a missing
 /// file names `qai db migrate` instead of materializing an empty database.
 async fn open_control_db(path: &str) -> Result<SqliteDatabase, JobControlError> {
-    if std::fs::symlink_metadata(path).is_err() {
+    // WR-07: only an absent file is DatabaseMissing. Any other metadata
+    // failure falls through to the real open so the true IO error surfaces.
+    if let Err(e) = std::fs::symlink_metadata(path)
+        && e.kind() == std::io::ErrorKind::NotFound
+    {
         return Err(JobControlError::DatabaseMissing { path: path.to_string() });
     }
     SqliteDatabase::new(path, 4, true).await.map_err(control_err)

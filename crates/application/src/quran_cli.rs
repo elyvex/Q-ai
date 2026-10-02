@@ -79,8 +79,14 @@ pub const LOCAL_PRINCIPAL: &str = "00000000-0000-0000-0000-000000000000";
 /// an existing file still opens through the read/write pool because mutation
 /// commands (import, activate, …) need writes.
 async fn open_db(db_path: &str) -> Result<SqliteDatabase, StorageError> {
-    if std::fs::symlink_metadata(db_path).is_err() {
-        return Err(StorageError::MigrationRequired { at_schema: 0, required: 0 });
+    match std::fs::symlink_metadata(db_path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Err(StorageError::MigrationRequired { at_schema: 0, required: 0 });
+        }
+        // WR-07: present-but-unreadable (or any other IO failure) is NOT a
+        // missing database — fall through so the real open surfaces the true
+        // failure instead of a `qai db migrate` remedy that cannot help.
+        Err(_) | Ok(_) => {}
     }
     SqliteDatabase::new(db_path, 4, true).await
 }
