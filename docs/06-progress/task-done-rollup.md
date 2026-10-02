@@ -2,6 +2,23 @@
 
 > Completed tasks across all phases. Newest first.
 
+## Phase 3.5 — Residual Closure (INSERTED) closure (GSD plans 03.5-01…03.5-04), 2026-10-02
+
+- Closed the inserted residual phase across four waves: W1 board/ledger truth
+  restoration + W2 six operator documents + SECURITY.md (03.5-01); W4 counting
+  CLI+HTTP parity, W3 read-only `quran.index.verify` job, W8 cold-rebuild budget
+  (03.5-02); W6 evaluation harness, W7 twelve-tool conformance, W5 goldens at
+  size, W8 50k soak (03.5-03); W9 Phase-1 hardening, W10 test-gate robustness,
+  evidence matrix (03.5-04).
+- Board/ledger arithmetic corrected at close: Phase-2 board sums to
+  **75/114 ☑ (25 ◐, 14 ☐, 66%)**; the §9 rollup had drifted to 65.
+- All 14 owner decisions (OD-01…OD-14) remain 🔴, each with its readiness and
+  unblocking command recorded; none answered.
+- Full gate green: `cargo test --workspace` = 191 suites, 1162 passed, 0 failed
+  (50k soak included); fmt, clippy, arch-check, migrate-check (22), adr-lint
+  (12) all clean. Evidence matrix: `docs/06-progress/status.md`;
+  deferral ledger: `docs/05-followups/phase-3.5-deferrals.md`.
+
 ## Phase 3 — Quran Search & Linguistics closure (GSD plans 03-01…03-08), 2026-09-28
 
 - Closed the roadmap Phase 3 board (legacy `phase-02-rag`, D-04) through eight
