@@ -6,20 +6,15 @@
 use std::sync::atomic::AtomicBool;
 
 use application::quran::activate_edition;
-use application::quran_doctor_indexes::load_snapshot;
 use application::quran_forms::{RebuildParams, rebuild_forms};
 use application::quran_index::{
     IndexBuildParams, IndexVerifyParams, QURAN_AYAH_INDEX_ID, QURAN_INDEX_VERIFY_KIND,
     rebuild_index, verify_index,
 };
-use application::quran_morphology::{
-    MorphologyActivateParams, MorphologyImportParams, activate_morphology, dataset_urn,
-    run_morphology_import,
-};
+use application::quran_morphology::dataset_urn;
 use domain::{PrincipalId, Timestamp};
 use quran_corpus::import::{ImportInput, ImportOptions, ImportOutcome, ImportProgress, run_import};
 use quran_corpus::sha256_hex;
-use storage::Database as _;
 use storage_sqlite::SqliteDatabase;
 use tempfile::tempdir;
 
@@ -30,7 +25,6 @@ const V1_URN: &str = "quran-edition:test-edition-min@0.1.0";
 const V2_URN: &str = "quran-edition:test-edition-min@0.2.0";
 const MORPH_SLUG: &str = "test-morph";
 const MORPH_VERSION: &str = "0.1.0";
-const MORPH_BATCH: &str = "index-verify-batch";
 
 fn principal() -> PrincipalId {
     PRINCIPAL.parse().unwrap()

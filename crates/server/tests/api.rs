@@ -381,7 +381,7 @@ impl application::quran_lexicon_api::LexiconBackend for FakeLexicon {
 
     async fn count_occurrences(
         &self,
-        target: &str,
+        _target: &str,
         _profile: &str,
     ) -> Result<
         application::quran_counting::OccurrenceSpan,

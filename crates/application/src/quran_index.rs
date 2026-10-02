@@ -1199,7 +1199,7 @@ impl jobs::JobHandler for IndexVerifyHandler {
 
     async fn run(
         &self,
-        ctx: jobs::JobContext,
+        _ctx: jobs::JobContext,
         payload: serde_json::Value,
     ) -> Result<jobs::JobOutcome, jobs::JobError> {
         use jobs::JobError;
@@ -1223,8 +1223,6 @@ impl jobs::JobHandler for IndexVerifyHandler {
         let report = verify_index(&self.db, &params).await;
         match report {
             Ok(report) => {
-                let result = serde_json::to_string(&report)
-                    .unwrap_or_else(|_| "{}".to_string());
                 if report.skipped {
                     Ok(jobs::JobOutcome {
                         success: true,
@@ -1270,8 +1268,6 @@ pub async fn verify_index(
     db: &SqliteDatabase,
     params: &IndexVerifyParams,
 ) -> Result<IndexVerifyReport, IndexBuildError> {
-    use storage::Database as _;
-
     // Load the snapshot using the same logic as the doctor.
     let snapshot = super::quran_doctor_indexes::load_snapshot(db)
         .await
