@@ -2881,22 +2881,30 @@ fn select_evidence_entry<'a>(
     Err("license evidence must be a JSON object".to_string())
 }
 
-/// Derive a permissive status from captured `spdx_id`/`redistribution_allowed`.
+/// Derive a status from captured `spdx_id`/`redistribution_allowed`.
 ///
-/// Never invents permissiveness: without a redistribution grant it falls back
-/// to `Unspecified`, which the activation gate rejects.
+/// Fail-closed (WR-03): a *recognized* open `spdx_id` is `OpenLicense`; any
+/// other identifier is `Unspecified` and never guessed into a permissive
+/// status. With no `spdx_id`, an explicit `redistribution_allowed: true` is
+/// `PermissionGranted`; anything else is `Unspecified`, which the activation
+/// gate rejects.
 fn derive_license_status(entry: &serde_json::Value) -> String {
-    let has_spdx = entry
+    let spdx_id = entry
         .get("spdx_id")
         .and_then(serde_json::Value::as_str)
-        .is_some_and(|value| !value.trim().is_empty());
-    if has_spdx {
-        "OpenLicense".to_string()
-    } else if entry.get("redistribution_allowed").and_then(serde_json::Value::as_bool) == Some(true)
-    {
-        "PermissionGranted".to_string()
-    } else {
-        "Unspecified".to_string()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    match spdx_id {
+        Some(id) if quran_morphology::license::is_known_open_spdx(id) => "OpenLicense".to_string(),
+        // An unrecognized identifier is never treated as permissive, even when
+        // the capture asserts redistribution.
+        Some(_) => "Unspecified".to_string(),
+        None if entry.get("redistribution_allowed").and_then(serde_json::Value::as_bool)
+            == Some(true) =>
+        {
+            "PermissionGranted".to_string()
+        }
+        None => "Unspecified".to_string(),
     }
 }
 
@@ -5308,6 +5316,13 @@ mod license_evidence_tests {
         let with_spdx: serde_json::Value =
             serde_json::from_str(r#"{"spdx_id":"CC0-1.0","redistribution_allowed":true}"#).unwrap();
         assert_eq!(derive_license_status(&with_spdx), "OpenLicense");
+        // WR-03: an unrecognized identifier is never permissive, even when the
+        // capture asserts redistribution.
+        let arbitrary: serde_json::Value = serde_json::from_str(
+            r#"{"spdx_id":"LicenseRef-Proprietary","redistribution_allowed":true}"#,
+        )
+        .unwrap();
+        assert_eq!(derive_license_status(&arbitrary), "Unspecified");
         let granted: serde_json::Value =
             serde_json::from_str(r#"{"redistribution_allowed":true}"#).unwrap();
         assert_eq!(derive_license_status(&granted), "PermissionGranted");

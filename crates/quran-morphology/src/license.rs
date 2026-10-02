@@ -31,6 +31,63 @@ pub fn is_permissive_status(status: &str) -> bool {
     PERMISSIVE_LICENSE_STATUSES.contains(&status)
 }
 
+/// SPDX identifiers recognized as open bundling evidence (WR-03).
+///
+/// An explicit allowlist: a capture's `spdx_id` only yields an `OpenLicense`
+/// status when it names one of these. An unrecognized identifier — including
+/// `LicenseRef-*`, `NOASSERTION`, or a typo — is never treated as permissive;
+/// the derivation fails closed instead of guessing a status from an arbitrary
+/// string.
+pub const KNOWN_OPEN_SPDX_IDS: [&str; 40] = [
+    "0BSD",
+    "AGPL-3.0-only",
+    "AGPL-3.0-or-later",
+    "Apache-2.0",
+    "Artistic-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSD-4-Clause",
+    "BSL-1.0",
+    "CC-BY-3.0",
+    "CC-BY-4.0",
+    "CC-BY-SA-3.0",
+    "CC-BY-SA-4.0",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
+    "EPL-2.0",
+    "EUPL-1.2",
+    "GPL-2.0-only",
+    "GPL-2.0-or-later",
+    "GPL-3.0-only",
+    "GPL-3.0-or-later",
+    "ISC",
+    "LGPL-2.1-only",
+    "LGPL-2.1-or-later",
+    "LGPL-3.0-only",
+    "LGPL-3.0-or-later",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "ODbL-1.0",
+    "ODC-By-1.0",
+    "OFL-1.1",
+    "PDDL-1.0",
+    "PostgreSQL",
+    "Python-2.0",
+    "Unlicense",
+    "Unicode-DFS-2016",
+    "WTFPL",
+    "X11",
+    "Zlib",
+];
+
+/// TRUE when `id` names a recognized open SPDX license (case-insensitive).
+#[must_use]
+pub fn is_known_open_spdx(id: &str) -> bool {
+    let id = id.trim();
+    KNOWN_OPEN_SPDX_IDS.iter().any(|known| known.eq_ignore_ascii_case(id))
+}
+
 /// Errors raised when license evidence is absent, malformed, or non-permissive.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum LicenseEvidenceError {
@@ -218,5 +275,15 @@ mod tests {
         let err = LicenseEvidence::from_status_and_json("PublicDomain", &json)
             .expect_err("redistribution forbidden is not evidence");
         assert_eq!(err, LicenseEvidenceError::RedistributionForbidden);
+    }
+
+    #[test]
+    fn spdx_allowlist_recognizes_open_ids_and_rejects_arbitrary_strings() {
+        assert!(is_known_open_spdx("CC0-1.0"));
+        assert!(is_known_open_spdx("cc0-1.0"), "match is case-insensitive");
+        assert!(is_known_open_spdx("MIT"));
+        assert!(!is_known_open_spdx("LicenseRef-Proprietary"));
+        assert!(!is_known_open_spdx("NOASSERTION"));
+        assert!(!is_known_open_spdx(""));
     }
 }
