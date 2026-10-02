@@ -144,11 +144,11 @@ Plans:
   4. Linguistics regressions are measurable against a committed versioned dataset, and every shipped tool passes one conformance contract
   5. Every owner decision that remains open is recorded with the exact command that closes it, and none of them is answered
 
-**Plans**: 4 plans
+**Plans**: 3/4 plans executed
 
-- [ ] 03.5-01-PLAN.md — W1 board + ledger truth restoration, W2 documentation set and SECURITY.md (wave 1)
-- [ ] 03.5-02-PLAN.md — W4 counting/discovery surface, W3 reconciliation job, W8 cold-rebuild budget (wave 2)
-- [ ] 03.5-03-PLAN.md — W6 evaluation harness, W7 tool conformance, W5 goldens, W8 full soak (wave 3)
+- [x] 03.5-01-PLAN.md — W1 board + ledger truth restoration, W2 documentation set and SECURITY.md (wave 1)
+- [x] 03.5-02-PLAN.md — W4 counting/discovery surface, W3 reconciliation job, W8 cold-rebuild budget (wave 2)
+- [x] 03.5-03-PLAN.md — W6 evaluation harness, W7 tool conformance, W5 goldens, W8 full soak (wave 3)
 - [ ] 03.5-04-PLAN.md — W9 Phase-1 hardening, W10 test-gate robustness, phase gate + evidence matrix (wave 4)
 
 ### Phase 4: Quran Graph
@@ -313,7 +313,7 @@ Phase 3.5 is an INSERTED gap-closure phase; it runs after Phase 4 and does not g
 | 1. Foundations | 5/5 | Complete    | 2026-09-28 |
 | 2. Canonical Quran Core | 7/7 | Complete    | 2026-09-25 |
 | 3. Quran Search & Linguistics | 8/8 | Complete (owner gates OD-11/OD-12 open) | 2026-09-28 |
-| 3.5. Residual Closure (INSERTED) | 0/4 | Not started | - |
+| 3.5. Residual Closure (INSERTED) | 3/4 | In Progress|  |
 | 4. Quran Graph | 5/5 | Complete (M5 blocked on OD-11) | 2026-09-29 |
 | 5. Rich Quran Experience | 0/TBD | Not started | - |
 | 6. Hadith & Tafsir | 0/TBD | Not started | - |
