@@ -15,7 +15,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundations** - Workspace, config, SQLite, jobs, provenance, audit, CLI skeleton (completed 2026-09-28)
 - [x] **Phase 2: Canonical Quran Core** - Validated import, addressing, tokens, exact lookup, integrity (completed 2026-09-25)
-- [ ] **Phase 3: Quran Search & Linguistics** - Normalization, roots/lemmas, morphology, frequency tools
+- [x] **Phase 3: Quran Search & Linguistics** - Normalization, roots/lemmas, morphology, frequency tools (completed 2026-09-28)
+- [ ] **Phase 3.5: Residual Closure (INSERTED)** - Engineering remainder of Phases 1-3, status truth restoration, owner-gate readiness
 - [x] **Phase 4: Quran Graph** - Graph store, traversal, annotations, visualization (completed 2026-09-29)
 - [ ] **Phase 5: Rich Quran Experience** - Web GUI, TUI cockpit, research tools, result contract
 - [ ] **Phase 6: Hadith & Tafsir** - Structured records, grading, verse links, tafsir indexing
@@ -127,6 +128,28 @@ Plans:
 **Wave 5** *(blocked on Wave 4 completion)*
 
 - [x] 03-08-PLAN.md — Owner gates OD-11/OD-12 recorded BLOCKED + deferral ledger + alpha end-to-end evidence (D-03/D-08)
+
+### Phase 3.5: Residual Closure (INSERTED)
+
+**Goal**: Close the engineering remainder Phases 1–3 left behind, and end the split-brain status condition, without re-opening a closed phase and without answering any owner decision.
+**Depends on**: Phases 1, 2, 3 (runs after Phase 4; does not gate it)
+**Requirements**: REQ-architecture-principles-quality, REQ-quran-normalization, REQ-quran-linguistics, REQ-quran-research-tools, REQ-cli-api, REQ-ingestion-validation-eval, REQ-engineering-baseline, REQ-security-licensing-observability, REQ-open-decisions-status
+**Context**: `.planning/phases/03.5-residual-closure/03.5-CONTEXT.md`
+
+**Success Criteria** (what must be TRUE):
+
+  1. No phase board row contradicts a committed SUMMARY, and a reader of any one status file learns the same phase state
+  2. The counting and discovery tools are reachable from CLI and HTTP with identical results and fail closed when their dataset is absent
+  3. Index drift is detectable on a schedule without a human, and a rebuild is bounded by a committed budget
+  4. Linguistics regressions are measurable against a committed versioned dataset, and every shipped tool passes one conformance contract
+  5. Every owner decision that remains open is recorded with the exact command that closes it, and none of them is answered
+
+**Plans**: 4 plans
+
+- [ ] 03.5-01-PLAN.md — W1 board + ledger truth restoration, W2 documentation set and SECURITY.md (wave 1)
+- [ ] 03.5-02-PLAN.md — W4 counting/discovery surface, W3 reconciliation job, W8 cold-rebuild budget (wave 2)
+- [ ] 03.5-03-PLAN.md — W6 evaluation harness, W7 tool conformance, W5 goldens, W8 full soak (wave 3)
+- [ ] 03.5-04-PLAN.md — W9 Phase-1 hardening, W10 test-gate robustness, phase gate + evidence matrix (wave 4)
 
 ### Phase 4: Quran Graph
 
@@ -282,14 +305,16 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12
+Phases execute in numeric order: 1 → 2 → 3 → 3.5 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12.
+Phase 3.5 is an INSERTED gap-closure phase; it runs after Phase 4 and does not gate it.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundations | 5/5 | Complete    | 2026-09-28 |
 | 2. Canonical Quran Core | 7/7 | Complete    | 2026-09-25 |
-| 3. Quran Search & Linguistics | 8/8 | In Progress|  |
-| 4. Quran Graph | 5/5 | Complete    | 2026-09-29 |
+| 3. Quran Search & Linguistics | 8/8 | Complete (owner gates OD-11/OD-12 open) | 2026-09-28 |
+| 3.5. Residual Closure (INSERTED) | 0/4 | Not started | - |
+| 4. Quran Graph | 5/5 | Complete (M5 blocked on OD-11) | 2026-09-29 |
 | 5. Rich Quran Experience | 0/TBD | Not started | - |
 | 6. Hadith & Tafsir | 0/TBD | Not started | - |
 | 7. Isnad & Narrator Research | 0/TBD | Not started | - |

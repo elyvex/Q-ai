@@ -16,7 +16,12 @@
     {
       "number": "3",
       "name": "Quran Search & Linguistics",
-      "status": "in_progress"
+      "status": "pending"
+    },
+    {
+      "number": "3.5",
+      "name": "Residual Closure (INSERTED)",
+      "status": "pending"
     },
     {
       "number": "4",
@@ -66,8 +71,8 @@
   ],
   "next": {
     "command": "/gsd:progress --next",
-    "label": "Advance to the next step (plan phase 02)",
-    "reason": "Phase 02 of 12 — needs a plan"
+    "label": "Advance to the next step",
+    "reason": "Phase 03.5 of 13 · 31% · executing"
   },
-  "updated_at": "2026-09-28T06:30:33.215Z"
+  "updated_at": "2026-10-02T08:46:00.429Z"
 }
