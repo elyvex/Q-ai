@@ -1900,12 +1900,16 @@ fn typed_relation_rows(
     for (key, members) in &groups {
         for (offset, &left) in members.iter().enumerate() {
             for &right in &members[offset + 1..] {
-                if !emitted.insert((left, right)) {
-                    continue;
-                }
                 let left_analysis = &per_token[left][*key];
                 let right_analysis = &per_token[right][*key];
                 if !pair_filter(left_analysis, right_analysis) {
+                    continue;
+                }
+                // WR-01: dedup only once the pair has passed the filter. A pair
+                // linked by several keys is represented by different analyses
+                // per key; marking it consumed on the first (failing) key would
+                // silently drop a relation that a later key would accept.
+                if !emitted.insert((left, right)) {
                     continue;
                 }
                 let from = tokens[left].id();
@@ -2216,5 +2220,59 @@ impl jobs::JobHandler for MorphologyImportHandler {
                 format!("{}: {}", err.code(), err.summary())
             })),
         }
+    }
+}
+
+#[cfg(test)]
+mod family_relation_tests {
+    use super::{FamilyToken, typed_relation_rows};
+    use quran_morphology::{FamilyRelation, TokenAnalysis};
+
+    /// A minimal token analysis carrying only the fields the builders read.
+    fn analysis(surface: &str, lemma: &str, root: &str) -> TokenAnalysis {
+        serde_json::from_value(serde_json::json!({
+            "surah": 1,
+            "ayah": 1,
+            "token_position": 1,
+            "surface": surface,
+            "lemma": lemma,
+            "root": root,
+        }))
+        .expect("minimal analysis deserializes")
+    }
+
+    fn token(position: i64, analyses: Vec<TokenAnalysis>) -> FamilyToken {
+        FamilyToken { surah: 1, ayah: 1, position, analyses }
+    }
+
+    /// WR-01 regression: a pair linked by several keys must still be emitted
+    /// when the first key's representative analyses fail the filter. Marking
+    /// the pair consumed before filtering would drop the valid relation.
+    #[test]
+    fn pair_linked_by_several_keys_is_not_dropped_by_a_failing_key() {
+        // X carries {r1/lA, r2/lB}; Y carries {r1/lA, r2/lC}. Under r1 the pair
+        // shares lemma lA (filtered out); under r2 it is lB vs lC (accepted).
+        let left = token(1, vec![analysis("x", "lA", "r1"), analysis("x", "lB", "r2")]);
+        let right = token(2, vec![analysis("y", "lA", "r1"), analysis("y", "lC", "r2")]);
+        let rows = typed_relation_rows(
+            "ds",
+            &[left, right],
+            FamilyRelation::SameLemma,
+            |analysis| {
+                vec![format!("root:{}", analysis.root), format!("lemma:{}", analysis.lemma)]
+            },
+            |left, right| left.lemma != right.lemma,
+        )
+        .expect("relation rows build");
+
+        assert_eq!(rows.len(), 1, "the valid r2 pair must be emitted");
+        assert_eq!(rows[0].relation, "same_lemma");
+        assert_eq!(rows[0].from_id, "token:1:1:1");
+        assert_eq!(rows[0].to_id, "token:1:1:2");
+        assert!(
+            rows[0].evidence_json.contains("root:r2"),
+            "the emitted key is the one that passed the filter: {}",
+            rows[0].evidence_json
+        );
     }
 }
