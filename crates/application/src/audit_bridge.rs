@@ -433,9 +433,6 @@ pub async fn verify_persisted_audit(path: &str) -> Result<AuditVerificationRepor
             // WR-05: name the MISSING rows, not the survivor after the hole.
             let from = expected_sequence.unwrap_or(event.sequence);
             report.gaps.extend(from..event.sequence);
-            // Resync the link across the hole so a pure deletion is not
-            // misdiagnosed as tampering of the surviving rows.
-            previous = event.prev_chain_hash.clone();
         }
         if event.prev_chain_hash != previous
             || HashChainWriter::compute_chain_hash(&previous, &event) != event.chain_hash
@@ -548,13 +545,49 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(verify_persisted_audit(path).await.unwrap().tampered_sequences, vec![2]);
+        pool.close().await;
+    }
+
+    /// WR-05 at the unit level: renumbering 2 → 3 on an otherwise clean chain
+    /// leaves a gap at the *missing* sequence 2, not at the survivor 3.
+    /// (Kept separate from the tamper test above because that fixture
+    /// deliberately tampers the row first.) Note the survivor IS also
+    /// tamper-flagged, correctly: the chain hash covers the sequence, so
+    /// rewriting it is a modification — unlike a deletion, whose survivors
+    /// keep their original sequences and verify clean (see the
+    /// `deleted_span_...` integration test).
+    #[tokio::test]
+    async fn renumber_reports_missing_sequence() {
+        use storage::Database as _;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("qai-renumber.db");
+        let path = path.to_str().unwrap();
+        let migrations =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../migrations/sqlite");
+        storage_sqlite::migrate::apply_migrations(path, &migrations).await.unwrap();
+        let db = storage_sqlite::SqliteDatabase::new(path, 1, true).await.unwrap();
+        let mut tx = db.write().await.unwrap();
+        append_audit_event(&mut *tx, event("00000000-0000-4000-8000-000000000011")).await.unwrap();
+        append_audit_event(&mut *tx, event("00000000-0000-4000-8000-000000000012")).await.unwrap();
+        tx.commit().await.unwrap();
+        assert!(verify_persisted_audit(path).await.unwrap().valid);
+
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .connect_with(sqlx::sqlite::SqliteConnectOptions::new().filename(path))
+            .await
+            .unwrap();
+        sqlx::query("DROP TRIGGER trg_audit_no_update").execute(&pool).await.unwrap();
         sqlx::query("UPDATE audit_events SET sequence = 3 WHERE sequence = 2")
             .execute(&pool)
             .await
             .unwrap();
         let broken = verify_persisted_audit(path).await.unwrap();
         assert!(!broken.valid);
-        assert_eq!(broken.gaps, vec![3]);
+        assert_eq!(broken.gaps, vec![2]);
+        // The sequence is hash input: rewriting 2 → 3 modifies the chained
+        // row, so the survivor is tamper-flagged too. Contrast a deletion,
+        // whose survivors keep their sequences and stay clean.
+        assert_eq!(broken.tampered_sequences, vec![3]);
         pool.close().await;
     }
 
