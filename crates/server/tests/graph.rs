@@ -224,7 +224,10 @@ impl application::quran_lexicon_api::LexiconBackend for FakeLexicon {
         _window: usize,
         _limit: usize,
     ) -> Result<
-        (application::quran_counting::CountingRules, Vec<application::quran_counting::CooccurrenceHit>),
+        (
+            application::quran_counting::CountingRules,
+            Vec<application::quran_counting::CooccurrenceHit>,
+        ),
         application::quran_lexicon_api::LexiconApiError,
     > {
         Err(application::quran_lexicon_api::LexiconApiError::Unsupported {
@@ -239,7 +242,10 @@ impl application::quran_lexicon_api::LexiconBackend for FakeLexicon {
         _window: usize,
         _limit: usize,
     ) -> Result<
-        (application::quran_counting::CountingRules, Vec<application::quran_counting::CollocationHit>),
+        (
+            application::quran_counting::CountingRules,
+            Vec<application::quran_counting::CollocationHit>,
+        ),
         application::quran_lexicon_api::LexiconApiError,
     > {
         Err(application::quran_lexicon_api::LexiconApiError::Unsupported {
@@ -278,7 +284,10 @@ impl application::quran_lexicon_api::LexiconBackend for FakeLexicon {
         _threshold: f64,
         _limit: usize,
     ) -> Result<
-        (application::quran_counting::CountingRules, Vec<application::quran_counting::NearDuplicateHit>),
+        (
+            application::quran_counting::CountingRules,
+            Vec<application::quran_counting::NearDuplicateHit>,
+        ),
         application::quran_lexicon_api::LexiconApiError,
     > {
         Err(application::quran_lexicon_api::LexiconApiError::Unsupported {

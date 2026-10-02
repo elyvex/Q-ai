@@ -240,10 +240,7 @@ async fn alpha_smoke_normalized_search_end_to_end() {
         let reference = hit.reference();
         let trace = hit.explanation();
         // I9: the ordered rule set is mandatory and non-empty on every hit.
-        assert!(
-            !trace.profile.is_empty(),
-            "hit {reference}: trace profile must be non-empty (I9)"
-        );
+        assert!(!trace.profile.is_empty(), "hit {reference}: trace profile must be non-empty (I9)");
         assert!(
             !trace.rules_applied.is_empty(),
             "hit {reference}: ordered rule set must be non-empty (I9); trace={trace:?}"

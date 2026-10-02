@@ -84,8 +84,8 @@ fn doctor_check(data_dir: &std::path::Path, check_id: &str) -> serde_json::Value
         .args(["doctor", "--json"])
         .output()
         .expect("run qai doctor");
-    let doc: serde_json::Value = serde_json::from_slice(&out.stdout)
-        .expect("doctor --json must be a single JSON document");
+    let doc: serde_json::Value =
+        serde_json::from_slice(&out.stdout).expect("doctor --json must be a single JSON document");
     doc["checks"]
         .as_array()
         .expect("top-level checks array")

@@ -531,15 +531,11 @@ mod tests {
         let job = q.get("j-lossy").await.unwrap().unwrap();
         assert!(job.checkpoint_json.is_none(), "progress alone stores nothing");
 
-        q.checkpoint("j-lossy", Some("50%".to_string()), Some("half".to_string()))
-            .await
-            .unwrap();
+        q.checkpoint("j-lossy", Some("50%".to_string()), Some("half".to_string())).await.unwrap();
         let job = q.get("j-lossy").await.unwrap().unwrap();
         assert_eq!(job.checkpoint_json.as_deref(), Some("half"));
 
-        q.finish("j-lossy", JobState::Succeeded, Some(r#"{"n":1}"#.to_string()))
-            .await
-            .unwrap();
+        q.finish("j-lossy", JobState::Succeeded, Some(r#"{"n":1}"#.to_string())).await.unwrap();
         let job = q.get("j-lossy").await.unwrap().unwrap();
         assert_eq!(job.state, "Succeeded");
         assert!(job.lease_owner.is_none(), "terminal transition clears the lease");

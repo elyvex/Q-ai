@@ -832,8 +832,7 @@ fn render_audit_verify(path: &str, json: bool) -> i32 {
         }
         Err(_) => {
             let summary = "audit verification could not complete";
-            let remedy =
-                "check database availability, migrations, and audit record integrity";
+            let remedy = "check database availability, migrations, and audit record integrity";
             if json {
                 println!(
                     "{}",

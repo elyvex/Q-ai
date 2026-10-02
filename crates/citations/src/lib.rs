@@ -604,4 +604,115 @@ mod tests {
             "declared normalization is unreachable in v1"
         );
     }
+
+    fn stored(hash: &str) -> StoredCitation {
+        StoredCitation {
+            id: "cit-s1".into(),
+            canonical_reference: "quran:test@0.1.0:1:1".into(),
+            quoted_text_hash: hash.into(),
+            edition_slug: "test".into(),
+            edition_version: "0.1.0".into(),
+            surah: 1,
+            ayah: 1,
+        }
+    }
+
+    #[tokio::test]
+    async fn resolve_stored_reverifies_the_live_text_hash() {
+        let live = format!("sha256:{}", content_hash_of("ب ت").hex);
+        let resolved = resolver().resolve_stored(&stored(&live)).await.unwrap();
+        assert_eq!(resolved.verdict, QuotationVerdict::ExactMatch);
+        assert_eq!(resolved.text_hash.as_deref(), Some(live.as_str()));
+        assert_eq!(resolved.deep_link.as_deref(), Some("/read/test@0.1.0/1:1"));
+
+        // A stale stored hash is a hard Mismatch, not a silent pass.
+        let resolved = resolver().resolve_stored(&stored("sha256:deadbeef")).await.unwrap();
+        assert!(matches!(resolved.verdict, QuotationVerdict::Mismatch { .. }));
+        assert_eq!(require_exact(&resolved.verdict).unwrap_err().code(), "QAI-QUR-0323");
+    }
+
+    #[tokio::test]
+    async fn resolve_stored_covers_missing_edition_location_and_unparseable() {
+        let live = format!("sha256:{}", content_hash_of("ب ت").hex);
+
+        let mut missing_edition = stored(&live);
+        missing_edition.edition_slug = "nope".into();
+        assert_eq!(
+            resolver().resolve_stored(&missing_edition).await.unwrap().verdict,
+            QuotationVerdict::EditionNotFound
+        );
+
+        let mut missing_ayah = stored(&live);
+        missing_ayah.canonical_reference = "quran:test@0.1.0:9:9".into();
+        missing_ayah.surah = 9;
+        missing_ayah.ayah = 9;
+        assert_eq!(
+            resolver().resolve_stored(&missing_ayah).await.unwrap().verdict,
+            QuotationVerdict::LocationNotFound
+        );
+
+        let mut range = stored(&live);
+        range.canonical_reference = "quran:test@0.1.0:1:1-1:2".into();
+        assert_eq!(
+            resolver().resolve_stored(&range).await.unwrap().verdict,
+            QuotationVerdict::LocationNotFound
+        );
+
+        let mut bad = stored(&live);
+        bad.canonical_reference = ":::".into();
+        let err = resolver().resolve_stored(&bad).await.unwrap_err();
+        assert_eq!(err.code(), "QAI-QUR-0321");
+    }
+
+    #[tokio::test]
+    async fn verify_quotation_delegates_to_resolve() {
+        let verdict = resolver().verify_quotation(&citation("ignored"), "ب ت").await.unwrap();
+        assert_eq!(verdict, QuotationVerdict::ExactMatch);
+    }
+
+    #[test]
+    fn declared_normalization_fails_closed_and_carries_backend_code() {
+        let verdict =
+            QuotationVerdict::MatchAfterDeclaredNormalization { rules: vec!["r1".into()] };
+        assert!(verdict.is_hard_failure());
+        assert_eq!(verdict.label(), "MatchAfterDeclaredNormalization");
+        let error = require_exact(&verdict).expect_err("no producer, must fail closed");
+        assert_eq!(error.code(), "QAI-QUR-0322");
+    }
+
+    #[test]
+    fn error_variants_render_and_carry_distinct_codes() {
+        let errors = [
+            CitationError::InvalidReference { reference: ":::".into() },
+            CitationError::Backend { detail: "boom".into() },
+            CitationError::QuotationMismatch { first_difference_at: 3, expected_hash: "ab".into() },
+            CitationError::LocationNotFound,
+            CitationError::EditionNotFound,
+            CitationError::AccessDenied,
+        ];
+        let codes: Vec<_> = errors.iter().map(|e| e.code()).collect();
+        assert_eq!(
+            codes,
+            vec![
+                "QAI-QUR-0321",
+                "QAI-QUR-0322",
+                "QAI-QUR-0323",
+                "QAI-QUR-0324",
+                "QAI-QUR-0325",
+                "QAI-QUR-0326",
+            ]
+        );
+        for error in &errors {
+            assert!(!error.to_string().is_empty(), "every error variant renders: {error:?}");
+        }
+    }
+
+    #[test]
+    fn content_hash_helper_matches_the_sha256_recipe() {
+        let hash = content_hash_of("ب ت");
+        assert_eq!(hash.algorithm, HashAlgorithm::Sha256);
+        assert_eq!(hash.hex, sha256_hex("ب ت"));
+        // AccessDenied is a reachable verdict type even though v1 never emits it.
+        assert!(QuotationVerdict::AccessDenied.is_hard_failure());
+    }
 }

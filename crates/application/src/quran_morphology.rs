@@ -2258,9 +2258,7 @@ mod family_relation_tests {
             "ds",
             &[left, right],
             FamilyRelation::SameLemma,
-            |analysis| {
-                vec![format!("root:{}", analysis.root), format!("lemma:{}", analysis.lemma)]
-            },
+            |analysis| vec![format!("root:{}", analysis.root), format!("lemma:{}", analysis.lemma)],
             |left, right| left.lemma != right.lemma,
         )
         .expect("relation rows build");

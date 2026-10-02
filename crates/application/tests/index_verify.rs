@@ -304,9 +304,8 @@ async fn index_verify_skipped_on_empty_database() {
 #[tokio::test]
 async fn index_verify_handler_is_registered() {
     use jobs::JobHandler;
-    let handler = application::quran_index::IndexVerifyHandler::new(std::sync::Arc::new(
-        ready_db().await.1,
-    ));
+    let handler =
+        application::quran_index::IndexVerifyHandler::new(std::sync::Arc::new(ready_db().await.1));
     assert_eq!(handler.kind().as_str(), QURAN_INDEX_VERIFY_KIND);
     assert!(handler.is_idempotent());
     let schema = handler.payload_schema();

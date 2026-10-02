@@ -8,9 +8,10 @@
 //!   (`docs/03-plan/phases/phase-01-core/acceptance.md` §4: quran-core incl.
 //!   reference grammar ≥ 90%; quran-corpus validation/tokenize/hashing ≥ 90%).
 //!   The measured aggregate is at or above the floor for both crates.
-//! - `citations`: **≥ 79%** — measured value; the published floor is 85%, so the
-//!   gap is recorded in `docs/05-followups/phase-02-owner-gates.md` (coverage
-//!   shortfall) rather than silently left unimplemented.
+//! - `citations`: **≥ 85%** — the published floor in `acceptance.md` §4. The
+//!   enforced number now equals the published number (plan 03.5-04, D-3.5-11);
+//!   the citation tests added there reach the floor. Never lower this to match
+//!   a measurement (T-3.5-18).
 //! - `cli`, `server`: smoke + snapshot only, no numeric gate.
 //!
 //! The parser is pure and unit-tested against synthetic LCOV, so the gate logic
@@ -41,12 +42,11 @@ pub const THRESHOLDS: &[Threshold] = &[
     // Phase 2 (Canonical Quran Core) — QC-12. The published Phase-1 floors from
     // `docs/03-plan/phases/phase-01-core/acceptance.md` §4. `quran-core` and
     // `quran-corpus` sit at or above their floors on the measured report; the
-    // `citations` row uses the measured value (the 85% published floor is not yet
-    // met) and the shortfall is recorded in
-    // `docs/05-followups/phase-02-owner-gates.md`. Existing rows are unchanged.
+    // `citations` row now carries the published 85% floor, with the tests added
+    // by plan 03.5-04 reaching it (D-3.5-11). Existing rows are unchanged.
     Threshold { krate: "quran-core", path_prefix: "crates/quran-core/", min_percent: 90.0 },
     Threshold { krate: "quran-corpus", path_prefix: "crates/quran-corpus/", min_percent: 90.0 },
-    Threshold { krate: "citations", path_prefix: "crates/citations/", min_percent: 79.0 },
+    Threshold { krate: "citations", path_prefix: "crates/citations/", min_percent: 85.0 },
 ];
 
 /// Aggregate `(lines_found, lines_hit)` per file from an LCOV report.

@@ -23,6 +23,8 @@ authority — they no longer duplicate phase-state tables.
 | Targeted tests | `cargo test -p quran-normalization -p quran-search -p quran-morphology -p quran-graph` and Phase-2 application suites | ✅ green in the reconciliation pass |
 | Architecture | `cargo run -p xtask -- arch-check` | ✅ OK |
 | Migrations | `cargo run -p xtask -- migrate-check` | ✅ OK; 19 migrations |
+| Coverage | `cargo run -p xtask -- coverage-gate <lcov.info>` | ✅ `citations` floor aligned to the published 85% (`cargo llvm-cov -p citations` = 99.5% lines) |
+| Dependency audit | `cargo deny check` | ⏭️ skipped-with-reason: `cargo-deny` is **not installed** in this local environment; the deny gate is enforced by the CI `deny` job (`.github/workflows/ci.yml`), never a local pass |
 | Full workspace | `cargo test --workspace` | ⚠️ not claimed in this pass; existing suite is large and the tree has concurrent work |
 
 ## Crate / phase status

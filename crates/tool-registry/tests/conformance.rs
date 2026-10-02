@@ -12,12 +12,12 @@ use std::sync::Arc;
 use domain::SemVer;
 use quran_core::{AyahOptions, AyahView, ContextSpec, ContextView, QuranRef};
 use tool_registry::{
-    BackendMeta, FAMILY_TOOL_VERSION, FamilyToolParams,
-    GRAPH_NEIGHBORS_TOOL_VERSION, GRAPH_PATH_TOOL_VERSION, GRAPH_PATTERN_TOOL_VERSION,
-    GRAPH_ROOT_FAMILY_TOOL_VERSION, GetAyahParams, GetContextParams,
-    GRAPH_SUBGRAPH_TOOL_VERSION as SUBGRAPH_VERSION, LEMMA_TOOL_VERSION, LemmaToolParams,
-    MORPHOLOGY_TOOL_VERSION, MorphologyToolParams, QuranBackend, ROOT_TOOL_VERSION, RootToolParams,
-    SEARCH_TOOL_VERSION, SearchToolParams, ToolRegistry,
+    BackendMeta, FAMILY_TOOL_VERSION, FamilyToolParams, GRAPH_NEIGHBORS_TOOL_VERSION,
+    GRAPH_PATH_TOOL_VERSION, GRAPH_PATTERN_TOOL_VERSION, GRAPH_ROOT_FAMILY_TOOL_VERSION,
+    GRAPH_SUBGRAPH_TOOL_VERSION as SUBGRAPH_VERSION, GetAyahParams, GetContextParams,
+    LEMMA_TOOL_VERSION, LemmaToolParams, MORPHOLOGY_TOOL_VERSION, MorphologyToolParams,
+    QuranBackend, ROOT_TOOL_VERSION, RootToolParams, SEARCH_TOOL_VERSION, SearchToolParams,
+    ToolRegistry,
 };
 use tools::{AnalysisSource, ToolError, ToolResult, reproducibility};
 
@@ -465,10 +465,8 @@ async fn all_twelve_tools_return_tool_result_envelope() {
     assert_eq!(result.tool_name, "quran.lemma");
 
     // morphology
-    let result = registry
-        .morphology(MorphologyToolParams { surah: 1, ayah: 1, position: 1 })
-        .await
-        .unwrap();
+    let result =
+        registry.morphology(MorphologyToolParams { surah: 1, ayah: 1, position: 1 }).await.unwrap();
     assert_eq!(result.tool_name, "quran.morphology");
 
     // family
@@ -521,10 +519,7 @@ async fn all_twelve_tools_return_tool_result_envelope() {
     let result = registry
         .graph_pattern(tool_registry::GraphPatternParams {
             seeds: vec!["ayah:1:1".into()],
-            steps: vec![tool_registry::GraphPatternStep {
-                edge: "NEXT".into(),
-                node_kind: None,
-            }],
+            steps: vec![tool_registry::GraphPatternStep { edge: "NEXT".into(), node_kind: None }],
             budgets: Default::default(),
         })
         .await
@@ -571,11 +566,17 @@ async fn all_twelve_tools_carry_reproducibility() {
     assert!(result.reproducibility.deterministic);
 
     for result in [
-        registry.search(SearchToolParams { text: "test".into(), edition: None, limit: None }).await.unwrap(),
+        registry
+            .search(SearchToolParams { text: "test".into(), edition: None, limit: None })
+            .await
+            .unwrap(),
         registry.root(RootToolParams { root: "root-0".into() }).await.unwrap(),
         registry.lemma(LemmaToolParams { lemma: "lem-0".into() }).await.unwrap(),
         registry.morphology(MorphologyToolParams { surah: 1, ayah: 1, position: 1 }).await.unwrap(),
-        registry.family(FamilyToolParams { kind: "token".into(), id: "token:1:1:1".into() }).await.unwrap(),
+        registry
+            .family(FamilyToolParams { kind: "token".into(), id: "token:1:1:1".into() })
+            .await
+            .unwrap(),
     ] {
         assert!(result.reproducibility.deterministic, "{}", result.tool_name);
     }
@@ -621,7 +622,10 @@ async fn lexicon_tools_carry_dataset_attribution() {
         registry.root(RootToolParams { root: "root-0".into() }).await.unwrap(),
         registry.lemma(LemmaToolParams { lemma: "lem-0".into() }).await.unwrap(),
         registry.morphology(MorphologyToolParams { surah: 1, ayah: 1, position: 1 }).await.unwrap(),
-        registry.family(FamilyToolParams { kind: "token".into(), id: "token:1:1:1".into() }).await.unwrap(),
+        registry
+            .family(FamilyToolParams { kind: "token".into(), id: "token:1:1:1".into() })
+            .await
+            .unwrap(),
     ] {
         assert!(
             !result.analysis_sources.is_empty(),
@@ -644,10 +648,7 @@ async fn search_tool_carries_normalization_rules() {
         .search(SearchToolParams { text: "test".into(), edition: None, limit: None })
         .await
         .unwrap();
-    assert!(
-        !result.normalization_rules.is_empty(),
-        "search must carry its rule trace"
-    );
+    assert!(!result.normalization_rules.is_empty(), "search must carry its rule trace");
 }
 
 /// Unavailable dataset surfaces the typed QAI-MORPH-0004 backend error.
@@ -657,8 +658,14 @@ async fn unavailable_dataset_surfaces_typed_error() {
     for err in [
         registry.root(RootToolParams { root: "root-0".into() }).await.unwrap_err(),
         registry.lemma(LemmaToolParams { lemma: "lem-0".into() }).await.unwrap_err(),
-        registry.morphology(MorphologyToolParams { surah: 1, ayah: 1, position: 1 }).await.unwrap_err(),
-        registry.family(FamilyToolParams { kind: "token".into(), id: "token:1:1:1".into() }).await.unwrap_err(),
+        registry
+            .morphology(MorphologyToolParams { surah: 1, ayah: 1, position: 1 })
+            .await
+            .unwrap_err(),
+        registry
+            .family(FamilyToolParams { kind: "token".into(), id: "token:1:1:1".into() })
+            .await
+            .unwrap_err(),
     ] {
         match err {
             ToolError::Backend { code, .. } => {
@@ -691,68 +698,91 @@ async fn registered_but_unimplemented_tool_returns_typed_unsupported() {
     assert_eq!(names.len(), 12);
     for name in &names {
         let err = match *name {
-            "quran.get_ayah" => registry.get_ayah(GetAyahParams {
-                reference: "1:1".into(),
-                translations: Vec::new(),
-                glosses: false,
-                tokens: false,
-            }).await.unwrap_err(),
-            "quran.get_context" => registry.get_context(GetContextParams {
-                reference: "1:1".into(),
-                before: 1,
-                after: 1,
-                boundary: tool_registry::ContextBoundaryArg::None,
-                max_ayahs: 5,
-            }).await.unwrap_err(),
-            "quran.search" => registry.search(SearchToolParams {
-                text: "test".into(),
-                edition: None,
-                limit: None,
-            }).await.unwrap_err(),
-            "quran.root" => registry.root(RootToolParams { root: "root-0".into() }).await.unwrap_err(),
-            "quran.lemma" => registry.lemma(LemmaToolParams { lemma: "lem-0".into() }).await.unwrap_err(),
-            "quran.morphology" => registry.morphology(MorphologyToolParams {
-                surah: 1,
-                ayah: 1,
-                position: 1,
-            }).await.unwrap_err(),
-            "quran.family" => registry.family(FamilyToolParams {
-                kind: "token".into(),
-                id: "token:1:1:1".into(),
-            }).await.unwrap_err(),
-            "quran.graph_neighbors" => registry.graph_neighbors(tool_registry::GraphNeighborsParams {
-                node: "ayah:1:1".into(),
-                edge_types: None,
-                direction: None,
-                budgets: Default::default(),
-            }).await.unwrap_err(),
-            "quran.graph_path" => registry.graph_path(tool_registry::GraphPathParams {
-                from: "ayah:1:1".into(),
-                to: "ayah:1:2".into(),
-                mode: None,
-                paths: None,
-                edge_types: None,
-                direction: None,
-                budgets: Default::default(),
-            }).await.unwrap_err(),
-            "quran.graph_subgraph" => registry.graph_subgraph(tool_registry::GraphSubgraphParams {
-                seeds: vec!["ayah:1:1".into()],
-                edge_types: None,
-                direction: None,
-                budgets: Default::default(),
-            }).await.unwrap_err(),
-            "quran.graph_pattern" => registry.graph_pattern(tool_registry::GraphPatternParams {
-                seeds: vec!["ayah:1:1".into()],
-                steps: vec![tool_registry::GraphPatternStep {
-                    edge: "NEXT".into(),
-                    node_kind: None,
-                }],
-                budgets: Default::default(),
-            }).await.unwrap_err(),
-            "quran.graph_root_family" => registry.graph_root_family(tool_registry::GraphRootFamilyParams {
-                root: "root-0".into(),
-                limit: None,
-            }).await.unwrap_err(),
+            "quran.get_ayah" => registry
+                .get_ayah(GetAyahParams {
+                    reference: "1:1".into(),
+                    translations: Vec::new(),
+                    glosses: false,
+                    tokens: false,
+                })
+                .await
+                .unwrap_err(),
+            "quran.get_context" => registry
+                .get_context(GetContextParams {
+                    reference: "1:1".into(),
+                    before: 1,
+                    after: 1,
+                    boundary: tool_registry::ContextBoundaryArg::None,
+                    max_ayahs: 5,
+                })
+                .await
+                .unwrap_err(),
+            "quran.search" => registry
+                .search(SearchToolParams { text: "test".into(), edition: None, limit: None })
+                .await
+                .unwrap_err(),
+            "quran.root" => {
+                registry.root(RootToolParams { root: "root-0".into() }).await.unwrap_err()
+            }
+            "quran.lemma" => {
+                registry.lemma(LemmaToolParams { lemma: "lem-0".into() }).await.unwrap_err()
+            }
+            "quran.morphology" => registry
+                .morphology(MorphologyToolParams { surah: 1, ayah: 1, position: 1 })
+                .await
+                .unwrap_err(),
+            "quran.family" => registry
+                .family(FamilyToolParams { kind: "token".into(), id: "token:1:1:1".into() })
+                .await
+                .unwrap_err(),
+            "quran.graph_neighbors" => registry
+                .graph_neighbors(tool_registry::GraphNeighborsParams {
+                    node: "ayah:1:1".into(),
+                    edge_types: None,
+                    direction: None,
+                    budgets: Default::default(),
+                })
+                .await
+                .unwrap_err(),
+            "quran.graph_path" => registry
+                .graph_path(tool_registry::GraphPathParams {
+                    from: "ayah:1:1".into(),
+                    to: "ayah:1:2".into(),
+                    mode: None,
+                    paths: None,
+                    edge_types: None,
+                    direction: None,
+                    budgets: Default::default(),
+                })
+                .await
+                .unwrap_err(),
+            "quran.graph_subgraph" => registry
+                .graph_subgraph(tool_registry::GraphSubgraphParams {
+                    seeds: vec!["ayah:1:1".into()],
+                    edge_types: None,
+                    direction: None,
+                    budgets: Default::default(),
+                })
+                .await
+                .unwrap_err(),
+            "quran.graph_pattern" => registry
+                .graph_pattern(tool_registry::GraphPatternParams {
+                    seeds: vec!["ayah:1:1".into()],
+                    steps: vec![tool_registry::GraphPatternStep {
+                        edge: "NEXT".into(),
+                        node_kind: None,
+                    }],
+                    budgets: Default::default(),
+                })
+                .await
+                .unwrap_err(),
+            "quran.graph_root_family" => registry
+                .graph_root_family(tool_registry::GraphRootFamilyParams {
+                    root: "root-0".into(),
+                    limit: None,
+                })
+                .await
+                .unwrap_err(),
             _ => panic!("unknown tool {name}"),
         };
         match err {
@@ -787,11 +817,9 @@ async fn truncated_results_carry_reason_and_never_claim_absence() {
         serde_json::Value::Bool(true),
         "budget exhaustion must set truncated"
     );
-    let reason = result.results["incomplete_reason"].as_str().unwrap_or_default().trim().to_string();
-    assert!(
-        !reason.is_empty(),
-        "a truncated result must carry a non-empty incomplete_reason"
-    );
+    let reason =
+        result.results["incomplete_reason"].as_str().unwrap_or_default().trim().to_string();
+    assert!(!reason.is_empty(), "a truncated result must carry a non-empty incomplete_reason");
     // `truncated == true` is what stops an empty `paths` from reading as
     // absence; the envelope also surfaces the reason as a warning.
     assert_eq!(result.results["paths"], serde_json::json!([]));

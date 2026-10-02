@@ -387,7 +387,9 @@ impl application::quran_lexicon_api::LexiconBackend for FakeLexicon {
         application::quran_counting::OccurrenceSpan,
         application::quran_lexicon_api::LexiconApiError,
     > {
-        use application::quran_counting::{CountingRules, MultiAnalysisHandling, INTERVAL_DISCLAIMER};
+        use application::quran_counting::{
+            CountingRules, INTERVAL_DISCLAIMER, MultiAnalysisHandling,
+        };
         Ok(application::quran_counting::OccurrenceSpan {
             first: Some((1, 1)),
             last: Some((2, 5)),
@@ -434,7 +436,10 @@ impl application::quran_lexicon_api::LexiconBackend for FakeLexicon {
         _window: usize,
         _limit: usize,
     ) -> Result<
-        (application::quran_counting::CountingRules, Vec<application::quran_counting::CooccurrenceHit>),
+        (
+            application::quran_counting::CountingRules,
+            Vec<application::quran_counting::CooccurrenceHit>,
+        ),
         application::quran_lexicon_api::LexiconApiError,
     > {
         use application::quran_counting::{CountingRules, MultiAnalysisHandling};
@@ -458,7 +463,10 @@ impl application::quran_lexicon_api::LexiconBackend for FakeLexicon {
         _window: usize,
         _limit: usize,
     ) -> Result<
-        (application::quran_counting::CountingRules, Vec<application::quran_counting::CollocationHit>),
+        (
+            application::quran_counting::CountingRules,
+            Vec<application::quran_counting::CollocationHit>,
+        ),
         application::quran_lexicon_api::LexiconApiError,
     > {
         use application::quran_counting::{CountingRules, MultiAnalysisHandling};
@@ -512,7 +520,10 @@ impl application::quran_lexicon_api::LexiconBackend for FakeLexicon {
         _threshold: f64,
         _limit: usize,
     ) -> Result<
-        (application::quran_counting::CountingRules, Vec<application::quran_counting::NearDuplicateHit>),
+        (
+            application::quran_counting::CountingRules,
+            Vec<application::quran_counting::NearDuplicateHit>,
+        ),
         application::quran_lexicon_api::LexiconApiError,
     > {
         use application::quran_counting::{CountingRules, MultiAnalysisHandling};

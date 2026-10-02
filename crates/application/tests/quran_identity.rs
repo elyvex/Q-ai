@@ -13,8 +13,8 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use application::quran::activate_edition;
 use application::job_queue::{build_default_registry, build_worker};
+use application::quran::activate_edition;
 use application::quran_cli::{cmd_edition_show, cmd_import};
 use application::quran_reader::{QuranReader, QuranReaderService, ReaderError};
 use domain::{PrincipalId, SemVer, Timestamp};

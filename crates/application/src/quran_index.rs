@@ -1298,15 +1298,16 @@ pub async fn verify_index(
     let registry_corpus_generation = snapshot.corpus_generation;
 
     if let Some(pointer) = pointer {
-        let manifest: quran_search::IndexManifest = match serde_json::from_str(&pointer.manifest_json) {
-            Ok(manifest) => manifest,
-            Err(error) => {
-                return Err(IndexBuildError::Index(IndexError::BuildFailed {
-                    stage: "verify".to_string(),
-                    detail: format!("serving manifest corrupt: {error}"),
-                }));
-            }
-        };
+        let manifest: quran_search::IndexManifest =
+            match serde_json::from_str(&pointer.manifest_json) {
+                Ok(manifest) => manifest,
+                Err(error) => {
+                    return Err(IndexBuildError::Index(IndexError::BuildFailed {
+                        stage: "verify".to_string(),
+                        detail: format!("serving manifest corrupt: {error}"),
+                    }));
+                }
+            };
         let index_corpus_generation = manifest.corpus_generation as i64;
         if index_corpus_generation != registry_corpus_generation {
             drift_details.push(format!(

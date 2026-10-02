@@ -59,15 +59,13 @@ pub fn load_dataset(path: &Path, expected_version: u32) -> Result<Dataset, Datas
     let text = std::fs::read_to_string(path)
         .map_err(|_| DatasetError::NotFound(path.display().to_string()))?;
     let mut lines = text.lines();
-    let header: DatasetHeader = serde_json::from_str(lines.next().ok_or_else(|| {
-        DatasetError::InvalidHeader("empty file".to_string())
-    })?)
+    let header: DatasetHeader = serde_json::from_str(
+        lines.next().ok_or_else(|| DatasetError::InvalidHeader("empty file".to_string()))?,
+    )
     .map_err(|e| DatasetError::InvalidHeader(e.to_string()))?;
 
     if !header.header {
-        return Err(DatasetError::InvalidHeader(
-            "header flag must be true".to_string(),
-        ));
+        return Err(DatasetError::InvalidHeader("header flag must be true".to_string()));
     }
     if header.version != expected_version {
         return Err(DatasetError::UnknownVersion {

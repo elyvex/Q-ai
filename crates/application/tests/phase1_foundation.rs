@@ -286,9 +286,10 @@ async fn audited_mutation_records_approval_with_its_grant_event() {
 #[tokio::test]
 async fn record_approval_rejects_unparseable_actor_with_no_staged_rows() {
     let (_dir, db, _path) = fixture().await;
-    let err = record_approval(&db, "appr-fnd10", SUBJECT, PRINCIPAL, "not-a-principal", "{}", CREATED_AT)
-        .await
-        .expect_err("a non-principal actor must fail closed");
+    let err =
+        record_approval(&db, "appr-fnd10", SUBJECT, PRINCIPAL, "not-a-principal", "{}", CREATED_AT)
+            .await
+            .expect_err("a non-principal actor must fail closed");
     assert!(
         err.to_string().contains("not a principal id"),
         "typed actor error expected, got: {err}"

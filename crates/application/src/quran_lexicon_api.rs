@@ -276,7 +276,10 @@ pub trait LexiconBackend: Send + Sync {
         profile: &str,
         window: usize,
         limit: usize,
-    ) -> Result<(quran_counting::CountingRules, Vec<quran_counting::CooccurrenceHit>), LexiconApiError>;
+    ) -> Result<
+        (quran_counting::CountingRules, Vec<quran_counting::CooccurrenceHit>),
+        LexiconApiError,
+    >;
     /// `quran.count.collocation`: association measures.
     async fn count_collocation(
         &self,
@@ -302,7 +305,10 @@ pub trait LexiconBackend: Send + Sync {
         &self,
         threshold: f64,
         limit: usize,
-    ) -> Result<(quran_counting::CountingRules, Vec<quran_counting::NearDuplicateHit>), LexiconApiError>;
+    ) -> Result<
+        (quran_counting::CountingRules, Vec<quran_counting::NearDuplicateHit>),
+        LexiconApiError,
+    >;
     /// `quran.count.interval`: interval analysis between occurrences.
     async fn count_interval(
         &self,
@@ -399,7 +405,10 @@ impl LexiconBackend for LexiconApiService {
         profile: &str,
         window: usize,
         limit: usize,
-    ) -> Result<(quran_counting::CountingRules, Vec<quran_counting::CooccurrenceHit>), LexiconApiError> {
+    ) -> Result<
+        (quran_counting::CountingRules, Vec<quran_counting::CooccurrenceHit>),
+        LexiconApiError,
+    > {
         Ok(quran_counting::cooccurrence(&self.db, target, profile, window, limit).await?)
     }
 
@@ -409,7 +418,8 @@ impl LexiconBackend for LexiconApiService {
         profile: &str,
         window: usize,
         limit: usize,
-    ) -> Result<(quran_counting::CountingRules, Vec<quran_counting::CollocationHit>), LexiconApiError> {
+    ) -> Result<(quran_counting::CountingRules, Vec<quran_counting::CollocationHit>), LexiconApiError>
+    {
         Ok(quran_counting::collocation(&self.db, target, profile, window, limit).await?)
     }
 
@@ -433,7 +443,10 @@ impl LexiconBackend for LexiconApiService {
         &self,
         threshold: f64,
         limit: usize,
-    ) -> Result<(quran_counting::CountingRules, Vec<quran_counting::NearDuplicateHit>), LexiconApiError> {
+    ) -> Result<
+        (quran_counting::CountingRules, Vec<quran_counting::NearDuplicateHit>),
+        LexiconApiError,
+    > {
         Ok(quran_counting::near_duplicate_passages(&self.db, threshold, limit).await?)
     }
 

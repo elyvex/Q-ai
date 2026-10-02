@@ -22,10 +22,7 @@ pub struct Report {
 /// Render a human-readable report.
 pub fn render_human(report: &Report) -> String {
     let mut out = String::new();
-    out.push_str(&format!(
-        "Evaluation Report (dataset v{})\n",
-        report.dataset_version
-    ));
+    out.push_str(&format!("Evaluation Report (dataset v{})\n", report.dataset_version));
     out.push_str(&format!("Profile: {}\n", report.profile));
     out.push_str(&format!("Scope: {}\n", report.scope_note));
     out.push_str("Metrics:\n");
@@ -46,10 +43,7 @@ pub fn render_human(report: &Report) -> String {
                 ));
             }
             MetricValue::Unavailable { remedy } => {
-                out.push_str(&format!(
-                    "  {}: Unavailable (remedy: {})\n",
-                    metric.name, remedy
-                ));
+                out.push_str(&format!("  {}: Unavailable (remedy: {})\n", metric.name, remedy));
             }
         }
     }

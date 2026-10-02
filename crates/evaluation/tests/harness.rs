@@ -5,8 +5,8 @@
 //! report rendering in both output forms.
 
 use evaluation::{
-    compare_metric, compute_lexicon_metrics, compute_search_metrics, load_dataset, render_human,
-    render_json, Metric, MetricValue, SCOPE_NOTE,
+    Metric, MetricValue, SCOPE_NOTE, compare_metric, compute_lexicon_metrics,
+    compute_search_metrics, load_dataset, render_human, render_json,
 };
 
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/quran/evaluation");
@@ -53,10 +53,7 @@ fn missing_file_is_refused() {
     let result = load_dataset(std::path::Path::new(&path), 1);
     assert!(result.is_err(), "missing file must be refused");
     let err = result.unwrap_err();
-    assert!(
-        err.to_string().contains("not found"),
-        "error must name the missing file: {err}"
-    );
+    assert!(err.to_string().contains("not found"), "error must name the missing file: {err}");
 }
 
 // ── Absent-dataset Unavailable-with-remedy ──────────────────────────────────
@@ -88,10 +85,7 @@ fn unavailable_metric_carries_remedy() {
     match &metric.value {
         MetricValue::Unavailable { remedy } => {
             assert!(!remedy.is_empty(), "remedy must be non-empty");
-            assert!(
-                remedy.contains("import"),
-                "remedy must name the import command: {remedy}"
-            );
+            assert!(remedy.contains("import"), "remedy must name the import command: {remedy}");
         }
         other => panic!("expected Unavailable, got {other:?}"),
     }
@@ -125,43 +119,25 @@ fn determinism_rate_zero_when_output_differs() {
 
 #[test]
 fn baseline_regression_fails() {
-    let metric = Metric {
-        name: "test.metric".to_string(),
-        value: MetricValue::Rate(0.5),
-        tolerance: 0.01,
-    };
+    let metric =
+        Metric { name: "test.metric".to_string(), value: MetricValue::Rate(0.5), tolerance: 0.01 };
     // A value of 0.5 with baseline 0.9 and tolerance 0.01 must fail.
-    assert!(
-        !compare_metric(&metric, 0.9),
-        "metric outside tolerance must fail"
-    );
+    assert!(!compare_metric(&metric, 0.9), "metric outside tolerance must fail");
 }
 
 #[test]
 fn baseline_pass_within_tolerance() {
-    let metric = Metric {
-        name: "test.metric".to_string(),
-        value: MetricValue::Rate(0.95),
-        tolerance: 0.1,
-    };
+    let metric =
+        Metric { name: "test.metric".to_string(), value: MetricValue::Rate(0.95), tolerance: 0.1 };
     // A value of 0.95 with baseline 0.9 and tolerance 0.1 must pass.
-    assert!(
-        compare_metric(&metric, 0.9),
-        "metric within tolerance must pass"
-    );
+    assert!(compare_metric(&metric, 0.9), "metric within tolerance must pass");
 }
 
 #[test]
 fn baseline_exact_match_passes() {
-    let metric = Metric {
-        name: "test.metric".to_string(),
-        value: MetricValue::Rate(1.0),
-        tolerance: 0.0,
-    };
-    assert!(
-        compare_metric(&metric, 1.0),
-        "exact match with zero tolerance must pass"
-    );
+    let metric =
+        Metric { name: "test.metric".to_string(), value: MetricValue::Rate(1.0), tolerance: 0.0 };
+    assert!(compare_metric(&metric, 1.0), "exact match with zero tolerance must pass");
 }
 
 // ── Report rendering ─────────────────────────────────────────────────────────
@@ -228,10 +204,7 @@ fn report_renders_unavailable_metric() {
     let json = render_json(&report);
     assert_eq!(json["metrics"][0]["value"]["unavailable"], true);
     assert!(
-        json["metrics"][0]["value"]["remedy"]
-            .as_str()
-            .unwrap()
-            .contains("import"),
+        json["metrics"][0]["value"]["remedy"].as_str().unwrap().contains("import"),
         "JSON report shows remedy"
     );
 }

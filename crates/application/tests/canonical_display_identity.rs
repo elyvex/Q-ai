@@ -241,7 +241,8 @@ async fn canonical_hashes(reader: &QuranReaderService) -> BTreeMap<String, Strin
     let mut hashes = BTreeMap::new();
     for surah in &surahs {
         let reference = QuranRef::Surah { edition: selector.clone(), surah: surah.number };
-        let views = reader.get_ayahs(&reference, &AyahOptions::default()).await.expect("ayahs list");
+        let views =
+            reader.get_ayahs(&reference, &AyahOptions::default()).await.expect("ayahs list");
         for view in &views {
             hashes.insert(
                 view.canonical.reference().to_string(),
@@ -418,18 +419,10 @@ async fn regex_hits_display_canonical_bytes() {
     let reader = QuranReaderService::new(db.clone());
 
     let limiter = RateLimiter::default_regex();
-    let out = search_regex(
-        &db,
-        &data_dir,
-        &params("x"),
-        "text_bare",
-        &bare,
-        PRINCIPAL,
-        &limiter,
-        3000,
-    )
-    .await
-    .expect("regex search runs");
+    let out =
+        search_regex(&db, &data_dir, &params("x"), "text_bare", &bare, PRINCIPAL, &limiter, 3000)
+            .await
+            .expect("regex search runs");
     assert_mode_hits(&out, "regex");
     assert_display_identity(&reader, &out, "regex", false).await;
 }
@@ -469,9 +462,10 @@ async fn canonical_hashes_are_stable_across_all_modes() {
         .await
         .unwrap();
     let limiter = RateLimiter::default_regex();
-    let _ = search_regex(&db, &data_dir, &params("x"), "text_bare", &bare, PRINCIPAL, &limiter, 3000)
-        .await
-        .unwrap();
+    let _ =
+        search_regex(&db, &data_dir, &params("x"), "text_bare", &bare, PRINCIPAL, &limiter, 3000)
+            .await
+            .unwrap();
 
     let after = canonical_hashes(&reader).await;
     assert_eq!(

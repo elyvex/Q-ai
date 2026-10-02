@@ -77,7 +77,14 @@ Status key: 🔴 open · 🟢 done (with date + where recorded).
   file while it is under live edit.
 
 ## FU-TEST-02 — `lookup_performance_smoke` is load-sensitive and aborts workspace runs
-- **Status:** 🔴 open (reproduced 2026-09-24; not a regression)
+- **Status:** 🟢 done 2026-10-02 (plan 03.5-04, D-3.5-11) — the gate now asserts
+  the **median** of per-call warm latencies from the **best of 5 warm
+  repetitions** (200 warmup calls, 500 calls/repetition) and reports the sample
+  size plus p95 in the failure message. The 5.0 ms bound is unchanged; the
+  statistic changed, the threshold did not. Evidence:
+  `cargo test -p application --test quran_reader` green, and three consecutive
+  `cargo test -p application --test quran_reader lookup_performance_smoke` runs
+  green. No reader/lookup/query behaviour changed.
 - **Evidence:** `cargo test --workspace` (2026-09-24) failed
   `application::quran_reader::lookup_performance_smoke` with
   `warm average 6.009 ms over budget` — a 5.0 ms average over 2,000 sequential
@@ -151,6 +158,16 @@ Status key: 🔴 open · 🟢 done (with date + where recorded).
   pre-existing suite-size limit; a concurrent Phase-2 writer was active in
   the tree). Coverage + `deny` + recorded walkthrough still outstanding.
 - **Closure boundary:** automated checks do not replace the independent recorded walkthrough, editorial approval, or handoff sign-off. P1-T60 remains open.
+- **Coverage + deny halves closed 2026-10-02 (plan 03.5-04, D-3.5-11):** the
+  `citations` coverage floor in `xtask/src/coverage.rs` now equals the published
+  85% (`acceptance.md` §4) instead of a measured 79%; citation tests added in
+  `crates/citations/src/lib.rs` exercise `resolve_stored`, `verify_quotation`,
+  the declared-normalization fail-closed branch, and every error variant, and
+  `cargo llvm-cov -p citations` measures 99.5% lines / 96.7% regions. `cargo-deny`
+  is not installed locally, so the dependency-audit half is recorded as
+  **skipped-with-reason** (enforced by the CI deny job), never as a pass. The
+  independent recorded walkthrough half stays **open** — an independent human
+  walkthrough is not an agent deliverable. OD-07 remains the owner gate.
 
 ## FU-P1-03 — Resume owner-gated Phase-1 implementation
 - **Status:** open; engineering groundwork landed 2026-09-17, owner decisions still pending.

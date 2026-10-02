@@ -257,9 +257,8 @@ enum DirCase {
 }
 
 fn classify_dir(dir: &std::path::Path) -> DirCase {
-    let is_symlink = std::fs::symlink_metadata(dir)
-        .map(|link| link.file_type().is_symlink())
-        .unwrap_or(false);
+    let is_symlink =
+        std::fs::symlink_metadata(dir).map(|link| link.file_type().is_symlink()).unwrap_or(false);
     match std::fs::metadata(dir) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound && !is_symlink => DirCase::Missing,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => DirCase::DanglingSymlink,
@@ -315,7 +314,10 @@ fn dir_writable_check(
         DirCase::NotADirectory { is_symlink } => CheckResult::fail(
             check_id,
             if is_symlink {
-                format!("{what} {} is a symlink that does not resolve to a directory", dir.display())
+                format!(
+                    "{what} {} is a symlink that does not resolve to a directory",
+                    dir.display()
+                )
             } else {
                 format!("{what} {} is not a directory", dir.display())
             },
