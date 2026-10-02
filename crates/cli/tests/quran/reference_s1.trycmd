@@ -6,7 +6,7 @@
 
 ```console
 $ qai db migrate
-migrations applied; schema version 21
+migrations applied; schema version 22
 
 ```
 

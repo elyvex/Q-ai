@@ -10,36 +10,46 @@
 
 ```console
 $ qai quran count distribution ويت --profile L3.diacritics
-SNAPSHOT-PLACEHOLDER
+ويت: 3 occurrence(s) across 3 surah(s); partitions keyed by surah number (canonical structure)
+
 ```
 
 ```console
 $ qai quran count occurrences ويت --profile L3.diacritics
-SNAPSHOT-PLACEHOLDER
+first Some((1, 3)), last Some((5, 3)), span Some(12)
+Intervals describe ayah positions only; no chronological or interpretive claim is made.
+
 ```
 
 ```console
 $ qai quran count cooccurrence ويت --profile L3.diacritics
-SNAPSHOT-PLACEHOLDER
+co-occurrence within token:3 — 10 candidate(s)
+
 ```
 
 ```console
 $ qai quran count collocation ويت --profile L3.diacritics
-SNAPSHOT-PLACEHOLDER
+collocations (LLR-ranked) — 2 candidate(s)
+
 ```
 
 ```console
 $ qai quran count numeric-report ويت --profile L3.diacritics
-SNAPSHOT-PLACEHOLDER
+ويت: 3
+Numeric output only; no interpretive commentary is provided.
+
 ```
 
 ```console
 $ qai quran count missing-form zzqqxxnotaword --profile L3.diacritics
-SNAPSHOT-PLACEHOLDER
+zzqqxxnotaword: 0 occurrence(s) under L3.diacritics
+Absence under these counting rules is not evidence of absence under other rules; see the CountingRules block.
+
 ```
 
 ```console
 $ qai quran count near-duplicates
-SNAPSHOT-PLACEHOLDER
+near-duplicates (>= 0.8) — 3 pair(s)
+
 ```
 

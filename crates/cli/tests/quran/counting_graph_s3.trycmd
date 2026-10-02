@@ -11,7 +11,9 @@
 
 ```console
 $ qai quran count interval ويت --profile L3.diacritics
-SNAPSHOT-PLACEHOLDER
+first Some((1, 3)), last Some((5, 3)), span Some(12)
+Intervals describe ayah positions only; no chronological or interpretive claim is made.
+
 ```
 
 ```console

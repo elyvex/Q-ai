@@ -31,8 +31,8 @@ use std::time::{Duration, Instant};
 use application::quran::activate_edition;
 use application::quran_counting::{
     CountingRules, MultiAnalysisHandling, collocation, cooccurrence, distribution, frequency,
-    hapax_search, interval_analysis, lemma_frequency, missing_expected_form, near_duplicate_passages,
-    numeric_report, root_frequency, unusual_usage,
+    hapax_search, interval_analysis, lemma_frequency, missing_expected_form,
+    near_duplicate_passages, numeric_report, root_frequency, unusual_usage,
 };
 use application::quran_doctor::CheckLevel;
 use application::quran_doctor_indexes::{INDEX_CHECK_IDS, run_index_checks};
@@ -76,7 +76,7 @@ const PROFILE: &str = "L3.diacritics";
 /// approximated.
 const SOAK_QUERIES: usize = 50_000;
 /// Fixed seed: the query stream is reproducible run to run.
-const SOAK_SEED: u64 = 0x3503_500B_11A11_CE;
+const SOAK_SEED: u64 = 0x0350_3500_B11A_11CE;
 const RUN_ID: &str = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeee1";
 const MISSING_TARGET: &str = "zzqqxxnotaword";
 
@@ -106,7 +106,6 @@ const KIND_NAMES: [&str; 21] = [
 
 /// One line per query kind: count and mean latency. Printed after pass one so
 /// timing evidence survives even if a later gate fails.
-
 fn principal() -> PrincipalId {
     PRINCIPAL.parse().unwrap()
 }
@@ -215,8 +214,7 @@ fn generate(seed: u64, n: usize, inv: &Inventory) -> Vec<Query> {
             2 => Query::Phrase(format!("{first} {second}")),
             3 => Query::Concat(format!("{first}{second}")),
             4 => {
-                let prefix: String =
-                    surface.chars().take(2).collect();
+                let prefix: String = surface.chars().take(2).collect();
                 Query::Regex(format!("^{prefix}"))
             }
             5 => Query::Frequency(surface),
@@ -331,7 +329,7 @@ async fn soak_db() -> (tempfile::TempDir, Arc<SqliteDatabase>, std::path::PathBu
         .await
         .expect("fixture activation completes");
     rebuild_forms(
-        &*db,
+        &db,
         &RebuildParams {
             edition_slug: SLUG.to_string(),
             edition_version: VERSION.to_string(),
@@ -345,7 +343,7 @@ async fn soak_db() -> (tempfile::TempDir, Arc<SqliteDatabase>, std::path::PathBu
     .expect("forms rebuild completes");
     let data_dir = dir.path().join("index");
     rebuild_index(
-        &*db,
+        &db,
         &IndexBuildParams {
             index_id: QURAN_AYAH_INDEX_ID.to_string(),
             edition_slug: SLUG.to_string(),
@@ -361,7 +359,7 @@ async fn soak_db() -> (tempfile::TempDir, Arc<SqliteDatabase>, std::path::PathBu
     .expect("index build completes");
     let document = aligned_morph_document(&db).await;
     run_morphology_import(
-        &*db,
+        &db,
         &MorphologyImportParams {
             dataset_slug: MORPH_SLUG.to_string(),
             dataset_version: MORPH_VERSION.to_string(),
@@ -381,7 +379,7 @@ async fn soak_db() -> (tempfile::TempDir, Arc<SqliteDatabase>, std::path::PathBu
     .await
     .expect("morphology import completes");
     activate_morphology(
-        &*db,
+        &db,
         &MorphologyActivateParams {
             batch_id: MORPH_BATCH.to_string(),
             approval_id: "appr-morph".to_string(),
@@ -602,9 +600,10 @@ async fn run_pass(
         let kind = tag as usize;
         let metric: u64 = match query {
             Query::Exact(text) => {
-                let out = search_exact(db, data_dir, &search_params(text.clone()), ExactField::TextExact)
-                    .await
-                    .unwrap_or_else(|e| panic!("soak[{i}]: exact({text}) failed: {e}"));
+                let out =
+                    search_exact(db, data_dir, &search_params(text.clone()), ExactField::TextExact)
+                        .await
+                        .unwrap_or_else(|e| panic!("soak[{i}]: exact({text}) failed: {e}"));
                 if with_invariants {
                     assert_search_contract("exact", &out, reader).await
                 } else {
@@ -777,10 +776,9 @@ async fn run_pass(
                 0
             }
             Query::RootFreq(root) => {
-                let report =
-                    root_frequency(db, root, PROFILE, MultiAnalysisHandling::AllAnalyses)
-                        .await
-                        .unwrap_or_else(|e| panic!("soak[{i}]: root-frequency({root}) failed: {e}"));
+                let report = root_frequency(db, root, PROFILE, MultiAnalysisHandling::AllAnalyses)
+                    .await
+                    .unwrap_or_else(|e| panic!("soak[{i}]: root-frequency({root}) failed: {e}"));
                 if with_invariants {
                     assert_rules_complete("root_frequency", &report.rules, Some(&dataset));
                 }
@@ -790,7 +788,9 @@ async fn run_pass(
                 let report =
                     lemma_frequency(db, lemma, PROFILE, MultiAnalysisHandling::AllAnalyses)
                         .await
-                        .unwrap_or_else(|e| panic!("soak[{i}]: lemma-frequency({lemma}) failed: {e}"));
+                        .unwrap_or_else(|e| {
+                            panic!("soak[{i}]: lemma-frequency({lemma}) failed: {e}")
+                        });
                 if with_invariants {
                     assert_rules_complete("lemma_frequency", &report.rules, Some(&dataset));
                 }
@@ -801,7 +801,10 @@ async fn run_pass(
                     .await
                     .unwrap_or_else(|e| panic!("soak[{i}]: root-search({root}) failed: {e}"));
                 if with_invariants {
-                    assert_eq!(ds, dataset, "soak[{i}]: root result must carry dataset attribution");
+                    assert_eq!(
+                        ds, dataset,
+                        "soak[{i}]: root result must carry dataset attribution"
+                    );
                     assert!(
                         occurrences.iter().all(|o| o.dataset == dataset),
                         "soak[{i}]: every root occurrence must carry the active dataset"
@@ -814,7 +817,10 @@ async fn run_pass(
                     .await
                     .unwrap_or_else(|e| panic!("soak[{i}]: lemma-search({lemma}) failed: {e}"));
                 if with_invariants {
-                    assert_eq!(ds, dataset, "soak[{i}]: lemma result must carry dataset attribution");
+                    assert_eq!(
+                        ds, dataset,
+                        "soak[{i}]: lemma result must carry dataset attribution"
+                    );
                     assert!(
                         occurrences.iter().all(|o| o.dataset == dataset),
                         "soak[{i}]: every lemma occurrence must carry the active dataset"
@@ -845,9 +851,7 @@ async fn run_pass(
             Query::Morphology(s, a, p) => {
                 let (ds, analyses) = morphology_for_token(db, SLUG, VERSION, *s, *a, *p)
                     .await
-                    .unwrap_or_else(|e| {
-                        panic!("soak[{i}]: morphology({s}:{a}:{p}) failed: {e}")
-                    });
+                    .unwrap_or_else(|e| panic!("soak[{i}]: morphology({s}:{a}:{p}) failed: {e}"));
                 if with_invariants {
                     assert_eq!(ds, dataset, "soak[{i}]: morphology must carry dataset attribution");
                     assert!(!analyses.is_empty(), "soak[{i}]: token must have analyses");
@@ -858,9 +862,15 @@ async fn run_pass(
                 // Lexicon-gated by construction: an unavailable capability is a
                 // typed error, never an empty result.
                 match unusual_usage(db, target, PROFILE).await {
-                    Err(application::quran_counting::CountingError::UnavailableDataset { .. }) => 1,
-                    Err(other) => panic!("soak[{i}]: unusual-usage must be typed-unavailable, got {other:?}"),
-                    Ok(_) => panic!("soak[{i}]: unusual-usage must not succeed without a lexicon capability"),
+                    Err(application::quran_counting::CountingError::UnavailableDataset {
+                        ..
+                    }) => 1,
+                    Err(other) => {
+                        panic!("soak[{i}]: unusual-usage must be typed-unavailable, got {other:?}")
+                    }
+                    Ok(_) => panic!(
+                        "soak[{i}]: unusual-usage must not succeed without a lexicon capability"
+                    ),
                 }
             }
         };
@@ -892,11 +902,11 @@ async fn fifty_thousand_query_soak_is_green_and_reproducible() {
     let wall = Instant::now();
     let first = run_pass(&db, &data_dir, &reader, &queries, true).await;
     let first_wall = wall.elapsed();
-    for kind in 0..21usize {
+    for (kind, name) in KIND_NAMES.iter().enumerate() {
         let avg_nanos = first.per_kind_nanos[kind] / first.per_kind_queries[kind].max(1) as u128;
         eprintln!(
             "soak pass1: {} n={} hits={} avg={:.2}ms",
-            KIND_NAMES[kind],
+            name,
             first.per_kind_queries[kind],
             first.per_kind_hits[kind],
             avg_nanos as f64 / 1_000_000.0
@@ -958,11 +968,11 @@ async fn fifty_thousand_query_soak_is_green_and_reproducible() {
         .expect("fixture_bound_ms row present");
     assert_eq!(fixture_bound_ms, 2000, "the fixture bound must never be loosened");
     let mut latency_lines = Vec::new();
-    for kind in 0..21usize {
+    for (kind, name) in KIND_NAMES.iter().enumerate() {
         let avg_nanos = first.per_kind_nanos[kind] / first.per_kind_queries[kind] as u128;
         latency_lines.push(format!(
             "    {}: n={} hits={} avg={:.2}ms",
-            KIND_NAMES[kind],
+            name,
             first.per_kind_queries[kind],
             first.per_kind_hits[kind],
             avg_nanos as f64 / 1_000_000.0

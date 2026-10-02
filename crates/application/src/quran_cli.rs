@@ -2326,26 +2326,24 @@ pub async fn cmd_index_verify(db_path: &str, index: Option<&str>) -> CommandOutp
 ///
 /// Enqueue-only boundary (D-13): the command enqueues the job and returns
 /// the job id; it never blocks on the job's completion.
-pub async fn cmd_index_verify_job(
-    db_path: &str,
-    index: Option<&str>,
-    deep: bool,
-) -> CommandOutput {
-    use super::quran_index::{IndexVerifyParams, QURAN_INDEX_VERIFY_KIND, QURAN_AYAH_INDEX_ID};
+pub async fn cmd_index_verify_job(db_path: &str, index: Option<&str>, deep: bool) -> CommandOutput {
+    use super::quran_index::{IndexVerifyParams, QURAN_AYAH_INDEX_ID, QURAN_INDEX_VERIFY_KIND};
     use jobs::queue::JobQueue;
     use storage::repository::JobRecord;
 
     let db = match open_db(db_path).await {
-        Ok(db) => db,
+        Ok(db) => std::sync::Arc::new(db),
         Err(error) => return open_error_output(error),
     };
+    // The jobs table references principals(id): the local-operator row must
+    // exist before enqueue, same as every other enqueue path (D-3.5-09).
+    let at = now_rfc3339();
+    if let Err(output) = ensure_principal_or_err(&db, &at).await {
+        return output;
+    }
     let index_id = index.unwrap_or(QURAN_AYAH_INDEX_ID);
     let data_dir = super::quran_index::index_root_for_db(db_path);
-    let params = IndexVerifyParams {
-        index_id: index_id.to_string(),
-        deep,
-        data_dir,
-    };
+    let params = IndexVerifyParams { index_id: index_id.to_string(), deep, data_dir };
     let payload = match serde_json::to_value(&params) {
         Ok(payload) => payload,
         Err(error) => return CommandOutput::err(exit::INTERNAL, error.to_string()),
@@ -2366,7 +2364,7 @@ pub async fn cmd_index_verify_job(
         cancel_requested: false,
         created_by: LOCAL_PRINCIPAL.to_string(),
     };
-    let queue = super::job_queue::SqliteJobQueue::new(std::sync::Arc::new(db));
+    let queue = super::job_queue::SqliteJobQueue::new(std::sync::Arc::clone(&db));
     let job_id = job.id.clone();
     match queue.enqueue(job).await {
         Ok(()) => {

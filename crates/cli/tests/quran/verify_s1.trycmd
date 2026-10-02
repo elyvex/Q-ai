@@ -8,7 +8,7 @@ report `skipped`, never `pass`, and the overall exit stays 0.
 
 ```console
 $ qai db migrate
-migrations applied; schema version 21
+migrations applied; schema version 22
 
 ```
 
