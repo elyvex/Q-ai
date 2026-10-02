@@ -55,6 +55,7 @@ fn quran_counting_graph_snapshots() {
         "tests/quran/counting_graph_s1.trycmd",
         "tests/quran/counting_graph_s2.trycmd",
         "tests/quran/counting_graph_s3.trycmd",
+        "tests/quran/counting_graph_s4.trycmd",
     ]);
 }
 

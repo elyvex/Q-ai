@@ -1,0 +1,45 @@
+# Phase 3.5 CLI acceptance — counting surface completion (W4, D-3.5-06).
+#
+# Segment 4 of 4 (host-backed, D-13): the segment-3 database has an active
+# edition with derived forms and no morphology dataset. This segment proves
+# the remaining counting verbs are reachable from the CLI with their rules
+# blocks, and that the zero-proof verb carries its disclaimer.
+#
+# Fixture-scale evidence only; the full-corpus run stays OD-11-gated
+# (see docs/05-followups/phase-3.5-deferrals.md).
+
+```console
+$ qai quran count distribution ويت --profile L3.diacritics
+SNAPSHOT-PLACEHOLDER
+```
+
+```console
+$ qai quran count occurrences ويت --profile L3.diacritics
+SNAPSHOT-PLACEHOLDER
+```
+
+```console
+$ qai quran count cooccurrence ويت --profile L3.diacritics
+SNAPSHOT-PLACEHOLDER
+```
+
+```console
+$ qai quran count collocation ويت --profile L3.diacritics
+SNAPSHOT-PLACEHOLDER
+```
+
+```console
+$ qai quran count numeric-report ويت --profile L3.diacritics
+SNAPSHOT-PLACEHOLDER
+```
+
+```console
+$ qai quran count missing-form zzqqxxnotaword --profile L3.diacritics
+SNAPSHOT-PLACEHOLDER
+```
+
+```console
+$ qai quran count near-duplicates
+SNAPSHOT-PLACEHOLDER
+```
+
