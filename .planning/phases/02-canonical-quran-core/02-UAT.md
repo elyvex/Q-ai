@@ -1,9 +1,9 @@
 ---
-status: complete
+status: diagnosed
 phase: 02-canonical-quran-core
 source: [02-01-SUMMARY.md, 02-02-SUMMARY.md, 02-03-SUMMARY.md, 02-04-SUMMARY.md, 02-05-SUMMARY.md, 02-06-SUMMARY.md, 02-07-SUMMARY.md]
 started: 2026-10-03T16:12:52Z
-updated: 2026-10-03T18:17:26Z
+updated: 2026-10-03T20:00:41Z
 ---
 
 ## Current Test
@@ -270,10 +270,31 @@ blocked: 0
 - gap_id: G-02-3
   truth: "Every answer path that emits quoted canonical text is either enforced or recorded as structurally exempt with a per-path file:line basis"
   status: failed
-  reason: "User reported: ledger is incomplete — 8 answer paths emitting canonical text are in neither list (HTTP surah_handler api.rs:369, divisions_handler api.rs:498, search_exact/normalized/phrase/concatenated/regex api.rs:1021-1145; CLI cmd_search quran_cli.rs:5099; tool quran.search quran_tools.rs:268), and the recorded line anchors have drifted against HEAD"
+  reason: "User reported: ledger is incomplete — 9 emitting answer paths are in neither list (HTTP surah_handler, divisions_handler, 5x search_*; CLI cmd_search; tool quran.search) plus 1 borderline debug route, and the recorded line anchors have drifted against HEAD"
   severity: major
   test: 3
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "Frame error at authoring time: the D-15 audit enumerated paths by 'direct read of the canonical reader' instead of 'every path whose response contains quoted canonical text'. 02-RESEARCH.md §F-6 (the enumeration source) has no search row, and 02-05-PLAN Task 3 <action> narrowed the deliverable to tool get_ayah/get_context + CLI/HTTP direct reads even though its own <success_criteria> demanded 'every answer path'. Separately, HTTP surah_handler/divisions_handler WERE listed in §F-6 but were dropped in transcription to the ledger; the tool quran.search (added 03-07, ca91230) was never dispositioned; all file:line anchors were frozen at 06f651f and have since drifted. 8 of the 9 missing paths already existed at the audit commit — authoring omissions, not later evolution."
+  artifacts:
+    - path: ".planning/phases/02-canonical-quran-core/02-05-SUMMARY.md"
+      issue: "§Structural Exemptions table (lines 170-181) omits search/surah/divisions paths; false 'every answer path' completeness claim at line 172"
+    - path: "docs/06-progress/phase-02-evidence.md"
+      issue: "§3 table (lines 172-192) repeats the same omission; all 33 unique refs across the three evidence files are stale at HEAD"
+    - path: "docs/05-followups/phase-02-owner-gates.md"
+      issue: "§Owner-ratifiable interpretation table (lines 155-175) repeats the same omission"
+    - path: "crates/application/src/quran_tools.rs"
+      issue: "ReaderCitationSource doc (lines 456-474) is an in-code copy of the narrowed list"
+    - path: ".planning/phases/02-canonical-quran-core/02-RESEARCH.md"
+      issue: "§F-6 (lines 491-498) enumeration source has no search row; D-15 restated broadly at line 34"
+    - path: ".planning/phases/02-canonical-quran-core/02-05-PLAN.md"
+      issue: "Task 3 <action> (line 146) narrows what <success_criteria> (line 198) demands"
+    - path: "crates/server/src/api.rs"
+      issue: "surah_handler :369 (emit :384) and divisions_handler :498 (emit :523) emit view.canonical.arabic_text(); search_*_handler :1021/:1049/:1077/:1113/:1145 emit SearchHit.quotation"
+  missing:
+    - "Exempt rows for HTTP surah_handler and divisions_handler"
+    - "Exempt rows for the five HTTP search handlers (exact/normalized/phrase/concatenated/regex)"
+    - "Exempt row for CLI cmd_search"
+    - "Exempt row for tool quran.search"
+    - "Explicit disposition for HTTP debug_reader_handler (/debug/read/{edition}/{surah}, api.rs:2002) — exempt or documented debug-only out-of-scope — so the set is exhaustive"
+    - "Emission-mechanism basis per path (AyahView.canonical vs SearchHit.quotation — both validated QuranQuotations built from canonical rows, exempt-by-construction)"
+    - "Re-anchor or symbol-convert all refs (path#symbol is drift-proof); correct the false 'every answer path' completeness claim in 02-05-SUMMARY D4 and the ReaderCitationSource doc"
+  debug_session: ".planning/debug/answer-path-exemption-ledger.md"
