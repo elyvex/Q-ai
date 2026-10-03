@@ -65,7 +65,7 @@ Plans:
   4. Canonical tables reject all non-approved writes; importer has no code path to canonical tables
   5. Every quotation verifies via `verify_quotation` with mismatch as a hard failure
 
-**Plans**: 7/7 plans executed
+**Plans**: 8 plans (7 executed + 1 gap-closure)
 
 Plans:
 **Wave 1**
@@ -89,6 +89,10 @@ Plans:
 **Wave 5** *(blocked on Wave 4 completion)*
 
 - [x] 02-07-PLAN.md — Owner gates OD-01/OD-02/OD-03 recorded as blocked, the owner-ratifiable D-15 read-path item, spec-less edge-probe disposition, coverage-gate reconciliation, TASK-002 closure, and committed evidence of record
+
+**Gap closure (G-02-3)**
+
+- [ ] 02-08-PLAN.md — Rebuild the D-15 answer-path exemption ledger on the emission frame, correct every copy of the false completeness claim, and add a source-scan drift guard
 
 ### Phase 3: Quran Search & Linguistics
 
