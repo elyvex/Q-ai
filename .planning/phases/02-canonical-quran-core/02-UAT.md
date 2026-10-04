@@ -1,14 +1,23 @@
 ---
-status: diagnosed
+status: testing
 phase: 02-canonical-quran-core
-source: [02-01-SUMMARY.md, 02-02-SUMMARY.md, 02-03-SUMMARY.md, 02-04-SUMMARY.md, 02-05-SUMMARY.md, 02-06-SUMMARY.md, 02-07-SUMMARY.md]
+source: [02-01-SUMMARY.md, 02-02-SUMMARY.md, 02-03-SUMMARY.md, 02-04-SUMMARY.md, 02-05-SUMMARY.md, 02-06-SUMMARY.md, 02-07-SUMMARY.md, 02-08-SUMMARY.md]
 started: 2026-10-03T16:12:52Z
-updated: 2026-10-03T20:00:41Z
+updated: 2026-10-04T15:33:06Z
 ---
 
 ## Current Test
 
-[testing complete]
+number: 37
+name: Decide the answer-path ledger guard's coverage scope (WR-01/WR-02)
+expected: |
+  Either (a) extend crates/application/tests/answer_path_ledger.rs to scan
+  quran_cli.rs/quran_tools.rs emission markers and add citation_handler/resolve_handler
+  to LEDGER, or (b) narrow the guard module doc (answer_path_ledger.rs:6-8) and the
+  ReaderCitationSource doc (quran_tools.rs:486-488) + evidence §3 wording to the
+  actually-scanned api.rs frame + CLI cmd_search. Then re-run
+  `cargo test -p application --test answer_path_ledger`.
+awaiting: user response
 
 ## Tests
 
@@ -23,9 +32,12 @@ result: pass
 
 ### 3. Answer-Path Citation Enforcement Audit
 expected: Every answer path that emits quoted canonical text is either enforced or recorded as structurally exempt with a per-path file:line basis (tool get_ayah/get_context; CLI cmd_get/context/surah/division; HTTP direct reads). The exemption set is auditable and complete.
-result: issue
-reported: "Ledger is incomplete. Every file:line ref in the exemption table IS exact at the 02-05 commit, but at least 8 answer paths emit quoted canonical text and appear in neither the enforced nor the exempt list: HTTP surah_handler (api.rs:369) and divisions_handler (api.rs:498) both return view.canonical.arabic_text(); HTTP search_exact/normalized/phrase/concatenated/regex (api.rs:1021-1145) return SearchHit.quotation.arabic_text; CLI cmd_search (quran_cli.rs:5099) and tool quran.search (quran_tools.rs:268) do the same. Also the recorded line anchors have drifted against HEAD (later phases moved the lines), so the evidence ledger no longer resolves in the working tree."
+result: pass
+reported: "Closed by gap-closure plan 02-08 (G-02-3). Emission-frame ledger rebuilt in all three evidence-of-record files + in-code ReaderCitationSource doc; every path#symbol ref resolves at HEAD; the false blanket completeness claim corrected; drift guard crates/application/tests/answer_path_ledger.rs added (6 tests green). Original report: ledger was incomplete — 9 emitting answer paths in neither list plus drifted line anchors."
+note: "Residual scope decision on the new guard's coverage claim surfaced as test 37 (WR-01/WR-02)."
 severity: major
+resolved_by: 02-08
+resolved: 2026-10-04
 
 ### 4. Blocked-Gate Ledger Audit (OD-01/OD-02/OD-03)
 expected: OD-01/OD-02/OD-03 are recorded as blocked human-only gates with their question, what they block, the closing action, and the exact command; the record is agent-uncloseable and no gate is marked resolved.
@@ -221,12 +233,18 @@ result: pass
 source: automated
 coverage_id: D6
 
+### 37. Decide the answer-path ledger guard's coverage scope (WR-01/WR-02)
+expected: |
+  Either (a) extend crates/application/tests/answer_path_ledger.rs to scan quran_cli.rs/quran_tools.rs emission markers and add citation_handler/resolve_handler to LEDGER, or (b) narrow the guard module doc (answer_path_ledger.rs:6-8) and the ReaderCitationSource doc (quran_tools.rs:486-488) plus evidence §3 wording to the actually-scanned api.rs frame + CLI cmd_search. Then re-run `cargo test -p application --test answer_path_ledger`.
+why_human: "The guard is green and fails closed for the HTTP api.rs emission frame (where G-02-3 actually occurred), but its module doc claims any new marker-emitting handler fails the build — demonstrably false for quran_cli.rs (4 .arabic_text() sites) and quran_tools.rs (1), and LEDGER omits citation_handler/resolve_handler that the ledger docs name. Choosing extend-vs-narrow is a scope/ratification decision."
+result: [pending]
+
 ## Summary
 
-total: 36
-passed: 35
-issues: 1
-pending: 0
+total: 37
+passed: 36
+issues: 0
+pending: 1
 skipped: 0
 blocked: 0
 
@@ -269,7 +287,10 @@ blocked: 0
 
 - gap_id: G-02-3
   truth: "Every answer path that emits quoted canonical text is either enforced or recorded as structurally exempt with a per-path file:line basis"
-  status: failed
+  status: resolved
+  resolved_by: 02-08
+  resolved: 2026-10-04
+  resolution: "Emission-frame ledger rebuilt in all three evidence-of-record files + in-code doc; all path#symbol refs resolve at HEAD; false completeness claim corrected in all copies; drift guard added (6 tests green). Residual guard-coverage scope decision tracked as test 37 (WR-01/WR-02), not a reopening of G-02-3."
   reason: "User reported: ledger is incomplete — 9 emitting answer paths are in neither list (HTTP surah_handler, divisions_handler, 5x search_*; CLI cmd_search; tool quran.search) plus 1 borderline debug route, and the recorded line anchors have drifted against HEAD"
   severity: major
   test: 3
