@@ -1,19 +1,19 @@
 ---
 gsd_state_version: "1.0"
-current_phase: "03.5"
-status: complete
-stopped_at: Phase 3.5 complete (4/4 plans, green full-workspace gate)
-last_updated: "2026-10-02T19:21:07.443Z"
-last_activity: 2026-10-02
-last_activity_desc: Phase 03.5 complete — hardening, gates, evidence matrix, honest close
-state_head: 05a7bce50c7862048fce48058df62f90855141de
+current_phase: 02
+current_phase_name: Canonical Quran Core
+status: executing
+stopped_at: Completed 02-08-PLAN.md
+last_updated: "2026-10-04T14:19:28.694Z"
+last_activity: 2026-10-04
+last_activity_desc: Phase 02 execution started
+state_head: d341b3c95af16be0ad170edf9eb8fdc953411f96
 progress:
   total_phases: 13
   completed_phases: 5
-  total_plans: 29
-  completed_plans: 29
+  total_plans: 30
+  completed_plans: 30
   percent: 38
-current_phase_name: Residual Closure (INSERTED)
 ---
 
 # Project State
@@ -23,16 +23,16 @@ current_phase_name: Residual Closure (INSERTED)
 See: .planning/PROJECT.md (updated 2026-09-23)
 
 **Core value:** Trustworthy Quran research: exact canonical text before generated interpretation, every factual claim traceable to its source.
-**Current focus:** Phase 3.5 complete — next active phase is Phase 5 (Rich Quran Experience) per `.planning/ROADMAP.md`
+**Current focus:** Phase 02 — Canonical Quran Core
 
 ## Current Position
 
-Phase: 03.5 — Residual Closure (INSERTED) — COMPLETE
-Plan: 4 of 4
-Status: Phase 3.5 complete on a green full-workspace gate (191 suites, 1162 passed, 0 failed)
-Last activity: 2026-10-02 — Phase 03.5 closed: W9 hardening + W10 gates + evidence matrix + honest status
+Phase: 02 (Canonical Quran Core) — EXECUTING
+Plan: 2 of 8
+Status: Ready to execute
+Last activity: 2026-10-04 — Phase 02 execution started
 
-Progress: [█████░░░░░] 38%
+Progress: [████░░░░░░] 38%
 
 ## Performance Metrics
 
@@ -81,6 +81,7 @@ Progress: [█████░░░░░] 38%
 | Phase 03 P06 | 27 min | 3 tasks | 10 files |
 | Phase 03 P07 | 28 min | 3 tasks | 7 files |
 | Phase 03 P08 | 50 min | 3 tasks | 5 files |
+| Phase 02 P08 | 5 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -143,6 +144,8 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-08: OD-11 and OD-12/D-08 are recorded as explicit BLOCKED owner gates with exact closing steps (licenses/qac capture per licenses/README.md; named Arabic linguist + ADR-0204/0205/0210/0215 acceptance); decisions-needed.md stays the source of truth and the plan closes nothing (T-03-30).
 - [Phase 03]: 03-08: The D-03 alpha is proven on the synthetic fixture only — one full-chain test (alpha_e2e::alpha_end_to_end_synthetic) runs normalize -> forms -> index -> five search modes -> morphology/root/lemma/family -> frequency/distribution/co-occurrence, gating every hit on trace + canonical span + byte-identical quotation (SC5), every lexicon result on dataset attribution, and every numeric report on a complete CountingRules; no linguistic correctness or real-data behavior is claimed (OD-11/OD-12 BLOCKED, T-03-31/T-03-32).
 - [Phase 03]: 03-08: The deferred scope is recorded in docs/05-followups/phase-03-deferrals.md (UI + result-contract checksum -> Phase 5; counting tail incl. hapax_search -> later; legacy phase-02-rag tail -> follow-ups; transliteration/L8; graph -> Phase 4; editions/multi-RAG), and the 03-VALIDATION.md per-task map is deferred to /gsd-validate-phase with the PLAN <verify> blocks as the authoritative Phase-3 map (T-03-33).
+- [Phase 02]: [Phase 02]: D-15 answer-path ledger rebuilt on the emission frame (every path whose response contains quoted canonical text), not the direct-read frame that omitted index-backed search paths; all refs are drift-proof path#symbol, and crates/application/tests/answer_path_ledger.rs guards both drift and a new marker-emitting handler
+- [Phase 02]: [Phase 02]: Each exempt emitting path carries its emission mechanism (AyahView.canonical, SearchHit.quotation, or the hand-built token surface); tokens_handler needs its own label because it is exempt by construction but does not emit via AyahView.canonical. The guard is a guard, not a proof: a novel hand-built json! text shape is enumerated but not literally detectable (G-02-3)
 
 ### Pending Todos
 
@@ -164,6 +167,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-02
-Stopped at: Phase 3.5 complete (4/4 plans; green full-workspace gate; W1–W10 evidence matrix in docs/06-progress/status.md)
-Resume file: None — next active phase is Phase 5 (Rich Quran Experience)
+Last session: 2026-10-04T14:19:28.515Z
+Stopped at: Completed 02-08-PLAN.md
+Resume file: None

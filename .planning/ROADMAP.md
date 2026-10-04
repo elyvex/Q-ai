@@ -65,7 +65,7 @@ Plans:
   4. Canonical tables reject all non-approved writes; importer has no code path to canonical tables
   5. Every quotation verifies via `verify_quotation` with mismatch as a hard failure
 
-**Plans**: 8 plans (7 executed + 1 gap-closure)
+**Plans**: 8/8 plans executed (7 executed + 1 gap-closure)
 
 Plans:
 **Wave 1**
@@ -92,7 +92,7 @@ Plans:
 
 **Gap closure (G-02-3)**
 
-- [ ] 02-08-PLAN.md — Rebuild the D-15 answer-path exemption ledger on the emission frame, correct every copy of the false completeness claim, and add a source-scan drift guard
+- [x] 02-08-PLAN.md — Rebuild the D-15 answer-path exemption ledger on the emission frame, correct every copy of the false completeness claim, and add a source-scan drift guard
 
 ### Phase 3: Quran Search & Linguistics
 
@@ -315,7 +315,7 @@ Phase 3.5 is an INSERTED gap-closure phase; it runs after Phase 4 and does not g
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundations | 5/5 | Complete    | 2026-09-28 |
-| 2. Canonical Quran Core | 7/7 | Complete    | 2026-09-25 |
+| 2. Canonical Quran Core | 8/8 | In Progress|  |
 | 3. Quran Search & Linguistics | 8/8 | Complete (owner gates OD-11/OD-12 open) | 2026-09-28 |
 | 3.5. Residual Closure (INSERTED) | 4/4 | Complete (W1–W10 evidence matrix; owner gates OD-01…OD-14 open) | 2026-10-02 |
 | 4. Quran Graph | 5/5 | Complete (M5 blocked on OD-11) | 2026-09-29 |
