@@ -145,38 +145,79 @@ a reference corpus, name a signer, or mark any of the three resolved.
 > the owner should **ratify or overrule**. It is recorded here as owner-ratifiable
 > and is **not** presented as a satisfied locked decision.
 
-**Interpretation.** D-15 is delivered as: enforce quotation verification on every
-path that accepts an *externally supplied* quotation, while the direct-read
-CLI/HTTP/tool paths are **structurally exempt** because they serve bytes from the
-canonical source of truth and cannot mismatch by construction — wrapping them in
-`verify_quotation` would compare canonical text against itself and prove nothing
-(research A6 / §F-6 / Pitfall 4).
+**Interpretation.** D-15 is delivered on the **emission frame**: enforce
+quotation verification on every path that accepts an *externally supplied*
+quotation, while paths whose response carries canonical text assembled from
+canonical rows in the reader/index layer are **structurally exempt** because that
+text cannot mismatch by construction — wrapping them in `verify_quotation` would
+compare canonical text against itself and prove nothing (research A6 / §F-6 /
+Pitfall 4). The complete sweep is guarded mechanically by
+`crates/application/tests/answer_path_ledger.rs`; every reference below is a
+drift-proof `path#symbol` reference.
 
 **Enforced paths (accept an external quotation):**
 
-| Path | Basis |
-|---|---|
-| `qai quran verify-quotation` | `crates/application/src/quran_tools.rs:253` (`verify_canonical_quotation`), `crates/application/src/quran_cli.rs:362` (`cmd_verify_quotation`) |
-| `GET /api/v1/quran/citations/{id}` | `crates/server/src/api.rs:584` (`citation_handler`), route `crates/server/src/api.rs:1314` |
-
-**Structurally exempt paths (serve the canonical source of truth):**
-
-| Path | Basis | Why exempt |
+| Path | Emission mechanism | Basis (`path#symbol`) |
 |---|---|---|
-| tool `quran.get_ayah` | `crates/application/src/quran_tools.rs:89-95` → `crates/application/src/quran_reader.rs:355` | Serves canonical rows; no externally supplied quotation |
-| tool `quran.get_context` | `crates/application/src/quran_tools.rs:99-105` | Same |
-| CLI `cmd_get` | `crates/application/src/quran_cli.rs:161` | Reads the canonical source of truth |
-| CLI `cmd_context` | `crates/application/src/quran_cli.rs:214` | Same |
-| CLI `cmd_surah` | `crates/application/src/quran_cli.rs:255` | Same |
-| CLI `cmd_division` | `crates/application/src/quran_cli.rs:290` | Same |
-| HTTP `context_handler` | `crates/server/src/api.rs:451` | Serves `AyahView` from the canonical reader |
-| HTTP `tokens_handler` | `crates/server/src/api.rs:524` | Same |
-| HTTP `resolve_handler` | `crates/server/src/api.rs:560` | Parses/bounds-checks a reference; no quoted text |
-| HTTP `ayahs_handler` (`/ayahs/{reference}`) | `crates/server/src/api.rs:1309` (route) | Serves `AyahView` from the canonical reader |
+| `qai quran verify-quotation` (CLI) | external quotation | `crates/application/src/quran_tools.rs#verify_canonical_quotation`, `crates/application/src/quran_cli.rs#cmd_verify_quotation` |
+| `GET /api/v1/quran/citations/{id}` | stored verdict re-served | `crates/server/src/api.rs#citation_handler` |
 
-**Per-path basis source:** `docs/.../02-05-SUMMARY.md` §"Structural Exemptions",
-`crates/application/src/quran_tools.rs` `ReaderCitationSource` doc, and
-`.planning/phases/02-canonical-quran-core/02-05-SUMMARY.md`.
+**Structurally exempt — emission mechanism `AyahView.canonical`:**
+
+| Path | Basis (`path#symbol`) |
+|---|---|
+| tool `quran.get_ayah` | `crates/application/src/quran_tools.rs#ReaderToolBackend` |
+| tool `quran.get_context` | `crates/application/src/quran_tools.rs#ReaderToolBackend` |
+| CLI `cmd_get` | `crates/application/src/quran_cli.rs#cmd_get` |
+| CLI `cmd_context` | `crates/application/src/quran_cli.rs#cmd_context` |
+| CLI `cmd_surah` | `crates/application/src/quran_cli.rs#cmd_surah` |
+| CLI `cmd_division` | `crates/application/src/quran_cli.rs#cmd_division` |
+| HTTP `ayahs_handler` | `crates/server/src/api.rs#ayahs_handler` |
+| HTTP `context_handler` | `crates/server/src/api.rs#context_handler` |
+| HTTP `surah_handler` | `crates/server/src/api.rs#surah_handler` — emits `view.canonical.arabic_text()` explicitly |
+| HTTP `divisions_handler` | `crates/server/src/api.rs#divisions_handler` — emits `view.canonical.arabic_text()` explicitly |
+
+**Structurally exempt — emission mechanism hand-built token surface:**
+`tokens_handler` assembles `serde_json::json!` objects whose `surface` values are
+canonical-text substrings (`state.api.api_tokens` output).
+
+| Path | Basis (`path#symbol`) |
+|---|---|
+| HTTP `tokens_handler` | `crates/server/src/api.rs#tokens_handler` |
+
+**Structurally exempt — emission mechanism `SearchHit.quotation`:**
+
+| Path | Basis (`path#symbol`) |
+|---|---|
+| HTTP `search_exact_handler` | `crates/server/src/api.rs#search_exact_handler` |
+| HTTP `search_normalized_handler` | `crates/server/src/api.rs#search_normalized_handler` |
+| HTTP `search_phrase_handler` | `crates/server/src/api.rs#search_phrase_handler` |
+| HTTP `search_concatenated_handler` | `crates/server/src/api.rs#search_concatenated_handler` |
+| HTTP `search_regex_handler` | `crates/server/src/api.rs#search_regex_handler` |
+| CLI `cmd_search` | `crates/application/src/quran_cli.rs#cmd_search` (human line and JSON) |
+| tool `quran.search` | `crates/application/src/quran_tools.rs#ReaderToolBackend` (backend_search arm) |
+
+**Exempt, no text emitted (recorded for completeness):** HTTP `resolve_handler`
+(`crates/server/src/api.rs#resolve_handler`) parses/bounds-checks a reference and
+emits metadata only.
+
+**Debug-only out of scope (explicit disposition):** HTTP `debug_reader_handler`
+(`crates/server/src/api.rs#debug_reader_handler`, route
+`/debug/read/{edition}/{surah}`) emits canonical text via
+`escape_html(view.canonical.arabic_text())`; it is exempt-by-construction **and**
+explicitly debug-only (an engineering preview, not the product UI).
+
+**Not emitters (so the sweep is provably exhaustive):** HTTP `surahs_handler`
+(surah metadata only), `editions_handler`/`edition_handler`, the normalization
+preview/profiles handlers, the lexicon/count/graph handlers (references/analyses
+only), the CLI graph commands (reference + `text_hash`, not text), and CLI
+`cmd_resolve`.
+
+**Per-path basis source:** the corrected tables in
+`docs/06-progress/phase-02-evidence.md` §3 and
+`.planning/phases/02-canonical-quran-core/02-05-SUMMARY.md` §"Structural
+Exemptions", the `crates/application/src/quran_tools.rs` `ReaderCitationSource`
+doc, and the guard `crates/application/tests/answer_path_ledger.rs`.
 
 **Owner asks:** ratify this interpretation (exempt-by-construction) or overrule
 it and require the read paths to be wrapped. Overruling is a scope change to the
