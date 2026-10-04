@@ -117,6 +117,7 @@ register threat. Tracked as follow-ups, not open threats:
 | Audit Date | Threats Total | Closed | Open | Run By |
 |------------|---------------|--------|------|--------|
 | 2026-09-26 | 40 | 40 | 0 | secure-phase L1 (plan-register + grep evidence + VERIFICATION 5/5) |
+| 2026-10-04 | 40 | 40 | 0 | secure-phase L1 re-run — gap plan 02-08 (D-15 ledger rebuild) is docs-only + one source-scan test; no threat-surface change, no SUMMARY threat flags |
 
 ---
 
