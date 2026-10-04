@@ -496,6 +496,17 @@ The served canonical text is the stored column verbatim: `arabic_text: ayah_row.
 | `GET /api/v1/quran/citations/{id}` | Re-serves a resolved citation (hash + verdict, no text) | **No** | **Yes** (`resolve_stored`) | Stored-hash re-verification, not `verify_quotation`. [VERIFIED: crates/server/src/api.rs:584-598] [VERIFIED: crates/server/src/api.rs:1531-1534] |
 | `quran.get_ayah` / `quran.get_context` tools (`crates/application/src/quran_tools.rs`) | Yes (via `AyahView`) | **No** | No | `ReaderCitationSource` provides the resolver but no caller invokes it. [VERIFIED: crates/application/src/quran_tools.rs:85-123] |
 | `citations` unit tests / `application/tests/quran_tools.rs` | — | **Yes** (test only) | Yes | The only call sites of `verify_quotation` in the tree. [VERIFIED: crates/application/tests/quran_tools.rs:140-160] |
+| `qai quran search` (CLI `cmd_search`) / `GET /api/v1/quran/search/*` (`search_exact_handler`, `search_normalized_handler`, `search_phrase_handler`, `search_concatenated_handler`, `search_regex_handler`) | Yes (each hit carries `SearchHit.quotation.arabic_text()`) | **No** | No | Index-backed search over canonical rows; each hit is a validated `QuranQuotation`. Existed at the audit commit but was omitted from this table. [VERIFIED: crates/server/src/api.rs#search_exact_handler] |
+| `quran.search` tool (`crates/application/src/quran_tools.rs`) | Yes (serialized `SearchHit` output) | **No** | No | Post-audit addition (plan 03-07); emits canonical text inside the serialized search output. [VERIFIED: crates/application/src/quran_tools.rs#ReaderToolBackend] |
+| `GET /api/v1/quran/debug/read/{edition}/{surah}` (`debug_reader_handler`) | Yes (canonical text as debug HTML) | **No** | No | Engineering preview, not the product UI; exempt-by-construction and explicitly debug-only. [VERIFIED: crates/server/src/api.rs#debug_reader_handler] |
+
+**Frame correction (G-02-3).** This table was originally scoped to *direct-read*
+paths, which structurally excluded the index-backed search paths (`qai quran
+search`, `GET /api/v1/quran/search/*`, tool `quran.search`) even though all five
+HTTP search handlers and `cmd_search` existed at the audit commit. The
+authoritative complete sweep — on the emission frame — now lives in
+`docs/06-progress/phase-02-evidence.md` §3 and is guarded mechanically by
+`crates/application/tests/answer_path_ledger.rs`.
 
 **What "hard failure on mismatch" requires.** (1) A shared mapping from `QuotationVerdict` to a typed diagnostic + CLI exit code (`Mismatch`, `LocationNotFound`, `EditionNotFound` → failure; `ExactMatch`/whitespace/declared-normalization → success) — this mapping does not exist today. (2) At least one *production* surface that accepts an externally supplied quotation and applies the mapping, so the contract is exercised. (3) An explicit recorded rationale for the read paths that are structurally exempt (they read the source of truth, so there is nothing to compare). (4) `MatchAfterDeclaredNormalization` is currently never produced by `CitationResolver::verdict` — only `ExactMatch`, `MatchAfterWhitespaceNormalization`, and `Mismatch` are reachable, because no normalization-rules parameter exists on the resolver. [VERIFIED: crates/citations/src/lib.rs:301-312] [VERIFIED: docs/07-technical/quran-citation-spec.md:67-73]
 

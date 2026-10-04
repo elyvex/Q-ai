@@ -456,22 +456,36 @@ impl QuranBackend for ReaderToolBackend {
 /// # Verification scope (D-15, Pitfall 4)
 ///
 /// `verify_quotation` is meaningful only for an *externally supplied*
-/// quotation. The direct-read answer paths are **structurally exempt** because
-/// they serve canonical text straight from the source of truth and therefore
-/// cannot mismatch by construction — wrapping them would compare canonical text
-/// against itself and prove nothing:
+/// quotation. On the **emission frame** — every answer path whose response
+/// contains quoted canonical text — a path is enforced when it accepts such a
+/// quotation, and **structurally exempt** when its canonical text is built from
+/// canonical rows in the reader/index layer and therefore cannot mismatch by
+/// construction (wrapping it would compare canonical text against itself):
 ///
-/// - tool-result reads: `quran.get_ayah` / `quran.get_context`
-///   ([`ReaderToolBackend`], this file);
-/// - CLI direct reads: `cmd_get` / `cmd_context` / `cmd_surah` / `cmd_division`
-///   (`crates/application/src/quran_cli.rs`);
-/// - HTTP direct reads: the ayah/context/token handlers backed by
-///   `ReaderBackend` (`crates/server/src/api.rs`).
+/// - **enforced**: `verify_canonical_quotation` / `cmd_verify_quotation` (this
+///   file, `crates/application/src/quran_cli.rs#cmd_verify_quotation`) and the
+///   HTTP stored-verdict path `crates/server/src/api.rs#citation_handler`;
+/// - **exempt, emission mechanism `AyahView.canonical`**: tool reads
+///   `quran.get_ayah` / `quran.get_context` ([`ReaderToolBackend`], this file);
+///   CLI `cmd_get` / `cmd_context` / `cmd_surah` / `cmd_division`
+///   (`crates/application/src/quran_cli.rs`); HTTP `ayahs_handler` /
+///   `context_handler` / `surah_handler` / `divisions_handler`
+///   (`crates/server/src/api.rs`);
+/// - **exempt, emission mechanism `SearchHit.quotation`**: HTTP
+///   `search_exact_handler` / `search_normalized_handler` /
+///   `search_phrase_handler` / `search_concatenated_handler` /
+///   `search_regex_handler` (`crates/server/src/api.rs`), CLI `cmd_search`
+///   (`crates/application/src/quran_cli.rs`), and tool `quran.search`
+///   (backend_search arm, [`ReaderToolBackend`]);
+/// - **exempt, emission mechanism hand-built token surface**: HTTP
+///   `tokens_handler` (`crates/server/src/api.rs`), whose `surface` values are
+///   canonical-text substrings from `api_tokens`;
+/// - **exempt, no text emitted**: HTTP `resolve_handler`; **debug-only out of
+///   scope**: HTTP `debug_reader_handler` (`/debug/read/{edition}/{surah}`).
 ///
-/// The verifying surfaces that do apply this mapping are
-/// [`verify_canonical_quotation`] (used by `qai quran verify-quotation`) and the
-/// HTTP stored-verdict path (`GET /api/v1/quran/citations/{id}`, which resolves
-/// a persisted citation and enforces [`citations::require_exact`]).
+/// The complete sweep is enumerated in
+/// `docs/06-progress/phase-02-evidence.md` §3 and guarded mechanically by
+/// `crates/application/tests/answer_path_ledger.rs`.
 pub struct ReaderCitationSource {
     reader: Arc<QuranReaderService>,
 }
