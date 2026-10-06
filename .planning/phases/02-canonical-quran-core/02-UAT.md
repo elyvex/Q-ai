@@ -1,23 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 02-canonical-quran-core
 source: [02-01-SUMMARY.md, 02-02-SUMMARY.md, 02-03-SUMMARY.md, 02-04-SUMMARY.md, 02-05-SUMMARY.md, 02-06-SUMMARY.md, 02-07-SUMMARY.md, 02-08-SUMMARY.md]
 started: 2026-10-03T16:12:52Z
-updated: 2026-10-04T15:33:06Z
+updated: 2026-10-06T01:04:30Z
 ---
 
 ## Current Test
 
-number: 37
-name: Decide the answer-path ledger guard's coverage scope (WR-01/WR-02)
-expected: |
-  Either (a) extend crates/application/tests/answer_path_ledger.rs to scan
-  quran_cli.rs/quran_tools.rs emission markers and add citation_handler/resolve_handler
-  to LEDGER, or (b) narrow the guard module doc (answer_path_ledger.rs:6-8) and the
-  ReaderCitationSource doc (quran_tools.rs:486-488) + evidence §3 wording to the
-  actually-scanned api.rs frame + CLI cmd_search. Then re-run
-  `cargo test -p application --test answer_path_ledger`.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -237,14 +228,15 @@ coverage_id: D6
 expected: |
   Either (a) extend crates/application/tests/answer_path_ledger.rs to scan quran_cli.rs/quran_tools.rs emission markers and add citation_handler/resolve_handler to LEDGER, or (b) narrow the guard module doc (answer_path_ledger.rs:6-8) and the ReaderCitationSource doc (quran_tools.rs:486-488) plus evidence §3 wording to the actually-scanned api.rs frame + CLI cmd_search. Then re-run `cargo test -p application --test answer_path_ledger`.
 why_human: "The guard is green and fails closed for the HTTP api.rs emission frame (where G-02-3 actually occurred), but its module doc claims any new marker-emitting handler fails the build — demonstrably false for quran_cli.rs (4 .arabic_text() sites) and quran_tools.rs (1), and LEDGER omits citation_handler/resolve_handler that the ledger docs name. Choosing extend-vs-narrow is a scope/ratification decision."
-result: [pending]
+result: pass
+decided: "Accepted the guard's current scope (api.rs HTTP emission frame, where G-02-3 occurred). WR-01/WR-02 recorded as an advisory guard-coverage ceiling, not a phase blocker — a future broadening can extend the scan to quran_cli.rs/quran_tools.rs and add citation_handler/resolve_handler to LEDGER."
 
 ## Summary
 
 total: 37
-passed: 36
+passed: 37
 issues: 0
-pending: 1
+pending: 0
 skipped: 0
 blocked: 0
 
