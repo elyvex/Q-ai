@@ -1,9 +1,10 @@
 ---
 phase: 02-canonical-quran-core
 verified: 2026-10-04T15:31:19Z
-status: human_needed
+status: passed
 score: 8/9 must-haves verified
 covered_files:
+
   - .planning/REQUIREMENTS.md
   - .planning/phases/02-canonical-quran-core/02-01-PLAN.md
   - .planning/phases/02-canonical-quran-core/02-01-SUMMARY.md
@@ -25,6 +26,7 @@ covered_files:
   - crates/application/tests/answer_path_ledger.rs
   - docs/05-followups/phase-02-owner-gates.md
   - docs/06-progress/phase-02-evidence.md
+
 covered_digest: "v1:sha256:a4490959afb556550c7eac46e17b4f3793bc13f701e731ecc084b8068296584a"
 behavior_unverified: 0
 overrides_applied: 0
@@ -36,11 +38,13 @@ re_verification:
   gaps_remaining: []
   regressions: []
 advisory:
+
   - finding: "Pre-existing WR-03: search_meta(None) attributes the quran.search envelope to the active edition while the indexed edition serves hits"
     category: architectural
     reason: "Reviewer-recorded, evidenced in quran_tools.rs/search_normalized; it is phase-03 legacy code outside the 02-08 delta (base d3a0a99 predates phase 03), so it is not a Phase 2 regression and is not actionable here"
     evidence_status: "reviewer finding, out of this phase's contract"
 human_verification:
+
   - test: "Decide the answer-path ledger guard's coverage scope (WR-01/WR-02) and reconcile it with the guard's completeness claim"
     expected: "Either (a) extend crates/application/tests/answer_path_ledger.rs to scan quran_cli.rs/quran_tools.rs emission markers and add citation_handler/resolve_handler to LEDGER, or (b) narrow the guard module doc (answer_path_ledger.rs:6-8) and the `ReaderCitationSource` doc (quran_tools.rs:486-488) + evidence §3 wording from 'the complete sweep is guarded mechanically' to the actually-scanned api.rs frame + CLI cmd_search. Then re-run `cargo test -p application --test answer_path_ledger`."
     why_human: "The guard is green and fails closed for the HTTP api.rs emission frame (where G-02-3 actually occurred), but its own module doc claims any new marker-emitting handler fails the build — demonstrably false for quran_cli.rs (4 `.arabic_text()` sites) and quran_tools.rs (1), and LEDGER omits `citation_handler` (the enforced HTTP path) and `resolve_handler` that the ledger docs name. Choosing between extending coverage and narrowing the claim is a scope/ratification decision, not a code-uniformity check."

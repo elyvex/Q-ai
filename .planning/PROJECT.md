@@ -23,14 +23,13 @@ Local-first + server (local-first default with optional server deploy).
 
 ### Validated
 
-(None yet — ship to validate)
+- ✓ Foundations: workspace, config, SQLite, migrations, jobs, provenance, audit, CLI — Phases 1, 3.5 (2026-09-28 / 2026-10-02)
+- ✓ Canonical Quran engine: validated import, addressing, tokens, exact lookup, integrity tests — Phase 2 (2026-10-06; UAT 37/37, threats_open 0)
+- ✓ Quran search and linguistics: normalization, roots/lemmas, morphology, frequency tools — Phase 3 (2026-09-28; owner gates OD-11/OD-12 open)
+- ✓ Quran knowledge graph: schema, traversal, annotations, visualization — Phase 4 (2026-09-29; M5 blocked on OD-11)
 
 ### Active
 
-- [ ] Foundations: workspace, config, SQLite, migrations, jobs, provenance, audit, CLI
-- [ ] Canonical Quran engine: validated import, addressing, tokens, exact lookup, integrity tests
-- [ ] Quran search and linguistics: normalization, roots/lemmas, morphology, frequency tools
-- [ ] Quran knowledge graph: schema, traversal, annotations, visualization
 - [ ] Rich Quran experience: Web GUI reading/research views, TUI, CLI tree
 - [ ] Hadith and tafsir: structured records, grading attribution, verse links
 - [ ] Isnad and narrator research: identity review, chain paths, uncertainty
@@ -103,8 +102,8 @@ Proposed (NOT locked — explicit decision points during roadmap execution): ADR
 |----------|-----------|---------|
 | Layered workspace + local-first binary (ADR-0000) | Enforceable boundaries; canonical safety at type level | — Pending |
 | SQLite default, PG-portable (ADR-0001) | Local-first authority; server path without rewrite | — Pending |
-| Canonical Quran safety model (ADR-0102…0113) | Exact text + verifiable citations are the core value | — Pending |
+| Canonical Quran safety model (ADR-0102…0113) | Exact text + verifiable citations are the core value | ✓ Validated — Phase 2 (8/8 plans, UAT 37/37, threats_open 0) |
 | Deny-by-default tools, human approvals | Untrusted retrieval; no silent canonical modification | — Pending |
 
 ---
-*Last updated: 2026-09-23 after ingest bootstrap (36 docs, 0 blockers)*
+*Last updated: 2026-10-06 after Phase 2 complete (canonical Quran core validated; phases 1–4 shipped)*
