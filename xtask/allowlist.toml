@@ -49,6 +49,14 @@ workspace = { allow = ["application", "config", "observability", "server"] }
 # not a refactor. Changing this allow set requires a new OD entry.
 workspace = { allow = ["application", "config", "observability", "tool-registry", "tools", "storage", "citations", "quran-core"] }
 
+# --- Phase 5 (Rich Quran Experience) ---
+# `tui` is the ratatui/crossterm operations cockpit (D-10/D-13). It reads
+# through the shared `application` services layer (D-12) — never HTTP, never
+# shelling out — plus the domain/observability/config types those services
+# surface. Added with its dependency in the owning allowlist plan (Pitfall 2).
+[tui]
+workspace = { allow = ["application", "config", "observability", "tools", "tool-registry", "quran-core", "domain"] }
+
 [observability]
 workspace = { allow = ["domain"] }
 
@@ -159,13 +167,22 @@ allow = ["async-trait", "base64", "ed25519-dalek", "serde", "serde_json", "sha2"
 allow = []
 
 [cli.external.registry]
-allow = ["clap", "serde_json", "sqlx", "tempfile", "thiserror", "tokio", "tracing", "trycmd"]
+allow = ["axum", "clap", "http-body-util", "serde", "serde_json", "sqlx", "tempfile", "thiserror", "tokio", "tower", "tracing", "trycmd"]
 [cli.external.git]
 allow = []
 
 [server.external.registry]
-allow = ["async-trait", "axum", "serde", "serde_json", "sqlx", "tempfile", "thiserror", "tokio", "tower", "tower-http"]
+allow = ["async-trait", "axum", "mime_guess", "rust-embed", "serde", "serde_json", "sqlx", "tempfile", "thiserror", "tokio", "tower", "tower-http"]
 [server.external.git]
+allow = []
+
+# Phase 5 TUI external policy: ratatui (re-exports crossterm 0.29, so no
+# direct crossterm edge is needed) plus the serialization/error/async types
+# the application shell uses. `crossterm` stays listed so a future direct
+# edge fails open-safe only via this explicit entry.
+[tui.external.registry]
+allow = ["ratatui", "crossterm", "serde", "serde_json", "thiserror", "tokio"]
+[tui.external.git]
 allow = []
 
 [observability.external.registry]
