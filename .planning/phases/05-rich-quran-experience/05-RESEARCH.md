@@ -593,28 +593,30 @@ function TranslationPanel({ translation }: { translation: { text: string; transl
 
 **If this table is not empty:** A1–A6 need a decision (mostly the plan/agent's discretion; A3/A4 worth a direct confirmation).
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **How is the SPA built and embedded across local dev and CI (no Node in the Rust matrix)?**
+> All five questions below are **RESOLVED** by the Phase-5 plans (see `05-0[1-8]-PLAN.md`). Each carries an inline `(RESOLVED)` marker; the Recommendation line is the resolution the plans implement.
+
+1. **(RESOLVED)** **How is the SPA built and embedded across local dev and CI (no Node in the Rust matrix)?**
    - What we know: `rust-embed` compiles at build time; CI is 9 Rust steps; `node v24` is available locally.
    - What's unclear: commit `web/dist/` vs add a Node step to `xtask ci` vs a `web`-feature-gated embed.
    - Recommendation: use `#[allow_missing = true]` + add an explicit SPA-build step to `xtask ci` (and the CI workflow); document the dev loop (`npm run dev` with a Vite proxy to `qai serve`).
 
-2. **What exactly is the "UI service path" leg of the parity gate (D-16)?**
+2. **(RESOLVED)** **What exactly is the "UI service path" leg of the parity gate (D-16)?**
    - What we know: TUI/CLI/HTTP all reach `crates/application`.
    - What's unclear: whether "UI" means the HTTP leg (what the SPA consumes) or a direct service call.
    - Recommendation: treat the HTTP `data` payload as the UI leg, and add the direct service call as the third leg (CLI, service, HTTP) — that gives three genuinely distinct code paths converging on one `ToolResult`.
 
-3. **Does `research_checksum` replace or supplement `reproducibility.checksum`, and where does it live on the HTTP contract?**
+3. **(RESOLVED)** **Does `research_checksum` replace or supplement `reproducibility.checksum`, and where does it live on the HTTP contract?**
    - What we know: D-15 says a required field on `ToolResult`/`Envelope`; `Meta.reproducibility` is untyped.
    - What's unclear: field location (`ToolResult` top level vs inside `ReproducibilityData`; `Meta` vs `Envelope`).
    - Recommendation: add it as a typed top-level `ToolResult.research_checksum: ContentHash`, surface it in `Meta` as a typed `research_checksum: String`, and add it to the OpenAPI `Meta` required list (naming/encoding is the agent's discretion per CONTEXT).
 
-4. **Can the NFC gap in `canonical_json_bytes` be left as-is?**
+4. **(RESOLVED)** **Can the NFC gap in `canonical_json_bytes` be left as-is?**
    - What we know: it is deterministic today (no `preserve_order`), but does not implement ADR-0006's NFC step.
    - Recommendation: leave it; reusing it is the frozen-contract-compliant choice. Record the gap as a follow-up for an ADR-level decision, not a Phase-5 fix.
 
-5. **Which font is bundled, if any?** — owner gate OD-04. Recommendation: system stack; gate the bundled font behind OD-04 with the closing action recorded.
+5. **(RESOLVED)** **Which font is bundled, if any?** — owner gate OD-04. Recommendation: system stack; gate the bundled font behind OD-04 with the closing action recorded.
 
 ## Environment Availability
 
