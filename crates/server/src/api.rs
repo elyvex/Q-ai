@@ -77,6 +77,11 @@ pub struct Meta {
     pub execution_time_ms: f64,
     /// Reproducibility record (tool calls) or checksum-only.
     pub reproducibility: serde_json::Value,
+    /// Research checksum (`sha256:<hex>`) projected from the typed
+    /// `ToolResult.research_checksum` (T-05-02: single source, never
+    /// recomputed in the HTTP layer). Empty when the route is not backed
+    /// by a registered tool result.
+    pub research_checksum: String,
     /// Non-fatal warnings.
     pub warnings: Vec<String>,
 }
@@ -178,6 +183,7 @@ fn empty_meta() -> Meta {
         deep_link: String::new(),
         execution_time_ms: 0.0,
         reproducibility: serde_json::Value::Null,
+        research_checksum: String::new(),
         warnings: Vec::new(),
     }
 }
@@ -203,6 +209,7 @@ fn meta_from_tool<T>(
         execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
         reproducibility: serde_json::to_value(&result.reproducibility)
             .unwrap_or(serde_json::Value::Null),
+        research_checksum: format!("sha256:{}", result.research_checksum.hex),
         warnings: result.warnings.clone(),
     }
 }
@@ -495,8 +502,56 @@ async fn context_handler(
     ok_envelope(result.results, envelope_meta, &headers)
 }
 
-async fn divisions_handler(
+/// Generic typed-tool route (D-16): `POST /api/v1/quran/tool/{name}`
+/// serves every registered tool through the same
+/// [`application::quran_tools::dispatch_registered_tool`] table the CLI
+/// `quran tool` verb uses, so tool identity and `research_checksum` cannot
+/// diverge between surfaces.
+///
+/// The payload is the registry-produced `ToolResult` verbatim; its checksum
+/// rides in both `data.research_checksum` and `meta.research_checksum`
+/// (projected, never recomputed — T-05-02). Unknown names and bad params
+/// bodies are typed 4xx errors through the existing `tool_status` mapping
+/// (T-05-23: never a panic, never an empty 200).
+async fn tool_handler(
     State(state): State<AppState>,
+    Path(name): Path<String>,
+    Json(params): Json<serde_json::Value>,
+) -> Response {
+    // The graph registry opens on the already-open handle — no backend or
+    // database handle is re-opened (`GraphBackend` is the same trait the
+    // application graph tools read through).
+    let graph_registry =
+        application::quran_graph_tools::GraphToolBackend::registry(state.graph.clone());
+    match application::quran_tools::dispatch_registered_tool(
+        &state.tools,
+        &graph_registry,
+        &name,
+        params,
+    )
+    .await
+    {
+        Ok(value) => {
+            let checksum = value
+                .get("research_checksum")
+                .and_then(|checksum| checksum.get("hex"))
+                .and_then(|hex| hex.as_str())
+                .map(|hex| format!("sha256:{hex}"))
+                .unwrap_or_default();
+            let mut meta = empty_meta();
+            meta.research_checksum = checksum;
+            json_response(
+                StatusCode::OK,
+                &Envelope { api_version: API_VERSION, data: value, meta },
+                None,
+                false,
+            )
+        }
+        Err(error) => tool_error_response(error),
+    }
+}
+
+async fn divisions_handler(    State(state): State<AppState>,
     headers: HeaderMap,
     Path((kind, number)): Path<(String, u32)>,
     Query(query): Query<SurahsQuery>,
@@ -911,6 +966,7 @@ fn meta_from_search(
             "rule_set": output.rule_set,
             "generation": output.generation,
         }),
+        research_checksum: String::new(),
         warnings: output
             .warnings
             .iter()
@@ -1351,6 +1407,7 @@ fn lexicon_meta(tool: &str, started: Instant) -> Meta {
     Meta {
         execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
         reproducibility: serde_json::json!({ "tool": tool }),
+        research_checksum: String::new(),
         ..empty_meta()
     }
 }
@@ -1720,6 +1777,7 @@ fn graph_base_meta(
         deep_link: String::new(),
         execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
         reproducibility: serde_json::Value::Null,
+        research_checksum: String::new(),
         warnings: Vec::new(),
     }
 }
@@ -2137,6 +2195,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/quran/surahs/{number}", get(surah_handler))
         .route("/api/v1/quran/ayahs/{reference}", get(ayahs_handler))
         .route("/api/v1/quran/context/{reference}", get(context_handler))
+        .route("/api/v1/quran/tool/{name}", post(tool_handler))
         .route("/api/v1/quran/divisions/{kind}/{number}", get(divisions_handler))
         .route("/api/v1/quran/tokens/{reference}", get(tokens_handler))
         .route("/api/v1/quran/resolve", get(resolve_handler))

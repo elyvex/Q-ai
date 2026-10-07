@@ -357,6 +357,66 @@
         }
       }
     },
+    "/api/v1/quran/tool/{name}": {
+      "post": {
+        "operationId": "runTool",
+        "description": "Run any registered tool by canonical name (D-16 generic typed-tool route). Dispatches through the shared name-to-tool table the CLI `quran tool` verb uses, so tool identity and `research_checksum` cannot diverge between surfaces. The payload is the registry-produced ToolResult verbatim, with its checksum in both `data.research_checksum` and `meta.research_checksum`.",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Registered tool name (`quran.get_ayah`, `quran.graph_neighbors`, …)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "The tool's typed params object (e.g. `{\"reference\": \"2:1\"}` for `quran.get_ayah`)"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "envelope of the serialized ToolResult",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "diagnostic body (unknown tool name or bad params)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "diagnostic body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/quran/divisions/{kind}/{number}": {
       "get": {
         "operationId": "getDivision",
@@ -1862,6 +1922,7 @@
           "deep_link",
           "execution_time_ms",
           "reproducibility",
+          "research_checksum",
           "warnings"
         ],
         "properties": {
@@ -1886,6 +1947,10 @@
               "null"
             ],
             "description": "checksum record (checksum key always present when computed)"
+          },
+          "research_checksum": {
+            "type": "string",
+            "description": "research checksum (`sha256:<hex>`) projected from the typed ToolResult; empty when the route is not backed by a registered tool result"
           },
           "warnings": {
             "type": "array",

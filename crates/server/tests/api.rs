@@ -744,6 +744,7 @@ async fn openapi_spec_covers_every_route() {
         "/api/v1/quran/surahs/{number}",
         "/api/v1/quran/ayahs/{reference}",
         "/api/v1/quran/context/{reference}",
+        "/api/v1/quran/tool/{name}",
         "/api/v1/quran/divisions/{kind}/{number}",
         "/api/v1/quran/tokens/{reference}",
         "/api/v1/quran/resolve",
@@ -783,6 +784,7 @@ async fn openapi_spec_schemas_resolve_and_cover_json_responses() {
         "deep_link",
         "execution_time_ms",
         "reproducibility",
+        "research_checksum",
         "warnings",
     ] {
         assert!(meta_required.iter().any(|v| v == key), "Meta missing required {key}");
@@ -857,6 +859,7 @@ fn assert_envelope(value: &serde_json::Value) {
         "deep_link",
         "execution_time_ms",
         "reproducibility",
+        "research_checksum",
         "warnings",
     ] {
         assert!(meta.get(key).is_some(), "missing meta key {key}");
@@ -932,6 +935,74 @@ async fn ayah_envelope_carries_meta_etag_and_language() {
         get(&addr, "/api/v1/quran/ayahs/1:1", &[("if-none-match", &etag)]).await;
     assert_eq!(status, StatusCode::NOT_MODIFIED);
     assert!(body.is_empty());
+    handle.abort();
+}
+
+#[tokio::test]
+async fn get_ayah_research_checksum_matches_service() {
+    use tool_registry::GetAyahParams;
+    let (addr, handle) = serve_once().await;
+    let (status, _, body) = get(&addr, "/api/v1/quran/ayahs/1:1", &[]).await;
+    assert_eq!(status, StatusCode::OK);
+    let value = body_json(&body);
+    let http_checksum =
+        value["meta"]["research_checksum"].as_str().expect("meta.research_checksum is a string");
+    assert!(!http_checksum.is_empty(), "meta.research_checksum must be non-empty");
+    assert!(
+        http_checksum.starts_with("sha256:"),
+        "checksum renders as sha256:<hex>: {http_checksum}"
+    );
+    // The HTTP leg projects the typed ToolResult checksum (T-05-02: single
+    // source, never recomputed in the HTTP layer) — so it equals the
+    // checksum the service returns for the same call.
+    let registry = ToolRegistry::new(Arc::new(FakeBackend));
+    let (result, _) = registry
+        .get_ayah(GetAyahParams {
+            reference: "1:1".into(),
+            translations: Vec::new(),
+            glosses: false,
+            tokens: false,
+        })
+        .await
+        .unwrap();
+    assert_eq!(http_checksum, format!("sha256:{}", result.research_checksum.hex));
+    handle.abort();
+}
+
+#[tokio::test]
+async fn tool_route_serves_registered_tools_with_matching_checksum() {
+    use tool_registry::GetAyahParams;
+    let (addr, handle) = serve_once().await;
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/tool/quran.get_ayah",
+        &serde_json::json!({"reference": "1:1"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let value = body_json(&body);
+    // The payload is the registry-produced ToolResult verbatim, so its
+    // checksum rides in both `data` and `meta` with the same value.
+    let data_hex =
+        value["data"]["research_checksum"]["hex"].as_str().expect("data carries the checksum");
+    assert!(!data_hex.is_empty());
+    assert_eq!(value["meta"]["research_checksum"], format!("sha256:{data_hex}"));
+    // …and it equals the checksum the same registry call produces.
+    let registry = ToolRegistry::new(Arc::new(FakeBackend));
+    let (result, _) = registry
+        .get_ayah(GetAyahParams {
+            reference: "1:1".into(),
+            translations: Vec::new(),
+            glosses: false,
+            tokens: false,
+        })
+        .await
+        .unwrap();
+    assert_eq!(data_hex, result.research_checksum.hex);
+    // Unknown tool names are typed 4xx errors, never a 200 and never a panic.
+    let (status, _) =
+        post_json(&addr, "/api/v1/quran/tool/quran.nope", &serde_json::json!({})).await;
+    assert!(status.is_client_error(), "unknown tool must be 4xx, got {status}");
     handle.abort();
 }
 

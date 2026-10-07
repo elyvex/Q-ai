@@ -27,7 +27,7 @@ use tool_registry::{
     GraphPathParams, GraphPatternParams, GraphRootFamilyParams, GraphSubgraphParams, QuranBackend,
     ToolRegistry,
 };
-use tools::{AnalysisSource, ToolError, ToolResult, reproducibility};
+use tools::{AnalysisSource, ToolError, ToolResult, reproducibility, research_checksum};
 
 use crate::quran_graph_api::{
     BudgetPatch, Explanation, GraphApiError, GraphBackend as GraphReadBackend, GraphSnapshotMeta,
@@ -153,7 +153,7 @@ fn envelope(
         edition_version: Some(meta.edition_version.clone()),
         canonical_references,
         analysis_sources,
-        results,
+        results: results.clone(),
         confidence: None,
         warnings,
         execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
@@ -163,9 +163,22 @@ fn envelope(
             query,
             Some(&meta.edition_slug),
             Some(&meta.edition_version),
-            source_versions,
+            source_versions.clone(),
             meta.corpus_generation,
         ),
+        research_checksum: research_checksum(
+            tool,
+            version,
+            query,
+            &serde_json::json!({
+                "edition_slug": meta.edition_slug,
+                "edition_version": meta.edition_version,
+                "corpus_generation": meta.corpus_generation,
+                "sources": source_versions,
+            }),
+            &results,
+        )
+        .expect("research checksum input is JSON-serializable"),
     }
 }
 

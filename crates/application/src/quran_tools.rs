@@ -20,11 +20,12 @@ use quran_core::{
 use storage::Database as _;
 use tool_registry::{
     BackendMeta, FAMILY_TOOL_VERSION, FamilyToolParams, GetAyahParams, GetContextParams,
-    LEMMA_TOOL_VERSION, LemmaToolParams, MORPHOLOGY_TOOL_VERSION, MorphologyToolParams,
-    QuranBackend, ROOT_TOOL_VERSION, RootToolParams, SEARCH_TOOL_VERSION, SearchToolParams,
-    ToolRegistry,
+    GraphNeighborsParams, GraphPathParams, GraphPatternParams, GraphRootFamilyParams,
+    GraphSubgraphParams, LEMMA_TOOL_VERSION, LemmaToolParams, MORPHOLOGY_TOOL_VERSION,
+    MorphologyToolParams, QuranBackend, ROOT_TOOL_VERSION, RootToolParams, SEARCH_TOOL_VERSION,
+    SearchToolParams, ToolRegistry,
 };
-use tools::{AnalysisSource, ToolError, ToolResult, reproducibility};
+use tools::{AnalysisSource, ToolError, ToolResult, reproducibility, research_checksum};
 
 use crate::quran_reader::{QuranReader, QuranReaderService, ReaderError};
 
@@ -264,6 +265,7 @@ impl QuranBackend for ReaderToolBackend {
             })
             .collect();
         let query = serde_json::to_value(params).unwrap_or(serde_json::Value::Null);
+        let results = serde_json::to_value(&output).unwrap_or(serde_json::Value::Null);
         Ok(ToolResult {
             tool_name: "quran.search".to_string(),
             tool_version: SEARCH_TOOL_VERSION,
@@ -273,7 +275,7 @@ impl QuranBackend for ReaderToolBackend {
             edition_version: Some(meta.edition_version.clone()),
             canonical_references,
             analysis_sources,
-            results: serde_json::to_value(&output).unwrap_or(serde_json::Value::Null),
+            results: results.clone(),
             confidence: None,
             warnings: Vec::new(),
             execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
@@ -286,6 +288,18 @@ impl QuranBackend for ReaderToolBackend {
                 BTreeMap::new(),
                 meta.corpus_generation,
             ),
+            research_checksum: research_checksum(
+                "quran.search",
+                SEARCH_TOOL_VERSION,
+                &query,
+                &serde_json::json!({
+                    "edition_slug": meta.edition_slug,
+                    "edition_version": meta.edition_version,
+                    "corpus_generation": meta.corpus_generation,
+                }),
+                &results,
+            )
+            .expect("research checksum input is JSON-serializable"),
         })
     }
 
@@ -304,6 +318,7 @@ impl QuranBackend for ReaderToolBackend {
         let canonical_references: Vec<String> =
             occurrences.iter().map(|occ| pinned_ref(&meta, occ.surah, occ.ayah)).collect();
         let query = serde_json::to_value(params).unwrap_or(serde_json::Value::Null);
+        let results = serde_json::to_value(&occurrences).unwrap_or(serde_json::Value::Null);
         Ok(ToolResult {
             tool_name: "quran.root".to_string(),
             tool_version: ROOT_TOOL_VERSION,
@@ -313,7 +328,7 @@ impl QuranBackend for ReaderToolBackend {
             edition_version: Some(meta.edition_version.clone()),
             canonical_references,
             analysis_sources: dataset_source(&dataset_id),
-            results: serde_json::to_value(&occurrences).unwrap_or(serde_json::Value::Null),
+            results: results.clone(),
             confidence: None,
             warnings: Vec::new(),
             execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
@@ -326,6 +341,18 @@ impl QuranBackend for ReaderToolBackend {
                 BTreeMap::new(),
                 meta.corpus_generation,
             ),
+            research_checksum: research_checksum(
+                "quran.root",
+                ROOT_TOOL_VERSION,
+                &query,
+                &serde_json::json!({
+                    "edition_slug": meta.edition_slug,
+                    "edition_version": meta.edition_version,
+                    "corpus_generation": meta.corpus_generation,
+                }),
+                &results,
+            )
+            .expect("research checksum input is JSON-serializable"),
         })
     }
 
@@ -343,6 +370,7 @@ impl QuranBackend for ReaderToolBackend {
         let canonical_references: Vec<String> =
             occurrences.iter().map(|occ| pinned_ref(&meta, occ.surah, occ.ayah)).collect();
         let query = serde_json::to_value(params).unwrap_or(serde_json::Value::Null);
+        let results = serde_json::to_value(&occurrences).unwrap_or(serde_json::Value::Null);
         Ok(ToolResult {
             tool_name: "quran.lemma".to_string(),
             tool_version: LEMMA_TOOL_VERSION,
@@ -352,7 +380,7 @@ impl QuranBackend for ReaderToolBackend {
             edition_version: Some(meta.edition_version.clone()),
             canonical_references,
             analysis_sources: dataset_source(&dataset_id),
-            results: serde_json::to_value(&occurrences).unwrap_or(serde_json::Value::Null),
+            results: results.clone(),
             confidence: None,
             warnings: Vec::new(),
             execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
@@ -365,6 +393,18 @@ impl QuranBackend for ReaderToolBackend {
                 BTreeMap::new(),
                 meta.corpus_generation,
             ),
+            research_checksum: research_checksum(
+                "quran.lemma",
+                LEMMA_TOOL_VERSION,
+                &query,
+                &serde_json::json!({
+                    "edition_slug": meta.edition_slug,
+                    "edition_version": meta.edition_version,
+                    "corpus_generation": meta.corpus_generation,
+                }),
+                &results,
+            )
+            .expect("research checksum input is JSON-serializable"),
         })
     }
 
@@ -388,6 +428,7 @@ impl QuranBackend for ReaderToolBackend {
         let canonical_references =
             vec![pinned_ref(&meta, i64::from(params.surah), i64::from(params.ayah))];
         let query = serde_json::to_value(params).unwrap_or(serde_json::Value::Null);
+        let results = serde_json::to_value(&analyses).unwrap_or(serde_json::Value::Null);
         Ok(ToolResult {
             tool_name: "quran.morphology".to_string(),
             tool_version: MORPHOLOGY_TOOL_VERSION,
@@ -397,7 +438,7 @@ impl QuranBackend for ReaderToolBackend {
             edition_version: Some(meta.edition_version.clone()),
             canonical_references,
             analysis_sources: dataset_source(&dataset_id),
-            results: serde_json::to_value(&analyses).unwrap_or(serde_json::Value::Null),
+            results: results.clone(),
             confidence: None,
             warnings: Vec::new(),
             execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
@@ -410,6 +451,18 @@ impl QuranBackend for ReaderToolBackend {
                 BTreeMap::new(),
                 meta.corpus_generation,
             ),
+            research_checksum: research_checksum(
+                "quran.morphology",
+                MORPHOLOGY_TOOL_VERSION,
+                &query,
+                &serde_json::json!({
+                    "edition_slug": meta.edition_slug,
+                    "edition_version": meta.edition_version,
+                    "corpus_generation": meta.corpus_generation,
+                }),
+                &results,
+            )
+            .expect("research checksum input is JSON-serializable"),
         })
     }
 
@@ -425,6 +478,7 @@ impl QuranBackend for ReaderToolBackend {
                 .await
                 .map_err(morphology_tool_error)?;
         let query = serde_json::to_value(params).unwrap_or(serde_json::Value::Null);
+        let results = serde_json::to_value(&members).unwrap_or(serde_json::Value::Null);
         Ok(ToolResult {
             tool_name: "quran.family".to_string(),
             tool_version: FAMILY_TOOL_VERSION,
@@ -434,7 +488,7 @@ impl QuranBackend for ReaderToolBackend {
             edition_version: Some(meta.edition_version.clone()),
             canonical_references: Vec::new(),
             analysis_sources: dataset_source(&dataset_id),
-            results: serde_json::to_value(&members).unwrap_or(serde_json::Value::Null),
+            results: results.clone(),
             confidence: None,
             warnings: Vec::new(),
             execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
@@ -447,6 +501,18 @@ impl QuranBackend for ReaderToolBackend {
                 BTreeMap::new(),
                 meta.corpus_generation,
             ),
+            research_checksum: research_checksum(
+                "quran.family",
+                FAMILY_TOOL_VERSION,
+                &query,
+                &serde_json::json!({
+                    "edition_slug": meta.edition_slug,
+                    "edition_version": meta.edition_version,
+                    "corpus_generation": meta.corpus_generation,
+                }),
+                &results,
+            )
+            .expect("research checksum input is JSON-serializable"),
         })
     }
 }
@@ -641,6 +707,97 @@ pub async fn verify_canonical_quotation(
         detail: "resolved citation carried no canonical hash".to_string(),
     })?;
     Ok((resolved.verdict, text_hash))
+}
+
+/// Dispatch any registered tool by its canonical name (D-16): the single
+/// name→`ToolRegistry`-method table the CLI (`quran tool`) and HTTP
+/// (`POST /api/v1/quran/tool/{name}`) legs share, so tool identity and
+/// `research_checksum` cannot diverge between surfaces.
+///
+/// The reader registry serves the seven non-graph tools; the graph registry
+/// serves the five graph tools. Returns the serialized `ToolResult`
+/// (carrying the required `research_checksum`). Unknown names and params
+/// that do not deserialize are typed `InvalidInput` errors, never panics.
+pub async fn dispatch_registered_tool(
+    reader: &ToolRegistry,
+    graph: &ToolRegistry,
+    name: &str,
+    params: serde_json::Value,
+) -> Result<serde_json::Value, ToolError> {
+    fn bad_params(tool: &'static str, err: serde_json::Error) -> ToolError {
+        ToolError::InvalidInput { tool, detail: format!("bad params for {tool}: {err}") }
+    }
+    fn serialized<T: serde::Serialize>(result: &ToolResult<T>) -> serde_json::Value {
+        serde_json::to_value(result).unwrap_or(serde_json::Value::Null)
+    }
+    match name {
+        "quran.get_ayah" => {
+            let params: GetAyahParams =
+                serde_json::from_value(params).map_err(|err| bad_params("quran.get_ayah", err))?;
+            let (result, _) = reader.get_ayah(params).await?;
+            Ok(serialized(&result))
+        }
+        "quran.get_context" => {
+            let params: GetContextParams =
+                serde_json::from_value(params).map_err(|err| bad_params("quran.get_context", err))?;
+            let (result, _) = reader.get_context(params).await?;
+            Ok(serialized(&result))
+        }
+        "quran.search" => {
+            let params: SearchToolParams =
+                serde_json::from_value(params).map_err(|err| bad_params("quran.search", err))?;
+            Ok(serialized(&reader.search(params).await?))
+        }
+        "quran.root" => {
+            let params: RootToolParams =
+                serde_json::from_value(params).map_err(|err| bad_params("quran.root", err))?;
+            Ok(serialized(&reader.root(params).await?))
+        }
+        "quran.lemma" => {
+            let params: LemmaToolParams =
+                serde_json::from_value(params).map_err(|err| bad_params("quran.lemma", err))?;
+            Ok(serialized(&reader.lemma(params).await?))
+        }
+        "quran.morphology" => {
+            let params: MorphologyToolParams = serde_json::from_value(params)
+                .map_err(|err| bad_params("quran.morphology", err))?;
+            Ok(serialized(&reader.morphology(params).await?))
+        }
+        "quran.family" => {
+            let params: FamilyToolParams =
+                serde_json::from_value(params).map_err(|err| bad_params("quran.family", err))?;
+            Ok(serialized(&reader.family(params).await?))
+        }
+        "quran.graph_neighbors" => {
+            let params: GraphNeighborsParams = serde_json::from_value(params)
+                .map_err(|err| bad_params("quran.graph_neighbors", err))?;
+            Ok(serialized(&graph.graph_neighbors(params).await?))
+        }
+        "quran.graph_path" => {
+            let params: GraphPathParams = serde_json::from_value(params)
+                .map_err(|err| bad_params("quran.graph_path", err))?;
+            Ok(serialized(&graph.graph_path(params).await?))
+        }
+        "quran.graph_subgraph" => {
+            let params: GraphSubgraphParams = serde_json::from_value(params)
+                .map_err(|err| bad_params("quran.graph_subgraph", err))?;
+            Ok(serialized(&graph.graph_subgraph(params).await?))
+        }
+        "quran.graph_pattern" => {
+            let params: GraphPatternParams = serde_json::from_value(params)
+                .map_err(|err| bad_params("quran.graph_pattern", err))?;
+            Ok(serialized(&graph.graph_pattern(params).await?))
+        }
+        "quran.graph_root_family" => {
+            let params: GraphRootFamilyParams = serde_json::from_value(params)
+                .map_err(|err| bad_params("quran.graph_root_family", err))?;
+            Ok(serialized(&graph.graph_root_family(params).await?))
+        }
+        _ => Err(ToolError::InvalidInput {
+            tool: "quran.tool",
+            detail: format!("unknown tool `{name}`"),
+        }),
+    }
 }
 
 /// Convenience: run `quran.get_ayah` against a reader.
