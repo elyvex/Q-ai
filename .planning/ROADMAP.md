@@ -223,10 +223,13 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3)*
 
-- [ ] 05-08-PLAN.md — Citation copy/open: stable URN + deep link, server-side re-verify + mismatch hard-failure via `/api/v1/quran/citations/{id}` (D-17)
 - [ ] 05-09-PLAN.md — SPA research view + graph view (truncation verbatim) + honest typed RAG debug view (D-11)
 
 **Wave 5** *(blocked on Wave 4)*
+
+- [ ] 05-08-PLAN.md — Citation copy/open: stable URN + deep link, server-side re-verify + mismatch hard-failure via `/api/v1/quran/citations/{id}` (D-17)
+
+**Wave 6** *(blocked on Wave 5)*
 
 - [ ] 05-07-PLAN.md — CI wiring (SPA build + parity steps, 9→11), layer-separation source scan, owner-gate recording, validation map + roadmap
 **UI hint**: yes
