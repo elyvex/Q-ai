@@ -203,7 +203,31 @@ Plans:
   4. Operator can use the TUI cockpit (command palette, RAG debug view) for daily operations
   5. Canonical text, translations, and annotations are visually unmistakable in every view
 
-**Plans**: TBD
+**Plans**: 8 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 05-01-PLAN.md — TRACER: `research_checksum` contract end-to-end (tool identity + params + inputs + payload) across all 12 tools, HTTP `Meta`, OpenAPI, and CLI
+- [ ] 05-02-PLAN.md — Arch/allowlist plumbing + TUI foundation: ratatui/crossterm app shell, palette, dashboard, `qai tui` over shared services
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 05-03-PLAN.md — Cross-surface parity gate: one fixture through service + HTTP + CLI, byte-identical payload + identical checksum (D-16)
+- [ ] 05-04-PLAN.md — SPA scaffold (React+Vite+TS, pinned) + same-origin embedded serving with a fallback that never swallows `/api/*` (D-01/D-02/D-03/D-04)
+- [ ] 05-05-PLAN.md — TUI cockpit screens: ops (doctor/jobs/index), reader/search, graph nav + annotation review, typed RAG debug (D-10/D-11/D-12)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 05-06-PLAN.md — SPA reading view (layer tokens, themes, 3 translation + 3 inspector modes, RTL) + research/graph/RAG views (D-05…D-09)
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 05-08-PLAN.md — Citation copy/open: stable URN + deep link, server-side re-verify, mismatch hard-failure (D-17)
+
+**Wave 5** *(blocked on Wave 4)*
+
+- [ ] 05-07-PLAN.md — CI wiring (SPA build + parity steps), layer-separation source scan, owner-gate recording, validation map + roadmap
 **UI hint**: yes
 
 ### Phase 6: Hadith & Tafsir
