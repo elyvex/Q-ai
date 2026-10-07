@@ -744,6 +744,7 @@ async fn openapi_spec_covers_every_route() {
         "/api/v1/quran/surahs/{number}",
         "/api/v1/quran/ayahs/{reference}",
         "/api/v1/quran/context/{reference}",
+        "/api/v1/quran/tool/{name}",
         "/api/v1/quran/divisions/{kind}/{number}",
         "/api/v1/quran/tokens/{reference}",
         "/api/v1/quran/resolve",
@@ -783,6 +784,7 @@ async fn openapi_spec_schemas_resolve_and_cover_json_responses() {
         "deep_link",
         "execution_time_ms",
         "reproducibility",
+        "research_checksum",
         "warnings",
     ] {
         assert!(meta_required.iter().any(|v| v == key), "Meta missing required {key}");
@@ -857,6 +859,7 @@ fn assert_envelope(value: &serde_json::Value) {
         "deep_link",
         "execution_time_ms",
         "reproducibility",
+        "research_checksum",
         "warnings",
     ] {
         assert!(meta.get(key).is_some(), "missing meta key {key}");
