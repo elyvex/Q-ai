@@ -295,6 +295,37 @@ pub async fn cmd_context(
     CommandOutput::ok(human, serde_json::to_value(&view).unwrap_or_default())
 }
 
+/// `quran tool`: run any registered tool by canonical name with a JSON
+/// params object (D-16). Builds the same registries the `qai serve` arm
+/// builds, dispatches through the shared
+/// [`crate::quran_tools::dispatch_registered_tool`] table, and returns the
+/// serialized `ToolResult` (carrying the required `research_checksum`) as
+/// the `--json` payload. Typed tool errors are usage errors.
+pub async fn cmd_tool(db_path: &str, name: &str, params: &str) -> CommandOutput {
+    let value: serde_json::Value = match serde_json::from_str(params) {
+        Ok(value) => value,
+        Err(err) => return CommandOutput::err(exit::USAGE, format!("bad params JSON: {err}")),
+    };
+    let db = match open_db(db_path).await {
+        Ok(db) => Arc::new(db),
+        Err(err) => return open_error_output(err),
+    };
+    let reader = Arc::new(crate::quran_reader::QuranReaderService::new(db));
+    let reader_registry = crate::quran_tools::ReaderToolBackend::registry_with_index_root(
+        reader,
+        crate::quran_index::index_root_for_db(db_path),
+    );
+    let graph_registry = crate::quran_graph_tools::GraphToolBackend::registry(Arc::new(
+        crate::quran_graph_api::FileGraphBackend::structural(db_path),
+    ));
+    match crate::quran_tools::dispatch_registered_tool(&reader_registry, &graph_registry, name, value)
+        .await
+    {
+        Ok(result) => CommandOutput::ok(format!("{name} ok"), result),
+        Err(err) => CommandOutput::err(exit::USAGE, err.to_string()),
+    }
+}
+
 /// `quran surah`.
 pub async fn cmd_surah(db_path: &str, number: u16, metadata: bool) -> CommandOutput {
     use crate::quran_reader::QuranReader;

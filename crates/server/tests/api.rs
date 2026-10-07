@@ -967,6 +967,43 @@ async fn get_ayah_research_checksum_matches_service() {
 }
 
 #[tokio::test]
+async fn tool_route_serves_registered_tools_with_matching_checksum() {
+    use tool_registry::GetAyahParams;
+    let (addr, handle) = serve_once().await;
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/tool/quran.get_ayah",
+        &serde_json::json!({"reference": "1:1"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let value = body_json(&body);
+    // The payload is the registry-produced ToolResult verbatim, so its
+    // checksum rides in both `data` and `meta` with the same value.
+    let data_hex =
+        value["data"]["research_checksum"]["hex"].as_str().expect("data carries the checksum");
+    assert!(!data_hex.is_empty());
+    assert_eq!(value["meta"]["research_checksum"], format!("sha256:{data_hex}"));
+    // …and it equals the checksum the same registry call produces.
+    let registry = ToolRegistry::new(Arc::new(FakeBackend));
+    let (result, _) = registry
+        .get_ayah(GetAyahParams {
+            reference: "1:1".into(),
+            translations: Vec::new(),
+            glosses: false,
+            tokens: false,
+        })
+        .await
+        .unwrap();
+    assert_eq!(data_hex, result.research_checksum.hex);
+    // Unknown tool names are typed 4xx errors, never a 200 and never a panic.
+    let (status, _) =
+        post_json(&addr, "/api/v1/quran/tool/quran.nope", &serde_json::json!({})).await;
+    assert!(status.is_client_error(), "unknown tool must be 4xx, got {status}");
+    handle.abort();
+}
+
+#[tokio::test]
 async fn errors_use_the_diagnostic_body() {
     let (addr, handle) = serve_once().await;
     let (status, _, body) = get(&addr, "/api/v1/quran/ayahs/99:1", &[]).await;

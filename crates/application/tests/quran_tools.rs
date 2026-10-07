@@ -528,6 +528,95 @@ async fn lexicon_tools_are_attributed_with_an_active_dataset() {
     assert!(!lemma.analysis_sources.is_empty(), "lemma results attribute their dataset");
 }
 
+/// D-16: `cmd_tool` surfaces the serialized `ToolResult` (with a
+/// non-empty `research_checksum`) for a registered tool, and
+/// `dispatch_registered_tool` covers every `TOOL_NAMES` entry — unknown
+/// names are typed-invalid, never a panic.
+#[tokio::test]
+async fn cmd_tool_surfaces_research_checksum() {
+    use application::quran_cli::cmd_tool;
+    use application::quran_graph_tools::GraphToolBackend;
+    use application::quran_index::index_root_for_db;
+    use application::quran_tools::{ReaderToolBackend, dispatch_registered_tool};
+    use tool_registry::ToolRegistry;
+
+    let (_dir, _db, _reader, path) = active_reader().await;
+    let db = Arc::new(
+        storage_sqlite::SqliteDatabase::new(&path, 4, true).await.expect("test db opens"),
+    );
+    let reader_service = Arc::new(application::quran_reader::QuranReaderService::new(db));
+    let reader_registry =
+        ReaderToolBackend::registry_with_index_root(reader_service, index_root_for_db(&path));
+    let graph_registry = GraphToolBackend::registry(Arc::new(
+        application::quran_graph_api::FileGraphBackend::structural(&path),
+    ));
+
+    // The CLI leg emits the dispatcher value: a top-level
+    // `research_checksum` carrying a non-empty hex digest.
+    let output = cmd_tool(&path, "quran.get_ayah", r#"{"reference": "2:1"}"#).await;
+    assert_eq!(output.exit, 0);
+    let hex = output.json["research_checksum"]["hex"].as_str().unwrap_or_default();
+    assert!(!hex.is_empty(), "cmd_tool JSON must carry a non-empty research_checksum");
+    assert_eq!(output.json["tool_name"], "quran.get_ayah");
+
+    // Unknown tool names are typed errors, never a panic.
+    let output = cmd_tool(&path, "quran.nope", r#"{}"#).await;
+    assert_ne!(output.exit, 0);
+
+    // Every registered name dispatches: either the serialized ToolResult
+    // (with checksum) or a typed backend error when this harness cannot
+    // serve it (no index / dataset / projection build here) — but never
+    // the unknown-tool rejection.
+    fn params_for(name: &str) -> serde_json::Value {
+        match name {
+            "quran.get_ayah" => serde_json::json!({"reference": "2:1"}),
+            "quran.get_context" => serde_json::json!({"reference": "1:2"}),
+            "quran.search" => serde_json::json!({"text": "x"}),
+            "quran.root" => serde_json::json!({"root": "r"}),
+            "quran.lemma" => serde_json::json!({"lemma": "l"}),
+            "quran.morphology" => serde_json::json!({"surah": 1, "ayah": 1, "position": 1}),
+            "quran.family" => serde_json::json!({"kind": "token", "id": "token:1:1:1"}),
+            "quran.graph_neighbors" => serde_json::json!({"node": "ayah:1:1"}),
+            "quran.graph_path" => serde_json::json!({"from": "a", "to": "b"}),
+            "quran.graph_subgraph" => serde_json::json!({"seeds": ["a"]}),
+            "quran.graph_pattern" => {
+                serde_json::json!({"seeds": ["a"], "steps": [{"edge": "contains"}]})
+            }
+            "quran.graph_root_family" => serde_json::json!({"root": "r"}),
+            _ => serde_json::Value::Null,
+        }
+    }
+    for name in ToolRegistry::TOOL_NAMES {
+        let result =
+            dispatch_registered_tool(&reader_registry, &graph_registry, name, params_for(name))
+                .await;
+        match result {
+            Ok(value) => {
+                let hex =
+                    value["research_checksum"]["hex"].as_str().unwrap_or_default().to_string();
+                assert!(!hex.is_empty(), "{name} must carry a non-empty research_checksum");
+            }
+            Err(tools::ToolError::InvalidInput { tool, .. }) => {
+                assert_ne!(
+                    tool, "quran.tool",
+                    "{name} is registered and must not hit the unknown-tool rejection"
+                );
+            }
+            Err(tools::ToolError::Backend { .. }) => {
+                // Typed unavailability (no index/dataset/projection in this
+                // harness) — proves the name dispatched without panicking.
+            }
+        }
+    }
+    let err =
+        dispatch_registered_tool(&reader_registry, &graph_registry, "quran.nope", params_for(""))
+            .await
+            .unwrap_err();
+    assert!(
+        matches!(err, tools::ToolError::InvalidInput { tool: "quran.tool", .. }),
+        "unknown tool names are typed-invalid: {err:?}"
+    );
+}
 /// D-14/D-15: every `quran.get_ayah` result carries a non-empty,
 /// payload-sensitive `research_checksum` — identical calls reproduce it,
 /// a different payload moves it.

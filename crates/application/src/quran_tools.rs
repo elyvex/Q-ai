@@ -20,9 +20,10 @@ use quran_core::{
 use storage::Database as _;
 use tool_registry::{
     BackendMeta, FAMILY_TOOL_VERSION, FamilyToolParams, GetAyahParams, GetContextParams,
-    LEMMA_TOOL_VERSION, LemmaToolParams, MORPHOLOGY_TOOL_VERSION, MorphologyToolParams,
-    QuranBackend, ROOT_TOOL_VERSION, RootToolParams, SEARCH_TOOL_VERSION, SearchToolParams,
-    ToolRegistry,
+    GraphNeighborsParams, GraphPathParams, GraphPatternParams, GraphRootFamilyParams,
+    GraphSubgraphParams, LEMMA_TOOL_VERSION, LemmaToolParams, MORPHOLOGY_TOOL_VERSION,
+    MorphologyToolParams, QuranBackend, ROOT_TOOL_VERSION, RootToolParams, SEARCH_TOOL_VERSION,
+    SearchToolParams, ToolRegistry,
 };
 use tools::{AnalysisSource, ToolError, ToolResult, reproducibility, research_checksum};
 
@@ -706,6 +707,97 @@ pub async fn verify_canonical_quotation(
         detail: "resolved citation carried no canonical hash".to_string(),
     })?;
     Ok((resolved.verdict, text_hash))
+}
+
+/// Dispatch any registered tool by its canonical name (D-16): the single
+/// name→`ToolRegistry`-method table the CLI (`quran tool`) and HTTP
+/// (`POST /api/v1/quran/tool/{name}`) legs share, so tool identity and
+/// `research_checksum` cannot diverge between surfaces.
+///
+/// The reader registry serves the seven non-graph tools; the graph registry
+/// serves the five graph tools. Returns the serialized `ToolResult`
+/// (carrying the required `research_checksum`). Unknown names and params
+/// that do not deserialize are typed `InvalidInput` errors, never panics.
+pub async fn dispatch_registered_tool(
+    reader: &ToolRegistry,
+    graph: &ToolRegistry,
+    name: &str,
+    params: serde_json::Value,
+) -> Result<serde_json::Value, ToolError> {
+    fn bad_params(tool: &'static str, err: serde_json::Error) -> ToolError {
+        ToolError::InvalidInput { tool, detail: format!("bad params for {tool}: {err}") }
+    }
+    fn serialized<T: serde::Serialize>(result: &ToolResult<T>) -> serde_json::Value {
+        serde_json::to_value(result).unwrap_or(serde_json::Value::Null)
+    }
+    match name {
+        "quran.get_ayah" => {
+            let params: GetAyahParams =
+                serde_json::from_value(params).map_err(|err| bad_params("quran.get_ayah", err))?;
+            let (result, _) = reader.get_ayah(params).await?;
+            Ok(serialized(&result))
+        }
+        "quran.get_context" => {
+            let params: GetContextParams =
+                serde_json::from_value(params).map_err(|err| bad_params("quran.get_context", err))?;
+            let (result, _) = reader.get_context(params).await?;
+            Ok(serialized(&result))
+        }
+        "quran.search" => {
+            let params: SearchToolParams =
+                serde_json::from_value(params).map_err(|err| bad_params("quran.search", err))?;
+            Ok(serialized(&reader.search(params).await?))
+        }
+        "quran.root" => {
+            let params: RootToolParams =
+                serde_json::from_value(params).map_err(|err| bad_params("quran.root", err))?;
+            Ok(serialized(&reader.root(params).await?))
+        }
+        "quran.lemma" => {
+            let params: LemmaToolParams =
+                serde_json::from_value(params).map_err(|err| bad_params("quran.lemma", err))?;
+            Ok(serialized(&reader.lemma(params).await?))
+        }
+        "quran.morphology" => {
+            let params: MorphologyToolParams = serde_json::from_value(params)
+                .map_err(|err| bad_params("quran.morphology", err))?;
+            Ok(serialized(&reader.morphology(params).await?))
+        }
+        "quran.family" => {
+            let params: FamilyToolParams =
+                serde_json::from_value(params).map_err(|err| bad_params("quran.family", err))?;
+            Ok(serialized(&reader.family(params).await?))
+        }
+        "quran.graph_neighbors" => {
+            let params: GraphNeighborsParams = serde_json::from_value(params)
+                .map_err(|err| bad_params("quran.graph_neighbors", err))?;
+            Ok(serialized(&graph.graph_neighbors(params).await?))
+        }
+        "quran.graph_path" => {
+            let params: GraphPathParams = serde_json::from_value(params)
+                .map_err(|err| bad_params("quran.graph_path", err))?;
+            Ok(serialized(&graph.graph_path(params).await?))
+        }
+        "quran.graph_subgraph" => {
+            let params: GraphSubgraphParams = serde_json::from_value(params)
+                .map_err(|err| bad_params("quran.graph_subgraph", err))?;
+            Ok(serialized(&graph.graph_subgraph(params).await?))
+        }
+        "quran.graph_pattern" => {
+            let params: GraphPatternParams = serde_json::from_value(params)
+                .map_err(|err| bad_params("quran.graph_pattern", err))?;
+            Ok(serialized(&graph.graph_pattern(params).await?))
+        }
+        "quran.graph_root_family" => {
+            let params: GraphRootFamilyParams = serde_json::from_value(params)
+                .map_err(|err| bad_params("quran.graph_root_family", err))?;
+            Ok(serialized(&graph.graph_root_family(params).await?))
+        }
+        _ => Err(ToolError::InvalidInput {
+            tool: "quran.tool",
+            detail: format!("unknown tool `{name}`"),
+        }),
+    }
 }
 
 /// Convenience: run `quran.get_ayah` against a reader.

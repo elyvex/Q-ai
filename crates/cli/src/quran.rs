@@ -258,6 +258,16 @@ pub enum QuranAction {
         #[command(subcommand)]
         action: GraphAction,
     },
+    /// Run any registered tool by canonical name with JSON params
+    /// (`quran.get_ayah`, …); `--json` emits the serialized `ToolResult`
+    /// including its `research_checksum` (D-16 parity leg).
+    Tool {
+        /// Tool name (`quran.get_ayah`, `quran.graph_neighbors`, …).
+        name: String,
+        /// Params as a JSON object string.
+        #[arg(long)]
+        params: String,
+    },
 }
 
 /// `qai quran search` flags (P2-T52): all five lexical tools plus filters.
@@ -1649,8 +1659,10 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
             )
             .await
         }
-        QuranAction::Normalize { text, profile, rules, explain, list_profiles, show_rule } => {
-            if list_profiles {
+        QuranAction::Tool { name, params } => {
+            application::quran_cli::cmd_tool(db_path, &name, &params).await
+        }
+        QuranAction::Normalize { text, profile, rules, explain, list_profiles, show_rule } => {            if list_profiles {
                 application::quran_cli::cmd_normalize_list_profiles(db_path).await
             } else if let Some(rule) = show_rule {
                 application::quran_cli::cmd_normalize_show_rule(db_path, &rule).await
