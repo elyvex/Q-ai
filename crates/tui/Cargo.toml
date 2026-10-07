@@ -3,3 +3,20 @@ name = "tui"
 version = "0.0.0"
 edition = "2024"
 publish = false
+
+[dependencies]
+application = { path = "../application" }
+config = { path = "../config" }
+observability = { path = "../observability" }
+tools = { path = "../tools" }
+tool-registry = { path = "../tool-registry" }
+quran-core = { path = "../quran-core" }
+domain = { path = "../domain" }
+ratatui = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
+[lints]
+workspace = true
