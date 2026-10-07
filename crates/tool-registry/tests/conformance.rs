@@ -19,7 +19,7 @@ use tool_registry::{
     QuranBackend, ROOT_TOOL_VERSION, RootToolParams, SEARCH_TOOL_VERSION, SearchToolParams,
     ToolRegistry,
 };
-use tools::{AnalysisSource, ToolError, ToolResult, reproducibility};
+use tools::{AnalysisSource, ToolError, ToolResult, reproducibility, research_checksum};
 
 // ── Conformable backend ─────────────────────────────────────────────────────
 
@@ -80,6 +80,7 @@ fn conformable_envelope(
     version: SemVer,
     query: serde_json::Value,
 ) -> ToolResult<serde_json::Value> {
+    let results = serde_json::json!({ "ok": true });
     ToolResult {
         tool_name: tool.to_string(),
         tool_version: version,
@@ -92,7 +93,7 @@ fn conformable_envelope(
             kind: "dataset".to_string(),
             reference: "test-morph@0.1.0".to_string(),
         }],
-        results: serde_json::json!({ "ok": true }),
+        results: results.clone(),
         confidence: None,
         warnings: Vec::new(),
         execution_time_ms: 0.0,
@@ -105,6 +106,18 @@ fn conformable_envelope(
             BTreeMap::new(),
             3,
         ),
+        research_checksum: research_checksum(
+            tool,
+            version,
+            &query,
+            &serde_json::json!({
+                "edition_slug": "test",
+                "edition_version": "0.1.0",
+                "corpus_generation": 3,
+            }),
+            &results,
+        )
+        .expect("research checksum input is JSON-serializable"),
     }
 }
 
@@ -370,6 +383,11 @@ impl QuranBackend for TruncatedBackend {
         params: &tool_registry::GraphPathParams,
     ) -> Result<ToolResult<serde_json::Value>, ToolError> {
         let query = serde_json::to_value(params).unwrap();
+        let results = serde_json::json!({
+            "paths": [],
+            "truncated": true,
+            "incomplete_reason": "budget exhausted: max_nodes reached before the search completed",
+        });
         Ok(ToolResult {
             tool_name: "quran.graph_path".to_string(),
             tool_version: GRAPH_PATH_TOOL_VERSION,
@@ -385,11 +403,7 @@ impl QuranBackend for TruncatedBackend {
             // Mirrors the graph API payload: an empty `paths` is only a proven
             // "no path" when `truncated` is false, so a budget-exhausted search
             // can never read as absence.
-            results: serde_json::json!({
-                "paths": [],
-                "truncated": true,
-                "incomplete_reason": "budget exhausted: max_nodes reached before the search completed",
-            }),
+            results: results.clone(),
             confidence: None,
             warnings: vec!["result truncated: budget exhausted".to_string()],
             execution_time_ms: 0.0,
@@ -402,6 +416,14 @@ impl QuranBackend for TruncatedBackend {
                 BTreeMap::new(),
                 0,
             ),
+            research_checksum: research_checksum(
+                "quran.graph_path",
+                GRAPH_PATH_TOOL_VERSION,
+                &query,
+                &serde_json::json!({ "corpus_generation": 0 }),
+                &results,
+            )
+            .expect("research checksum input is JSON-serializable"),
         })
     }
 }

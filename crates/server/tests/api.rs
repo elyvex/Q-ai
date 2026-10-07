@@ -936,6 +936,37 @@ async fn ayah_envelope_carries_meta_etag_and_language() {
 }
 
 #[tokio::test]
+async fn get_ayah_research_checksum_matches_service() {
+    use tool_registry::GetAyahParams;
+    let (addr, handle) = serve_once().await;
+    let (status, _, body) = get(&addr, "/api/v1/quran/ayahs/1:1", &[]).await;
+    assert_eq!(status, StatusCode::OK);
+    let value = body_json(&body);
+    let http_checksum =
+        value["meta"]["research_checksum"].as_str().expect("meta.research_checksum is a string");
+    assert!(!http_checksum.is_empty(), "meta.research_checksum must be non-empty");
+    assert!(
+        http_checksum.starts_with("sha256:"),
+        "checksum renders as sha256:<hex>: {http_checksum}"
+    );
+    // The HTTP leg projects the typed ToolResult checksum (T-05-02: single
+    // source, never recomputed in the HTTP layer) — so it equals the
+    // checksum the service returns for the same call.
+    let registry = ToolRegistry::new(Arc::new(FakeBackend));
+    let (result, _) = registry
+        .get_ayah(GetAyahParams {
+            reference: "1:1".into(),
+            translations: Vec::new(),
+            glosses: false,
+            tokens: false,
+        })
+        .await
+        .unwrap();
+    assert_eq!(http_checksum, format!("sha256:{}", result.research_checksum.hex));
+    handle.abort();
+}
+
+#[tokio::test]
 async fn errors_use_the_diagnostic_body() {
     let (addr, handle) = serve_once().await;
     let (status, _, body) = get(&addr, "/api/v1/quran/ayahs/99:1", &[]).await;

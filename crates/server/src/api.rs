@@ -77,6 +77,11 @@ pub struct Meta {
     pub execution_time_ms: f64,
     /// Reproducibility record (tool calls) or checksum-only.
     pub reproducibility: serde_json::Value,
+    /// Research checksum (`sha256:<hex>`) projected from the typed
+    /// `ToolResult.research_checksum` (T-05-02: single source, never
+    /// recomputed in the HTTP layer). Empty when the route is not backed
+    /// by a registered tool result.
+    pub research_checksum: String,
     /// Non-fatal warnings.
     pub warnings: Vec<String>,
 }
@@ -178,6 +183,7 @@ fn empty_meta() -> Meta {
         deep_link: String::new(),
         execution_time_ms: 0.0,
         reproducibility: serde_json::Value::Null,
+        research_checksum: String::new(),
         warnings: Vec::new(),
     }
 }
@@ -203,6 +209,7 @@ fn meta_from_tool<T>(
         execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
         reproducibility: serde_json::to_value(&result.reproducibility)
             .unwrap_or(serde_json::Value::Null),
+        research_checksum: format!("sha256:{}", result.research_checksum.hex),
         warnings: result.warnings.clone(),
     }
 }
@@ -911,6 +918,7 @@ fn meta_from_search(
             "rule_set": output.rule_set,
             "generation": output.generation,
         }),
+        research_checksum: String::new(),
         warnings: output
             .warnings
             .iter()
@@ -1351,6 +1359,7 @@ fn lexicon_meta(tool: &str, started: Instant) -> Meta {
     Meta {
         execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
         reproducibility: serde_json::json!({ "tool": tool }),
+        research_checksum: String::new(),
         ..empty_meta()
     }
 }
@@ -1720,6 +1729,7 @@ fn graph_base_meta(
         deep_link: String::new(),
         execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
         reproducibility: serde_json::Value::Null,
+        research_checksum: String::new(),
         warnings: Vec::new(),
     }
 }

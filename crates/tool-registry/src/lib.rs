@@ -15,7 +15,7 @@ use async_trait::async_trait;
 use domain::SemVer;
 use quran_core::{AyahOptions, AyahView, ContextBoundary, ContextSpec, ContextView, QuranRef};
 use serde::{Deserialize, Serialize};
-use tools::{AnalysisSource, ToolError, ToolResult, reproducibility};
+use tools::{AnalysisSource, ToolError, ToolResult, reproducibility, research_checksum};
 
 /// Tool versions (§12 tool plan).
 pub const GET_AYAH_VERSION: SemVer = SemVer::new(1, 0, 0);
@@ -475,6 +475,9 @@ impl ToolRegistry {
         };
         let query = serde_json::to_value(&params).unwrap_or(serde_json::Value::Null);
         let (view, meta) = self.backend.backend_get_ayah(&reference, &options).await?;
+        let canonical = view.canonical.reference().to_string();
+        let results = vec![view];
+        let payload = serde_json::to_value(&results).unwrap_or(serde_json::Value::Null);
         let result = ToolResult {
             tool_name: "quran.get_ayah".to_string(),
             tool_version: GET_AYAH_VERSION,
@@ -482,12 +485,12 @@ impl ToolRegistry {
             normalization_rules: Vec::new(),
             edition_id: Some(meta.edition_id.clone()),
             edition_version: Some(meta.edition_version.clone()),
-            canonical_references: vec![view.canonical.reference().to_string()],
+            canonical_references: vec![canonical.clone()],
             analysis_sources: vec![AnalysisSource {
                 kind: "canonical".to_string(),
-                reference: view.canonical.reference().to_string(),
+                reference: canonical,
             }],
-            results: vec![view],
+            results,
             confidence: None,
             warnings: Vec::new(),
             execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
@@ -500,6 +503,19 @@ impl ToolRegistry {
                 BTreeMap::new(),
                 meta.corpus_generation,
             ),
+            research_checksum: research_checksum(
+                "quran.get_ayah",
+                GET_AYAH_VERSION,
+                &query,
+                &serde_json::json!({
+                    "reference": params.reference,
+                    "edition_slug": meta.edition_slug,
+                    "edition_version": meta.edition_version,
+                    "corpus_generation": meta.corpus_generation,
+                }),
+                &payload,
+            )
+            .expect("research checksum input is JSON-serializable"),
         };
         Ok((result, meta))
     }
@@ -538,6 +554,7 @@ impl ToolRegistry {
                 reference: reference.clone(),
             })
             .collect();
+        let payload = serde_json::to_value(&view).unwrap_or(serde_json::Value::Null);
         let result = ToolResult {
             tool_name: "quran.get_context".to_string(),
             tool_version: GET_CONTEXT_VERSION,
@@ -560,6 +577,19 @@ impl ToolRegistry {
                 BTreeMap::new(),
                 meta.corpus_generation,
             ),
+            research_checksum: research_checksum(
+                "quran.get_context",
+                GET_CONTEXT_VERSION,
+                &query,
+                &serde_json::json!({
+                    "reference": params.reference,
+                    "edition_slug": meta.edition_slug,
+                    "edition_version": meta.edition_version,
+                    "corpus_generation": meta.corpus_generation,
+                }),
+                &payload,
+            )
+            .expect("research checksum input is JSON-serializable"),
         };
         Ok((result, meta))
     }
@@ -775,6 +805,8 @@ mod tests {
         version: SemVer,
         query: serde_json::Value,
     ) -> ToolResult<serde_json::Value> {
+        let results = serde_json::json!({ "ok": true });
+        let payload = serde_json::to_value(&results).unwrap_or(serde_json::Value::Null);
         ToolResult {
             tool_name: tool.to_string(),
             tool_version: version,
@@ -787,7 +819,7 @@ mod tests {
                 kind: "dataset".to_string(),
                 reference: "test-morph@0.1.0".to_string(),
             }],
-            results: serde_json::json!({ "ok": true }),
+            results,
             confidence: None,
             warnings: Vec::new(),
             execution_time_ms: 0.0,
@@ -800,6 +832,18 @@ mod tests {
                 BTreeMap::new(),
                 3,
             ),
+            research_checksum: research_checksum(
+                tool,
+                version,
+                &query,
+                &serde_json::json!({
+                    "edition_slug": "test",
+                    "edition_version": "0.1.0",
+                    "corpus_generation": 3,
+                }),
+                &payload,
+            )
+            .expect("research checksum input is JSON-serializable"),
         }
     }
 

@@ -527,3 +527,52 @@ async fn lexicon_tools_are_attributed_with_an_active_dataset() {
     assert_eq!(lemma.tool_name, "quran.lemma");
     assert!(!lemma.analysis_sources.is_empty(), "lemma results attribute their dataset");
 }
+
+/// D-14/D-15: every `quran.get_ayah` result carries a non-empty,
+/// payload-sensitive `research_checksum` — identical calls reproduce it,
+/// a different payload moves it.
+#[tokio::test]
+async fn get_ayah_research_checksum_is_nonempty_and_payload_sensitive() {
+    let (_dir, _db, reader, _path) = active_reader().await;
+    let reader = Arc::new(reader);
+    let plain = GetAyahParams {
+        reference: "2:1".into(),
+        translations: Vec::new(),
+        glosses: false,
+        tokens: false,
+    };
+    let (first, _) = tool_get_ayah(&reader, plain).await.unwrap();
+    assert!(!first.research_checksum.hex.is_empty(), "checksum must be non-empty");
+    let (again, _) = tool_get_ayah(
+        &reader,
+        GetAyahParams {
+            reference: "2:1".into(),
+            translations: Vec::new(),
+            glosses: false,
+            tokens: false,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        first.research_checksum, again.research_checksum,
+        "identical tool + inputs + payload reproduces the checksum"
+    );
+    // A richer payload (tokens attached) moves the digest.
+    let (with_tokens, _) = tool_get_ayah(
+        &reader,
+        GetAyahParams {
+            reference: "2:1".into(),
+            translations: Vec::new(),
+            glosses: false,
+            tokens: true,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(!with_tokens.research_checksum.hex.is_empty());
+    assert_ne!(
+        first.research_checksum, with_tokens.research_checksum,
+        "a different result payload must change the checksum"
+    );
+}

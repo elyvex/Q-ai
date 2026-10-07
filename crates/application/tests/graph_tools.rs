@@ -482,3 +482,37 @@ async fn graph_suggestion_results_are_labeled_pending_in_warnings() {
     );
     drop(service);
 }
+
+/// D-14/D-15: every graph tool result carries a non-empty,
+/// payload-sensitive `research_checksum` — identical calls reproduce it,
+/// a different payload moves it.
+#[tokio::test]
+async fn graph_tools_carry_nonempty_payload_sensitive_research_checksum() {
+    let (_dir, _service, registry) = live_registry().await;
+    let params = || tool_registry::GraphNeighborsParams {
+        node: "ayah:1:1".to_string(),
+        edge_types: None,
+        direction: None,
+        budgets: tool_registry::GraphBudgetsParams::default(),
+    };
+    let first = registry.graph_neighbors(params()).await.expect("neighbors tool answers");
+    assert!(!first.research_checksum.hex.is_empty(), "checksum must be non-empty");
+    let again = registry.graph_neighbors(params()).await.expect("neighbors tool answers again");
+    assert_eq!(
+        first.research_checksum, again.research_checksum,
+        "identical tool + inputs + payload reproduces the checksum"
+    );
+    // A different seed node yields a different payload, which moves the digest.
+    let other = registry
+        .graph_neighbors(tool_registry::GraphNeighborsParams {
+            node: "ayah:1:2".to_string(),
+            ..params()
+        })
+        .await
+        .expect("neighbors tool answers for a second node");
+    assert!(!other.research_checksum.hex.is_empty());
+    assert_ne!(
+        first.research_checksum, other.research_checksum,
+        "a different result payload must change the checksum"
+    );
+}
