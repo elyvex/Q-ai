@@ -4,6 +4,7 @@
 //! [`api`] against a backend trait, so contract tests run with fakes.
 
 pub mod api;
+pub mod webassets;
 
 use std::net::SocketAddr;
 use thiserror::Error;

@@ -1472,3 +1472,44 @@ async fn lexicon_count_routes_are_typed_when_the_dataset_is_unavailable() {
     }
     handle.abort();
 }
+
+/// 05-04 SPA fallback (D-01/D-03): client routes serve `index.html`, unknown
+/// `/api/*` paths 404 (never the SPA), health paths keep plain responses.
+///
+/// Environmental skip (same precedent as the OTLP manual gate): without a
+/// built `web/dist` the embed is empty by design (`allow_missing`), so the
+/// test bows out with a notice instead of failing. CI builds the SPA first
+/// (05-07); locally run `npm run build` in `web/`.
+#[tokio::test]
+async fn spa_fallback_serves_index_and_preserves_api() {
+    if server::webassets::spa_index_present() {
+        // marker only; the real assertions run below
+    } else {
+        eprintln!("SKIP spa_fallback: web/dist not built; run `npm run build` in web/");
+        return;
+    }
+    let (addr, handle) = serve_once().await;
+    let (status, headers, body) = get(&addr, "/read/hafs-uthmani@1.0.0/2:255", &[]).await;
+    assert_eq!(status, StatusCode::OK, "client route serves the SPA");
+    let content_type = headers
+        .get("content-type")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_string();
+    assert!(content_type.starts_with("text/html"), "SPA is html, got {content_type}");
+    let text = String::from_utf8_lossy(&body);
+    assert!(text.contains(r#"id="root""#), "client route serves index.html");
+
+    let (status, _, _) = get(&addr, "/api/v1/does-not-exist", &[]).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "unknown /api/* is 404, never the SPA");
+
+    for path in ["/healthz", "/readyz"] {
+        let (status, _, body) = get(&addr, path, &[]).await;
+        assert_eq!(status, StatusCode::OK, "{path} keeps its plain response");
+        assert!(
+            !String::from_utf8_lossy(&body).contains(r#"id="root""#),
+            "{path} never serves SPA content"
+        );
+    }
+    handle.abort();
+}

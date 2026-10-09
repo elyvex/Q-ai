@@ -2227,6 +2227,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/quran/graph/pattern", post(graph_pattern_handler))
         .route("/api/v1/quran/graph/root-family", post(graph_root_family_handler))
         .route("/debug/read/{edition}/{surah}", get(debug_reader_handler))
+        .fallback(crate::webassets::spa_fallback)
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .layer(tower_http::limit::RequestBodyLimitLayer::new(1024 * 1024))
         .layer(tower_http::timeout::TimeoutLayer::with_status_code(
