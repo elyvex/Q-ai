@@ -102,7 +102,7 @@ status: complete
 ## Task Commits
 
 1. **Task 1: Confirm citation-identity contract (blocking-decision)** - owner answer recorded here (no code)
-2. **Task 2: Copy + open flow** - `HEAD` feat commit (this run)
+2. **Task 2: Copy + open flow** - `69b811c` (feat)
 
 **Plan metadata:** `HEAD` (docs: this file)
 
