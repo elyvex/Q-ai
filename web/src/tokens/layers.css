@@ -1,0 +1,45 @@
+/* Shared layer-token set (D-08/D-09, ADR-0112): the single vocabulary that
+ * keeps canonical text, translations, and annotations structurally
+ * distinct. Components never hard-code colours — they use these tokens.
+ * Canonical text lives ONLY inside `--layer-canonical-*`; a translation
+ * never receives a canonical token. */
+
+:root {
+  --layer-canonical-fg: #1b1b1f;
+  --layer-canonical-bg: #ffffff;
+  --layer-canonical-accent: #0f766e;
+  --layer-translation-fg: #334155;
+  --layer-translation-bg: #f1f5f9;
+  --layer-annotation-fg: #7c2d12;
+  --layer-annotation-bg: #fff7ed;
+  --layer-font-arabic: 'Amiri', 'Scheherazade New', 'Noto Naskh Arabic', 'Geeza Pro', serif;
+}
+
+.ayah-canonical {
+  color: var(--layer-canonical-fg);
+  background: var(--layer-canonical-bg);
+  font-family: var(--layer-font-arabic);
+}
+
+.ayah-translation {
+  color: var(--layer-translation-fg);
+  background: var(--layer-translation-bg);
+}
+
+.ayah-annotation {
+  color: var(--layer-annotation-fg);
+  background: var(--layer-annotation-bg);
+}
+
+.layer-canonical {
+  color: var(--layer-canonical-fg);
+  border-color: var(--layer-canonical-accent);
+}
+
+.layer-translation {
+  color: var(--layer-translation-fg);
+}
+
+.layer-annotation {
+  color: var(--layer-annotation-fg);
+}

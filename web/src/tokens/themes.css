@@ -1,0 +1,32 @@
+/* Theme overrides for the layer tokens (D-08). Selected via
+ * `data-theme` on the document root; unset means the light defaults. */
+
+[data-theme='dark'] {
+  --layer-canonical-fg: #e5e7eb;
+  --layer-canonical-bg: #0b1020;
+  --layer-canonical-accent: #2dd4bf;
+  --layer-translation-fg: #cbd5e1;
+  --layer-translation-bg: #1e293b;
+  --layer-annotation-fg: #fed7aa;
+  --layer-annotation-bg: #431407;
+}
+
+[data-theme='sepia'] {
+  --layer-canonical-fg: #433422;
+  --layer-canonical-bg: #f4ecd8;
+  --layer-canonical-accent: #0f766e;
+  --layer-translation-fg: #5b4a36;
+  --layer-translation-bg: #e9dfc9;
+  --layer-annotation-fg: #7c2d12;
+  --layer-annotation-bg: #efe0c3;
+}
+
+[data-theme='contrast'] {
+  --layer-canonical-fg: #ffffff;
+  --layer-canonical-bg: #000000;
+  --layer-canonical-accent: #ffff00;
+  --layer-translation-fg: #ffffff;
+  --layer-translation-bg: #000000;
+  --layer-annotation-fg: #ffff00;
+  --layer-annotation-bg: #000000;
+}
