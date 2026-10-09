@@ -130,6 +130,27 @@ fn suggestion_warnings(explanation: &Explanation) -> Vec<String> {
     warnings
 }
 
+/// Strip wall-clock timing from checksum inputs: `duration_ms` is
+/// presentational-only, so covering it would make identical calls produce
+/// different checksums on different legs (D-16). The displayed payload is
+/// untouched — only the checksum-input clone is scrubbed.
+fn scrub_timing(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            map.remove("duration_ms");
+            for field in map.values_mut() {
+                scrub_timing(field);
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                scrub_timing(item);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Assemble the full tool envelope over a read-service payload.
 #[allow(clippy::too_many_arguments)]
 fn envelope(
@@ -144,6 +165,8 @@ fn envelope(
     warnings: Vec<String>,
     started: Instant,
 ) -> ToolResult<serde_json::Value> {
+    let mut checksum_results = results.clone();
+    scrub_timing(&mut checksum_results);
     ToolResult {
         tool_name: tool.to_string(),
         tool_version: version,
@@ -176,7 +199,7 @@ fn envelope(
                 "corpus_generation": meta.corpus_generation,
                 "sources": source_versions,
             }),
-            &results,
+            &checksum_results,
         )
         .expect("research checksum input is JSON-serializable"),
     }

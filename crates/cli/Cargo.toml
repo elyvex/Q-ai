@@ -20,6 +20,17 @@ tracing = { workspace = true }
 tempfile = { workspace = true }
 trycmd = { workspace = true }
 sqlx = { workspace = true }
+application = { path = "../application" }
+domain = { path = "../domain" }
+quran-corpus = { path = "../quran-corpus" }
+quran-core = { path = "../quran-core" }
+storage = { path = "../storage" }
+storage-sqlite = { path = "../storage-sqlite" }
+tool-registry = { path = "../tool-registry" }
+tools = { path = "../tools" }
+axum = { workspace = true }
+serde = { workspace = true }
+tower = { workspace = true }
 
 [lints]
 workspace = true

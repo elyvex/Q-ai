@@ -43,7 +43,7 @@ workspace = { allow = ["domain", "storage", "provenance"] }
 # parity legs, so it admits the `tui` edge plus the tool/domain crates the
 # parity HTTP/tool legs name (`router(state).oneshot(...)`,
 # `domain::hashing::canonical_json_bytes`).
-workspace = { allow = ["application", "config", "domain", "observability", "quran-core", "server", "tool-registry", "tools", "tui"] }
+workspace = { allow = ["application", "config", "domain", "observability", "quran-corpus", "quran-core", "server", "storage", "storage-sqlite", "tool-registry", "tools", "tui"] }
 
 [server]
 # `server` is the HTTP interface layer. OD-14 accepts `server -> storage` +
