@@ -32,10 +32,10 @@ fn read_tree(dir: &Path, extensions: &[&str]) -> Vec<(PathBuf, String)> {
             let path = entry.path();
             if path.is_dir() {
                 stack.push(path);
-            } else if extensions.iter().any(|ext| path.extension().is_some_and(|e| e == *ext)) {
-                if let Ok(text) = std::fs::read_to_string(&path) {
-                    out.push((path, text));
-                }
+            } else if extensions.iter().any(|ext| path.extension().is_some_and(|e| e == *ext))
+                && let Ok(text) = std::fs::read_to_string(&path)
+            {
+                out.push((path, text));
             }
         }
     }
