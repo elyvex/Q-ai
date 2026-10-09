@@ -1,20 +1,30 @@
 # Progress Status
 
-**Updated:** 2026-10-02
-**Active phase:** Phase 3.5 — Residual Closure (INSERTED) — `.planning/phases/03.5-residual-closure/` — closing (Wave 4/4)
+**Updated:** 2026-10-09
+**Active phase:** Phase 5 — Rich Quran Experience — **complete (9/9 plans, `cargo xtask ci` 11 steps green)**
+**Next:** Phase 6 — Hadith & Tafsir
 **Phase-state authority:** `.planning/STATE.md` + per-phase SUMMARY
 **Task-granularity authority:** `docs/03-plan/phases/*/tasks.md`
 **Evidence authority:** per-phase `done.md` ledgers
 
 ## Summary
 
-Phase 3.5 (Residual Closure) is closing. The legacy boards were reconciled
-against the live tree (plan 03.5-01) and re-verified at close (plan 03.5-04):
-Phase 2 sums to 75/114 rows ☑ across §1–§8 with 25 ◐ rows covering
-partial/synthetic/owner-gated work. All four 03.5 plans are complete
-(reconciliation + docs, counting/index-job, harness/conformance/goldens/soak,
-hardening/gates); the W1–W10 evidence matrix below names the proving command
-for every workstream, and all 14 owner decisions remain open.
+Phase 5 (Rich Quran Experience) is complete: 9/9 plans across 6 waves, all
+summarized in `.planning/phases/05-rich-quran-experience/`. The full
+`cargo xtask ci` gate (11 steps: fmt/clippy/spa-build/test/deny/parity/
+arch-check/migrate-check/adr-lint/gen-schema/doctor-schema) is green.
+Owner gates OD-04/OD-11/OD-12 remain recorded BLOCKED (never answered).
+
+- **SC1** RTL reading, translation panels, word inspector, deep links — SPA
+  reading view, 9/9 Vitest green, `npm run build` green (05-06).
+- **SC2** citation copy re-verifies at the exact source; mismatch hard-fails —
+  URN on the resolve DTO, `citation_open` gate + SPA flow (05-08).
+- **SC3** identical results + checksum across UI/API/CLI — 12-tool × 3-leg
+  parity gate + snapshot, all green (05-01/05-03).
+- **SC4** TUI cockpit (palette, ops/reader/search/graph/annotation/RAG-debug
+  screens) over shared services — 12/12 tui tests green (05-02/05-05).
+- **SC5** unmistakable layer distinction — layer tokens + type guard + committed
+  source scan 7/7 green (05-06/05-07).
 
 ## Gate status
 

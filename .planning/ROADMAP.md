@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Quran Search & Linguistics** - Normalization, roots/lemmas, morphology, frequency tools (completed 2026-09-28)
 - [x] **Phase 3.5: Residual Closure (INSERTED)** - Engineering remainder of Phases 1-3, status truth restoration, owner-gate readiness (completed 2026-10-02)
 - [x] **Phase 4: Quran Graph** - Graph store, traversal, annotations, visualization (completed 2026-09-29)
-- [ ] **Phase 5: Rich Quran Experience** - Web GUI, TUI cockpit, research tools, result contract
+- [x] **Phase 5: Rich Quran Experience** - Web GUI, TUI cockpit, research tools, result contract
 - [ ] **Phase 6: Hadith & Tafsir** - Structured records, grading, verse links, tafsir indexing
 - [ ] **Phase 7: Isnad & Narrator Research** - Identity review, chain paths, uncertainty
 - [ ] **Phase 8: Multi-RAG Platform** - Full-text, vector, hybrid, reranking, generic RAG projects
@@ -347,7 +347,7 @@ Phase 3.5 is an INSERTED gap-closure phase; it runs after Phase 4 and does not g
 | 3. Quran Search & Linguistics | 8/8 | Complete (owner gates OD-11/OD-12 open) | 2026-09-28 |
 | 3.5. Residual Closure (INSERTED) | 4/4 | Complete (W1–W10 evidence matrix; owner gates OD-01…OD-14 open) | 2026-10-02 |
 | 4. Quran Graph | 5/5 | Complete (M5 blocked on OD-11) | 2026-09-29 |
-| 5. Rich Quran Experience | 0/TBD | Not started | - |
+| 5. Rich Quran Experience | 9/9 | Complete (owner gates OD-04/OD-11/OD-12 open) | 2026-10-09 |
 | 6. Hadith & Tafsir | 0/TBD | Not started | - |
 | 7. Isnad & Narrator Research | 0/TBD | Not started | - |
 | 8. Multi-RAG Platform | 0/TBD | Not started | - |

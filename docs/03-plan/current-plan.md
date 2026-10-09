@@ -1,8 +1,8 @@
 # Current Plan — Active Phase Pointer
 
-**Updated:** 2026-10-02
-**Active phase:** Phase 3.5 — Residual Closure (INSERTED) — `.planning/phases/03.5-residual-closure/` — **complete**
-**Next phase:** Phase 5 — Rich Quran Experience (per `.planning/ROADMAP.md`)
+**Updated:** 2026-10-09
+**Active phase:** Phase 5 — Rich Quran Experience — **complete (9/9 plans, green 11-step gate)**
+**Next phase:** Phase 6 — Hadith & Tafsir (per `.planning/ROADMAP.md`)
 
 - **Phase-state authority:** `.planning/STATE.md` + per-phase SUMMARY files.
 - **Task-granularity authority:** `docs/03-plan/phases/*/tasks.md` boards.
