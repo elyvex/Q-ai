@@ -3,6 +3,9 @@
 // back to the reading view (the server fallback serves index.html).
 import { useEffect, useState } from 'react'
 import ReadingView from './views/ReadingView'
+import ResearchView from './views/ResearchView'
+import GraphView from './views/GraphView'
+import RagDebugView from './views/RagDebugView'
 import { fetchAyahs, type AyahView } from './api/client'
 
 export function parseReadPath(path: string): string | null {
@@ -10,6 +13,20 @@ export function parseReadPath(path: string): string | null {
   if (!match) return null
   void match[1]
   return match[2]
+}
+
+function Nav({ path }: { path: string }) {
+  const link = (href: string, label: string) => (
+    <a href={href} aria-current={path === href ? 'page' : undefined}>
+      {label}
+    </a>
+  )
+  return (
+    <nav>
+      {link('/', 'read')} {link('/research', 'research')} {link('/graph', 'graph')}{' '}
+      {link('/rag-debug', 'rag-debug')}
+    </nav>
+  )
 }
 
 export default function Router({ path }: { path: string }) {
@@ -32,10 +49,44 @@ export default function Router({ path }: { path: string }) {
     }
   }, [reference])
 
+  if (path === '/research') {
+    return (
+      <>
+        <Nav path={path} />
+        <ResearchView query="" />
+      </>
+    )
+  }
+  if (path === '/graph') {
+    return (
+      <>
+        <Nav path={path} />
+        <GraphView lines={[]} truncated={false} />
+      </>
+    )
+  }
+  if (path === '/rag-debug') {
+    return (
+      <>
+        <Nav path={path} />
+        <RagDebugView />
+      </>
+    )
+  }
   if (reference === null) {
-    return <p>reading view — open a /read/… deep link</p>
+    return (
+      <>
+        <Nav path={path} />
+        <p>reading view — open a /read/… deep link</p>
+      </>
+    )
   }
   if (error !== null) return <p role="alert">{error}</p>
   if (ayahs === null) return <p>loading…</p>
-  return <ReadingView ayahs={ayahs} onResolve={() => {}} />
+  return (
+    <>
+      <Nav path={path} />
+      <ReadingView ayahs={ayahs} onResolve={() => {}} />
+    </>
+  )
 }

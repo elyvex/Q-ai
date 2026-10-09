@@ -85,3 +85,58 @@ export function fetchCitation(id: string): Promise<Envelope<unknown>> {
 export function runTool(name: string, params: unknown): Promise<Envelope<unknown>> {
   return post<unknown>(`/api/v1/quran/tool/${encodeURIComponent(name)}`, params)
 }
+
+// ─── Research methods (05-09): one typed method per surface route ───
+
+export type SearchMode = 'exact' | 'normalized' | 'phrase' | 'concatenated' | 'regex'
+
+/** POST /api/v1/quran/search/{mode} — lexical search over the serving index. */
+export function search(mode: SearchMode, query: string): Promise<Envelope<unknown>> {
+  return post<unknown>(`/api/v1/quran/search/${mode}`, { text: query })
+}
+
+/** POST /api/v1/quran/family — word-family relations for one member. */
+export function family(kind: string, id: string): Promise<Envelope<unknown>> {
+  return post<unknown>('/api/v1/quran/family', { kind, id })
+}
+
+/** POST /api/v1/quran/count/root-frequency — exact rules-blocked root count. */
+export function rootFrequency(root: string): Promise<Envelope<unknown>> {
+  return post<unknown>('/api/v1/quran/count/root-frequency', { root })
+}
+
+/** POST /api/v1/quran/count/lemma-frequency — the lemma analogue. */
+export function lemmaFrequency(lemma: string): Promise<Envelope<unknown>> {
+  return post<unknown>('/api/v1/quran/count/lemma-frequency', { lemma })
+}
+
+/** POST /api/v1/quran/count/frequency — exact token frequency under a profile. */
+export function frequency(target: string, profile: string): Promise<Envelope<unknown>> {
+  return post<unknown>('/api/v1/quran/count/frequency', { target, profile })
+}
+
+/** POST /api/v1/quran/count/distribution — frequency partitioned by surah. */
+export function distribution(target: string, profile: string): Promise<Envelope<unknown>> {
+  return post<unknown>('/api/v1/quran/count/distribution', { target, profile })
+}
+
+/** POST /api/v1/quran/count/cooccurrence — windowed co-occurrence. */
+export function cooccurrence(
+  target: string,
+  profile: string,
+  window: number,
+): Promise<Envelope<unknown>> {
+  return post<unknown>('/api/v1/quran/count/cooccurrence', { target, profile, window })
+}
+
+// ─── Graph methods (05-09): neighbors + paths over the frozen payload ───
+
+/** POST /api/v1/quran/graph/neighbors — bounded neighbors with provenance. */
+export function graphNeighbors(node: string): Promise<Envelope<unknown>> {
+  return post<unknown>('/api/v1/quran/graph/neighbors', { node })
+}
+
+/** POST /api/v1/quran/graph/path — reachability/shortest/paths between nodes. */
+export function graphPath(from: string, to: string): Promise<Envelope<unknown>> {
+  return post<unknown>('/api/v1/quran/graph/path', { from, to })
+}
