@@ -185,7 +185,7 @@ async fn seed() -> Seed {
     let outcome = run_import(
         &*db,
         &ImportInput {
-            run_id: "parity-run".into(),
+            run_id: "22222222-3333-4444-8555-666666666666".into(),
             job_id: None,
             source_version_id: SOURCE_VERSION_ID.into(),
             adapter: "json".into(),

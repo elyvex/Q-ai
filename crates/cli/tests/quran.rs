@@ -586,6 +586,15 @@ fn quran_family_snapshots() {
     guard.run_segments(&["tests/quran/family_s1.trycmd", "tests/quran/family_s2.trycmd"]);
 }
 
+/// Phase 5 cross-surface parity snapshot (D-16/SC3): host-backed import,
+/// then the typed-tool verb emits the serialized `ToolResult` with its
+/// `research_checksum` (the CLI leg of `parity_cross_surface.rs`).
+#[test]
+fn quran_parity_snapshots() {
+    let guard = ServeGuard::start();
+    guard.run_segments(&["tests/quran/parity_s0.trycmd", "tests/quran/parity_s1.trycmd"]);
+}
+
 /// Upstream catalog ingestion (metadata-only, no database).
 #[test]
 fn quran_catalog_snapshots() {

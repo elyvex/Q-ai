@@ -1,0 +1,102 @@
+# Phase 5 CLI acceptance — cross-surface parity gate (D-16/SC3).
+#
+# Segment 2 of 2 (host-backed, D-13): the segment-1 import has reached its
+# host-owned terminal state. Activating, then proving the typed-tool verb
+# emits the serialized `ToolResult` with its `research_checksum` (the CLI
+# leg of `crates/cli/tests/parity_cross_surface.rs`).
+
+```console
+$ qai quran activate test-edition-min@0.1.0 --yes
+activated test-edition-min@0.1.0 (generation 1)
+
+```
+
+```console
+$ qai quran tool quran.get_ayah --params '{"reference": "2:1"}' --json
+{
+  "analysis_sources": [
+    {
+      "kind": "canonical",
+      "reference": "quran:test-edition-min@0.1.0:2:1"
+    }
+  ],
+  "canonical_references": [
+    "quran:test-edition-min@0.1.0:2:1"
+  ],
+  "confidence": null,
+  "edition_id": "[..]",
+  "edition_version": "0.1.0",
+  "execution_time_ms": [..],
+  "normalization_rules": [],
+  "query": {
+    "glosses": false,
+    "reference": "2:1",
+    "tokens": false,
+    "translations": []
+  },
+  "reproducibility": {
+    "checksum": {
+      "algorithm": "Sha256",
+      "hex": "68f07ba0266c68912e354e490c062b7e21f8052654ff87d3f20e8cfa99a717f7"
+    },
+    "corpus_generation": 1,
+    "deterministic": true,
+    "edition_versions": {
+      "test-edition-min": "0.1.0"
+    },
+    "model_name": null,
+    "model_provider": null,
+    "normalization_rule_set": null,
+    "prompt_version": null,
+    "query_hash": {
+      "algorithm": "Sha256",
+      "hex": "87fb07f9fed51e3352556378c5a8d2342686759a3681bcb16c36ef4d4292ae14"
+    },
+    "retrieval_config_hash": null,
+    "source_versions": {},
+    "tool_plan": [
+      "quran.get_ayah@1.0.0"
+    ]
+  },
+  "research_checksum": {
+    "algorithm": "Sha256",
+    "hex": "ad512ac45743a8ac38e53c86695b04348d6dc426ffd2d7ea413409c5e6d57bc0"
+  },
+  "results": [
+    {
+      "canonical": {
+        "arabic_text": "نَبلهُم هم شأُو يُتساَ اكنَبل بلَ",
+        "ayah_range": [
+          1,
+          1
+        ],
+        "deep_link": "/read/test-edition-min@0.1.0/2:1",
+        "edition": {
+          "riwayah": null,
+          "script": "uthmani",
+          "slug": "test-edition-min",
+          "version": "0.1.0"
+        },
+        "juz": 1,
+        "page": 2,
+        "reference": "quran:test-edition-min@0.1.0:2:1",
+        "surah_name_arabic": "سورة تجريبية 2",
+        "surah_name_translit": "Test-2",
+        "surah_number": 2,
+        "text_hash": {
+          "algorithm": "Sha256",
+          "hex": "e30316244b84ea4fd56a85ec5ddbe894f82b5320a496635434a5ba255d28152d"
+        },
+        "translation": null
+      },
+      "tokens": null,
+      "translations": [],
+      "word_glosses": null
+    }
+  ],
+  "tool_name": "quran.get_ayah",
+  "tool_version": "1.0.0",
+  "warnings": []
+}
+
+```

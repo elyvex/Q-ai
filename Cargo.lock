@@ -503,17 +503,28 @@ name = "cli"
 version = "0.0.0"
 dependencies = [
  "application",
+ "axum",
  "clap",
  "config",
+ "domain",
  "observability",
+ "quran-core",
+ "quran-corpus",
+ "serde",
  "serde_json",
  "server",
  "sqlx",
+ "storage",
+ "storage-sqlite",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
+ "tool-registry",
+ "tools",
+ "tower",
  "tracing",
  "trycmd",
+ "tui",
 ]
 
 [[package]]
@@ -3937,6 +3948,7 @@ name = "tui"
 version = "0.0.0"
 dependencies = [
  "application",
+ "async-trait",
  "config",
  "domain",
  "observability",
