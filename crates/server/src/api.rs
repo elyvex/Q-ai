@@ -551,7 +551,8 @@ async fn tool_handler(
     }
 }
 
-async fn divisions_handler(    State(state): State<AppState>,
+async fn divisions_handler(
+    State(state): State<AppState>,
     headers: HeaderMap,
     Path((kind, number)): Path<(String, u32)>,
     Query(query): Query<SurahsQuery>,

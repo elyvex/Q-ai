@@ -318,8 +318,13 @@ pub async fn cmd_tool(db_path: &str, name: &str, params: &str) -> CommandOutput 
     let graph_registry = crate::quran_graph_tools::GraphToolBackend::registry(Arc::new(
         crate::quran_graph_api::FileGraphBackend::structural(db_path),
     ));
-    match crate::quran_tools::dispatch_registered_tool(&reader_registry, &graph_registry, name, value)
-        .await
+    match crate::quran_tools::dispatch_registered_tool(
+        &reader_registry,
+        &graph_registry,
+        name,
+        value,
+    )
+    .await
     {
         Ok(result) => CommandOutput::ok(format!("{name} ok"), result),
         Err(err) => CommandOutput::err(exit::USAGE, err.to_string()),

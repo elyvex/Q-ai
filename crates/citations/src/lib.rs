@@ -289,7 +289,7 @@ impl CitationResolver {
                 verdict: QuotationVerdict::EditionNotFound,
                 text_hash: None,
                 deep_link: None,
-                    urn: None,
+                urn: None,
             });
         }
         let canonical = self
@@ -302,7 +302,7 @@ impl CitationResolver {
                 verdict: QuotationVerdict::LocationNotFound,
                 text_hash: None,
                 deep_link: None,
-                    urn: None,
+                urn: None,
             });
         };
         Ok(ResolvedCitation {
@@ -315,12 +315,7 @@ impl CitationResolver {
                 surah,
                 ayah,
             )),
-            urn: Some(citation_urn(
-                &citation.edition_slug,
-                &citation.edition_version,
-                surah,
-                ayah,
-            )),
+            urn: Some(citation_urn(&citation.edition_slug, &citation.edition_version, surah, ayah)),
         })
     }
 
@@ -352,7 +347,7 @@ impl CitationResolver {
                 verdict: QuotationVerdict::LocationNotFound,
                 text_hash: None,
                 deep_link: None,
-                    urn: None,
+                urn: None,
             });
         }
         if !self.source.edition_exists(&stored.edition_slug, &stored.edition_version).await? {
@@ -361,7 +356,7 @@ impl CitationResolver {
                 verdict: QuotationVerdict::EditionNotFound,
                 text_hash: None,
                 deep_link: None,
-                    urn: None,
+                urn: None,
             });
         }
         let current = self
@@ -379,7 +374,7 @@ impl CitationResolver {
                 verdict: QuotationVerdict::LocationNotFound,
                 text_hash: None,
                 deep_link: None,
-                    urn: None,
+                urn: None,
             });
         };
         let current_hash = format!("sha256:{}", sha256_hex(&current));

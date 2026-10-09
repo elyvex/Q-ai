@@ -541,9 +541,8 @@ async fn cmd_tool_surfaces_research_checksum() {
     use tool_registry::ToolRegistry;
 
     let (_dir, _db, _reader, path) = active_reader().await;
-    let db = Arc::new(
-        storage_sqlite::SqliteDatabase::new(&path, 4, true).await.expect("test db opens"),
-    );
+    let db =
+        Arc::new(storage_sqlite::SqliteDatabase::new(&path, 4, true).await.expect("test db opens"));
     let reader_service = Arc::new(application::quran_reader::QuranReaderService::new(db));
     let reader_registry =
         ReaderToolBackend::registry_with_index_root(reader_service, index_root_for_db(&path));

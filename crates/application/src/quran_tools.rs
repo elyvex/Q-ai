@@ -738,8 +738,8 @@ pub async fn dispatch_registered_tool(
             Ok(serialized(&result))
         }
         "quran.get_context" => {
-            let params: GetContextParams =
-                serde_json::from_value(params).map_err(|err| bad_params("quran.get_context", err))?;
+            let params: GetContextParams = serde_json::from_value(params)
+                .map_err(|err| bad_params("quran.get_context", err))?;
             let (result, _) = reader.get_context(params).await?;
             Ok(serialized(&result))
         }

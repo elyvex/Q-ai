@@ -36,10 +36,7 @@ impl QuranApiBackend for FakeApi {
     async fn api_edition(&self, _slug: &str) -> Result<serde_json::Value, tools::ToolError> {
         unimplemented!()
     }
-    async fn api_surahs(
-        &self,
-        _edition: &str,
-    ) -> Result<Vec<quran_core::Surah>, tools::ToolError> {
+    async fn api_surahs(&self, _edition: &str) -> Result<Vec<quran_core::Surah>, tools::ToolError> {
         unimplemented!()
     }
     async fn api_surah(
@@ -65,7 +62,10 @@ impl QuranApiBackend for FakeApi {
     ) -> Result<Vec<quran_core::Token>, tools::ToolError> {
         unimplemented!()
     }
-    async fn api_citation(&self, id: &str) -> Result<citations::ResolvedCitation, tools::ToolError> {
+    async fn api_citation(
+        &self,
+        id: &str,
+    ) -> Result<citations::ResolvedCitation, tools::ToolError> {
         match id {
             "cite-ok" => Ok(citations::ResolvedCitation {
                 citation_id: id.to_string(),
@@ -105,10 +105,7 @@ fn state() -> AppState {
 
 async fn get(path: &str) -> (axum::http::StatusCode, serde_json::Value) {
     use tower::ServiceExt as _;
-    let request = axum::http::Request::builder()
-        .uri(path)
-        .body(axum::body::Body::empty())
-        .unwrap();
+    let request = axum::http::Request::builder().uri(path).body(axum::body::Body::empty()).unwrap();
     let response = router(state()).oneshot(request).await.unwrap();
     let status = response.status();
     let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
@@ -141,46 +138,182 @@ async fn open_missing_citation_is_not_found() {
     assert_eq!(status, axum::http::StatusCode::NOT_FOUND);
 }
 
+use application::{
+    quran_counting::FrequencyReport,
+    quran_morphology::FamilyMemberView,
+    quran_search::{SearchError, SearchOutput},
+};
 use application::{quran_graph_api::*, quran_lexicon_api::*, quran_search_api::*};
-use application::{quran_counting::FrequencyReport, quran_morphology::FamilyMemberView, quran_search::{SearchError, SearchOutput}};
 struct StubSearch;
 #[async_trait::async_trait]
 impl application::quran_search_api::SearchBackend for StubSearch {
-    async fn search_exact(&self, _args: ExactArgs) -> Result<SearchOutput, SearchError> { unimplemented!() }
-    async fn search_normalized(&self, _args: NormalizedArgs) -> Result<SearchOutput, SearchError> { unimplemented!() }
-    async fn search_phrase(&self, _args: PhraseArgs) -> Result<SearchOutput, SearchError> { unimplemented!() }
-    async fn search_concatenated(&self, _args: ConcatenatedArgs) -> Result<SearchOutput, SearchError> { unimplemented!() }
-    async fn search_regex(&self, _args: RegexArgs) -> Result<SearchOutput, SearchError> { unimplemented!() }
+    async fn search_exact(&self, _args: ExactArgs) -> Result<SearchOutput, SearchError> {
+        unimplemented!()
+    }
+    async fn search_normalized(&self, _args: NormalizedArgs) -> Result<SearchOutput, SearchError> {
+        unimplemented!()
+    }
+    async fn search_phrase(&self, _args: PhraseArgs) -> Result<SearchOutput, SearchError> {
+        unimplemented!()
+    }
+    async fn search_concatenated(
+        &self,
+        _args: ConcatenatedArgs,
+    ) -> Result<SearchOutput, SearchError> {
+        unimplemented!()
+    }
+    async fn search_regex(&self, _args: RegexArgs) -> Result<SearchOutput, SearchError> {
+        unimplemented!()
+    }
 }
 
 struct StubLexicon;
 #[async_trait::async_trait]
 impl application::quran_lexicon_api::LexiconBackend for StubLexicon {
-    async fn word_family(&self, _args: FamilyArgs) -> Result<Vec<FamilyMemberView>, LexiconApiError> { unimplemented!() }
-    async fn root_frequency(&self, _args: RootFrequencyArgs) -> Result<FrequencyReport, LexiconApiError> { unimplemented!() }
-    async fn lemma_frequency(&self, _args: LemmaFrequencyArgs) -> Result<FrequencyReport, LexiconApiError> { unimplemented!() }
-    async fn count_frequency(&self, _target: &str, _profile: &str) -> Result<FrequencyReport, LexiconApiError> { unimplemented!() }
-    async fn count_distribution(&self, _target: &str, _profile: &str) -> Result<application::quran_counting::DistributionReport, LexiconApiError> { unimplemented!() }
-    async fn count_occurrences(&self, _target: &str, _profile: &str) -> Result<application::quran_counting::OccurrenceSpan, LexiconApiError> { unimplemented!() }
-    async fn count_hapax(&self, _profile: &str, _limit: usize) -> Result<application::quran_counting::HapaxReport, LexiconApiError> { unimplemented!() }
-    async fn count_cooccurrence(&self, _target: &str, _profile: &str, _window: usize, _limit: usize) -> Result<(application::quran_counting::CountingRules, Vec<application::quran_counting::CooccurrenceHit>), LexiconApiError> { unimplemented!() }
-    async fn count_collocation(&self, _target: &str, _profile: &str, _window: usize, _limit: usize) -> Result<(application::quran_counting::CountingRules, Vec<application::quran_counting::CollocationHit>), LexiconApiError> { unimplemented!() }
-    async fn count_numeric_report(&self, _target: &str, _profile: &str) -> Result<application::quran_counting::NumericReport, LexiconApiError> { unimplemented!() }
-    async fn count_missing_form(&self, _target: &str, _profile: &str) -> Result<application::quran_counting::MissingFormReport, LexiconApiError> { unimplemented!() }
-    async fn count_near_duplicates(&self, _threshold: f64, _limit: usize) -> Result<(application::quran_counting::CountingRules, Vec<application::quran_counting::NearDuplicateHit>), LexiconApiError> { unimplemented!() }
-    async fn count_interval(&self, _target: &str, _profile: &str) -> Result<application::quran_counting::OccurrenceSpan, LexiconApiError> { unimplemented!() }
-    async fn count_unusual_usage(&self, _target: &str, _profile: &str) -> Result<application::quran_counting::NumericReport, LexiconApiError> { unimplemented!() }
+    async fn word_family(
+        &self,
+        _args: FamilyArgs,
+    ) -> Result<Vec<FamilyMemberView>, LexiconApiError> {
+        unimplemented!()
+    }
+    async fn root_frequency(
+        &self,
+        _args: RootFrequencyArgs,
+    ) -> Result<FrequencyReport, LexiconApiError> {
+        unimplemented!()
+    }
+    async fn lemma_frequency(
+        &self,
+        _args: LemmaFrequencyArgs,
+    ) -> Result<FrequencyReport, LexiconApiError> {
+        unimplemented!()
+    }
+    async fn count_frequency(
+        &self,
+        _target: &str,
+        _profile: &str,
+    ) -> Result<FrequencyReport, LexiconApiError> {
+        unimplemented!()
+    }
+    async fn count_distribution(
+        &self,
+        _target: &str,
+        _profile: &str,
+    ) -> Result<application::quran_counting::DistributionReport, LexiconApiError> {
+        unimplemented!()
+    }
+    async fn count_occurrences(
+        &self,
+        _target: &str,
+        _profile: &str,
+    ) -> Result<application::quran_counting::OccurrenceSpan, LexiconApiError> {
+        unimplemented!()
+    }
+    async fn count_hapax(
+        &self,
+        _profile: &str,
+        _limit: usize,
+    ) -> Result<application::quran_counting::HapaxReport, LexiconApiError> {
+        unimplemented!()
+    }
+    async fn count_cooccurrence(
+        &self,
+        _target: &str,
+        _profile: &str,
+        _window: usize,
+        _limit: usize,
+    ) -> Result<
+        (
+            application::quran_counting::CountingRules,
+            Vec<application::quran_counting::CooccurrenceHit>,
+        ),
+        LexiconApiError,
+    > {
+        unimplemented!()
+    }
+    async fn count_collocation(
+        &self,
+        _target: &str,
+        _profile: &str,
+        _window: usize,
+        _limit: usize,
+    ) -> Result<
+        (
+            application::quran_counting::CountingRules,
+            Vec<application::quran_counting::CollocationHit>,
+        ),
+        LexiconApiError,
+    > {
+        unimplemented!()
+    }
+    async fn count_numeric_report(
+        &self,
+        _target: &str,
+        _profile: &str,
+    ) -> Result<application::quran_counting::NumericReport, LexiconApiError> {
+        unimplemented!()
+    }
+    async fn count_missing_form(
+        &self,
+        _target: &str,
+        _profile: &str,
+    ) -> Result<application::quran_counting::MissingFormReport, LexiconApiError> {
+        unimplemented!()
+    }
+    async fn count_near_duplicates(
+        &self,
+        _threshold: f64,
+        _limit: usize,
+    ) -> Result<
+        (
+            application::quran_counting::CountingRules,
+            Vec<application::quran_counting::NearDuplicateHit>,
+        ),
+        LexiconApiError,
+    > {
+        unimplemented!()
+    }
+    async fn count_interval(
+        &self,
+        _target: &str,
+        _profile: &str,
+    ) -> Result<application::quran_counting::OccurrenceSpan, LexiconApiError> {
+        unimplemented!()
+    }
+    async fn count_unusual_usage(
+        &self,
+        _target: &str,
+        _profile: &str,
+    ) -> Result<application::quran_counting::NumericReport, LexiconApiError> {
+        unimplemented!()
+    }
 }
 
 struct StubGraph;
 #[async_trait::async_trait]
 impl application::quran_graph_api::GraphBackend for StubGraph {
-    async fn neighbors(&self, _args: NeighborsArgs) -> Result<NeighborsOutput, GraphApiError> { unimplemented!() }
-    async fn reachability(&self, _args: PathArgs) -> Result<ReachabilityOutput, GraphApiError> { unimplemented!() }
-    async fn shortest_path(&self, _args: PathArgs) -> Result<ShortestOutput, GraphApiError> { unimplemented!() }
-    async fn paths(&self, _args: PathsArgs) -> Result<PathsOutput, GraphApiError> { unimplemented!() }
-    async fn subgraph(&self, _args: SubgraphArgs) -> Result<SubgraphOutput, GraphApiError> { unimplemented!() }
-    async fn pattern(&self, _args: PatternArgs) -> Result<PatternOutput, GraphApiError> { unimplemented!() }
-    async fn root_family(&self, _args: RootFamilyArgs) -> Result<RootFamilyOutput, GraphApiError> { unimplemented!() }
-    async fn snapshot_meta(&self) -> Result<GraphSnapshotMeta, GraphApiError> { unimplemented!() }
+    async fn neighbors(&self, _args: NeighborsArgs) -> Result<NeighborsOutput, GraphApiError> {
+        unimplemented!()
+    }
+    async fn reachability(&self, _args: PathArgs) -> Result<ReachabilityOutput, GraphApiError> {
+        unimplemented!()
+    }
+    async fn shortest_path(&self, _args: PathArgs) -> Result<ShortestOutput, GraphApiError> {
+        unimplemented!()
+    }
+    async fn paths(&self, _args: PathsArgs) -> Result<PathsOutput, GraphApiError> {
+        unimplemented!()
+    }
+    async fn subgraph(&self, _args: SubgraphArgs) -> Result<SubgraphOutput, GraphApiError> {
+        unimplemented!()
+    }
+    async fn pattern(&self, _args: PatternArgs) -> Result<PatternOutput, GraphApiError> {
+        unimplemented!()
+    }
+    async fn root_family(&self, _args: RootFamilyArgs) -> Result<RootFamilyOutput, GraphApiError> {
+        unimplemented!()
+    }
+    async fn snapshot_meta(&self) -> Result<GraphSnapshotMeta, GraphApiError> {
+        unimplemented!()
+    }
 }

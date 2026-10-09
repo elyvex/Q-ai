@@ -257,13 +257,8 @@ mod tests {
         );
     }
 
-    fn checksum_fixture() -> (
-        &'static str,
-        SemVer,
-        serde_json::Value,
-        serde_json::Value,
-        serde_json::Value,
-    ) {
+    fn checksum_fixture()
+    -> (&'static str, SemVer, serde_json::Value, serde_json::Value, serde_json::Value) {
         (
             "quran.get_ayah",
             SemVer::new(1, 0, 0),
@@ -298,8 +293,8 @@ mod tests {
         assert_ne!(first, changed);
 
         // An empty payload still yields a non-null, non-empty digest.
-        let empty = research_checksum(tool, version, &params, &inputs, &serde_json::Value::Null)
-            .unwrap();
+        let empty =
+            research_checksum(tool, version, &params, &inputs, &serde_json::Value::Null).unwrap();
         assert!(!empty.hex.is_empty());
         assert_ne!(first, empty);
     }

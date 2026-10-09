@@ -62,9 +62,7 @@ fn canonical_props_clean(source: &str) -> bool {
                 // Field-shaped occurrence outside comments (e.g. inside the
                 // props interface). Destructured uses (`translation.text`)
                 // contain `translation.` not `translation:` — allowed.
-                if !lower.contains(&format!("{marker}."))
-                    || lower.contains(&format!("{marker}:"))
-                {
+                if !lower.contains(&format!("{marker}.")) || lower.contains(&format!("{marker}:")) {
                     return false;
                 }
             }
@@ -129,14 +127,9 @@ fn no_bundled_font(source: &str) -> bool {
 /// the tree uses); a bare `Command::new` is the palette's own constructor
 /// and must not trip the scan.
 fn tui_pure(source: &str) -> bool {
-    for marker in [
-        "process::Command",
-        "reqwest::",
-        "hyper::",
-        "HttpClient",
-        "http_client",
-        "ureq::",
-    ] {
+    for marker in
+        ["process::Command", "reqwest::", "hyper::", "HttpClient", "http_client", "ureq::"]
+    {
         if source.contains(marker) {
             return false;
         }
@@ -153,7 +146,8 @@ fn spa_canonical_slot_has_no_translation_prop() {
 
 #[test]
 fn spa_non_canonical_components_wear_no_canonical_class() {
-    for file in ["web/src/components/TranslationPanel.tsx", "web/src/components/WordInspector.tsx"] {
+    for file in ["web/src/components/TranslationPanel.tsx", "web/src/components/WordInspector.tsx"]
+    {
         let source = std::fs::read_to_string(root().join(file)).expect("component exists");
         assert!(no_canonical_class(&source), "{file} uses the canonical token class");
     }
@@ -161,8 +155,8 @@ fn spa_non_canonical_components_wear_no_canonical_class() {
 
 #[test]
 fn spa_layer_tokens_define_all_three_families() {
-    let source =
-        std::fs::read_to_string(root().join("web/src/tokens/layers.css")).expect("layers.css exists");
+    let source = std::fs::read_to_string(root().join("web/src/tokens/layers.css"))
+        .expect("layers.css exists");
     for family in ["--layer-canonical-", "--layer-translation-", "--layer-annotation-"] {
         assert!(source.contains(family), "layers.css lacks {family}");
     }
