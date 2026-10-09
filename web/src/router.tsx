@@ -6,13 +6,23 @@ import ReadingView from './views/ReadingView'
 import ResearchView from './views/ResearchView'
 import GraphView from './views/GraphView'
 import RagDebugView from './views/RagDebugView'
+import CitationView from './views/CitationView'
 import { fetchAyahs, type AyahView } from './api/client'
 
 export function parseReadPath(path: string): string | null {
-  const match = /^\/read\/([^/]+)\/(\d+:\d+)$/.exec(path)
+  const [pathname] = path.split('?', 1)
+  const match = /^\/read\/([^/]+)\/(\d+:\d+)$/.exec(pathname)
   if (!match) return null
   void match[1]
   return match[2]
+}
+
+/** Citation id carried on a deep link (`?citation=<id>`), if any. */
+export function parseCitationId(path: string): string | null {
+  const query = path.split('?', 2)[1]
+  if (!query) return null
+  const id = new URLSearchParams(query).get('citation')
+  return id && id.length > 0 ? id : null
 }
 
 function Nav({ path }: { path: string }) {
@@ -83,10 +93,12 @@ export default function Router({ path }: { path: string }) {
   }
   if (error !== null) return <p role="alert">{error}</p>
   if (ayahs === null) return <p>loading…</p>
+  const citationId = parseCitationId(path)
   return (
     <>
       <Nav path={path} />
       <ReadingView ayahs={ayahs} onResolve={() => {}} />
+      {citationId !== null && <CitationView citationId={citationId} />}
     </>
   )
 }

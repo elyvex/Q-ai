@@ -9,7 +9,8 @@ const THEMES = ['light', 'dark', 'sepia', 'contrast'] as const
 
 export default function App() {
   const [theme, setTheme] = useState<(typeof THEMES)[number]>('light')
-  const path = typeof window === 'undefined' ? '/' : window.location.pathname
+  const path =
+    typeof window === 'undefined' ? '/' : window.location.pathname + window.location.search
   return (
     <div data-theme={theme === 'light' ? undefined : theme}>
       <label>
