@@ -10,6 +10,7 @@ config = { path = "../config" }
 domain = { path = "../domain" }
 observability = { path = "../observability" }
 quran-core = { path = "../quran-core" }
+storage = { path = "../storage" }
 tool-registry = { path = "../tool-registry" }
 tools = { path = "../tools" }
 async-trait = { workspace = true }

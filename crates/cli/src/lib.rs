@@ -513,6 +513,7 @@ pub fn dispatch(cli: Cli) -> i32 {
                             search,
                             lexicon,
                             graph,
+                            db_path: db_path.clone(),
                         };
                         match tui::run(services).await {
                             Ok(()) => exit_code::OK,

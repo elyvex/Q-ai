@@ -59,7 +59,7 @@ workspace = { allow = ["application", "config", "observability", "tool-registry"
 # shelling out — plus the domain/observability/config types those services
 # surface. Added with its dependency in the owning allowlist plan (Pitfall 2).
 [tui]
-workspace = { allow = ["application", "config", "observability", "tools", "tool-registry", "quran-core", "domain"] }
+workspace = { allow = ["application", "config", "observability", "tools", "tool-registry", "quran-core", "domain", "storage"] }
 
 [observability]
 workspace = { allow = ["domain"] }

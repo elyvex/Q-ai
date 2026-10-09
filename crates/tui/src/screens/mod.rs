@@ -1,9 +1,21 @@
 //! Cockpit screens. Wave 1 ships the dashboard; later plans add
 //! reader/search/graph/ops screens behind the same `Screen` selector.
 
+pub mod annotation_review;
 pub mod dashboard;
+pub mod graph;
+pub mod ops;
+pub mod rag_debug;
+pub mod reader;
+pub mod search;
 
+pub use annotation_review::{AnnotationRow, render_annotation_review};
 pub use dashboard::render_dashboard;
+pub use graph::{GraphNavView, render_graph_nav};
+pub use ops::{IndexStatus, JobRow, render_doctor, render_index_status, render_jobs};
+pub use rag_debug::{RagState, render_rag_debug};
+pub use reader::render_reader;
+pub use search::{SearchRow, render_search};
 
 /// Cockpit destination selector. Mirrors the palette inventory one-to-one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
