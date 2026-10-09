@@ -48,7 +48,7 @@ lcov-*.info
 /.windsurf/
 
 # Regenerable tool output and local scratch files.
-/graphify-out/
+graphify-out/
 
 # Phase 5 SPA (05-04): build artifacts, only source tracked
 web/node_modules/
