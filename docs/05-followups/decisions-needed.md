@@ -89,6 +89,14 @@
   fonts); only the bundled binary needs this decision.
 - **Blocks:** `P1-T54`, `AC-P1-18`.
 - **Recorded in:** `tasks.md` §7, `acceptance.md` §1.6, `STATUS.md` §3.2.
+- **Phase 5 record (2026-10-09, plan 05-04/05-07):** stays 🔴 BLOCKED.
+  Shipped default: system Arabic font stack in the SPA layer tokens
+  (`web/src/tokens/layers.css` `--layer-font-arabic`) and no bundled
+  `@font-face` anywhere under `web/` (enforced by
+  `crates/application/tests/layer_separation.rs`). Remote-font references are
+  likewise scan-gated. Closing action: owner names the webfont file and
+  records its redistribution license; only then may a `url(*.woff2)`
+  `@font-face` land. Agent-uncloseable.
 
 ## OD-05 — Estimate / schedule gap: 82 ed stated vs 131.0 ed summed
 
@@ -151,6 +159,12 @@
 - **Needed:** dataset + license, before Phase 2 starts.
 - **Blocks:** `P1-X04`.
 - **Recorded in:** `tasks.md` §1.
+- **Phase 5 record (2026-10-09, plan 05-03/05-05):** stays 🔴 BLOCKED.
+  Phase 5 runs lexicon/graph surfaces on `synthetic_test_only` fixtures and
+  typed-unavailable states; no dataset selected. Closing action: owner selects
+  the morphology dataset and captures its license under `licenses/` per
+  `licenses/README.md`, then activation evidence flows through the dataset row
+  (plan 03-06 gate). Agent-uncloseable.
 
 ## OD-12 — Normalization rule catalog + linguist engagement (Phase-2 input)
 
@@ -160,6 +174,9 @@
 - **Needed:** catalog + linguist name, before Phase 2 starts.
 - **Blocks:** `P1-X05`.
 - **Recorded in:** `tasks.md` §1.
+- **Phase 5 record (2026-10-09, plan 05-06):** stays 🔴 BLOCKED. Goldens stay
+  `reviewed_by: pending-linguist`; ADRs remain Draft. Closing action: owner
+  names the Arabic linguist and accepts ADR-0204/0205/0210/0215. Agent-uncloseable.
 
 ## OD-13 — Phase-0 exit discrepancy reconciliation
 

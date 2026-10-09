@@ -208,30 +208,30 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 05-01-PLAN.md — TRACER: `research_checksum` contract end-to-end (tool identity + params + inputs + payload) across all 12 tools, HTTP `Meta` + the generic typed-tool route `/api/v1/quran/tool/{name}`, OpenAPI, and CLI
-- [ ] 05-02-PLAN.md — Arch/allowlist plumbing + TUI foundation: ratatui/crossterm app shell, palette, dashboard, `qai tui` over shared services
+- [x] 05-01-PLAN.md — TRACER: `research_checksum` contract end-to-end (tool identity + params + inputs + payload) across all 12 tools, HTTP `Meta` + the generic typed-tool route `/api/v1/quran/tool/{name}`, OpenAPI, and CLI
+- [x] 05-02-PLAN.md — Arch/allowlist plumbing + TUI foundation: ratatui/crossterm app shell, palette, dashboard, `qai tui` over shared services
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 05-03-PLAN.md — Cross-surface parity gate: one fixture through service + HTTP (generic tool route) + CLI, byte-identical payload + identical checksum (D-16)
-- [ ] 05-04-PLAN.md — SPA scaffold (React+Vite+TS, pinned, incl. the Vitest/jsdom/@testing-library test toolchain) + same-origin embedded serving with a fallback that never swallows `/api/*` (D-01/D-02/D-03/D-04)
-- [ ] 05-05-PLAN.md — TUI cockpit screens: ops (doctor/jobs/index), reader/search, graph nav + annotation review, typed RAG debug (D-10/D-11/D-12)
+- [x] 05-03-PLAN.md — Cross-surface parity gate: one fixture through service + HTTP (generic tool route) + CLI, byte-identical payload + identical checksum (D-16)
+- [x] 05-04-PLAN.md — SPA scaffold (React+Vite+TS, pinned, incl. the Vitest/jsdom/@testing-library test toolchain) + same-origin embedded serving with a fallback that never swallows `/api/*` (D-01/D-02/D-03/D-04)
+- [x] 05-05-PLAN.md — TUI cockpit screens: ops (doctor/jobs/index), reader/search, graph nav + annotation review, typed RAG debug (D-10/D-11/D-12)
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 05-06-PLAN.md — SPA reading view: layer tokens, themes, 3 translation + 3 inspector modes, RTL, typed client (D-05…D-09)
+- [x] 05-06-PLAN.md — SPA reading view: layer tokens, themes, 3 translation + 3 inspector modes, RTL, typed client (D-05…D-09)
 
 **Wave 4** *(blocked on Wave 3)*
 
-- [ ] 05-09-PLAN.md — SPA research view + graph view (truncation verbatim) + honest typed RAG debug view (D-11)
+- [x] 05-09-PLAN.md — SPA research view + graph view (truncation verbatim) + honest typed RAG debug view (D-11)
 
 **Wave 5** *(blocked on Wave 4)*
 
-- [ ] 05-08-PLAN.md — Citation copy/open: stable URN + deep link, server-side re-verify + mismatch hard-failure via `/api/v1/quran/citations/{id}` (D-17)
+- [x] 05-08-PLAN.md — Citation copy/open: stable URN + deep link, server-side re-verify + mismatch hard-failure via `/api/v1/quran/citations/{id}` (D-17)
 
 **Wave 6** *(blocked on Wave 5)*
 
-- [ ] 05-07-PLAN.md — CI wiring (SPA build + parity steps, 9→11), layer-separation source scan, owner-gate recording, validation map + roadmap
+- [x] 05-07-PLAN.md — CI wiring (SPA build + parity steps, 9→11), layer-separation source scan, owner-gate recording, validation map + roadmap
 **UI hint**: yes
 
 ### Phase 6: Hadith & Tafsir
