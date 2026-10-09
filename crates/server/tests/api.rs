@@ -163,6 +163,7 @@ impl QuranApiBackend for FakeApi {
                 verdict: citations::QuotationVerdict::ExactMatch,
                 text_hash: Some("sha256:ab".into()),
                 deep_link: Some("/read/test@0.1.0/1:1".into()),
+                urn: Some(citations::citation_urn("test", "0.1.0", 1, 1)),
             })
         } else if id == "cit-mismatch" {
             // A persisted citation whose stored verdict is a hard failure: the
@@ -175,6 +176,7 @@ impl QuranApiBackend for FakeApi {
                 },
                 text_hash: Some("sha256:ab".into()),
                 deep_link: Some("/read/test@0.1.0/1:1".into()),
+                urn: None,
             })
         } else {
             Err(ToolError::Backend {

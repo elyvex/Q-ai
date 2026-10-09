@@ -123,6 +123,9 @@ pub struct ResolvedCitation {
     pub text_hash: Option<String>,
     /// Deep link for the reader.
     pub deep_link: Option<String>,
+    /// Stable citation URN (`qai://quran/…`) from the frozen helper —
+    /// surfaces never reconstruct it (ADR-0111).
+    pub urn: Option<String>,
 }
 
 /// Citation errors (infrastructure failures; verdicts cover content outcomes).
@@ -276,6 +279,7 @@ impl CitationResolver {
                     verdict: QuotationVerdict::LocationNotFound,
                     text_hash: None,
                     deep_link: None,
+                    urn: None,
                 });
             }
         };
@@ -285,6 +289,7 @@ impl CitationResolver {
                 verdict: QuotationVerdict::EditionNotFound,
                 text_hash: None,
                 deep_link: None,
+                    urn: None,
             });
         }
         let canonical = self
@@ -297,6 +302,7 @@ impl CitationResolver {
                 verdict: QuotationVerdict::LocationNotFound,
                 text_hash: None,
                 deep_link: None,
+                    urn: None,
             });
         };
         Ok(ResolvedCitation {
@@ -304,6 +310,12 @@ impl CitationResolver {
             verdict: Self::verdict(&canonical, &citation.quoted_text),
             text_hash: Some(format!("sha256:{}", sha256_hex(&canonical))),
             deep_link: Some(deep_link(
+                &citation.edition_slug,
+                &citation.edition_version,
+                surah,
+                ayah,
+            )),
+            urn: Some(citation_urn(
                 &citation.edition_slug,
                 &citation.edition_version,
                 surah,
@@ -340,6 +352,7 @@ impl CitationResolver {
                 verdict: QuotationVerdict::LocationNotFound,
                 text_hash: None,
                 deep_link: None,
+                    urn: None,
             });
         }
         if !self.source.edition_exists(&stored.edition_slug, &stored.edition_version).await? {
@@ -348,6 +361,7 @@ impl CitationResolver {
                 verdict: QuotationVerdict::EditionNotFound,
                 text_hash: None,
                 deep_link: None,
+                    urn: None,
             });
         }
         let current = self
@@ -365,6 +379,7 @@ impl CitationResolver {
                 verdict: QuotationVerdict::LocationNotFound,
                 text_hash: None,
                 deep_link: None,
+                    urn: None,
             });
         };
         let current_hash = format!("sha256:{}", sha256_hex(&current));
@@ -381,6 +396,12 @@ impl CitationResolver {
             verdict,
             text_hash: Some(current_hash),
             deep_link: Some(deep_link(
+                &stored.edition_slug,
+                &stored.edition_version,
+                stored.surah,
+                stored.ayah,
+            )),
+            urn: Some(citation_urn(
                 &stored.edition_slug,
                 &stored.edition_version,
                 stored.surah,
