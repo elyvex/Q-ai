@@ -9,6 +9,7 @@ application = { path = "../application" }
 config = { path = "../config" }
 observability = { path = "../observability" }
 server = { path = "../server" }
+tui = { path = "../tui" }
 clap = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

@@ -114,6 +114,8 @@ pub enum Commands {
         #[arg(long, default_value = "127.0.0.1:8737")]
         bind: String,
     },
+    /// Launch the terminal cockpit (Phase 5).
+    Tui,
     /// Quran corpus: lookup, import, validation, activation.
     Quran {
         #[command(subcommand)]
@@ -438,6 +440,85 @@ pub fn dispatch(cli: Cli) -> i32 {
                                         exit_code::INTERNAL
                                     }
                                 }
+                            }
+                        }
+                    })
+                }
+                Err(code) => code,
+            }
+        }
+        Commands::Tui => {
+            let r = tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(|e| {
+                eprintln!("failed to start async runtime: {e}");
+                exit_code::INTERNAL
+            });
+            match r {
+                Ok(rt) => {
+                    let db_path = cfg.storage.sqlite.path.clone();
+                    rt.block_on(async {
+                        // Same readiness gate as `serve` (D-05): a missing
+                        // or pending database fails startup with the
+                        // explicit remedy; tui never creates state.
+                        match application::db::database_readiness(&cfg, &migrations_dir()).await {
+                            application::db::DatabaseReadiness::Current { .. } => {}
+                            readiness => {
+                                eprintln!(
+                                    "cannot start tui: database is not ready ({readiness:?}); remedy: {}; next: {}",
+                                    readiness.remedy(),
+                                    readiness.next_command()
+                                );
+                                return match readiness {
+                                    application::db::DatabaseReadiness::Unreadable { .. } => {
+                                        exit_code::INTERNAL
+                                    }
+                                    _ => exit_code::VALIDATION,
+                                };
+                            }
+                        }
+                        let reader = match application::quran_cli::open_reader(&db_path).await {
+                            Ok(reader) => std::sync::Arc::new(reader),
+                            Err(e) => {
+                                eprintln!("cannot open database: {e}");
+                                return exit_code::INTERNAL;
+                            }
+                        };
+                        let search = match application::quran_search_api::SearchApiService::open(
+                            &db_path,
+                        )
+                        .await
+                        {
+                            Ok(search) => std::sync::Arc::new(search),
+                            Err(e) => {
+                                eprintln!("cannot open search backend: {e}");
+                                return exit_code::INTERNAL;
+                            }
+                        };
+                        let lexicon =
+                            match application::quran_lexicon_api::LexiconApiService::open(&db_path)
+                                .await
+                            {
+                                Ok(lexicon) => std::sync::Arc::new(lexicon),
+                                Err(e) => {
+                                    eprintln!("cannot open lexicon backend: {e}");
+                                    return exit_code::INTERNAL;
+                                }
+                            };
+                        let graph = std::sync::Arc::new(
+                            application::quran_graph_api::FileGraphBackend::structural(&db_path),
+                        );
+                        // D-12: direct service handles — never HTTP, never
+                        // shelling out. Same constructors as the `Serve` arm.
+                        let services = tui::TuiServices {
+                            reader,
+                            search,
+                            lexicon,
+                            graph,
+                        };
+                        match tui::run(services).await {
+                            Ok(()) => exit_code::OK,
+                            Err(e) => {
+                                eprintln!("tui failed: {e}");
+                                exit_code::INTERNAL
                             }
                         }
                     })

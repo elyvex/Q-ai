@@ -39,7 +39,11 @@ workspace = { allow = ["domain", "storage", "observability"] }
 workspace = { allow = ["domain", "storage", "provenance"] }
 
 [cli]
-workspace = { allow = ["application", "config", "observability", "server"] }
+# Phase 5 (05-02/05-03): `cli` drives the TUI cockpit and the cross-surface
+# parity legs, so it admits the `tui` edge plus the tool/domain crates the
+# parity HTTP/tool legs name (`router(state).oneshot(...)`,
+# `domain::hashing::canonical_json_bytes`).
+workspace = { allow = ["application", "config", "domain", "observability", "quran-core", "server", "tool-registry", "tools", "tui"] }
 
 [server]
 # `server` is the HTTP interface layer. OD-14 accepts `server -> storage` +
