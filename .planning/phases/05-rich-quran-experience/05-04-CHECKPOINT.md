@@ -13,10 +13,10 @@
 | vite | 8.3.3 | vitejs/vite |
 | @vitejs/plugin-react | 6.1.2 | vitejs/vite |
 | typescript | ~6.0.2 | microsoft/TypeScript (6.x template pin; do not chase 7.x) |
-| vitest | confirmed | vitest-dev/vitest |
-| jsdom | confirmed | jsdom/jsdom |
-| @testing-library/react | confirmed | testing-library/react-testing-library |
-| @testing-library/dom | confirmed | testing-library/dom-testing-library |
+| vitest | 5.0.3 | vitest-dev/vitest |
+| jsdom | 30.1.2 | jsdom/jsdom |
+| @testing-library/react | 16.3.3 | testing-library/react-testing-library |
+| @testing-library/dom | 10.4.2 | testing-library/dom-testing-library |
 
 ## Human confirmation
 

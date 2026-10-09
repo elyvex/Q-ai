@@ -12,7 +12,10 @@ use std::sync::{Arc, atomic::AtomicBool};
 use application::quran_forms::{RebuildParams, rebuild_forms};
 use application::quran_graph_api::FileGraphBackend;
 use application::quran_graph_build::{collect_structural_input, publish_structural_build};
-use application::quran_index::{IndexBuildParams, QURAN_AYAH_INDEX_ID, index_root_for_db, rebuild_index};
+use application::quran_graph_tools::GraphToolBackend;
+use application::quran_index::{
+    IndexBuildParams, QURAN_AYAH_INDEX_ID, index_root_for_db, rebuild_index,
+};
 use application::quran_lexicon_api::LexiconApiService;
 use application::quran_morphology::{
     MorphologyActivateParams, MorphologyImportParams, activate_morphology, dataset_urn,
@@ -20,7 +23,6 @@ use application::quran_morphology::{
 };
 use application::quran_search_api::SearchApiService;
 use application::quran_tools::{ReaderToolBackend, dispatch_registered_tool};
-use application::quran_graph_tools::GraphToolBackend;
 use domain::hashing::canonical_json_bytes;
 use quran_corpus::import::{ImportInput, ImportOptions, ImportOutcome, ImportProgress, run_import};
 use storage::Database as _;
@@ -68,10 +70,7 @@ fn fixtures(search_surface: &str) -> Vec<Row> {
             name: "quran.graph_path",
             params: serde_json::json!({"from": "ayah:1:1", "to": "ayah:1:2"}),
         },
-        Row {
-            name: "quran.graph_subgraph",
-            params: serde_json::json!({"seeds": ["ayah:1:1"]}),
-        },
+        Row { name: "quran.graph_subgraph", params: serde_json::json!({"seeds": ["ayah:1:1"]}) },
         Row {
             name: "quran.graph_pattern",
             params: serde_json::json!({"seeds": ["ayah:1:1"], "steps": [{"edge": "NEXT"}]}),
@@ -144,7 +143,9 @@ async fn seed() -> Seed {
 
     let setup = sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(1)
-        .connect_with(sqlx::sqlite::SqliteConnectOptions::new().filename(&db_path).foreign_keys(true))
+        .connect_with(
+            sqlx::sqlite::SqliteConnectOptions::new().filename(&db_path).foreign_keys(true),
+        )
         .await
         .unwrap();
     for sql in [
@@ -204,10 +205,16 @@ async fn seed() -> Seed {
     .await
     .expect("import completes");
     assert!(matches!(outcome, ImportOutcome::Completed(_)));
-    let generation =
-        application::quran::activate_edition(&*db, SLUG, VERSION, &principal(), "appr-1", &timestamp())
-            .await
-            .expect("activation completes");
+    let generation = application::quran::activate_edition(
+        &*db,
+        SLUG,
+        VERSION,
+        &principal(),
+        "appr-1",
+        &timestamp(),
+    )
+    .await
+    .expect("activation completes");
     assert_eq!(generation, 1);
 
     rebuild_forms(
@@ -348,9 +355,8 @@ struct Legs {
 
 async fn legs() -> Legs {
     let seed = seed().await;
-    let reader = Arc::new(
-        application::quran_cli::open_reader(&seed.db_path).await.expect("reader opens"),
-    );
+    let reader =
+        Arc::new(application::quran_cli::open_reader(&seed.db_path).await.expect("reader opens"));
     let reader_registry = ReaderToolBackend::registry_with_index_root(
         reader.clone(),
         index_root_for_db(&seed.db_path),
@@ -376,9 +382,14 @@ async fn legs() -> Legs {
 
 /// Service leg: the shared dispatcher over real backends.
 async fn service_leg(legs: &Legs, row: &Row) -> serde_json::Value {
-    dispatch_registered_tool(&legs.reader_registry, &legs.graph_registry, row.name, row.params.clone())
-        .await
-        .unwrap_or_else(|err| panic!("service leg fails for {}: {err:?}", row.name))
+    dispatch_registered_tool(
+        &legs.reader_registry,
+        &legs.graph_registry,
+        row.name,
+        row.params.clone(),
+    )
+    .await
+    .unwrap_or_else(|err| panic!("service leg fails for {}: {err:?}", row.name))
 }
 
 /// HTTP leg: the generic typed-tool route over the same handles.
