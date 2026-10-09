@@ -1,6 +1,5 @@
 use ratatui::{Terminal, backend::TestBackend};
 use tui::{App, Palette, TuiServices, render_dashboard, sanitize_terminal_text};
-use std::sync::Arc;
 
 fn services() -> TuiServices {
     // Task 2 tests render paths only; service handles are never invoked.
@@ -17,20 +16,13 @@ fn dashboard_renders_title_and_palette_hint() {
     let buf = terminal.backend().buffer().clone();
     let text: String = buf.content().iter().map(|c| c.symbol()).collect();
     assert!(text.contains("Q-ai"), "dashboard shows product title");
-    assert!(
-        text.contains("qai tui"),
-        "dashboard shows the palette hint"
-    );
+    assert!(text.contains("qai tui"), "dashboard shows the palette hint");
 }
 
 #[test]
 fn palette_filter_matches_doctor_by_prefix_and_substring() {
     let palette = Palette::new();
-    let names: Vec<&str> = palette
-        .filter("doc")
-        .iter()
-        .map(|c| c.name.as_str())
-        .collect();
+    let names: Vec<&str> = palette.filter("doc").iter().map(|c| c.name.as_str()).collect();
     assert!(
         names.iter().any(|n| n.contains("doctor")),
         "filter('doc') returns the doctor command, got {names:?}"

@@ -181,7 +181,7 @@ allow = []
 # the application shell uses. `crossterm` stays listed so a future direct
 # edge fails open-safe only via this explicit entry.
 [tui.external.registry]
-allow = ["ratatui", "crossterm", "serde", "serde_json", "thiserror", "tokio"]
+allow = ["async-trait", "ratatui", "crossterm", "serde", "serde_json", "thiserror", "tokio"]
 [tui.external.git]
 allow = []
 

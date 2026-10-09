@@ -7,11 +7,12 @@ publish = false
 [dependencies]
 application = { path = "../application" }
 config = { path = "../config" }
-observability = { path = "../observability" }
-tools = { path = "../tools" }
-tool-registry = { path = "../tool-registry" }
-quran-core = { path = "../quran-core" }
 domain = { path = "../domain" }
+observability = { path = "../observability" }
+quran-core = { path = "../quran-core" }
+tool-registry = { path = "../tool-registry" }
+tools = { path = "../tools" }
+async-trait = { workspace = true }
 ratatui = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

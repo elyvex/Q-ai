@@ -11,6 +11,7 @@ pub mod screens;
 
 pub use app::{App, TuiServices, run};
 pub use palette::{Command, Palette};
+pub use screens::render_dashboard;
 
 /// Strip terminal control sequences from untrusted text before render.
 ///
@@ -62,9 +63,7 @@ pub fn sanitize_terminal_text(input: &str) -> String {
             }
             continue;
         }
-        if ch == '\n' || ch == '\t' {
-            out.push(ch);
-        } else if !ch.is_control() {
+        if ch == '\n' || ch == '\t' || !ch.is_control() {
             out.push(ch);
         }
     }
