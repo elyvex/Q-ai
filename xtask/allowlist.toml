@@ -18,7 +18,7 @@
 workspace = { allow = [] }
 
 [application]
-workspace = { allow = ["domain", "storage", "storage-sqlite", "provenance", "audit", "jobs", "sources", "config", "observability", "quran-core", "quran-corpus", "quran-normalization", "quran-search", "quran-morphology", "quran-graph", "citations", "tools", "tool-registry"] }
+workspace = { allow = ["domain", "storage", "storage-sqlite", "provenance", "audit", "jobs", "sources", "config", "observability", "quran-core", "quran-corpus", "quran-normalization", "quran-search", "quran-morphology", "quran-graph", "citations", "tools", "tool-registry", "hadith-core"] }
 
 [storage]
 workspace = { allow = ["domain"] }
@@ -121,6 +121,13 @@ workspace = { allow = ["domain", "quran-core"] }
 # direction application -> quran-graph.
 [quran-graph]
 workspace = { allow = ["domain", "quran-core", "application", "storage-sqlite"] }
+
+# hadith-core: hadith collection/record/grading domain types (Phase 6, D6.1–D6.3).
+# Pure types + parsing + hashing; no storage/sqlx, no llm/embeddings/retrieval.
+# Depends on `domain` for ContentHash/SourceVersionId/Timestamp/SemVer.
+# application -> hadith-core is the port direction (services consume the types).
+[hadith-core]
+workspace = { allow = ["domain"] }
 
 # --- Phase 1 (FND-07) external dependency policy ---
 # Registry/git edges are explicit per crate and fail closed (D-02, D-03).
@@ -254,6 +261,14 @@ allow = []
 [quran-graph.external.registry]
 allow = ["serde", "serde_json", "thiserror", "sqlx", "tempfile", "tokio"]
 [quran-graph.external.git]
+allow = []
+
+# hadith-core externals: serde for the record types, serde_json for grading
+# evidence/metadata payloads, uuid for typed-id construction. No new package
+# was added or upgraded to produce this list.
+[hadith-core.external.registry]
+allow = ["serde", "serde_json", "thiserror", "uuid"]
+[hadith-core.external.git]
 allow = []
 
 # --- Phase 3.5 (Evaluation harness) ---

@@ -7,6 +7,9 @@
 
 pub mod audit_bridge;
 pub mod db;
+pub mod hadith_reader;
+pub mod hadith_search;
+pub mod hadith_tools;
 pub mod job_queue;
 pub mod quran;
 pub mod quran_cli;

@@ -152,6 +152,12 @@ impl SqliteDatabase {
     pub fn read_pool(&self) -> &Pool<Sqlite> {
         &self.read_pool
     }
+
+    /// The underlying write pool. Serialized (single connection) — use for
+    /// ingest-style writes that are not routed through a `UnitOfWork`.
+    pub fn write_pool(&self) -> &Pool<Sqlite> {
+        &self.write_pool
+    }
 }
 
 #[async_trait]

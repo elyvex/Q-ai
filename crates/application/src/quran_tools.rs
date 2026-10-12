@@ -20,10 +20,10 @@ use quran_core::{
 use storage::Database as _;
 use tool_registry::{
     BackendMeta, FAMILY_TOOL_VERSION, FamilyToolParams, GetAyahParams, GetContextParams,
-    GraphNeighborsParams, GraphPathParams, GraphPatternParams, GraphRootFamilyParams,
-    GraphSubgraphParams, LEMMA_TOOL_VERSION, LemmaToolParams, MORPHOLOGY_TOOL_VERSION,
-    MorphologyToolParams, QuranBackend, ROOT_TOOL_VERSION, RootToolParams, SEARCH_TOOL_VERSION,
-    SearchToolParams, ToolRegistry,
+    GetHadithParams, GraphNeighborsParams, GraphPathParams, GraphPatternParams,
+    GraphRootFamilyParams, GraphSubgraphParams, HadithSearchToolParams, LEMMA_TOOL_VERSION,
+    LemmaToolParams, MORPHOLOGY_TOOL_VERSION, MorphologyToolParams, QuranBackend,
+    ROOT_TOOL_VERSION, RootToolParams, SEARCH_TOOL_VERSION, SearchToolParams, ToolRegistry,
 };
 use tools::{AnalysisSource, ToolError, ToolResult, reproducibility, research_checksum};
 
@@ -792,6 +792,27 @@ pub async fn dispatch_registered_tool(
             let params: GraphRootFamilyParams = serde_json::from_value(params)
                 .map_err(|err| bad_params("quran.graph_root_family", err))?;
             Ok(serialized(&graph.graph_root_family(params).await?))
+        }
+        // Phase 6 hadith read tools. `hadith.get` returns a view + BackendMeta,
+        // so it is unwrapped to the bare envelope here for parity with the
+        // other tools; `hadith.search` already returns the envelope directly.
+        "hadith.get" => {
+            let params: GetHadithParams =
+                serde_json::from_value(params).map_err(|err| bad_params("hadith.get", err))?;
+            let (result, _) = reader.get_hadith(params).await?;
+            Ok(serialized(&result))
+        }
+        "hadith.search" => {
+            let params: HadithSearchToolParams =
+                serde_json::from_value(params).map_err(|err| bad_params("hadith.search", err))?;
+            Ok(serialized(&reader.search_hadith(params).await?))
+        }
+        "hadith.gradings" => {
+            let params: serde_json::Value = params;
+            let hadith_id = params.get("hadith_id").and_then(|v| v.as_str()).ok_or_else(|| {
+                bad_params("hadith.gradings", serde::de::Error::custom("missing `hadith_id`"))
+            })?;
+            Ok(serialized(&reader.get_gradings(hadith_id).await?))
         }
         _ => Err(ToolError::InvalidInput {
             tool: "quran.tool",

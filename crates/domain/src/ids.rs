@@ -15,6 +15,7 @@ use std::str::FromStr;
 use uuid::Uuid;
 
 /// Generates a Uuid-backed newtype ID with the standard trait set.
+#[macro_export]
 macro_rules! typed_id {
     ($(#[$doc:meta])* $vis:vis struct $name:ident;) => {
         $(#[$doc])*

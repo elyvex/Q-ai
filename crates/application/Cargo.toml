@@ -15,6 +15,7 @@ quran-normalization = { path = "../quran-normalization" }
 jobs = { path = "../jobs" }
 sources = { path = "../sources" }
 observability = { path = "../observability" }
+hadith-core = { path = "../hadith-core" }
 quran-core = { path = "../quran-core" }
 quran-corpus = { path = "../quran-corpus" }
 quran-search = { path = "../quran-search" }

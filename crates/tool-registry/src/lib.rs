@@ -173,6 +173,127 @@ pub trait QuranBackend: Send + Sync {
     }
 }
 
+// ============================================================================
+// Hadith tools (Phase 6)
+// ============================================================================
+
+/// Tool versions for hadith tools (Phase 6).
+pub const HADITH_GET_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions for hadith search (Phase 6).
+pub const HADITH_SEARCH_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions for hadith gradings (Phase 6).
+pub const HADITH_GRADINGS_VERSION: SemVer = SemVer::new(1, 0, 0);
+
+/// A hadith reference: collection slug + source number.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HadithRef {
+    /// Collection slug (e.g., "bukhari-arabic").
+    pub collection_slug: String,
+    /// Source number, preserved verbatim (e.g., "bukhari:1234").
+    pub source_number: String,
+}
+
+impl HadithRef {
+    /// Parse a reference string like "bukhari-arabic:bukhari:1234".
+    pub fn parse(s: &str) -> Option<Self> {
+        let (slug, number) = s.split_once(':')?;
+        if slug.is_empty() || number.is_empty() {
+            return None;
+        }
+        Some(Self { collection_slug: slug.to_string(), source_number: number.to_string() })
+    }
+}
+
+impl std::fmt::Display for HadithRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.collection_slug, self.source_number)
+    }
+}
+
+/// A full hadith view with matn, isnad, and gradings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HadithView {
+    /// The hadith record id.
+    pub id: String,
+    /// Collection slug.
+    pub collection_slug: String,
+    /// Source number (preserved verbatim).
+    pub source_number: String,
+    /// Canonical matn text.
+    pub matn_text: String,
+    /// Isnad text, if separated.
+    pub isnad_text: Option<String>,
+    /// Narrator names.
+    pub narrator_names: Vec<String>,
+    /// Per-scholar grading records.
+    pub gradings: Vec<GradingRecord>,
+}
+
+/// A grading record in the tool result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GradingRecord {
+    /// The grading record id.
+    pub id: String,
+    /// Scholar name.
+    pub scholar_name: String,
+    /// Grading value.
+    pub grading_value: String,
+    /// Source citation.
+    pub source_citation: String,
+    /// Review decision.
+    pub decision: String,
+    /// Reviewer, if any.
+    pub reviewer: Option<String>,
+    /// Provenance layer.
+    pub provenance_layer: String,
+    /// Confidence, if any.
+    pub confidence: Option<f64>,
+}
+
+/// Parameters for `hadith.get`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetHadithParams {
+    /// Reference string in format `collection_slug:source_number`.
+    pub reference: String,
+}
+
+/// Parameters for `hadith.search`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HadithSearchToolParams {
+    /// Query text.
+    pub query: String,
+    /// Optional collection filter.
+    #[serde(default)]
+    pub collection_slug: Option<String>,
+    /// Result cap.
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+/// The hadith backend trait: implemented by `application` for the real reader.
+#[async_trait]
+pub trait HadithBackend: Send + Sync {
+    /// Fetch one hadith view by reference.
+    async fn backend_get_hadith(
+        &self,
+        reference: &HadithRef,
+    ) -> Result<(HadithView, BackendMeta), ToolError>;
+
+    /// Search hadith records.
+    async fn backend_search_hadith(
+        &self,
+        _params: &HadithSearchToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        Err(ToolError::Backend {
+            code: "QAI-HAD-0310".to_string(),
+            detail: "hadith.search is not supported by this backend".to_string(),
+        })
+    }
+
+    /// Fetch grading records for a hadith.
+    async fn backend_get_gradings(&self, hadith_id: &str) -> Result<Vec<GradingRecord>, ToolError>;
+}
+
 /// Parameters for `quran.get_ayah`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetAyahParams {
@@ -426,17 +547,30 @@ impl From<ContextBoundaryArg> for ContextBoundary {
 /// The local tool registry.
 pub struct ToolRegistry {
     backend: Arc<dyn QuranBackend>,
+    hadith_backend: Option<Arc<dyn HadithBackend>>,
 }
 
 impl ToolRegistry {
     /// Wrap a backend.
     pub fn new(backend: Arc<dyn QuranBackend>) -> Self {
-        Self { backend }
+        Self { backend, hadith_backend: None }
     }
 
-    /// The full registered tool set (§12 tool plan; D-13): the two direct-read
-    /// tools plus the attributed search/lexicon surface.
-    pub const TOOL_NAMES: [&'static str; 12] = [
+    /// Wrap a backend with a hadith backend.
+    pub fn with_hadith(
+        backend: Arc<dyn QuranBackend>,
+        hadith_backend: Arc<dyn HadithBackend>,
+    ) -> Self {
+        Self { backend, hadith_backend: Some(hadith_backend) }
+    }
+
+    /// Set the hadith backend after construction.
+    pub fn set_hadith_backend(&mut self, hadith_backend: Arc<dyn HadithBackend>) {
+        self.hadith_backend = Some(hadith_backend);
+    }
+
+    /// The full registered tool set (§12 tool plan; D-13; Phase 6 hadith tools).
+    pub const TOOL_NAMES: [&'static str; 15] = [
         "quran.get_ayah",
         "quran.get_context",
         "quran.search",
@@ -449,6 +583,9 @@ impl ToolRegistry {
         "quran.graph_subgraph",
         "quran.graph_pattern",
         "quran.graph_root_family",
+        "hadith.get",
+        "hadith.search",
+        "hadith.gradings",
     ];
 
     /// Registered tool names.
@@ -742,6 +879,137 @@ impl ToolRegistry {
         }
         self.backend.backend_graph_root_family(&params).await
     }
+
+    /// `hadith.get`: fetch one hadith view by reference.
+    pub async fn get_hadith(
+        &self,
+        params: GetHadithParams,
+    ) -> Result<(ToolResult<HadithView>, BackendMeta), ToolError> {
+        let hadith_backend = self.hadith_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-HAD-0310".to_string(),
+            detail: "hadith backend not configured".to_string(),
+        })?;
+        let started = Instant::now();
+        let reference =
+            HadithRef::parse(&params.reference).ok_or_else(|| ToolError::InvalidInput {
+                tool: "hadith.get",
+                detail: "reference must be in format `collection_slug:source_number`".to_string(),
+            })?;
+        let query = serde_json::to_value(&params).unwrap_or(serde_json::Value::Null);
+        let (view, meta) = hadith_backend.backend_get_hadith(&reference).await?;
+        let canonical = format!("{}:{}", view.collection_slug, view.source_number);
+        let payload = serde_json::to_value(&view).unwrap_or(serde_json::Value::Null);
+        let result = ToolResult {
+            tool_name: "hadith.get".to_string(),
+            tool_version: HADITH_GET_VERSION,
+            query: query.clone(),
+            normalization_rules: Vec::new(),
+            edition_id: Some(meta.edition_id.clone()),
+            edition_version: Some(meta.edition_version.clone()),
+            canonical_references: vec![canonical.clone()],
+            analysis_sources: vec![AnalysisSource {
+                kind: "hadith".to_string(),
+                reference: canonical,
+            }],
+            results: view,
+            confidence: None,
+            warnings: Vec::new(),
+            execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
+            reproducibility: reproducibility(
+                "hadith.get",
+                HADITH_GET_VERSION,
+                &query,
+                Some(&meta.edition_slug),
+                Some(&meta.edition_version),
+                BTreeMap::new(),
+                meta.corpus_generation,
+            ),
+            research_checksum: research_checksum(
+                "hadith.get",
+                HADITH_GET_VERSION,
+                &query,
+                &serde_json::json!({
+                    "reference": params.reference,
+                    "edition_slug": meta.edition_slug,
+                    "edition_version": meta.edition_version,
+                    "corpus_generation": meta.corpus_generation,
+                }),
+                &payload,
+            )
+            .expect("research checksum input is JSON-serializable"),
+        };
+        Ok((result, meta))
+    }
+
+    /// `hadith.search`: normalized search over hadith records.
+    pub async fn search_hadith(
+        &self,
+        params: HadithSearchToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        if params.query.trim().is_empty() {
+            return Err(ToolError::InvalidInput {
+                tool: "hadith.search",
+                detail: "query text must not be empty".to_string(),
+            });
+        }
+        let hadith_backend = self.hadith_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-HAD-0310".to_string(),
+            detail: "hadith backend not configured".to_string(),
+        })?;
+        hadith_backend.backend_search_hadith(&params).await
+    }
+
+    /// `hadith.gradings`: fetch grading records for a hadith.
+    pub async fn get_gradings(
+        &self,
+        hadith_id: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let hadith_backend = self.hadith_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-HAD-0310".to_string(),
+            detail: "hadith backend not configured".to_string(),
+        })?;
+        let started = Instant::now();
+        let query = serde_json::json!({ "hadith_id": hadith_id });
+        let gradings = hadith_backend.backend_get_gradings(hadith_id).await?;
+        let results = serde_json::to_value(&gradings).unwrap_or(serde_json::Value::Null);
+        let payload = results.clone();
+        let canonical = vec![hadith_id.to_string()];
+        let result = ToolResult {
+            tool_name: "hadith.gradings".to_string(),
+            tool_version: HADITH_GRADINGS_VERSION,
+            query: query.clone(),
+            normalization_rules: Vec::new(),
+            edition_id: None,
+            edition_version: None,
+            canonical_references: canonical,
+            analysis_sources: vec![AnalysisSource {
+                kind: "hadith".to_string(),
+                reference: hadith_id.to_string(),
+            }],
+            results,
+            confidence: None,
+            warnings: Vec::new(),
+            execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
+            reproducibility: reproducibility(
+                "hadith.gradings",
+                HADITH_GRADINGS_VERSION,
+                &query,
+                None,
+                None,
+                BTreeMap::new(),
+                0,
+            ),
+            research_checksum: research_checksum(
+                "hadith.gradings",
+                HADITH_GRADINGS_VERSION,
+                &query,
+                &serde_json::json!({}),
+                &payload,
+            )
+            .expect("research checksum input is JSON-serializable"),
+        };
+        Ok(result)
+    }
 }
 
 #[cfg(test)]
@@ -989,6 +1257,9 @@ mod tests {
                 "quran.graph_subgraph",
                 "quran.graph_pattern",
                 "quran.graph_root_family",
+                "hadith.get",
+                "hadith.search",
+                "hadith.gradings",
             ]
         );
     }
