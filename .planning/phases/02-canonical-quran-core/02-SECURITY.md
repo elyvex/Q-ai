@@ -74,6 +74,9 @@ created: "2026-09-26"
 | T-02-37 | Repudiation | spec-less edge-probe row silently dropped | high | mitigate | All six rows enumerated with answering plan/criterion in evidence doc; gate asserts every category token + requirement id present | closed |
 | T-02-38 | Repudiation | D-15 read-path exemption closed without owner knowledge | high | mitigate | Recorded as explicit owner-ratifiable interpretation with per-path basis; never presented as satisfied locked decision | closed |
 | T-02-39 | Repudiation | task marked complete before acceptance criteria hold | medium | mitigate | TASK-002 moved active→completed only after gate evidence + evidence doc exist; rollup entry required | closed |
+| T-02-42 | Repudiation | D-15 exemption ledger overclaims completeness | high | mitigate | Rebuild the ledger on the emission frame, disposition every path with a basis, and correct the blanket claim in all four copies | closed |
+| T-02-43 | Tampering | A new emitting path is added without being recorded | high | mitigate | Checked-list source-scan guard (`answer_path_ledger.rs`) fails on an unlisted emitting marker; symbol-resolution guard catches renames/drift | closed |
+| T-02-44 | Information disclosure | Stale `file:line` anchors mislead an owner gate | low | accept | The ledger now uses `path#symbol` refs; the debug-only route emits already-public canonical text and no secret | closed |
 | T-02-SC | Tampering | npm/pip/cargo installs | high | mitigate | No package install in phase: zero `Cargo.toml`/`Cargo.lock` changes in any `(02-0X)` plan commit (the `sha2` addition predates phase execution, 2026-09-24); future installs require package-legitimacy gate + blocking human checkpoint | closed |
 
 *Status: open · closed · open — below high threshold (non-blocking)*

@@ -170,3 +170,11 @@ Items acknowledged and deferred at milestone close, most recent first:
 Last session: 2026-10-06T14:43:18.262Z
 Stopped at: Phase 05 context gathered
 Resume file: .planning/phases/05-rich-quran-experience/05-CONTEXT.md
+
+## Deferred Verification
+
+| Phase | State | Resume |
+|-------|-------|--------|
+| 3 | verification_deferred_human | /gsd-verify-work 3 |
+| 3.5 | ~~soak confirmed green 2026-10-13 (630s)~~ | ~~/gsd-verify-work 3.5~~ |
+| 5 | verification_deferred_infrastructure | /gsd-verify-work 5 |

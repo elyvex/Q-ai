@@ -247,7 +247,24 @@ Plans:
   4. Scholarly disagreement is shown side-by-side, never silently merged
   5. Computational identity matches are labeled as uncertain, never as certainty
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 06-01-PLAN.md — TRACER: hadith data model, storage, search, and typed tool end-to-end
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 06-02-PLAN.md — Tafsir data model, storage, search, and typed tool
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 06-03-PLAN.md — Verse linking, owner gate, and disagreement display
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 06-04-PLAN.md — Cross-surface parity, CLI/API routes, and ingestion pipeline
 
 ### Phase 7: Isnad & Narrator Research
 
@@ -348,7 +365,7 @@ Phase 3.5 is an INSERTED gap-closure phase; it runs after Phase 4 and does not g
 | 3.5. Residual Closure (INSERTED) | 4/4 | Complete (W1–W10 evidence matrix; owner gates OD-01…OD-14 open) | 2026-10-02 |
 | 4. Quran Graph | 5/5 | Complete (M5 blocked on OD-11) | 2026-09-29 |
 | 5. Rich Quran Experience | 9/9 | Complete (owner gates OD-04/OD-11/OD-12 open) | 2026-10-09 |
-| 6. Hadith & Tafsir | 0/TBD | Not started | - |
+| 6. Hadith & Tafsir | 0/4 | Not started | - |
 | 7. Isnad & Narrator Research | 0/TBD | Not started | - |
 | 8. Multi-RAG Platform | 0/TBD | Not started | - |
 | 9. Comparative Scripture | 0/TBD | Not started | - |
