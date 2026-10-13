@@ -141,6 +141,17 @@ async fn search_meta(
     }
 }
 
+/// Split a pinned `quran:slug@version:surah:ayah` hit reference into its
+/// served-edition parts (WR-03; mirrors the HTTP surface's `edition_of` in
+/// `meta_from_search`). Hit references are built from the serving edition, so
+/// the first hit identifies what the index actually served.
+fn served_edition_of(reference: &str) -> Option<(String, String)> {
+    let body = reference.strip_prefix("quran:")?;
+    let (edition, _) = body.split_once(':')?;
+    let (slug, version) = edition.split_once('@')?;
+    (!slug.is_empty() && !version.is_empty()).then(|| (slug.to_string(), version.to_string()))
+}
+
 /// A pinned `quran:<slug>@<version>:<surah>:<ayah>` reference.
 fn pinned_ref(meta: &BackendMeta, surah: i64, ayah: i64) -> String {
     format!("quran:{}@{}:{surah}:{ayah}", meta.edition_slug, meta.edition_version)
@@ -226,7 +237,7 @@ impl QuranBackend for ReaderToolBackend {
     ) -> Result<ToolResult<serde_json::Value>, ToolError> {
         let started = Instant::now();
         // WR-02: attribute the envelope to the edition the search will serve.
-        let meta = search_meta(&self.reader, params.edition.as_deref()).await?;
+        let requested_meta = search_meta(&self.reader, params.edition.as_deref()).await?;
         let search_params = crate::quran_search::SearchParams {
             text: params.text.clone(),
             edition: params.edition.clone(),
@@ -248,6 +259,34 @@ impl QuranBackend for ReaderToolBackend {
         )
         .await
         .map_err(search_tool_error)?;
+        // WR-03: the serving index answers from the *indexed* edition, but a
+        // request without a pinned version (absent `edition`, or a bare slug)
+        // resolves its meta from the active pointer, which may have moved on.
+        // Attribute the envelope to the served edition instead — the HTTP
+        // surface does the same (`meta_from_search` derives it from the first
+        // hit's pinned reference). With zero hits there is nothing to
+        // misattribute, so the requested meta stands; either way the serving
+        // advisories (including the stale-index warning) are propagated below.
+        let meta = match params.edition.as_deref() {
+            Some(spec) if spec.contains('@') => requested_meta,
+            _ => match output.hits.first().and_then(|hit| served_edition_of(hit.reference())) {
+                Some((slug, version)) => {
+                    let version = version.parse().map_err(|_| ToolError::Backend {
+                        code: "QAI-IDX-0003".into(),
+                        detail: format!(
+                            "served hit reference names an unparseable edition version `{version}`"
+                        ),
+                    })?;
+                    let edition = self
+                        .reader
+                        .get_edition(&EditionSelector::Pinned { slug, version })
+                        .await
+                        .map_err(tool_error)?;
+                    meta_from_edition(&self.reader, &edition).await?
+                }
+                None => requested_meta,
+            },
+        };
         let normalization_rules: Vec<String> = output
             .hits
             .first()
@@ -277,7 +316,14 @@ impl QuranBackend for ReaderToolBackend {
             analysis_sources,
             results: results.clone(),
             confidence: None,
-            warnings: Vec::new(),
+            // WR-03: propagate the serving advisories (mirroring the HTTP
+            // `meta_from_search` mapping). The stale-index warning is what
+            // discloses an active/indexed divergence on this path.
+            warnings: output
+                .warnings
+                .iter()
+                .map(|warning| format!("{}: {}", warning.code, warning.message))
+                .collect(),
             execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
             reproducibility: reproducibility(
                 "quran.search",
