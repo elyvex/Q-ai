@@ -129,6 +129,13 @@ workspace = { allow = ["domain", "quran-core", "application", "storage-sqlite"] 
 [hadith-core]
 workspace = { allow = ["domain"] }
 
+# retrieval: the backend-agnostic retrieval port (Phase 8 groundwork).
+# Depends on `domain` types via `storage` for typed error diagnostics. The
+# memvid-core edge is optional and gated behind the `memvid` feature, so the
+# default build does not pull its dependency tree.
+[retrieval]
+workspace = { allow = ["domain", "storage"] }
+
 # --- Phase 1 (FND-07) external dependency policy ---
 # Registry/git edges are explicit per crate and fail closed (D-02, D-03).
 # Each `external.registry.allow` list is derived from the crate's current
@@ -269,6 +276,15 @@ allow = []
 [hadith-core.external.registry]
 allow = ["serde", "serde_json", "thiserror", "uuid"]
 [hadith-core.external.git]
+allow = []
+
+# retrieval externals: serde types for the port, thiserror for typed errors,
+# tempfile for tests. memvid-core is listed because the gate reads
+# `cargo metadata --all-features`, which resolves the optional edge too; the
+# crate is NOT in the default build (opt-in `memvid` feature).
+[retrieval.external.registry]
+allow = ["serde", "serde_json", "tempfile", "thiserror", "memvid-core"]
+[retrieval.external.git]
 allow = []
 
 # --- Phase 3.5 (Evaluation harness) ---

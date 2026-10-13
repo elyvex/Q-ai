@@ -178,3 +178,9 @@ Resume file: .planning/phases/05-rich-quran-experience/05-CONTEXT.md
 | 3 | verification_deferred_human | /gsd-verify-work 3 |
 | 3.5 | ~~soak confirmed green 2026-10-13 (630s)~~ | ~~/gsd-verify-work 3.5~~ |
 | 5 | verification_deferred_infrastructure | /gsd-verify-work 5 |
+
+## Quick Tasks Completed
+
+| Slug | Date | Result |
+|------|------|--------|
+| 20261013-memvid-rag-backend | 2026-10-13 | Retrieval port + opt-in memvid backend in `crates/retrieval`; 11 tests pass with `--features memvid`, default build untouched |
