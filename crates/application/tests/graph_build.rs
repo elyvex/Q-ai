@@ -21,7 +21,8 @@ use application::quran_graph_annotations::{ProposeInput, accept, get_assertion, 
 use application::quran_graph_build::{
     ANNOTATED_PROJECTION_ID, WORDROOT_CAPABILITY, WORDROOT_PROJECTION_ID,
     clear_projection_adjacency, collect_structural_input, collect_wordroot_input,
-    parse_annotated_seed, publish_annotated_build, publish_structural_build, publish_wordroot_build,
+    parse_annotated_seed, publish_annotated_build, publish_structural_build,
+    publish_wordroot_build,
 };
 use application::quran_graph_store::SqliteGraphStore;
 use quran_graph::{AuthzScope, EdgeFilter, GraphStore, QueryBudgets};
@@ -551,8 +552,7 @@ fn annotated_seed_typo_src_fails_at_parse_not_as_dangling_edge() {
     // WR-10: a typo'd `concept:`/`entity:` link src must fail at parse with
     // the same `links[{index}]` shape as the dst check, not much later as a
     // "dangling edge source" stage error misattributed to the pipeline.
-    let mut seed: serde_json::Value =
-        serde_json::from_str(CONCEPT_SEED).expect("fixture parses");
+    let mut seed: serde_json::Value = serde_json::from_str(CONCEPT_SEED).expect("fixture parses");
     seed["links"][0]["src"] = serde_json::json!("concept:typo");
     let err = parse_annotated_seed(&seed.to_string()).expect_err("typo src is rejected");
     match &err {
