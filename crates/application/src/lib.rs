@@ -35,6 +35,7 @@ pub mod quran_search_cache;
 pub mod quran_tools;
 pub mod tafsir_reader;
 pub mod tafsir_search;
+pub mod tafsir_tools;
 
 pub use config::Config;
 pub use domain::redaction;

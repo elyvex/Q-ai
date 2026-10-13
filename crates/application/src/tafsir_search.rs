@@ -167,11 +167,8 @@ impl TafsirSearchService {
                 page: page.map(|p| p as u32),
                 chapter: chapter.clone(),
             };
-            let snippet = if text.len() > 100 {
-                format!("{}...", &text[..100])
-            } else {
-                text.clone()
-            };
+            let snippet =
+                if text.len() > 100 { format!("{}...", &text[..100]) } else { text.clone() };
             let reference = canonical_reference(
                 &work_slug,
                 dimensions.volume,
@@ -372,7 +369,11 @@ mod tests {
         search.derive_search_forms(&record, &work, 1).await.unwrap();
 
         let results = search
-            .search(&TafsirSearchParams { query: "القول في تأويل".to_string(), work_slug: None, limit: None })
+            .search(&TafsirSearchParams {
+                query: "القول في تأويل".to_string(),
+                work_slug: None,
+                limit: None,
+            })
             .await
             .unwrap();
         assert!(!results.is_empty());

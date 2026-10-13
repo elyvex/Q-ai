@@ -185,6 +185,11 @@ pub trait TafsirReader: Send + Sync {
     async fn insert_record(&self, record: &TafsirRecord) -> Result<(), TafsirReaderError>;
     /// Get a tafsir record by id.
     async fn get_record(&self, id: &TafsirId) -> Result<TafsirRecord, TafsirReaderError>;
+    /// List all records for a work, ordered by (volume, page, created_at).
+    async fn list_records_for_work(
+        &self,
+        work_id: &TafsirWorkId,
+    ) -> Result<Vec<TafsirRecord>, TafsirReaderError>;
     /// Get tafsir records for a verse via the works' own chapter organization
     /// (structural navigation; computational links arrive in plan 06-03).
     async fn get_records_for_verse(
@@ -302,6 +307,23 @@ impl TafsirReader for TafsirReaderService {
             })?
             .ok_or_else(|| TafsirReaderError::RecordNotFound(id.to_string()))?;
         record_from_row(&row)
+    }
+
+    async fn list_records_for_work(
+        &self,
+        work_id: &TafsirWorkId,
+    ) -> Result<Vec<TafsirRecord>, TafsirReaderError> {
+        let rows = sqlx::query(&format!(
+            "SELECT {RECORD_COLUMNS} FROM tafsir_records WHERE work_id = ? \
+             ORDER BY volume ASC, page ASC, created_at ASC"
+        ))
+        .bind(work_id.to_string())
+        .fetch_all(self.db.read_pool())
+        .await
+        .map_err(|e| {
+            TafsirReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() })
+        })?;
+        rows.iter().map(record_from_row).collect()
     }
 
     async fn get_records_for_verse(

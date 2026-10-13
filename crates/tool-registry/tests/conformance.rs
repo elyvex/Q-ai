@@ -435,11 +435,13 @@ impl QuranBackend for TruncatedBackend {
 fn all_twelve_tools_resolve_stable_names() {
     let registry = ToolRegistry::new(Arc::new(ConformableBackend));
     let names = registry.tool_names();
-    assert_eq!(names.len(), 15);
+    assert_eq!(names.len(), 17);
     for name in &names {
         assert!(
-            name.starts_with("quran.") || name.starts_with("hadith."),
-            "tool name must be quran.* or hadith.*: {name}"
+            name.starts_with("quran.")
+                || name.starts_with("hadith.")
+                || name.starts_with("tafsir."),
+            "tool name must be quran.*, hadith.*, or tafsir.*: {name}"
         );
     }
 }
@@ -720,7 +722,7 @@ async fn registered_but_unimplemented_tool_returns_typed_unsupported() {
     // All 12 tools must return the typed-unsupported error, distinguishable
     // from a real empty result.
     let names = registry.tool_names();
-    assert_eq!(names.len(), 15);
+    assert_eq!(names.len(), 17);
     for name in &names {
         let err = match *name {
             "quran.get_ayah" => registry
@@ -825,11 +827,29 @@ async fn registered_but_unimplemented_tool_returns_typed_unsupported() {
             "hadith.gradings" => {
                 registry.get_gradings("00000000-0000-4000-8000-000000000000").await.unwrap_err()
             }
+            "tafsir.get" => registry
+                .get_tafsir(tool_registry::GetTafsirParams { reference: "tafsir-tabari:2".into() })
+                .await
+                .unwrap_err(),
+            "tafsir.search" => registry
+                .search_tafsir(tool_registry::TafsirSearchToolParams {
+                    query: "test".into(),
+                    work_slug: None,
+                    limit: None,
+                })
+                .await
+                .unwrap_err(),
             _ => panic!("unknown tool {name}"),
         };
         // Hadith tools carry their own typed-unsupported code (QAI-HAD-*);
-        // Quran tools use QAI-QUR-0310.
-        let expected = if name.starts_with("hadith.") { "QAI-HAD-0310" } else { "QAI-QUR-0310" };
+        // tafsir tools carry QAI-TAF-*; Quran tools use QAI-QUR-0310.
+        let expected = if name.starts_with("hadith.") {
+            "QAI-HAD-0310"
+        } else if name.starts_with("tafsir.") {
+            "QAI-TAF-0310"
+        } else {
+            "QAI-QUR-0310"
+        };
         match err {
             ToolError::Backend { code, .. } => {
                 assert_eq!(code, expected, "{name} must return typed-unsupported");

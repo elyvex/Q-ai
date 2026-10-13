@@ -40,9 +40,10 @@ async fn live_registry() -> (tempfile::TempDir, GraphApiService, ToolRegistry) {
     (dir, service, registry)
 }
 
-/// Fifteen registered names with their own SemVer 1.0.0 version consts, and
-/// no mutation tool in the set (D-11 fence). The three `hadith.*` read tools
-/// were added in Phase 6; they are read-only, so the fence still holds.
+/// Seventeen registered names with their own SemVer 1.0.0 version consts, and
+/// no mutation tool in the set (D-11 fence). The three `hadith.*` and two
+/// `tafsir.*` read tools were added in Phase 6; they are read-only, so the
+/// fence still holds.
 #[tokio::test]
 async fn graph_tools_register_twelve_names_with_version_consts() {
     let (_dir, _service, registry) = live_registry().await;
@@ -64,6 +65,8 @@ async fn graph_tools_register_twelve_names_with_version_consts() {
             "hadith.get",
             "hadith.search",
             "hadith.gradings",
+            "tafsir.get",
+            "tafsir.search",
         ]
     );
     for version in [

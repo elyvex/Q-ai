@@ -431,11 +431,12 @@ fn cli_leg(legs: &Legs, row: &Row) -> serde_json::Value {
 
 /// Every fixture row is a registered tool, and every `quran.*` tool has a row.
 ///
-/// The three `hadith.*` tools are registered but have no fixture row yet: this
-/// test drives all three surfaces (service dispatcher, CLI, HTTP) per row, and
-/// the hadith surfaces are not wired until plan 06-04. Adding rows before then
-/// would assert parity that does not exist. When 06-04 lands, add the three
-/// rows and restore the full-set equality below.
+/// The three `hadith.*` and two `tafsir.*` tools are registered but have no
+/// fixture row yet: this test drives all three surfaces (service dispatcher,
+/// CLI, HTTP) per row, and the hadith/tafsir surfaces are not wired until
+/// plan 06-04. Adding rows before then would assert parity that does not
+/// exist. When 06-04 lands, add the five rows and restore the full-set
+/// equality below.
 #[test]
 fn fixtures_cover_all_tool_names() {
     let rows = fixtures("surface");
@@ -456,8 +457,8 @@ fn fixtures_cover_all_tool_names() {
     uncovered.sort_unstable();
     assert_eq!(
         uncovered,
-        ["hadith.get", "hadith.gradings", "hadith.search"],
-        "unexpected uncovered tools (hadith parity lands in plan 06-04)"
+        ["hadith.get", "hadith.gradings", "hadith.search", "tafsir.get", "tafsir.search"],
+        "unexpected uncovered tools (hadith/tafsir parity lands in plan 06-04)"
     );
 }
 

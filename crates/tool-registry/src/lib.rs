@@ -183,6 +183,10 @@ pub const HADITH_GET_VERSION: SemVer = SemVer::new(1, 0, 0);
 pub const HADITH_SEARCH_VERSION: SemVer = SemVer::new(1, 0, 0);
 /// Tool versions for hadith gradings (Phase 6).
 pub const HADITH_GRADINGS_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions for tafsir get (Phase 6, plan 06-02).
+pub const TAFSIR_GET_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions for tafsir search (Phase 6, plan 06-02).
+pub const TAFSIR_SEARCH_VERSION: SemVer = SemVer::new(1, 0, 0);
 
 /// A hadith reference: collection slug + source number.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -292,6 +296,129 @@ pub trait HadithBackend: Send + Sync {
 
     /// Fetch grading records for a hadith.
     async fn backend_get_gradings(&self, hadith_id: &str) -> Result<Vec<GradingRecord>, ToolError>;
+}
+
+// ============================================================================
+// Tafsir tools (Phase 6, plan 06-02)
+// ============================================================================
+
+/// A tafsir reference: work slug + optional location inside the work.
+///
+/// String form is `work-slug[:chapter]` — e.g. `tafsir-tabari:2:255`, where
+/// the remainder after the first `:` is the chapter verbatim (it may itself
+/// contain `:`). Volume/page are set programmatically, not parsed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TafsirRef {
+    /// Work slug (e.g., "tafsir-tabari").
+    pub work_slug: String,
+    /// Volume number, when the work is multi-volume.
+    #[serde(default)]
+    pub volume: Option<u32>,
+    /// Page number, when the work is paginated.
+    #[serde(default)]
+    pub page: Option<u32>,
+    /// Chapter (e.g. surah name or number), when the work is chaptered.
+    #[serde(default)]
+    pub chapter: Option<String>,
+}
+
+impl TafsirRef {
+    /// Parse a reference string like "tafsir-tabari" or "tafsir-tabari:2:255".
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.split_once(':') {
+            Some((slug, chapter)) => {
+                if slug.is_empty() || chapter.is_empty() {
+                    return None;
+                }
+                Some(Self {
+                    work_slug: slug.to_string(),
+                    volume: None,
+                    page: None,
+                    chapter: Some(chapter.to_string()),
+                })
+            }
+            None => {
+                if s.is_empty() {
+                    return None;
+                }
+                Some(Self { work_slug: s.to_string(), volume: None, page: None, chapter: None })
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for TafsirRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.work_slug)?;
+        if let Some(chapter) = &self.chapter {
+            write!(f, ":{chapter}")?;
+        }
+        Ok(())
+    }
+}
+
+/// A full tafsir view with text, work, author, and dimensions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TafsirView {
+    /// The tafsir record id.
+    pub id: String,
+    /// Work slug.
+    pub work_slug: String,
+    /// Work name.
+    pub work_name: String,
+    /// Work author.
+    pub author: String,
+    /// Volume number, if any.
+    pub volume: Option<u32>,
+    /// Page number, if any.
+    pub page: Option<u32>,
+    /// Chapter, if any.
+    pub chapter: Option<String>,
+    /// Canonical tafsir text.
+    pub text: String,
+    /// Fully qualified reference (`work_slug:chapter` or `work_slug:volume:page`).
+    pub canonical_reference: String,
+}
+
+/// Parameters for `tafsir.get`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetTafsirParams {
+    /// Reference string in format `work_slug[:chapter]`.
+    pub reference: String,
+}
+
+/// Parameters for `tafsir.search`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TafsirSearchToolParams {
+    /// Query text.
+    pub query: String,
+    /// Optional work filter.
+    #[serde(default)]
+    pub work_slug: Option<String>,
+    /// Result cap.
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+/// The tafsir backend trait: implemented by `application` for the real reader.
+#[async_trait]
+pub trait TafsirBackend: Send + Sync {
+    /// Fetch one tafsir view by reference.
+    async fn backend_get_tafsir(
+        &self,
+        reference: &TafsirRef,
+    ) -> Result<(TafsirView, BackendMeta), ToolError>;
+
+    /// Search tafsir records.
+    async fn backend_search_tafsir(
+        &self,
+        _params: &TafsirSearchToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        Err(ToolError::Backend {
+            code: "QAI-TAF-0310".to_string(),
+            detail: "tafsir.search is not supported by this backend".to_string(),
+        })
+    }
 }
 
 /// Parameters for `quran.get_ayah`.
@@ -548,12 +675,13 @@ impl From<ContextBoundaryArg> for ContextBoundary {
 pub struct ToolRegistry {
     backend: Arc<dyn QuranBackend>,
     hadith_backend: Option<Arc<dyn HadithBackend>>,
+    tafsir_backend: Option<Arc<dyn TafsirBackend>>,
 }
 
 impl ToolRegistry {
     /// Wrap a backend.
     pub fn new(backend: Arc<dyn QuranBackend>) -> Self {
-        Self { backend, hadith_backend: None }
+        Self { backend, hadith_backend: None, tafsir_backend: None }
     }
 
     /// Wrap a backend with a hadith backend.
@@ -561,7 +689,7 @@ impl ToolRegistry {
         backend: Arc<dyn QuranBackend>,
         hadith_backend: Arc<dyn HadithBackend>,
     ) -> Self {
-        Self { backend, hadith_backend: Some(hadith_backend) }
+        Self { backend, hadith_backend: Some(hadith_backend), tafsir_backend: None }
     }
 
     /// Set the hadith backend after construction.
@@ -569,8 +697,21 @@ impl ToolRegistry {
         self.hadith_backend = Some(hadith_backend);
     }
 
-    /// The full registered tool set (§12 tool plan; D-13; Phase 6 hadith tools).
-    pub const TOOL_NAMES: [&'static str; 15] = [
+    /// Wrap a backend with a tafsir backend.
+    pub fn with_tafsir(
+        backend: Arc<dyn QuranBackend>,
+        tafsir_backend: Arc<dyn TafsirBackend>,
+    ) -> Self {
+        Self { backend, hadith_backend: None, tafsir_backend: Some(tafsir_backend) }
+    }
+
+    /// Set the tafsir backend after construction.
+    pub fn set_tafsir_backend(&mut self, tafsir_backend: Arc<dyn TafsirBackend>) {
+        self.tafsir_backend = Some(tafsir_backend);
+    }
+
+    /// The full registered tool set (§12 tool plan; D-13; Phase 6 hadith + tafsir tools).
+    pub const TOOL_NAMES: [&'static str; 17] = [
         "quran.get_ayah",
         "quran.get_context",
         "quran.search",
@@ -586,6 +727,8 @@ impl ToolRegistry {
         "hadith.get",
         "hadith.search",
         "hadith.gradings",
+        "tafsir.get",
+        "tafsir.search",
     ];
 
     /// Registered tool names.
@@ -1010,6 +1153,85 @@ impl ToolRegistry {
         };
         Ok(result)
     }
+
+    /// `tafsir.get`: fetch one tafsir view by reference.
+    pub async fn get_tafsir(
+        &self,
+        params: GetTafsirParams,
+    ) -> Result<(ToolResult<TafsirView>, BackendMeta), ToolError> {
+        let tafsir_backend = self.tafsir_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-TAF-0310".to_string(),
+            detail: "tafsir backend not configured".to_string(),
+        })?;
+        let started = Instant::now();
+        let reference =
+            TafsirRef::parse(&params.reference).ok_or_else(|| ToolError::InvalidInput {
+                tool: "tafsir.get",
+                detail: "reference must be in format `work_slug[:chapter]`".to_string(),
+            })?;
+        let query = serde_json::to_value(&params).unwrap_or(serde_json::Value::Null);
+        let (view, meta) = tafsir_backend.backend_get_tafsir(&reference).await?;
+        let canonical = view.canonical_reference.clone();
+        let payload = serde_json::to_value(&view).unwrap_or(serde_json::Value::Null);
+        let result = ToolResult {
+            tool_name: "tafsir.get".to_string(),
+            tool_version: TAFSIR_GET_VERSION,
+            query: query.clone(),
+            normalization_rules: Vec::new(),
+            edition_id: Some(meta.edition_id.clone()),
+            edition_version: Some(meta.edition_version.clone()),
+            canonical_references: vec![canonical.clone()],
+            analysis_sources: vec![AnalysisSource {
+                kind: "tafsir".to_string(),
+                reference: canonical,
+            }],
+            results: view,
+            confidence: None,
+            warnings: Vec::new(),
+            execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
+            reproducibility: reproducibility(
+                "tafsir.get",
+                TAFSIR_GET_VERSION,
+                &query,
+                Some(&meta.edition_slug),
+                Some(&meta.edition_version),
+                BTreeMap::new(),
+                meta.corpus_generation,
+            ),
+            research_checksum: research_checksum(
+                "tafsir.get",
+                TAFSIR_GET_VERSION,
+                &query,
+                &serde_json::json!({
+                    "reference": params.reference,
+                    "edition_slug": meta.edition_slug,
+                    "edition_version": meta.edition_version,
+                    "corpus_generation": meta.corpus_generation,
+                }),
+                &payload,
+            )
+            .expect("research checksum input is JSON-serializable"),
+        };
+        Ok((result, meta))
+    }
+
+    /// `tafsir.search`: normalized search over tafsir records.
+    pub async fn search_tafsir(
+        &self,
+        params: TafsirSearchToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        if params.query.trim().is_empty() {
+            return Err(ToolError::InvalidInput {
+                tool: "tafsir.search",
+                detail: "query text must not be empty".to_string(),
+            });
+        }
+        let tafsir_backend = self.tafsir_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-TAF-0310".to_string(),
+            detail: "tafsir backend not configured".to_string(),
+        })?;
+        tafsir_backend.backend_search_tafsir(&params).await
+    }
 }
 
 #[cfg(test)]
@@ -1260,6 +1482,8 @@ mod tests {
                 "hadith.get",
                 "hadith.search",
                 "hadith.gradings",
+                "tafsir.get",
+                "tafsir.search",
             ]
         );
     }
