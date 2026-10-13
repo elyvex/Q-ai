@@ -388,6 +388,44 @@ async fn budget_exhaustion_is_truncated_not_empty() {
     }
 }
 
+/// Star hub with more neighbors than the node budget: one center plus ten
+/// leaves under `max_nodes: 5`.
+fn star_parts() -> FixtureParts {
+    let mut nodes = vec![node("hub", NodeKind::Ayah)];
+    let mut edges = Vec::new();
+    for i in 0..10 {
+        let leaf = format!("leaf-{i:02}");
+        nodes.push(node(&leaf, NodeKind::Ayah));
+        edges.push(GraphEdge::structural("hub", "NEXT", &leaf, serde_json::Value::Null));
+    }
+    FixtureParts { projection_id: "star".to_string(), nodes, edges, assertions: Vec::new() }
+}
+
+#[tokio::test]
+async fn truncated_neighbors_keep_no_edges_to_dropped_nodes() {
+    // WR-11: node-budget truncation must prune edges to the surviving set —
+    // every returned edge's endpoints are present in `nodes`, still flagged
+    // truncated so the page is never mistaken for complete.
+    let parts = star_parts();
+    for backend in backends(&parts).await {
+        println!("backend: {}", backend.name());
+        let store = backend.store();
+        let (cancel, authz, _) = open();
+        let tight = QueryBudgets { max_nodes: 5, ..QueryBudgets::default() };
+        let view = store.neighbors("hub", &EdgeFilter::any(), &tight, &cancel, &authz).unwrap();
+        assert!(view.truncated, "node-budget overflow must truncate");
+        assert_eq!(view.nodes.len(), 5);
+        let ids: HashSet<&str> = view.nodes.iter().map(|n| n.stable_id.as_str()).collect();
+        assert!(ids.contains("hub"), "center survives its own truncation");
+        for edge in &view.edges {
+            assert!(
+                ids.contains(edge.src.as_str()) && ids.contains(edge.dst.as_str()),
+                "no dangling edge endpoints in a truncated page: {edge:?}"
+            );
+        }
+    }
+}
+
 #[tokio::test]
 async fn authz_hides_intermediates_from_paths_and_counts() {
     let parts = triangle_parts();

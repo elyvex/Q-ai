@@ -226,6 +226,14 @@ impl GraphStore for MemGraphStore {
             nodes.truncate(budgets.max_nodes);
             truncated_reason =
                 Some(format!("neighbor nodes exceed node budget {}", budgets.max_nodes));
+            // WR-11: truncated nodes must not leave edges pointing at absent
+            // endpoints — retain only edges fully inside the surviving set
+            // (still flagged truncated above).
+            let surviving: BTreeSet<&str> =
+                nodes.iter().map(|node| node.stable_id.as_str()).collect();
+            edges.retain(|edge| {
+                surviving.contains(edge.src.as_str()) && surviving.contains(edge.dst.as_str())
+            });
         }
         edges.sort_by(|a, b| (&a.src, &a.edge, &a.dst).cmp(&(&b.src, &b.edge, &b.dst)));
         match truncated_reason {
