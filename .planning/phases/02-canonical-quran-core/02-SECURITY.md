@@ -10,7 +10,7 @@ created: "2026-09-26"
 # Phase 02 — Security
 
 > Per-phase security contract: threat register, accepted risks, and audit trail.
-> Source: `<threat_model>` blocks in `02-01-PLAN.md` … `02-07-PLAN.md` (all seven
+> Source: `<threat_model>` blocks in `02-01-PLAN.md` … `02-08-PLAN.md` (all eight
 > plans authored with a parseable threat model → `register_authored_at_plan_time: true`).
 > Posture: ASVS Level 1; unmitigated `high` blocks. L1 verification depth applied;
 > short-circuit taken per workflow (threats_open: 0, register at plan time, ASVS 1).
@@ -121,6 +121,7 @@ register threat. Tracked as follow-ups, not open threats:
 |------------|---------------|--------|------|--------|
 | 2026-09-26 | 40 | 40 | 0 | secure-phase L1 (plan-register + grep evidence + VERIFICATION 5/5) |
 | 2026-10-04 | 40 | 40 | 0 | secure-phase L1 re-run — gap plan 02-08 (D-15 ledger rebuild) is docs-only + one source-scan test; no threat-surface change, no SUMMARY threat flags |
+| 2026-10-13 | 40 | 40 | 0 | secure-phase L1 stale-refresh — re-verified high-severity mitigations in current tree (open_read_only verify path quran_cli.rs; ApprovalToken::new pub(crate) provenance/src/lib.rs:159; require_exact server/api.rs:662; QAI-QUR trigger adversarial tests; answer_path_ledger.rs guard); no SUMMARY threat flags; only post-audit commits are docs-only 02-08 + unrelated phase 05/06 work |
 
 ---
 
