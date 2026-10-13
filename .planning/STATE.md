@@ -2,17 +2,17 @@
 gsd_state_version: "1.0"
 current_phase: 06
 current_phase_name: Hadith & Tafsir
-status: planning
+status: executing
 stopped_at: Phase 04 complete, ready to plan Phase 06
-last_updated: "2026-10-13T06:39:23.161Z"
+last_updated: "2026-10-13T06:53:19.710Z"
 last_activity: 2026-10-13
-last_activity_desc: Phase 04 complete, transitioned to Phase 06
-state_head: e7a44f1b5be9683d910299099de725a935a27a1d
+last_activity_desc: Phase 06 execution started
+state_head: 10585d340685ccfdea0954c79f39f95e1d41f79e
 progress:
   total_phases: 13
   completed_phases: 6
   total_plans: 43
-  completed_plans: 39
+  completed_plans: 40
   percent: 46
 ---
 
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-06)
 
 **Core value:** Trustworthy Quran research: exact canonical text before generated interpretation, every factual claim traceable to its source.
-**Current focus:** Phase 04 — Quran Graph
+**Current focus:** Phase 06 — Hadith & Tafsir
 
 ## Current Position
 
-Phase: 06 — Hadith & Tafsir
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-10-13 — Phase 04 complete, transitioned to Phase 06
+Phase: 06 (Hadith & Tafsir) — EXECUTING
+Plan: 2 of 4
+Status: Executing Phase 06
+Last activity: 2026-10-13 — Phase 06 plan 02 (tafsir tracer) complete
 
 Progress: [█████░░░░░] 46%
 
@@ -146,6 +146,8 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-08: The deferred scope is recorded in docs/05-followups/phase-03-deferrals.md (UI + result-contract checksum -> Phase 5; counting tail incl. hapax_search -> later; legacy phase-02-rag tail -> follow-ups; transliteration/L8; graph -> Phase 4; editions/multi-RAG), and the 03-VALIDATION.md per-task map is deferred to /gsd-validate-phase with the PLAN <verify> blocks as the authoritative Phase-3 map (T-03-33).
 - [Phase 02]: [Phase 02]: D-15 answer-path ledger rebuilt on the emission frame (every path whose response contains quoted canonical text), not the direct-read frame that omitted index-backed search paths; all refs are drift-proof path#symbol, and crates/application/tests/answer_path_ledger.rs guards both drift and a new marker-emitting handler
 - [Phase 02]: [Phase 02]: Each exempt emitting path carries its emission mechanism (AyahView.canonical, SearchHit.quotation, or the hand-built token surface); tokens_handler needs its own label because it is exempt by construction but does not emit via AyahView.canonical. The guard is a guard, not a proof: a novel hand-built json! text shape is enumerated but not literally detectable (G-02-3)
+- [Phase 06-02]: tafsir IDs are manual uuid newtypes (hadith-core precedent) — domain::typed_id! is unusable cross-crate (crate::primitives resolves to caller); L5-normalize-both-sides for tafsir FTS; standalone tafsir_fts (no content= backing); tafsir parity deferred to 06-04 (5 uncovered tools asserted)
+- [Phase 06-02]: get_records_for_verse is structural chapter navigation (surah-level); computational verse links arrive in 06-03; no query-time normalization-profile selector (unsound vs single L5 index)
 
 ### Pending Todos
 
@@ -167,8 +169,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-06T14:43:18.262Z
-Stopped at: Phase 04 complete, ready to plan Phase 06
+Last session: 2026-10-13T07:53:14Z
+Stopped at: Completed 06-02-PLAN.md (tafsir tracer)
 Resume file: .planning/phases/05-rich-quran-experience/05-CONTEXT.md
 
 ## Deferred Verification
