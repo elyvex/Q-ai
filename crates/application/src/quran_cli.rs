@@ -4461,8 +4461,13 @@ fn render_export(
         ExportFormat::Json => {
             let json =
                 super::quran_graph_export::assemble_export(sets, &scope, &ExportNotice::complete());
-            let nodes = sets.nodes.len();
-            let edges = sets.edges.len();
+            // WR-12: the human message must count what was actually exported
+            // (the policy-filtered payload), not the raw pinned sets — with
+            // any rejected/superseded assertions present the raw lengths
+            // overstate the export. Count from the assembled document so
+            // message and payload agree by construction.
+            let nodes = json["nodes"].as_array().map(Vec::len).unwrap_or(0);
+            let edges = json["edges"].as_array().map(Vec::len).unwrap_or(0);
             let traveling = json["assertions"].as_array().map(Vec::len).unwrap_or(0);
             match out {
                 Some(path) => {
@@ -5376,5 +5381,75 @@ mod license_evidence_tests {
             resolve_license_evidence("synthetic-test-lexicon", None, None, None).unwrap();
         assert_eq!(status, "Unspecified");
         assert_eq!(json, "{}");
+    }
+}
+
+#[cfg(test)]
+mod export_count_tests {
+    use super::super::quran_graph_export::ProjectionSets;
+    use super::{ExportFormat, render_export};
+
+    fn tombstoned_sets() -> ProjectionSets {
+        use quran_graph::{
+            Assertion, AssertionDecision, AssertionKind, GraphEdge, GraphNode, NodeKind,
+            ProjectionManifest, ProjectionStatus, ProvenanceLayer,
+        };
+        let manifest = ProjectionManifest {
+            id: "row-1".to_string(),
+            projection_id: quran_graph::STRUCTURAL_PROJECTION_ID.to_string(),
+            builder_version: "test-v1".to_string(),
+            edition_id: "test-min".to_string(),
+            corpus_generation: 0,
+            dataset_versions: Default::default(),
+            dependency_snapshot: Default::default(),
+            status: ProjectionStatus::Active,
+            manifest: serde_json::Value::Null,
+            created_at: "2026-09-28T00:00:00Z".to_string(),
+        };
+        let nodes = vec![
+            GraphNode::new("ayah:1:1", NodeKind::Ayah, serde_json::Value::Null),
+            GraphNode::new("ayah:1:2", NodeKind::Ayah, serde_json::Value::Null),
+        ];
+        let edges = vec![
+            GraphEdge::structural("ayah:1:1", "NEXT", "ayah:1:2", serde_json::Value::Null),
+            GraphEdge::asserted("ayah:1:1", "PARALLELS", "ayah:1:2", "tomb"),
+        ];
+        let assertions = vec![Assertion {
+            id: "tomb".to_string(),
+            kind: AssertionKind::ConceptLink,
+            claim: serde_json::json!({}),
+            evidence: serde_json::json!({}),
+            source_location: "test".to_string(),
+            reviewer: Some("reviewer-1".to_string()),
+            decision: AssertionDecision::Rejected,
+            decided_at: Some("2026-09-28T00:00:00Z".to_string()),
+            supersedes_id: None,
+            layer: ProvenanceLayer::B,
+            algorithm: None,
+            algorithm_version: None,
+            confidence: None,
+            created_at: "2026-09-28T00:00:00Z".to_string(),
+        }];
+        ProjectionSets { manifest, nodes, edges, assertions }
+    }
+
+    #[test]
+    fn json_export_message_counts_filtered_payload_not_raw_sets() {
+        // WR-12: with a rejected assertion present, the human message must
+        // report the policy-filtered payload (1 edge, 0 assertions), not the
+        // raw pinned sets (2 edges) the JSON went through without.
+        let sets = tombstoned_sets();
+        let out = render_export(&sets, ExportFormat::Json, None, None);
+        assert!(
+            out.human.starts_with("exported 2 nodes, 1 edges, 0 assertions"),
+            "message counts the filtered payload: {}",
+            out.human
+        );
+        let edges = out.json["edges"].as_array().cloned().unwrap_or_default();
+        assert_eq!(edges.len(), 1, "payload carries one edge: {edges:?}");
+        assert!(
+            !serde_json::to_string(&out.json).unwrap_or_default().contains("tomb"),
+            "tombstoned id byte-absent from the payload"
+        );
     }
 }
