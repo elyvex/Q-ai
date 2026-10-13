@@ -18,7 +18,7 @@
 workspace = { allow = [] }
 
 [application]
-workspace = { allow = ["domain", "storage", "storage-sqlite", "provenance", "audit", "jobs", "sources", "config", "observability", "quran-core", "quran-corpus", "quran-normalization", "quran-search", "quran-morphology", "quran-graph", "citations", "tools", "tool-registry", "hadith-core"] }
+workspace = { allow = ["domain", "storage", "storage-sqlite", "provenance", "audit", "jobs", "sources", "config", "observability", "quran-core", "quran-corpus", "quran-normalization", "quran-search", "quran-morphology", "quran-graph", "citations", "tools", "tool-registry", "hadith-core", "tafsir"] }
 
 [storage]
 workspace = { allow = ["domain"] }
@@ -127,6 +127,13 @@ workspace = { allow = ["domain", "quran-core", "application", "storage-sqlite"] 
 # Depends on `domain` for ContentHash/SourceVersionId/Timestamp/SemVer.
 # application -> hadith-core is the port direction (services consume the types).
 [hadith-core]
+workspace = { allow = ["domain"] }
+
+# tafsir: tafsir work/record/dimension domain types (Phase 6, plan 06-02).
+# Pure types + parsing + hashing; no storage/sqlx, no llm/embeddings/retrieval.
+# Depends on `domain` for ContentHash/SourceVersionId/Timestamp/SemVer.
+# application -> tafsir is the port direction (services consume the types).
+[tafsir]
 workspace = { allow = ["domain"] }
 
 # retrieval: the backend-agnostic retrieval port (Phase 8 groundwork).
@@ -276,6 +283,14 @@ allow = []
 [hadith-core.external.registry]
 allow = ["serde", "serde_json", "thiserror", "uuid"]
 [hadith-core.external.git]
+allow = []
+
+# tafsir externals: serde for the work/record types, serde_json for the
+# dimensions-schema payload, uuid for typed-id construction. No new package
+# was added or upgraded to produce this list.
+[tafsir.external.registry]
+allow = ["serde", "serde_json", "thiserror", "uuid"]
+[tafsir.external.git]
 allow = []
 
 # retrieval externals: serde types for the port, thiserror for typed errors,

@@ -16,6 +16,7 @@ jobs = { path = "../jobs" }
 sources = { path = "../sources" }
 observability = { path = "../observability" }
 hadith-core = { path = "../hadith-core" }
+tafsir = { path = "../tafsir" }
 quran-core = { path = "../quran-core" }
 quran-corpus = { path = "../quran-corpus" }
 quran-search = { path = "../quran-search" }

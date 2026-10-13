@@ -185,6 +185,7 @@ dependencies = [
  "sqlx",
  "storage",
  "storage-sqlite",
+ "tafsir",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -4381,6 +4382,12 @@ dependencies = [
 [[package]]
 name = "tafsir"
 version = "0.0.0"
+dependencies = [
+ "domain",
+ "serde",
+ "serde_json",
+ "uuid",
+]
 
 [[package]]
 name = "tantivy"
