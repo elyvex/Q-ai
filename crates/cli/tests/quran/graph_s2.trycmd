@@ -55,7 +55,7 @@ exported 84 nodes, 142 edges, 0 assertions as Graph JSON (projection quran-struc
 
 ```console
 $ qai quran graph neighbors --db --node ayah:1:1 --max-nodes 1
-neighbors of ayah:1:1: 1 node(s), 7 edge(s) (truncated)
+neighbors of ayah:1:1: 1 node(s), 0 edge(s) (truncated)
 incomplete: neighbor nodes exceed node budget 1
   ayah:1:1 -> quran:test-edition-min@0.1.0:1:1
 
