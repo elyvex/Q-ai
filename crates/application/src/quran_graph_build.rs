@@ -1296,6 +1296,12 @@ pub fn parse_annotated_seed(seed_json: &str) -> Result<AnnotatedSeed, GraphError
                 detail: format!("concept seed links[{index}] points at unknown node '{dst}'"),
             });
         }
+        if (src.starts_with("concept:") || src.starts_with("entity:")) && !known.contains(src) {
+            return Err(GraphError::BuildFailed {
+                stage: "collect".to_string(),
+                detail: format!("concept seed links[{index}] points at unknown node '{src}'"),
+            });
+        }
         if src.trim().is_empty() || dst.trim().is_empty() {
             return Err(GraphError::BuildFailed {
                 stage: "collect".to_string(),
