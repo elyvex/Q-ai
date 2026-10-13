@@ -148,6 +148,30 @@ const WORK_COLUMNS: &str = "id, slug, name, author, dimensions_schema_json, vers
 const RECORD_COLUMNS: &str = "id, work_id, volume, page, chapter, text, text_hash, \
                                source_version_id, status, created_at";
 
+/// The canonical reference for a tafsir record: work slug plus its location
+/// inside the work. Chapter-first (the work's own verse organization), else
+/// volume/page. Deterministic for identical inputs.
+pub fn canonical_reference(
+    work_slug: &str,
+    volume: Option<u32>,
+    page: Option<u32>,
+    chapter: Option<&str>,
+) -> String {
+    let mut reference = work_slug.to_string();
+    if let Some(chapter) = chapter {
+        reference.push(':');
+        reference.push_str(chapter);
+    } else {
+        if let Some(volume) = volume {
+            reference.push_str(&format!(":{volume}"));
+        }
+        if let Some(page) = page {
+            reference.push_str(&format!(":{page}"));
+        }
+    }
+    reference
+}
+
 /// Tafsir reader trait: insert/retrieve tafsir works and records.
 #[async_trait]
 pub trait TafsirReader: Send + Sync {
