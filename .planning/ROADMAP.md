@@ -65,7 +65,7 @@ Plans:
   4. Canonical tables reject all non-approved writes; importer has no code path to canonical tables
   5. Every quotation verifies via `verify_quotation` with mismatch as a hard failure
 
-**Plans**: 8/8 plans executed (7 executed + 1 gap-closure)
+**Plans**: 8/8 plans complete (7 executed + 1 gap-closure)
 
 Plans:
 **Wave 1**
@@ -232,6 +232,7 @@ Plans:
 **Wave 6** *(blocked on Wave 5)*
 
 - [x] 05-07-PLAN.md — CI wiring (SPA build + parity steps, 9→11), layer-separation source scan, owner-gate recording, validation map + roadmap
+
 **UI hint**: yes
 
 ### Phase 6: Hadith & Tafsir
