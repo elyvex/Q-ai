@@ -6,6 +6,8 @@
 //! turns the ledger into a checked list that is resolved against the source tree,
 //! so a rename/drift of a recorded path fails the build, and a *new* emitting
 //! handler that uses one of the three known emission markers also fails the build.
+//! The marker scan covers every ledger file with per-file expected counts (the
+//! two HTTP-only markers are asserted absent outside `api.rs`).
 //!
 //! It follows the precedent of
 //! `crates/application/tests/quran_translation.rs#translation_cannot_reach_a_canonical_slot`,
@@ -20,7 +22,9 @@
 //! `tokens_handler` — is enumerated in [`LEDGER`] but cannot be detected literally
 //! by the scan; adding such a handler must still be caught by the review
 //! checklist. The ledger's completeness claim is correspondingly framed in
-//! `docs/06-progress/phase-02-evidence.md` §3.
+//! `docs/06-progress/phase-02-evidence.md` §3. Expected counts are per file, so
+//! moving an emission across files breaks the guard loudly instead of silently
+//! re-attributing it.
 
 use std::collections::BTreeSet;
 
@@ -58,6 +62,9 @@ const LEDGER: &[(&str, &str, &str)] = &[
     (CLI, "cmd_search", "async fn"),
     (CLI, "cmd_verify_quotation", "async fn"),
     (TOOLS, "verify_canonical_quotation", "async fn"),
+    // WR-02: the verifying read behind `resolve()`. Its `.arabic_text()`
+    // occurrence must attribute to a recorded path or the marker scan fails.
+    (TOOLS, "fetch_ayah_text", "async fn"),
     (TOOLS, "ReaderToolBackend", "struct"),
     (TOOLS, "ReaderCitationSource", "struct"),
 ];
@@ -116,16 +123,29 @@ fn every_ledger_symbol_resolves_under_its_declared_kind() {
 
 #[test]
 fn emitting_markers_resolve_to_recorded_paths() {
-    let recorded = ledger_symbols(API);
-    let markers = [".arabic_text()", "search_response(&headers,", "ok_envelope(result.results"];
-    let expected = [3usize, 5usize, 2usize];
-    for (marker, expected) in markers.iter().zip(expected) {
-        let hits = scan_marker(source_for(API), marker);
-        assert_eq!(hits.len(), expected, "occurrence count for `{marker}` changed");
+    // (file, marker, expected occurrences). The two HTTP-only markers are
+    // asserted absent outside `api.rs`, so a new emitting handler in the CLI
+    // or tool surface fails the build instead of slipping past an API-only
+    // scan (WR-02).
+    let cases = [
+        (API, ".arabic_text()", 3usize),
+        (API, "search_response(&headers,", 5usize),
+        (API, "ok_envelope(result.results", 2usize),
+        (CLI, ".arabic_text()", 4usize),
+        (CLI, "search_response(&headers,", 0usize),
+        (CLI, "ok_envelope(result.results", 0usize),
+        (TOOLS, ".arabic_text()", 1usize),
+        (TOOLS, "search_response(&headers,", 0usize),
+        (TOOLS, "ok_envelope(result.results", 0usize),
+    ];
+    for (file, marker, expected) in cases {
+        let recorded = ledger_symbols(file);
+        let hits = scan_marker(source_for(file), marker);
+        assert_eq!(hits.len(), expected, "occurrence count for `{marker}` in {file} changed");
         for name in hits {
             assert!(
                 recorded.contains(name.as_str()),
-                "emitting marker `{marker}` in `{name}` is not in the ledger"
+                "emitting marker `{marker}` in `{name}` ({file}) is not in the ledger"
             );
         }
     }
