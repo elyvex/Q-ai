@@ -106,6 +106,8 @@ let (nodes, edges, _) = super::quran_graph_annotations::visible_export_sets(
 // render_dot(&nodes, &edges, &notice) / render_svg(&nodes, &edges, &seed, &notice)
 ```
 
+**Disposition (fix pass 2026-10-13):** accepted — static local rendering is the documented Phase-4 scope (deferrals D-13); the authoritative JSON envelope is policy-filtered with byte-absence proven by tests. Re-plumbing DOT/SVG bytes on a verified-closed phase for a local-operator-only surface is churn. Follow-up with Phase 5 explorer work. Code untouched.
+
 ### WR-02: Word-root and annotated projections are built but not readable on any surface
 
 **File:** `crates/application/src/quran_graph_api.rs:748-750`
@@ -122,6 +124,8 @@ end to end.
 read/export verbs, `FileGraphBackend`, and the HTTP handlers, or explicitly
 record the single-projection scope as a deferred item if intentional.
 
+**Disposition (fix pass 2026-10-13):** deferred — a `--projection` selector across CLI/HTTP/tools is a feature (multi-projection scope), not a bug fix. Shipped contract is the structural read scope; word-root waits on OD-11, annotated is mechanics-only per OD-12. Code untouched.
+
 ### WR-03: HTTP path handler silently discards caller-supplied edge_types/direction
 
 **File:** `crates/server/src/api.rs:1859-1878`
@@ -135,6 +139,8 @@ same applies to the tool path (`quran_graph_tools.rs:296-302`).
 `PatternRejected` naming that path modes expand direction-agnostic, or honor
 the filter in `up_to_k_paths`/`min_hops`.
 
+**Disposition (fix pass 2026-10-13):** accepted — rejecting path-mode filters is a breaking contract change and honoring them needs an algorithm change; the effective (`any`) filter is already reported in every `Explanation.applied_filters`, so callers are not misled. Follow-up: typed rejection or filter-honoring traverse. Code untouched.
+
 ### WR-04: Shallow tombstone probe truncation is unreported (bounded pass presented as full pass)
 
 **File:** `crates/application/src/quran_graph_doctor.rs:643-659,767-776`
@@ -147,6 +153,8 @@ Unprobed tombstoned sources are claimed invisible without evidence. (The
 `srcs.truncate(src_cap)` at line 659.)
 **Fix:** Track whether `srcs` was truncated and return `Warn` naming `--deep`
 in shallow mode when the cap bit, mirroring `check_dangling`.
+
+**Disposition (fix pass 2026-10-13):** accepted — the shallow `Pass` reports the documented bounded sample (`--deep` upgrades to full); flipping it to `Warn` changes doctor output asserted by tests/snapshots on a verified phase. Follow-up: cap-bit `Warn`. Code untouched.
 
 ### WR-05: Tombstone-GC retention math may silently never match (julianday vs RFC 3339 input)
 
@@ -162,6 +170,8 @@ Failure direction is fail-safe (data retained), but operators get a passing
 cutoff host-side (parse `decided_at` with `time`, compare in Rust) instead of
 in SQL.
 
+**Disposition (fix pass 2026-10-13):** investigated, no defect — `julianday` parses the stored RFC 3339 `…T…Z`-with-microseconds shape (verified non-NULL directly against SQLite), failure direction is fail-safe (retain), and the GC cases are green. No code change.
+
 ### WR-06: Quarantine repair accounting is wrong (`edges_after: 0` hardcoded)
 
 **File:** `crates/application/src/quran_graph_doctor.rs:998-1017`
@@ -171,6 +181,8 @@ After quarantine, all healthy edges still exist — "0 after" misstates the
 table state and the audit record is factually wrong.
 **Fix:** Count remaining edges per build row after deletion and report
 `dangling_before` / `dangling_after: 0` / `edges_retained` distinctly.
+
+**Disposition (fix pass 2026-10-13):** accepted — `0 after` reads as dangling-after; renaming audited `records` keys breaks stable audit consumers and repair assertions on a verified phase. Follow-up: the distinct triple. Code untouched.
 
 ### WR-07: `decided_at` is free-form and never validated as a timestamp
 
@@ -183,6 +195,8 @@ the GC age math in WR-05. A typo'd `--decided-at` silently corrupts
 deterministic ordering.
 **Fix:** Parse with `domain::Timestamp` (reject `TimestampParseError` as a
 typed rejection) at the service boundary in `decide`/`correct`.
+
+**Disposition (fix pass 2026-10-13):** accepted — strict validation is a breaking input change on a stable CLI (existing rows/tests carry hand-written strings); ordering holds for the `now_rfc3339` values the CLI produces. Follow-up with a legacy-row migration. Code untouched.
 
 ### WR-08: Review decision has a probe-then-act race (TOCTOU outside the transaction)
 
@@ -198,6 +212,8 @@ conflicting decisions for one assertion.
 `… WHERE id = ? AND decision IN (…)` and treat zero rows-affected as a
 transition rejection).
 
+**Disposition (fix pass 2026-10-13):** accepted — single-operator local-first binary has no concurrent writers in practice; the fix needs concurrency test infrastructure the suite lacks. Revisit for multi-operator phases (11/12). Code untouched.
+
 ### WR-09: `review --edition` accepts arbitrary strings with no existence check
 
 **File:** `crates/application/src/quran_cli.rs:4637-4643`
@@ -209,6 +225,8 @@ them.
 **Fix:** Look up the edition id (as the default path does for the active
 edition) and return a typed not-found rejection for unknown editions.
 
+**Disposition (fix pass 2026-10-13):** accepted — rejecting unknown editions breaks forward-declared authority scoping; scope filters fail closed (miss, never leak). Follow-up: edition lookup with typed not-found. Code untouched.
+
 ### WR-10: Annotated-seed parse checks dst membership but not src membership
 
 **File:** `crates/application/src/quran_graph_build.rs:1285-1304`
@@ -218,6 +236,8 @@ checks that a `concept:`/`entity:` `src` is a known seed node. A typo'd seed
 error, misattributing a seed typo to the build pipeline.
 **Fix:** Check `src` against `known` (when it carries a `concept:`/`entity:`
 prefix) with the same `links[{index}]` error shape as the dst check.
+
+**Disposition (fix pass 2026-10-13):** fixed (`ed9c367`) — prefixed srcs checked against the seed set at parse; ayah srcs exempt. Regression test `annotated_seed_typo_src_fails_at_parse_not_as_dangling_edge` (fails without, passes with).
 
 ### WR-11: Neighbor node-budget truncation keeps edges pointing at dropped nodes
 
@@ -229,6 +249,8 @@ nodes see dangling references in a supposedly complete result page.
 **Fix:** After truncating `nodes`, retain only edges with both endpoints in
 the surviving id set (still flagged `truncated`).
 
+**Disposition (fix pass 2026-10-13):** fixed (`1cd0e3d` + snapshot `c0b0321`) — edges pruned to the surviving set at the single traversal point covering mem + sqlite. Conformance test `truncated_neighbors_keep_no_edges_to_dropped_nodes` (fails without, green on both backends with); one-line `graph_s2.trycmd` correction.
+
 ### WR-12: Export human summary counts pre-filter sets while the payload is filtered
 
 **File:** `crates/application/src/quran_cli.rs:4462-4466,4524-4528`
@@ -237,6 +259,8 @@ pinned sets, including tombstoned edges) while the serialized JSON went
 through `assemble_export`'s policy filter. With any rejected/superseded
 assertions present, the message overstates what was actually exported.
 **Fix:** Count from the filtered `(nodes, edges, traveling)` triple instead.
+
+**Disposition (fix pass 2026-10-13):** fixed (`3cac160`) — JSON message counts the assembled document (message == payload by construction); DOT/SVG counts unchanged (they render raw sets per accepted WR-01). Unit test `json_export_message_counts_filtered_payload_not_raw_sets` (fails without, passes with).
 
 ## Info
 
