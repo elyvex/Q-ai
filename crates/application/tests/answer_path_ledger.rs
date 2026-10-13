@@ -46,6 +46,11 @@ const LEDGER: &[(&str, &str, &str)] = &[
     (API, "context_handler", "async fn"),
     (API, "tokens_handler", "async fn"),
     (API, "debug_reader_handler", "async fn"),
+    // WR-01: the enforced stored-verdict path and the metadata-only resolve
+    // path. Neither emits via a scanned marker, so without these entries a
+    // rename/removal of either is silent.
+    (API, "citation_handler", "async fn"),
+    (API, "resolve_handler", "async fn"),
     (CLI, "cmd_get", "async fn"),
     (CLI, "cmd_context", "async fn"),
     (CLI, "cmd_surah", "async fn"),
