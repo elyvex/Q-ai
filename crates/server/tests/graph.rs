@@ -766,12 +766,9 @@ async fn graph_neighbors_route_threads_projection_selector() {
     let (addr, handle) = serve_once().await;
 
     // Selector-less reads keep the structural default.
-    let (status, body) = post_json(
-        &addr,
-        "/api/v1/quran/graph/neighbors",
-        &serde_json::json!({"node": "ayah:1:1"}),
-    )
-    .await;
+    let (status, body) =
+        post_json(&addr, "/api/v1/quran/graph/neighbors", &serde_json::json!({"node": "ayah:1:1"}))
+            .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         body_json(&body)["data"]["explanation"]["snapshot"]["projection_id"],
@@ -790,17 +787,11 @@ async fn graph_neighbors_route_threads_projection_selector() {
     assert_eq!(value["data"]["nodes"][0]["stable_id"], "concept:mercy");
     assert_eq!(value["data"]["nodes"][0]["kind"], "concept");
     assert_eq!(value["data"]["edges"][0]["edge"], "MENTIONS_CONCEPT");
-    assert_eq!(
-        value["data"]["explanation"]["snapshot"]["projection_id"],
-        "quran-annotated-v1"
-    );
+    assert_eq!(value["data"]["explanation"]["snapshot"]["projection_id"], "quran-annotated-v1");
     assert_eq!(value["meta"]["reproducibility"]["projection_id"], "quran-annotated-v1");
     // Pending attribution is surfaced as pending, never as verified.
     assert_eq!(value["data"]["nodes"][0]["attrs"]["reviewed_by"], "pending-scholar");
-    assert_eq!(
-        value["data"]["explanation"]["edges"][0]["provenance"]["decision"],
-        "pending"
-    );
+    assert_eq!(value["data"]["explanation"]["edges"][0]["provenance"]["decision"], "pending");
     handle.abort();
 }
 

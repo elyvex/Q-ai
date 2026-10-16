@@ -362,9 +362,16 @@ async fn graph_parity_neighbors_across_cli_http_and_tools() {
     ));
 
     // CLI leg: the db verb with the fixed inputs.
-    let cli =
-        quran_cli::cmd_graph_neighbors(&path_str, None, true, "ayah:1:1", HOPS, &cli_budgets(), None)
-            .await;
+    let cli = quran_cli::cmd_graph_neighbors(
+        &path_str,
+        None,
+        true,
+        "ayah:1:1",
+        HOPS,
+        &cli_budgets(),
+        None,
+    )
+    .await;
     assert_eq!(cli.exit, 0, "CLI neighbors succeeds: {}", cli.human);
     let cli_projection = serde_json::json!({
         "nodes": cli.json["nodes"],
