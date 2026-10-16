@@ -6,7 +6,9 @@
 
 pub mod doctor;
 pub mod exit_code;
+pub mod hadith;
 pub mod quran;
+pub mod tafsir;
 
 use clap::{Parser, Subcommand};
 use config::{Config, OriginMap, ValueOrigin};
@@ -120,6 +122,16 @@ pub enum Commands {
     Quran {
         #[command(subcommand)]
         action: quran::QuranAction,
+    },
+    /// Hadith corpus commands.
+    Hadith {
+        #[command(subcommand)]
+        action: hadith::HadithAction,
+    },
+    /// Tafsir commands.
+    Tafsir {
+        #[command(subcommand)]
+        action: tafsir::TafsirAction,
     },
     /// Shell completions (Phase 1).
     Completions {
@@ -531,6 +543,14 @@ pub fn dispatch(cli: Cli) -> i32 {
         Commands::Quran { action } => {
             let db_path = cfg.storage.sqlite.path.clone();
             quran::handle_quran(action, &db_path, cli.json, cli.yes)
+        }
+        Commands::Hadith { action } => {
+            let db_path = cfg.storage.sqlite.path.clone();
+            hadith::handle_hadith(action, &db_path, cli.json)
+        }
+        Commands::Tafsir { action } => {
+            let db_path = cfg.storage.sqlite.path.clone();
+            tafsir::handle_tafsir(action, &db_path, cli.json)
         }
     }
 }
