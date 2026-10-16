@@ -103,7 +103,8 @@ Proposed (NOT locked — explicit decision points during roadmap execution): ADR
 | Layered workspace + local-first binary (ADR-0000) | Enforceable boundaries; canonical safety at type level | — Pending |
 | SQLite default, PG-portable (ADR-0001) | Local-first authority; server path without rewrite | — Pending |
 | Canonical Quran safety model (ADR-0102…0113) | Exact text + verifiable citations are the core value | ✓ Validated — Phase 2 (8/8 plans, UAT 37/37, threats_open 0) |
+| Single graph read selector (04-06 gap closure) | One read selector resolved in one place (`ReadOptions.projection` → `open_for_projection`) so CLI/HTTP/tool surfaces cannot drift; default structural read stays byte-identical | ✓ Validated — Phase 4 (neighbors/export gain `--projection`; `path`/`subgraph`/`pattern`/`inspect` stay structural-only, recorded in the deferral ledger) |
 | Deny-by-default tools, human approvals | Untrusted retrieval; no silent canonical modification | — Pending |
 
 ---
-*Last updated: 2026-10-16 after Phase 2 complete (canonical Quran core validated; phases 1–5 shipped)*
+*Last updated: 2026-10-16 after Phase 4 complete (Quran knowledge graph validated; SC1 closed by the 04-06 projection selector; phases 1–5 shipped)*

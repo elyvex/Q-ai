@@ -163,6 +163,8 @@ None yet.
 - ⚠️ [Phase 2] citations crate coverage 79.27% vs the published 85% floor (gate row held at 79%) — add verdict-mapping/resolver-error coverage, then raise the threshold
 - ⚠️ [Phase 2] 5 open code-review info findings (IN-01…IN-05) recorded, not triaged — .planning/phases/02-canonical-quran-core/02-REVIEW-DISPOSITION.md
 - ADR-0201/0202/0701/0301 (retrieval/graph/vector/RAG) undecided — Phase 4/8 plans must include decision points
+- ⚠️ [Phase 4] Six owner gates stay BLOCKED (OD-11 dataset/license, OD-12 linguist, P4-X01/X02/X03/X05 ratifications); no check can close them — docs/05-followups/phase-04-owner-gates.md
+- ⚠️ [Phase 4] Projection selector is on `neighbors`/`export` only; `path`/`subgraph`/`pattern`/`inspect` remain structural-only by design — deferral §7, docs/05-followups/phase-04-deferrals.md
 - ADR-0702 foundational subset (outbox/revisions/jobs/tombstones) required from Phases 0–3
 
 ## Deferred Items
@@ -175,7 +177,7 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-16T11:42:43.461Z
+Last session: 2026-10-16T11:53:55.000Z
 Stopped at: Phase 04 complete, ready to plan Phase 06
 Resume file: None
 
