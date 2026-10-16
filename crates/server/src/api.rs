@@ -2204,6 +2204,12 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/quran/ayahs/{reference}", get(ayahs_handler))
         .route("/api/v1/quran/context/{reference}", get(context_handler))
         .route("/api/v1/quran/tool/{name}", post(tool_handler))
+        .route("/api/v1/hadith/{collection}/{source_number}", get(hadith_get_handler))
+        .route("/api/v1/hadith/search", post(hadith_search_handler))
+        .route("/api/v1/hadith/{collection}/{source_number}/gradings", get(hadith_gradings_handler))
+        .route("/api/v1/tafsir/{work_slug}", get(tafsir_get_handler))
+        .route("/api/v1/tafsir/search", post(tafsir_search_handler))
+        .route("/api/v1/verse/{surah}/{ayah}/links", get(verse_links_handler))
         .route("/api/v1/quran/divisions/{kind}/{number}", get(divisions_handler))
         .route("/api/v1/quran/tokens/{reference}", get(tokens_handler))
         .route("/api/v1/quran/resolve", get(resolve_handler))
@@ -2244,6 +2250,145 @@ pub fn router(state: AppState) -> Router {
         ))
         .layer(tower::limit::ConcurrencyLimitLayer::new(128))
         .with_state(state)
+}
+
+
+#[derive(serde::Deserialize)]
+struct HadithSearchBody {
+    query: String,
+    #[serde(default)]
+    collection_slug: Option<String>,
+    #[serde(default)]
+    limit: Option<u32>,
+}
+
+#[derive(serde::Deserialize)]
+struct TafsirSearchBody {
+    query: String,
+    #[serde(default)]
+    work_slug: Option<String>,
+    #[serde(default)]
+    limit: Option<u32>,
+}
+
+async fn hadith_get_handler(
+    State(state): State<AppState>,
+    Path((collection, source_number)): Path<(String, String)>,
+) -> Response {
+    let reference = format!("{collection}:{source_number}");
+    let params = tool_registry::GetHadithParams { reference };
+    match state.tools.get_hadith(params).await {
+        Ok((result, _meta)) => {
+            let checksum = result
+                .research_checksum
+                .hex
+                .clone();
+            let mut meta = empty_meta();
+            meta.research_checksum = format!("sha256:{checksum}");
+            let data = serde_json::to_value(&result).unwrap_or(serde_json::Value::Null);
+            json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, false)
+        }
+        Err(error) => tool_error_response(error),
+    }
+}
+
+async fn hadith_search_handler(
+    State(state): State<AppState>,
+    Json(body): Json<HadithSearchBody>,
+) -> Response {
+    let params = tool_registry::HadithSearchToolParams {
+        query: body.query,
+        collection_slug: body.collection_slug,
+        limit: body.limit,
+    };
+    match state.tools.search_hadith(params).await {
+        Ok(result) => {
+            let checksum = result.research_checksum.hex.clone();
+            let mut meta = empty_meta();
+            meta.research_checksum = format!("sha256:{checksum}");
+            let data = serde_json::to_value(&result).unwrap_or(serde_json::Value::Null);
+            json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, false)
+        }
+        Err(error) => tool_error_response(error),
+    }
+}
+
+async fn hadith_gradings_handler(
+    State(state): State<AppState>,
+    Path((collection, source_number)): Path<(String, String)>,
+) -> Response {
+    let reference = format!("{collection}:{source_number}");
+    let params = tool_registry::GetHadithParams { reference };
+    let result = match state.tools.get_hadith(params).await {
+        Ok((r, _)) => r,
+        Err(error) => return tool_error_response(error),
+    };
+    let hadith_id = result.results.id.clone();
+    match state.tools.get_gradings(&hadith_id).await {
+        Ok(result) => {
+            let checksum = result.research_checksum.hex.clone();
+            let mut meta = empty_meta();
+            meta.research_checksum = format!("sha256:{checksum}");
+            let data = serde_json::to_value(&result).unwrap_or(serde_json::Value::Null);
+            json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, false)
+        }
+        Err(error) => tool_error_response(error),
+    }
+}
+
+async fn tafsir_get_handler(
+    State(state): State<AppState>,
+    Path(work_slug): Path<String>,
+) -> Response {
+    let params = tool_registry::GetTafsirParams { reference: work_slug };
+    match state.tools.get_tafsir(params).await {
+        Ok((result, _meta)) => {
+            let checksum = result.research_checksum.hex.clone();
+            let mut meta = empty_meta();
+            meta.research_checksum = format!("sha256:{checksum}");
+            let data = serde_json::to_value(&result).unwrap_or(serde_json::Value::Null);
+            json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, false)
+        }
+        Err(error) => tool_error_response(error),
+    }
+}
+
+async fn tafsir_search_handler(
+    State(state): State<AppState>,
+    Json(body): Json<TafsirSearchBody>,
+) -> Response {
+    let params = tool_registry::TafsirSearchToolParams {
+        query: body.query,
+        work_slug: body.work_slug,
+        limit: body.limit,
+    };
+    match state.tools.search_tafsir(params).await {
+        Ok(result) => {
+            let checksum = result.research_checksum.hex.clone();
+            let mut meta = empty_meta();
+            meta.research_checksum = format!("sha256:{checksum}");
+            let data = serde_json::to_value(&result).unwrap_or(serde_json::Value::Null);
+            json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, false)
+        }
+        Err(error) => tool_error_response(error),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct LinksQuery {
+    #[serde(default)]
+    include_uncertain: bool,
+}
+
+async fn verse_links_handler(
+    State(_state): State<AppState>,
+    Path((surah, ayah)): Path<(u16, u32)>,
+    Query(q): Query<LinksQuery>,
+) -> Response {
+    let _ = (surah, ayah, q.include_uncertain);
+    let mut meta = empty_meta();
+    let data = serde_json::json!([]);
+    json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, false)
 }
 
 /// Serve until the process is killed.
@@ -2470,7 +2615,7 @@ mod tests {
 
     #[test]
     fn envelope_meta_serializes_with_required_keys() {
-        let meta = empty_meta();
+        let mut meta = empty_meta();
         let value = serde_json::to_value(&meta).unwrap();
         for key in [
             "edition",
