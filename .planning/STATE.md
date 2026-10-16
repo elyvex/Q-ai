@@ -14,7 +14,7 @@ progress:
   completed_phases: 7
   total_plans: 45
   completed_plans: 45
-  percent: 54
+  percent: 100
 ---
 
 # Project State
@@ -24,7 +24,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-16)
 
 **Core value:** Trustworthy Quran research: exact canonical text before generated interpretation, every factual claim traceable to its source.
-**Current focus:** Phase 06 — Hadith & Tafsir
+**Current focus:** Phase 07 — Isnad & Narrator Research
 
 ## Current Position
 
@@ -35,7 +35,7 @@ Plan: 4 of 4
 Status: Ready to plan
 Last activity: 2026-10-16 — Phase 06 complete, transitioned to Phase 7
 
-Progress: [█████░░░░░] 54%
+Progress: [████████████████████] 45/45 plans (100%)
 
 ## Performance Metrics
 
@@ -158,6 +158,9 @@ Recent decisions affecting current work:
 - [Phase 04]: 04-06: ReadOptions.projection is the single graph read selector, resolved in exactly one place by FileGraphBackend::service via GraphApiService::open_for_projection (default quran-structural-v1) — no per-surface resolution to drift.
 - [Phase 04]: 04-06: The projection selector is exposed only on graph neighbors and graph export (CLI --projection, HTTP body projection, quran.graph_neighbors v1.1.0); graph path/subgraph/pattern/inspect stay structural-only this cycle, recorded as an explicit deferral.
 - [Phase 06]: Cross-surface hadith/tafsir route handles use application service layer and ToolResult envelopes
+- [Phase 06-03]: Computational verse links start Uncertain (confidence labeled, never certainty); owner confirmation requires reviewer + decided_at (DB CHECK); read path returns confirmed-only by default
+- [Phase 06-03]: DisagreementService assembles all per-scholar gradings side-by-side sorted by scholar — no merging or resolution
+- [Phase 06-05]: SC3 verse-link read surface wired end-to-end (HTTP `state.verse_links` + CLI `qai links verse`); hadith-ingestion 10 tests + arch-check green
 
 ### Pending Todos
 
@@ -172,6 +175,8 @@ None yet.
 - ADR-0201/0202/0701/0301 (retrieval/graph/vector/RAG) undecided — Phase 4/8 plans must include decision points
 - ⚠️ [Phase 4] Six owner gates stay BLOCKED (OD-11 dataset/license, OD-12 linguist, P4-X01/X02/X03/X05 ratifications); no check can close them — docs/05-followups/phase-04-owner-gates.md
 - ⚠️ [Phase 4] Projection selector is on `neighbors`/`export` only; `path`/`subgraph`/`pattern`/`inspect` remain structural-only by design — deferral §7, docs/05-followups/phase-04-deferrals.md
+- ⚠️ [Phase 6] Hadith/tafsir ingestion pipeline is in-memory; SQLite persistence deferred per 06-04 contract
+- ⚠️ [Phase 6] Cross-surface parity three-leg rows for hadith.get/search/gradings + tafsir.get/search remain unexercised (owner-accepted test-coverage gap; 19/20 verified)
 - ADR-0702 foundational subset (outbox/revisions/jobs/tombstones) required from Phases 0–3
 
 ## Deferred Items
@@ -184,7 +189,7 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-16T12:53:15.945Z
+Last session: 2026-10-16
 Stopped at: Phase 06 complete, ready to plan Phase 7
 Resume file: None
 
