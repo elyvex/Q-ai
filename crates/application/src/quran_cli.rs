@@ -3662,10 +3662,17 @@ pub async fn cmd_graph_neighbors(
     node: &str,
     hops: usize,
     budgets: &GraphBudgets,
+    projection: Option<&str>,
 ) -> CommandOutput {
+    if projection.is_some() && file.is_some() {
+        return CommandOutput::err(
+            exit::USAGE,
+            "--projection applies only to --db".to_string(),
+        );
+    }
     match (file, use_db) {
         (Some(path), false) => neighbors_graph_file(path, node, hops, budgets),
-        (None, true) => neighbors_graph_db(db_path, node, hops, budgets).await,
+        (None, true) => neighbors_graph_db(db_path, node, hops, budgets, projection).await,
         _ => CommandOutput::err(exit::USAGE, "specify exactly one of --file or --db".to_string()),
     }
 }
@@ -3712,7 +3719,8 @@ fn neighbors_graph_file(
     }
 }
 
-/// SQLite-backed neighbors over the active structural projection.
+/// SQLite-backed neighbors over the requested projection family (structural
+/// by default; `--projection` selects another active build).
 ///
 /// Every ayah-kind hit resolves through the canonical reader to a pinned
 /// reference (`quran:<slug>@<version>:<surah>:<ayah>`) plus its stored text
@@ -3724,10 +3732,13 @@ async fn neighbors_graph_db(
     node: &str,
     hops: usize,
     budgets: &GraphBudgets,
+    projection: Option<&str>,
 ) -> CommandOutput {
     use super::quran_graph_api::{GraphApiService, GraphBackend as _, NeighborsArgs, ReadOptions};
     use storage::Database as _;
-    let service = match GraphApiService::open(db_path).await {
+    let service = match GraphApiService::open_for_projection(db_path, graph_projection(projection))
+        .await
+    {
         Ok(service) => service,
         Err(error) => return graph_error_output(&error),
     };
@@ -4374,6 +4385,7 @@ pub async fn cmd_graph_export(
     format: &str,
     seed: Option<&str>,
     out: Option<&str>,
+    projection: Option<&str>,
 ) -> CommandOutput {
     let format = match format {
         "json" => ExportFormat::Json,
@@ -4386,9 +4398,15 @@ pub async fn cmd_graph_export(
             );
         }
     };
+    if projection.is_some() && file.is_some() {
+        return CommandOutput::err(
+            exit::USAGE,
+            "--projection applies only to --db".to_string(),
+        );
+    }
     match (file, use_db) {
         (Some(path), false) => export_file(path, format, seed, out),
-        (None, true) => export_db(db_path, format, seed, out).await,
+        (None, true) => export_db(db_path, format, seed, out, projection).await,
         _ => CommandOutput::err(exit::USAGE, "specify exactly one of --file or --db".to_string()),
     }
 }
@@ -4423,19 +4441,27 @@ fn export_file(
     render_export(&sets, format, seed, out)
 }
 
-/// SQLite-backed export over the active structural projection: the full
-/// pinned sets through the pre-serialization policy filter, serialized
-/// with the complete notice.
+/// SQLite-backed export over the requested projection family (structural by
+/// default; `--projection` selects another active build): the full pinned
+/// sets through the pre-serialization policy filter, serialized with the
+/// complete notice.
 async fn export_db(
     db_path: &str,
     format: ExportFormat,
     seed: Option<&str>,
     out: Option<&str>,
+    projection: Option<&str>,
 ) -> CommandOutput {
-    let service = match super::quran_graph_api::GraphApiService::open(db_path).await {
-        Ok(service) => service,
-        Err(error) => return graph_error_output(&error),
-    };
+    let service =
+        match super::quran_graph_api::GraphApiService::open_for_projection(
+            db_path,
+            graph_projection(projection),
+        )
+        .await
+        {
+            Ok(service) => service,
+            Err(error) => return graph_error_output(&error),
+        };
     let row_id = service.manifest().id.clone();
     let sets =
         match super::quran_graph_export::load_projection_sets(service.database(), &row_id).await {
@@ -4633,6 +4659,16 @@ pub struct ReviewCorrectOptions {
 fn review_projection(raw: Option<String>) -> String {
     raw.filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| quran_graph::STRUCTURAL_PROJECTION_ID.to_string())
+}
+
+/// Resolve a `--projection` selector for a graph read/export verb: trim,
+/// treat empty as absent, and default to the structural family (the default
+/// read scope). Shared by `neighbors` and `export` so the default can never
+/// drift between them (T-04-18).
+fn graph_projection(raw: Option<&str>) -> &str {
+    raw.map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(quran_graph::STRUCTURAL_PROJECTION_ID)
 }
 
 fn review_scope(raw: Option<String>) -> String {

@@ -766,6 +766,9 @@ pub enum GraphAction {
         /// Max hops from the node.
         #[arg(long, default_value_t = 1)]
         hops: usize,
+        /// Projection family (default `quran-structural-v1`).
+        #[arg(long)]
+        projection: Option<String>,
         /// Budget overrides.
         #[command(flatten)]
         budgets: GraphBudgetFlags,
@@ -851,6 +854,9 @@ pub enum GraphAction {
         /// Output path (defaults to stdout).
         #[arg(long)]
         out: Option<String>,
+        /// Projection family (default `quran-structural-v1`).
+        #[arg(long)]
+        projection: Option<String>,
     },
     /// Review-queue management (D-11 management scope).
     ///
@@ -1347,7 +1353,7 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
             GraphAction::Inspect { file, db } => {
                 application::quran_cli::cmd_graph_inspect(db_path, file.as_deref(), db).await
             }
-            GraphAction::Neighbors { file, db, node, hops, budgets } => {
+            GraphAction::Neighbors { file, db, node, hops, projection, budgets } => {
                 application::quran_cli::cmd_graph_neighbors(
                     db_path,
                     file.as_deref(),
@@ -1361,6 +1367,7 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
                         max_fanout: budgets.max_fanout,
                         timeout_ms: budgets.timeout_ms,
                     },
+                    projection.as_deref(),
                 )
                 .await
             }
@@ -1418,7 +1425,7 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
             GraphAction::RootFamily { root, limit } => {
                 application::quran_cli::cmd_graph_root_family(db_path, &root, limit).await
             }
-            GraphAction::Export { file, db, format, seed, out } => {
+            GraphAction::Export { file, db, format, seed, out, projection } => {
                 application::quran_cli::cmd_graph_export(
                     db_path,
                     file.as_deref(),
@@ -1426,6 +1433,7 @@ async fn handle_quran_async(action: QuranAction, db_path: &str, json: bool, yes:
                     &format,
                     seed.as_deref(),
                     out.as_deref(),
+                    projection.as_deref(),
                 )
                 .await
             }
