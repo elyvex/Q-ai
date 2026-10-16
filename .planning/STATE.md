@@ -3,17 +3,17 @@ gsd_state_version: "1.0"
 current_phase: 06
 current_phase_name: Hadith & Tafsir
 current_plan: 4
-status: executing
-stopped_at: Completed 06-03-PLAN.md
-last_updated: "2026-10-16T12:09:55.273Z"
+status: verifying
+stopped_at: Completed 06-04-PLAN.md
+last_updated: "2026-10-16T12:53:16.296Z"
 last_activity: 2026-10-16
 last_activity_desc: Phase 04 complete, transitioned to Phase 06
-state_head: 3f8d04fd5b876e474451669d4f9ef06bdf5c314c
+state_head: 6c7d86d7d6ec95434484d86bdd9e60208185c65c
 progress:
   total_phases: 13
   completed_phases: 6
   total_plans: 44
-  completed_plans: 43
+  completed_plans: 44
   percent: 46
 ---
 
@@ -32,7 +32,7 @@ Phase: 06 — Hadith & Tafsir
 Current Plan: 4
 Total Plans in Phase: 4
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-10-16 — Phase 04 complete, transitioned to Phase 06
 
 Progress: [█████░░░░░] 46%
@@ -87,6 +87,7 @@ Progress: [█████░░░░░] 46%
 | Phase 02 P08 | 5 min | 3 tasks | 7 files |
 | Phase 04 P06 | 36min | 3 tasks | 15 files |
 | Phase 06 P03 | 0 | 3 tasks | 3 files |
+| Phase 06 P04 | 45 | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -155,6 +156,7 @@ Recent decisions affecting current work:
 - [Phase 06-02]: get_records_for_verse is structural chapter navigation (surah-level); computational verse links arrive in 06-03; no query-time normalization-profile selector (unsound vs single L5 index)
 - [Phase 04]: 04-06: ReadOptions.projection is the single graph read selector, resolved in exactly one place by FileGraphBackend::service via GraphApiService::open_for_projection (default quran-structural-v1) — no per-surface resolution to drift.
 - [Phase 04]: 04-06: The projection selector is exposed only on graph neighbors and graph export (CLI --projection, HTTP body projection, quran.graph_neighbors v1.1.0); graph path/subgraph/pattern/inspect stay structural-only this cycle, recorded as an explicit deferral.
+- [Phase 06]: Cross-surface hadith/tafsir route handles use application service layer and ToolResult envelopes
 
 ### Pending Todos
 
@@ -181,8 +183,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-16T12:09:54.979Z
-Stopped at: Completed 06-03-PLAN.md
+Last session: 2026-10-16T12:53:15.945Z
+Stopped at: Completed 06-04-PLAN.md
 Resume file: None
 
 ## Deferred Verification
