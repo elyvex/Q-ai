@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 06
 current_phase_name: Hadith & Tafsir
 status: planning
-stopped_at: Phase 02 complete, ready to plan Phase 06
-last_updated: "2026-10-16T10:31:05.963Z"
+stopped_at: Completed 04-06-PLAN.md
+last_updated: "2026-10-16T11:42:43.681Z"
 last_activity: 2026-10-16
 last_activity_desc: Phase 02 complete, transitioned to Phase 06
-state_head: 9a2eacc02b2ece6752754e6cc97c95af6416e920
+state_head: b069e14e60ec2552fc133da722c2544444d466be
 progress:
   total_phases: 13
   completed_phases: 6
-  total_plans: 43
-  completed_plans: 41
+  total_plans: 44
+  completed_plans: 42
   percent: 46
 ---
 
@@ -82,6 +82,7 @@ Progress: [█████░░░░░] 46%
 | Phase 03 P07 | 28 min | 3 tasks | 7 files |
 | Phase 03 P08 | 50 min | 3 tasks | 5 files |
 | Phase 02 P08 | 5 min | 3 tasks | 7 files |
+| Phase 04 P06 | 36min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -148,6 +149,8 @@ Recent decisions affecting current work:
 - [Phase 02]: [Phase 02]: Each exempt emitting path carries its emission mechanism (AyahView.canonical, SearchHit.quotation, or the hand-built token surface); tokens_handler needs its own label because it is exempt by construction but does not emit via AyahView.canonical. The guard is a guard, not a proof: a novel hand-built json! text shape is enumerated but not literally detectable (G-02-3)
 - [Phase 06-02]: tafsir IDs are manual uuid newtypes (hadith-core precedent) — domain::typed_id! is unusable cross-crate (crate::primitives resolves to caller); L5-normalize-both-sides for tafsir FTS; standalone tafsir_fts (no content= backing); tafsir parity deferred to 06-04 (5 uncovered tools asserted)
 - [Phase 06-02]: get_records_for_verse is structural chapter navigation (surah-level); computational verse links arrive in 06-03; no query-time normalization-profile selector (unsound vs single L5 index)
+- [Phase 04]: 04-06: ReadOptions.projection is the single graph read selector, resolved in exactly one place by FileGraphBackend::service via GraphApiService::open_for_projection (default quran-structural-v1) — no per-surface resolution to drift.
+- [Phase 04]: 04-06: The projection selector is exposed only on graph neighbors and graph export (CLI --projection, HTTP body projection, quran.graph_neighbors v1.1.0); graph path/subgraph/pattern/inspect stay structural-only this cycle, recorded as an explicit deferral.
 
 ### Pending Todos
 
@@ -172,8 +175,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-16T10:34:30Z
-Stopped at: Phase 02 complete, ready to plan Phase 06
+Last session: 2026-10-16T11:42:43.461Z
+Stopped at: Completed 04-06-PLAN.md
 Resume file: None
 
 ## Deferred Verification

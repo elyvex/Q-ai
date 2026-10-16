@@ -167,9 +167,11 @@ Plans:
   3. User can export a subgraph with edge provenance intact
   4. Graph queries explain why each result was returned
 
-**Plans**: 5/5 plans complete
+**Plans**: 6/6 plans executed
 
 Plans:
+- [x] 04-06-PLAN.md
+
 **Wave 1**
 
 - [x] 04-01-PLAN.md — TRACER: structural build → inspect → neighbors → canonical quotation over SQLite, schema fix, vocab, conformance, fixtures
@@ -364,7 +366,7 @@ Phase 3.5 is an INSERTED gap-closure phase; it runs after Phase 4 and does not g
 | 2. Canonical Quran Core | 8/8 | Complete    | 2026-10-06 |
 | 3. Quran Search & Linguistics | 8/8 | Complete (owner gates OD-11/OD-12 open) | 2026-09-28 |
 | 3.5. Residual Closure (INSERTED) | 4/4 | Complete (W1–W10 evidence matrix; owner gates OD-01…OD-14 open) | 2026-10-02 |
-| 4. Quran Graph | 5/5 | Complete    | 2026-09-29 |
+| 4. Quran Graph | 6/6 | In Progress |  |
 | 5. Rich Quran Experience | 9/9 | Complete (owner gates OD-04/OD-11/OD-12 open) | 2026-10-09 |
 | 6. Hadith & Tafsir | 2/4 | In Progress | - |
 | 7. Isnad & Narrator Research | 0/TBD | Not started | - |
