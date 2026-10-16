@@ -3665,10 +3665,7 @@ pub async fn cmd_graph_neighbors(
     projection: Option<&str>,
 ) -> CommandOutput {
     if projection.is_some() && file.is_some() {
-        return CommandOutput::err(
-            exit::USAGE,
-            "--projection applies only to --db".to_string(),
-        );
+        return CommandOutput::err(exit::USAGE, "--projection applies only to --db".to_string());
     }
     match (file, use_db) {
         (Some(path), false) => neighbors_graph_file(path, node, hops, budgets),
@@ -3736,12 +3733,11 @@ async fn neighbors_graph_db(
 ) -> CommandOutput {
     use super::quran_graph_api::{GraphApiService, GraphBackend as _, NeighborsArgs, ReadOptions};
     use storage::Database as _;
-    let service = match GraphApiService::open_for_projection(db_path, graph_projection(projection))
-        .await
-    {
-        Ok(service) => service,
-        Err(error) => return graph_error_output(&error),
-    };
+    let service =
+        match GraphApiService::open_for_projection(db_path, graph_projection(projection)).await {
+            Ok(service) => service,
+            Err(error) => return graph_error_output(&error),
+        };
     let output = match service
         .neighbors(NeighborsArgs {
             node: node.to_string(),
@@ -4399,10 +4395,7 @@ pub async fn cmd_graph_export(
         }
     };
     if projection.is_some() && file.is_some() {
-        return CommandOutput::err(
-            exit::USAGE,
-            "--projection applies only to --db".to_string(),
-        );
+        return CommandOutput::err(exit::USAGE, "--projection applies only to --db".to_string());
     }
     match (file, use_db) {
         (Some(path), false) => export_file(path, format, seed, out),
@@ -4452,16 +4445,15 @@ async fn export_db(
     out: Option<&str>,
     projection: Option<&str>,
 ) -> CommandOutput {
-    let service =
-        match super::quran_graph_api::GraphApiService::open_for_projection(
-            db_path,
-            graph_projection(projection),
-        )
-        .await
-        {
-            Ok(service) => service,
-            Err(error) => return graph_error_output(&error),
-        };
+    let service = match super::quran_graph_api::GraphApiService::open_for_projection(
+        db_path,
+        graph_projection(projection),
+    )
+    .await
+    {
+        Ok(service) => service,
+        Err(error) => return graph_error_output(&error),
+    };
     let row_id = service.manifest().id.clone();
     let sets =
         match super::quran_graph_export::load_projection_sets(service.database(), &row_id).await {

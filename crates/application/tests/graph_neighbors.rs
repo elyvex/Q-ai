@@ -15,14 +15,65 @@ mod common;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use application::quran_graph_build::{collect_structural_input, publish_structural_build};
+use application::quran_cli::{GraphBudgets, cmd_graph_neighbors};
+use application::quran_graph_api::{
+    FileGraphBackend, GraphApiError, GraphApiService, GraphBackend as _, NeighborsArgs, ReadOptions,
+};
+use application::quran_graph_build::{
+    ANNOTATED_PROJECTION_ID, collect_structural_input, publish_annotated_build,
+    publish_structural_build,
+};
 use application::quran_graph_store::SqliteGraphStore;
+use application::quran_graph_tools::GraphToolBackend;
 use application::quran_reader::{QuranReader, QuranReaderService};
 use application::quran_tools::verify_canonical_quotation;
 use quran_graph::{
     AuthzScope, EdgeFilter, GraphError, GraphStore, NodeKind, QueryBudgets,
     STRUCTURAL_PROJECTION_ID,
 };
+use serde_json::{Value, json};
+
+const CONCEPT_SEED: &str = include_str!("../../../fixtures/quran/graph/concept-seed-v1.json");
+
+/// Neighbor-view depth every annotated leg runs at, so canonicalized parity
+/// compares reads that asked the same question.
+const HOPS: usize = 2;
+
+/// One selector-bearing read-options value for the file-backed legs: the
+/// annotated family at the shared budgets.
+fn annotated_options() -> ReadOptions {
+    ReadOptions {
+        budgets: QueryBudgets { max_hops: HOPS, ..QueryBudgets::default() },
+        projection: Some(ANNOTATED_PROJECTION_ID.to_string()),
+        ..ReadOptions::default()
+    }
+}
+
+fn annotated_tool_budgets() -> tool_registry::GraphBudgetsParams {
+    tool_registry::GraphBudgetsParams {
+        max_hops: Some(HOPS),
+        ..tool_registry::GraphBudgetsParams::default()
+    }
+}
+
+/// Strip the presentational-only duration wherever it appears: the one field
+/// excluded from cross-surface parity.
+fn canonical(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            map.remove("duration_ms");
+            for nested in map.values_mut() {
+                canonical(nested);
+            }
+        }
+        Value::Array(items) => {
+            for nested in items {
+                canonical(nested);
+            }
+        }
+        _ => {}
+    }
+}
 
 fn budgets() -> QueryBudgets {
     QueryBudgets::default()
@@ -135,6 +186,149 @@ async fn structural_build_inspect_neighbors_canonical_quotation() {
         quran_graph::Diagnostic::code(&err).to_string(),
         "QAI-GRAPH-0004",
         "unknown nodes carry QAI-GRAPH-0004"
+    );
+}
+
+/// SC1 concept leg (gap G-04-SC1): the concept/entity neighborhood is
+/// reachable, but only through the annotated projection — and the selector
+/// that reaches it is the same one on every surface.
+///
+/// Proves: the structural default hides the concept node (typed
+/// `NodeNotFound`, never empty-complete); the annotated selector reveals it
+/// identically through the read service, the request-scoped file backend,
+/// the `quran.graph_neighbors` tool, and the CLI verb; every seed edge keeps
+/// the seed's attribution assertion and no concept/entity node claims
+/// reviewed scholarship; an unknown family is a typed `UnknownProjection`
+/// before any traversal.
+#[tokio::test]
+async fn concept_neighborhood_is_reachable_only_through_the_annotated_projection() {
+    let (_dir, _db, _reader, path_str, _structural) = active_store().await;
+    let report = publish_annotated_build(&path_str, CONCEPT_SEED)
+        .await
+        .expect("the annotated projection publishes");
+    assert_eq!(report.manifest.projection_id, ANNOTATED_PROJECTION_ID);
+
+    // (a) The default read scope is unchanged: the concept node is out of the
+    // structural family, as a typed error.
+    let pinned = GraphApiService::open(&path_str).await.expect("structural opens");
+    let err = pinned
+        .neighbors(NeighborsArgs {
+            node: "concept:mercy".to_string(),
+            options: ReadOptions::default(),
+        })
+        .await
+        .expect_err("concept:mercy is out of the structural default scope");
+    assert!(
+        matches!(err, GraphApiError::Graph(GraphError::NodeNotFound { .. })),
+        "the selector-less read stays a typed NodeNotFound: {err}"
+    );
+    drop(pinned);
+
+    // (b) The annotated family reaches it, keep its pending attribution, and
+    // never claims reviewed scholarship.
+    let annotated = GraphApiService::open_for_projection(&path_str, ANNOTATED_PROJECTION_ID)
+        .await
+        .expect("the annotated projection opens");
+    let direct = annotated
+        .neighbors(NeighborsArgs {
+            node: "concept:mercy".to_string(),
+            options: annotated_options(),
+        })
+        .await
+        .expect("the concept neighborhood opens under the annotated selector");
+    assert!(!direct.nodes.is_empty() && !direct.edges.is_empty(), "the seed neighborhood is real");
+    assert_eq!(direct.explanation.snapshot.projection_id, ANNOTATED_PROJECTION_ID);
+    for edge in &direct.edges {
+        assert_eq!(
+            edge.assertion_id.as_deref(),
+            Some(report.attribution_assertion_id.as_str()),
+            "seed edges stay seed-attributed: {edge:?}"
+        );
+    }
+    for node in &direct.nodes {
+        if matches!(node.kind, NodeKind::Concept | NodeKind::Entity) {
+            assert_eq!(
+                node.attrs.get("reviewed_by").and_then(Value::as_str),
+                Some("pending-scholar"),
+                "no concept/entity node claims reviewed scholarship: {node:?}"
+            );
+        }
+    }
+    let mut service_payload = serde_json::to_value(&direct).expect("the direct read serializes");
+    canonical(&mut service_payload);
+
+    // (c) The request-scoped file backend (the shared HTTP/tool path)
+    // resolves the same selector to the same canonicalized payload.
+    let backend = FileGraphBackend::structural(&path_str);
+    let over_backend = backend
+        .neighbors(NeighborsArgs {
+            node: "concept:mercy".to_string(),
+            options: annotated_options(),
+        })
+        .await
+        .expect("the file backend reads the annotated family per request");
+    let mut via_backend = serde_json::to_value(&over_backend).expect("the backend read serializes");
+    canonical(&mut via_backend);
+    assert_eq!(via_backend, service_payload, "the file backend matches the direct service read");
+
+    // (d) The tool surface shares the one resolution point.
+    let registry = GraphToolBackend::registry(Arc::new(FileGraphBackend::structural(&path_str)));
+    let tool = registry
+        .graph_neighbors(tool_registry::GraphNeighborsParams {
+            node: "concept:mercy".to_string(),
+            projection: Some(ANNOTATED_PROJECTION_ID.to_string()),
+            edge_types: None,
+            direction: None,
+            budgets: annotated_tool_budgets(),
+        })
+        .await
+        .expect("the neighbors tool forwards the selector");
+    let mut tool_results = tool.results.clone();
+    canonical(&mut tool_results);
+    assert_eq!(tool_results, service_payload, "the tool payload matches the direct read");
+    assert_eq!(
+        tool.reproducibility.source_versions.get("graph_projection").map(String::as_str),
+        Some(ANNOTATED_PROJECTION_ID),
+        "the tool's reproducibility block pins the answering family"
+    );
+
+    // (e) The CLI verb resolves the same selector through the same point.
+    let cli = cmd_graph_neighbors(
+        &path_str,
+        None,
+        true,
+        "concept:mercy",
+        HOPS,
+        &GraphBudgets::default(),
+        Some(ANNOTATED_PROJECTION_ID),
+    )
+    .await;
+    assert_eq!(cli.exit, 0, "CLI neighbors succeeds: {}", cli.human);
+    let mut cli_projection = json!({
+        "nodes": cli.json["nodes"],
+        "edges": cli.json["edges"],
+        "truncated": cli.json["truncated"],
+        "incomplete_reason": cli.json["incomplete_reason"],
+        "explanation": cli.json["explanation"],
+    });
+    canonical(&mut cli_projection);
+    assert_eq!(cli_projection, service_payload, "the CLI shares the one resolution point");
+
+    // (f) An unknown or unbuilt family fails before traversal: a typed
+    // UnknownProjection, never an empty success.
+    let err = FileGraphBackend::structural(&path_str)
+        .neighbors(NeighborsArgs {
+            node: "concept:mercy".to_string(),
+            options: ReadOptions {
+                projection: Some("quran-not-a-family".to_string()),
+                ..ReadOptions::default()
+            },
+        })
+        .await
+        .expect_err("an unbuilt family is UnknownProjection");
+    assert!(
+        matches!(err, GraphApiError::Graph(GraphError::UnknownProjection { .. })),
+        "an unknown family is typed UnknownProjection: {err}"
     );
 }
 

@@ -61,3 +61,20 @@ incomplete: neighbor nodes exceed node budget 1
 
 ```
 
+```console
+$ qai quran graph neighbors --db --node ayah:1:1 --projection quran-structural-v1
+neighbors of ayah:1:1: 8 node(s), 7 edge(s)
+  ayah:1:1 -> quran:test-edition-min@0.1.0:1:1
+  ayah:1:2 -> quran:test-edition-min@0.1.0:1:2
+
+```
+
+```console
+$ qai quran graph neighbors --db --node ayah:1:1 --projection quran-not-built-v1
+? 5
+error: [QAI-GRAPH-0001] unknown graph projection 'quran-not-built-v1' at projection 'quran-not-built-v1'
+Remedy: List active projections with build inspection, then retry with a live projection id.
+Next: qai graph build --help
+
+```
+
