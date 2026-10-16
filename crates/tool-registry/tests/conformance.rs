@@ -507,6 +507,7 @@ async fn all_twelve_tools_return_tool_result_envelope() {
     let result = registry
         .graph_neighbors(tool_registry::GraphNeighborsParams {
             node: "ayah:1:1".into(),
+            projection: None,
             edge_types: None,
             direction: None,
             budgets: Default::default(),
@@ -765,6 +766,7 @@ async fn registered_but_unimplemented_tool_returns_typed_unsupported() {
             "quran.graph_neighbors" => registry
                 .graph_neighbors(tool_registry::GraphNeighborsParams {
                     node: "ayah:1:1".into(),
+                    projection: None,
                     edge_types: None,
                     direction: None,
                     budgets: Default::default(),

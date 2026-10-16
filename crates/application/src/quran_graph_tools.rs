@@ -256,13 +256,16 @@ impl QuranBackend for GraphToolBackend {
         let started = Instant::now();
         let meta = self.backend.snapshot_meta().await.map_err(graph_tool_error)?;
         // CLI parity: neighbors opens one hop by default (`--hops 1`).
-        let options = read_options(
+        let mut options = read_options(
             BudgetPatch::from(&params.budgets),
             1,
             params.edge_types.clone(),
             params.direction.as_deref(),
         )
         .map_err(graph_tool_error)?;
+        // The tool param rides the shared read-options field, so the surface
+        // shares the one backend resolution point with HTTP and the CLI.
+        options.projection = params.projection.clone();
         let output = self
             .backend
             .neighbors(NeighborsArgs { node: params.node.clone(), options })

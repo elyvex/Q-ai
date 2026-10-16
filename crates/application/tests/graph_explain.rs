@@ -387,6 +387,7 @@ async fn graph_parity_neighbors_across_cli_http_and_tools() {
     let tool = registry
         .graph_neighbors(tool_registry::GraphNeighborsParams {
             node: "ayah:1:1".to_string(),
+            projection: None,
             edge_types: None,
             direction: None,
             budgets: tool_budgets(),
@@ -716,6 +717,7 @@ async fn graph_parity_truncated_reports_unanimously() {
     let tool = registry
         .graph_neighbors(tool_registry::GraphNeighborsParams {
             node: "ayah:1:1".to_string(),
+            projection: None,
             edge_types: None,
             direction: None,
             budgets: tight_tools,

@@ -1331,6 +1331,10 @@
                   "node": {
                     "type": "string"
                   },
+                  "projection": {
+                    "type": "string",
+                    "description": "Projection family to read (default quran-structural-v1, the structural read scope). An unknown or unbuilt family is a typed 404 (QAI-GRAPH-0001), never an empty success."
+                  },
                   "edge_types": {
                     "type": "array",
                     "items": {

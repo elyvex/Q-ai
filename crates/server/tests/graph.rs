@@ -406,6 +406,47 @@ fn path_json() -> serde_json::Value {
     })
 }
 
+/// The annotated family's neighbor view: the seed-attributed concept node
+/// reaches back to the ayah that mentions it, under the annotated build's
+/// projection identity. Pending attribution stays visible as pending.
+fn annotated_neighbors_json() -> serde_json::Value {
+    let mut explanation = explanation_json("concept:mercy", None, false);
+    explanation["nodes"] = serde_json::json!(["concept:mercy", "ayah:1:1"]);
+    explanation["edges"] = serde_json::json!([{
+        "src": "ayah:1:1",
+        "edge": "MENTIONS_CONCEPT",
+        "dst": "concept:mercy",
+        "provenance": {
+            "kind": "asserted",
+            "id": "annotated-v1-fixture-attribution",
+            "reviewer": null,
+            "decision": "pending",
+        },
+    }]);
+    explanation["snapshot"]["projection_id"] = serde_json::json!("quran-annotated-v1");
+    explanation["snapshot"]["builder_version"] = serde_json::json!("annotated-v1");
+    serde_json::json!({
+        "nodes": [
+            {
+                "stable_id": "concept:mercy",
+                "kind": "concept",
+                "attrs": {"reviewed_by": "pending-scholar"},
+            },
+            {"stable_id": "ayah:1:1", "kind": "ayah", "attrs": {}},
+        ],
+        "edges": [{
+            "src": "ayah:1:1",
+            "edge": "MENTIONS_CONCEPT",
+            "dst": "concept:mercy",
+            "assertion_id": "annotated-v1-fixture-attribution",
+            "attrs": {},
+        }],
+        "truncated": false,
+        "incomplete_reason": serde_json::Value::Null,
+        "explanation": explanation,
+    })
+}
+
 #[async_trait::async_trait]
 impl application::quran_graph_api::GraphBackend for FakeGraph {
     async fn neighbors(
@@ -416,6 +457,11 @@ impl application::quran_graph_api::GraphBackend for FakeGraph {
         application::quran_graph_api::GraphApiError,
     > {
         use application::quran_graph_api::GraphApiError;
+        // The request selector reaches the backend as `options.projection`;
+        // only the annotated family carries the concept/entity seed nodes.
+        if args.options.projection.as_deref() == Some("quran-annotated-v1") {
+            return Ok(serde_json::from_value(annotated_neighbors_json()).unwrap());
+        }
         match args.node.as_str() {
             "ayah:9:9" => Err(GraphApiError::unknown_node("ayah:9:9")),
             "denied-node" => Err(GraphApiError::access_denied("restricted assertion scope")),
@@ -708,6 +754,53 @@ async fn graph_neighbors_route_returns_enveloped_result_with_etag() {
     )
     .await;
     assert_eq!(status, StatusCode::NOT_MODIFIED);
+    handle.abort();
+}
+
+/// SC1 (concept leg): the neighbors body's `projection` selector reaches the
+/// backend as `ReadOptions.projection`, so an annotated-family read returns
+/// the concept/entity seed view (T-04-17/T-04-18). The default body stays
+/// structural.
+#[tokio::test]
+async fn graph_neighbors_route_threads_projection_selector() {
+    let (addr, handle) = serve_once().await;
+
+    // Selector-less reads keep the structural default.
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/graph/neighbors",
+        &serde_json::json!({"node": "ayah:1:1"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body_json(&body)["data"]["explanation"]["snapshot"]["projection_id"],
+        "quran-structural-v1"
+    );
+
+    // An explicit annotated selector returns the concept neighborhood.
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/graph/neighbors",
+        &serde_json::json!({"node": "concept:mercy", "projection": "quran-annotated-v1"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let value = body_json(&body);
+    assert_eq!(value["data"]["nodes"][0]["stable_id"], "concept:mercy");
+    assert_eq!(value["data"]["nodes"][0]["kind"], "concept");
+    assert_eq!(value["data"]["edges"][0]["edge"], "MENTIONS_CONCEPT");
+    assert_eq!(
+        value["data"]["explanation"]["snapshot"]["projection_id"],
+        "quran-annotated-v1"
+    );
+    assert_eq!(value["meta"]["reproducibility"]["projection_id"], "quran-annotated-v1");
+    // Pending attribution is surfaced as pending, never as verified.
+    assert_eq!(value["data"]["nodes"][0]["attrs"]["reviewed_by"], "pending-scholar");
+    assert_eq!(
+        value["data"]["explanation"]["edges"][0]["provenance"]["decision"],
+        "pending"
+    );
     handle.abort();
 }
 

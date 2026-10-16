@@ -1660,6 +1660,10 @@ fn graph_patch(budgets: Option<GraphBudgetsBody>) -> application::quran_graph_ap
 struct GraphNeighborsBody {
     /// Stable node id to open around.
     node: String,
+    /// Projection family to read (default `quran-structural-v1`); an unknown
+    /// or unbuilt family is a typed 404, never an empty success.
+    #[serde(default)]
+    projection: Option<String>,
     /// Allowed edge predicates (`None` admits every allowlisted predicate).
     edge_types: Option<Vec<String>>,
     /// Expansion direction (`both` default; `outgoing`|`incoming`).
@@ -1826,7 +1830,7 @@ async fn graph_neighbors_handler(
     use application::quran_graph_api as api;
     let started = Instant::now();
     // CLI parity: neighbors opens one hop by default (`--hops 1`).
-    let options = match api::read_options(
+    let mut options = match api::read_options(
         graph_patch(body.budgets),
         1,
         body.edge_types,
@@ -1835,6 +1839,9 @@ async fn graph_neighbors_handler(
         Ok(options) => options,
         Err(error) => return graph_error_response(error),
     };
+    // The request body's selector rides the shared read-options field, so one
+    // resolution point (`FileGraphBackend::service`) serves HTTP and tools.
+    options.projection = body.projection;
     let output = match state.graph.neighbors(api::NeighborsArgs { node: body.node, options }).await
     {
         Ok(output) => output,

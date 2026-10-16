@@ -32,7 +32,7 @@ pub const MORPHOLOGY_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
 /// Tool versions (§12 tool plan; D-13 lexicon surface).
 pub const FAMILY_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
 /// Tool versions (§12 tool plan; Phase 4 graph surface, D-12).
-pub const GRAPH_NEIGHBORS_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
+pub const GRAPH_NEIGHBORS_TOOL_VERSION: SemVer = SemVer::new(1, 1, 0);
 /// Tool versions (§12 tool plan; Phase 4 graph surface, D-12).
 pub const GRAPH_PATH_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
 /// Tool versions (§12 tool plan; Phase 4 graph surface, D-12).
@@ -549,6 +549,11 @@ pub struct GraphBudgetsParams {
 pub struct GraphNeighborsParams {
     /// Stable node id to open around.
     pub node: String,
+    /// Projection family to read (default `quran-structural-v1`, the
+    /// structural read scope); an unknown or unbuilt family is a typed
+    /// `QAI-GRAPH-0001` error, never an empty success.
+    #[serde(default)]
+    pub projection: Option<String>,
     /// Allowed edge predicates (`None` admits every allowlisted predicate).
     #[serde(default)]
     pub edge_types: Option<Vec<String>>,
