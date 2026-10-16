@@ -376,6 +376,7 @@ async fn legs() -> Legs {
             LexiconApiService::open(&seed.db_path).await.expect("lexicon backend opens"),
         ),
         graph: Arc::new(FileGraphBackend::structural(&seed.db_path)),
+        verse_links: None,
     };
     Legs { reader_registry, graph_registry, state, seed }
 }

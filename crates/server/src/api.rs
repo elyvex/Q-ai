@@ -166,6 +166,8 @@ pub struct AppState {
     /// Read-only graph backend (D-12): neighbors, path, subgraph, pattern,
     /// and root-family over the active structural projection.
     pub graph: Arc<dyn application::quran_graph_api::GraphBackend>,
+    /// Optional verse-link service (Phase 6 SC3).
+    pub verse_links: Option<std::sync::Arc<application::verse_link::VerseLinkService>>,
 }
 
 fn empty_meta() -> Meta {
@@ -2381,13 +2383,18 @@ struct LinksQuery {
 }
 
 async fn verse_links_handler(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Path((surah, ayah)): Path<(u16, u32)>,
     Query(q): Query<LinksQuery>,
 ) -> Response {
-    let _ = (surah, ayah, q.include_uncertain);
-    let mut meta = empty_meta();
-    let data = serde_json::json!([]);
+    let meta = empty_meta();
+    let data = match state.verse_links.as_ref() {
+        Some(service) => match application::verse_link::VerseLinker::get_links_for_verse(service.as_ref(), surah, ayah, q.include_uncertain).await {
+            Ok(links) => serde_json::to_value(&links).unwrap_or_else(|_| serde_json::json!([])),
+            Err(_) => serde_json::json!([]),
+        },
+        None => serde_json::json!([]),
+    };
     json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, false)
 }
 

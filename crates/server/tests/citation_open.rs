@@ -100,6 +100,7 @@ fn state() -> AppState {
         search: Arc::new(StubSearch),
         lexicon: Arc::new(StubLexicon),
         graph: Arc::new(StubGraph),
+        verse_links: None,
     }
 }
 

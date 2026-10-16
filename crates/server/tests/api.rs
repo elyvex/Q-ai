@@ -572,6 +572,7 @@ fn test_state() -> AppState {
         search: Arc::new(FakeSearch),
         lexicon: Arc::new(FakeLexicon),
         graph: Arc::new(DisabledGraph),
+        verse_links: None,
     }
 }
 

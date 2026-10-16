@@ -7,6 +7,7 @@
 pub mod doctor;
 pub mod exit_code;
 pub mod hadith;
+pub mod links;
 pub mod quran;
 pub mod tafsir;
 
@@ -132,6 +133,11 @@ pub enum Commands {
     Tafsir {
         #[command(subcommand)]
         action: tafsir::TafsirAction,
+    },
+    /// Verse link commands.
+    Links {
+        #[command(subcommand)]
+        action: links::LinksAction,
     },
     /// Shell completions (Phase 1).
     Completions {
@@ -389,6 +395,14 @@ pub fn dispatch(cli: Cli) -> i32 {
                         let graph = std::sync::Arc::new(
                             application::quran_graph_api::FileGraphBackend::structural(&db_path),
                         );
+                        // Phase 6 SC3: verse-link service over the same SQLite database,
+                        // so the verse-links read route surfaces confirmed links.
+                        let verse_links = match storage_sqlite::SqliteDatabase::new(&db_path, 4, true).await {
+                            Ok(db) => Some(std::sync::Arc::new(
+                                application::verse_link::VerseLinkService::new(std::sync::Arc::new(db)),
+                            )),
+                            Err(_) => None,
+                        };
                         // Long-lived worker host (D-13): the serve process
                         // owns durable execution; one-shot commands only
                         // enqueue. The host task is always awaited below —
@@ -414,7 +428,7 @@ pub fn dispatch(cli: Cli) -> i32 {
                         tokio::select! {
                             served = server::api::serve(
                                 &bind,
-                                server::api::AppState { tools, api, search, lexicon, graph },
+                                server::api::AppState { tools, api, search, lexicon, graph, verse_links },
                             ) => {
                                 let _ = shutdown_tx.send(true);
                                 let joined = match host.await {
@@ -551,6 +565,10 @@ pub fn dispatch(cli: Cli) -> i32 {
         Commands::Tafsir { action } => {
             let db_path = cfg.storage.sqlite.path.clone();
             tafsir::handle_tafsir(action, &db_path, cli.json)
+        }
+        Commands::Links { action } => {
+            let db_path = cfg.storage.sqlite.path.clone();
+            links::handle_links(action, &db_path, cli.json)
         }
     }
 }
