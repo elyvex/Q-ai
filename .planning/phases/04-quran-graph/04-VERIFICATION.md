@@ -1,10 +1,9 @@
 ---
 phase: 04-quran-graph
-verified: 2026-10-13T00:00:00Z
+verified: 2026-10-16T11:50:26Z
 status: passed
-score: 4/4 must-haves verified
+score: 11/11 must-haves verified
 covered_files:
-  - .planning/REQUIREMENTS.md
   - .planning/phases/04-quran-graph/04-01-PLAN.md
   - .planning/phases/04-quran-graph/04-01-SUMMARY.md
   - .planning/phases/04-quran-graph/04-02-PLAN.md
@@ -15,13 +14,8 @@ covered_files:
   - .planning/phases/04-quran-graph/04-04-SUMMARY.md
   - .planning/phases/04-quran-graph/04-05-PLAN.md
   - .planning/phases/04-quran-graph/04-05-SUMMARY.md
-  - .planning/phases/04-quran-graph/04-CONTEXT.md
-  - .planning/phases/04-quran-graph/04-RESEARCH.md
-  - .planning/phases/04-quran-graph/04-REVIEW-DISPOSITION.md
-  - .planning/phases/04-quran-graph/04-REVIEW-FIX.md
-  - .planning/phases/04-quran-graph/04-REVIEW.md
-  - .planning/phases/04-quran-graph/04-SECURITY.md
-  - .planning/phases/04-quran-graph/04-UI-SPEC.md
+  - .planning/phases/04-quran-graph/04-06-PLAN.md
+  - .planning/phases/04-quran-graph/04-06-SUMMARY.md
   - .planning/phases/04-quran-graph/04-VALIDATION.md
   - crates/application/src/quran_cli.rs
   - crates/application/src/quran_graph_annotations.rs
@@ -40,39 +34,73 @@ covered_files:
   - crates/application/tests/graph_review.rs
   - crates/application/tests/graph_tools.rs
   - crates/cli/src/quran.rs
+  - crates/cli/tests/quran.rs
   - crates/cli/tests/quran/graph_s1.trycmd
   - crates/cli/tests/quran/graph_s2.trycmd
   - crates/quran-graph/src/export.rs
   - crates/quran-graph/src/mem.rs
   - crates/quran-graph/src/model.rs
+  - crates/quran-graph/src/structural.rs
   - crates/quran-graph/src/traverse.rs
   - crates/quran-graph/tests/conformance.rs
   - crates/server/src/api.rs
   - crates/server/tests/graph.rs
   - crates/tool-registry/src/lib.rs
+  - crates/tool-registry/tests/conformance.rs
   - docs/05-followups/phase-04-deferrals.md
   - docs/05-followups/phase-04-owner-gates.md
   - docs/08-api/quran-v1-openapi.json
   - fixtures/quran/graph/annotation-goldens.json
   - fixtures/quran/graph/concept-seed-v1.json
   - migrations/sqlite/0022_quran_graph_fix.up.sql
-covered_digest: "v3:sha256:936652e144c6443d2f4de348a066d594441c79b35da9c2a09dca90987d7bd186"
+  - migrations/sqlite/checksums.json
+covered_digest: "v3:sha256:3296563edf968fa2701e8db942edca28ae8c2c47872cd6efc23b4ec9574c08f7"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
-  previous_status: passed
-  previous_score: 4/4
-  gaps_closed: []
+  previous_status: gaps_found
+  previous_score: 10/11
+  gaps_closed:
+    - "SC1 — User can open a neighbor view around any verse, word, root, or concept (the concept/entity leg was unreachable; a projection selector now reaches it on CLI, HTTP, and the tool while the structural default is unchanged)"
   gaps_remaining: []
   regressions: []
+advisory:
+  - finding: "`next_command()` in `crates/quran-graph/src/error.rs` still emits `qai graph …` for five of six graph errors; the real tree is `qai quran graph …`, so suggested commands fail if pasted. The new unknown-projection snapshot (`graph_s2.trycmd:78`) inherits `Next: qai graph build --help`."
+    category: other
+    reason: "Carried forward from the prior report; surfaced by 04-UI-REVIEW.md (Pillar 1 warning). Copy/UX defect, no failing test, does not block graph navigation. Out of scope for the G-04-SC1 gap-closure plan."
+    evidence_status: "none provided"
+  - finding: "`dispute` review operation is service-only with no CLI verb (accept/reject/correct cover the CLI)."
+    category: other
+    reason: "Carried forward; surfaced by 04-UI-REVIEW.md (Pillar 6 warning). 04-02-PLAN did not require a dispute verb, so this is polish/parity, not a plan must-have."
+    evidence_status: "none provided"
+  - finding: "Static DOT/SVG export renders raw node/edge sets, bypassing the tombstone policy filter that the authoritative Graph JSON path applies (WR-01)."
+    category: security
+    reason: "Carried forward; flagged in 04-REVIEW.md and dispositioned accepted (D-13 local-operator static rendering). The authoritative JSON envelope is policy-filtered with byte-absence proven by `graph_export::restricted_and_tombstoned_ids_are_absent_from_bytes`. No failing test demonstrates an impact on a success criterion."
+    evidence_status: "none provided"
+  - finding: "HTTP/tool path-mode requests accept but ignore caller-supplied `edge_types`/`direction` (WR-03)."
+    category: other
+    reason: "Carried forward; dispositioned accepted in 04-REVIEW.md. All surfaces share the same service and report the effective `any` filter in `Explanation.applied_filters`, so cross-surface parity is not broken. A typed rejection is a contract change, not a bug fix."
+    evidence_status: "none provided"
+  - finding: "Shallow doctor tombstone probe reports `Pass` after a capped (50-source) sample (WR-04)."
+    category: other
+    reason: "Carried forward; dispositioned accepted in 04-REVIEW.md; `--deep` upgrades to a full probe. No reproducible failure artifact."
+    evidence_status: "none provided"
+  - finding: "SVG output has `role=\"img\"` + `<desc>` but no `<title>` element."
+    category: other
+    reason: "Carried forward; surfaced by 04-UI-REVIEW.md (minor a11y note). One-line addition, no functional impact."
+    evidence_status: "none provided"
+  - finding: "`qai quran graph export --db --projection <family>` is wired (opens via `GraphApiService::open_for_projection` through `graph_projection`) but has no dedicated behavioral test for a non-default family; coverage for the new selector is on `neighbors` (the concept-neighborhood integration test + the CLI snapshot segments)."
+    category: other
+    reason: "New-scope observation from the gap-closure plan (04-06): the plan scoped selector coverage to `neighbors`, and the export render path is exercised with the structural family only. The export selector resolves through the same one resolution point that is tested for neighbors and the pre-serialization filter is unchanged, so no failure is reproducible; it is a coverage gap, not a defect."
+    evidence_status: "none provided"
 ---
 
 # Phase 04: Quran Graph Verification Report
 
 **Phase Goal:** Users can explore structural and linguistic relationships of the Quran as a navigable graph.
-**Verified:** 2026-10-13T00:00:00Z
+**Verified:** 2026-10-16T11:50:26Z
 **Status:** passed
-**Re-verification:** Yes — stale-verification refresh (#4682). Prior VERIFICATION.md (2026-10-11T14:30:00Z) passed 4/4 with no gaps. Covered source files changed since: 3 review-fix commits (ed9c367 WR-10, 1cd0e3d + c0b0321 WR-11, 3cac160 WR-12) plus unrelated Phase 05/06 work (research_checksum envelope, TOOL_NAMES 7→12→15, serve wiring, migrations 22→26). Every must-have below was re-checked against the actual codebase at HEAD (e7a44f1) with behavioral evidence re-run in this verifier's own process.
+**Re-verification:** Yes — after gap closure. The prior report (`2026-10-16T10:43:42Z`) returned `gaps_found` 10/11 with one SC1 gap: concept/entity nodes were written only into the `quran-annotated-v1` projection and no read surface selected a projection, so the "concept" leg of SC1 was unreachable. Gap-closure plan `04-06-PLAN.md` executed (`b4ad0e2`, `cc6702b`, `d4bf736`, `b069e14`, `efaf8a8`). This run re-derived must-haves from ROADMAP success criteria + every PLAN frontmatter, re-checked the previously-verified truths against HEAD (`efaf8a8`) with independently re-run suites, and verified the gap closure against the actual code (not the SUMMARY). `crates/application/src/verse_link.rs` (uncommitted Phase-06 WIP) is excluded from the covered set and was not treated as a regression.
 
 ## Goal Achievement
 
@@ -80,114 +108,153 @@ re_verification:
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | SC1 — User can open a neighbor view around any verse, word, root, or concept | ✓ VERIFIED | `SqliteGraphStore` (374 lines; struct + open/open_active/manifest/export_sets/neighbors/subgraph/pattern_query) snapshot-on-open delegating to reference expansion; `graph_neighbors` 2/2 green (re-run); structural build→inspect→neighbors→pinned-quotation proof; word-root builder gated on active morphology dataset with typed UnavailableDataset (`quran_graph_build.rs:451-468`, 1634 lines) + annotated builder from concept seed (links array, refs-only TRANSLATES); root-family ranked ayahs with dataset attribution (`graph_paths` 11/11 green, re-run); CLI `neighbors --db --node` + `graph_s1.trycmd`/`graph_s2.trycmd` snapshots green (`quran_graph_snapshots` 1/1 re-run) |
-| 2 | SC2 — User can find paths between two graph nodes with each edge's provenance shown | ✓ VERIFIED | `quran_graph_api.rs` (1254 lines, GraphApiService + GraphBackend trait) reachability/shortest/up-to-K over `traverse::up_to_k_paths` (no reimplemented algorithm); `graph_paths` 11/11 green in this process (all 3 path modes, per-edge structural-vs-assertion provenance with reviewer/decision/timestamp + algorithm/confidence, pattern allowlist rejection, subgraph seed-skip, completeness rule, K pre-flight, truncation precision); CLI `Path --mode` + `graph_s2` green; HTTP path route + 5 graph tools return service-identical payloads (`graph_tools` 6/6, `graph_explain` 4/4, both re-run) |
-| 3 | SC3 — User can export a subgraph with edge provenance intact | ✓ VERIFIED | `quran_graph_export.rs::assemble_export` (277 lines) composes `visible_export_sets` + `export_json_with_notice` (Graph JSON v1, `quran-graph-json-v1` marker); `retain_visible` + `assertion_allowlist_predicate` applied strictly before serialization; `graph_export` 5/5 green in this process (assertions travel with kept edges, restricted/tombstoned ids byte-absent, truncation notice with reason, DOT/SVG smoke with truncation banner); CLI `Export --format json\|dot\|svg` file assertions green; WR-12 fix (3cac160) makes JSON human message count the filtered payload (regression test green); WR-01 DOT/SVG-raw-sets limitation explicitly accepted (local-operator static rendering per D-13, authoritative JSON envelope unaffected) |
-| 4 | SC4 — Graph queries explain why each result was returned | ✓ VERIFIED | `Explanation` payload on every read result (start/end nodes, ordered traversed path, edge types + per-edge provenance incl. algorithm/confidence, applied filters + authz descriptor, snapshot identity with projection_id/builder_version/corpus_generation, completion + reason, duration ms) via shared `explain_edge_with`/`describe_authz` helpers; `graph_explain` 4/4 green in this process (canonicalized CLI≈HTTP≈tools parity on neighbors/paths/subgraph/pattern, full field asserts, unanimous truncated-plus-reason); HTTP enveloped + ETag (`server/tests/graph.rs` 10/10 green, re-run, incl. 304 round-trip); tools carry projection-pinned reproducibility checksums (`graph_tools` 6/6 green, re-run) |
+| 1 | SC1 — User can open a neighbor view around any verse, word, root, or concept | ✓ VERIFIED | **Gap closed.** The concept/entity leg is now reachable via a projection selector. `ReadOptions.projection` (`quran_graph_api.rs:164`, default `None` = structural) is resolved in one place by `FileGraphBackend::service(projection)` (`:1203-1210`) through `GraphApiService::open_for_projection`, and every request-scoped `GraphBackend` impl passes `args.options.projection.as_deref()` (`:1225-1246`). Re-run in this process: `concept_neighborhood_is_reachable_only_through_the_annotated_projection` (graph_neighbors 3/3 green) proves the structural default read of `concept:mercy` is a typed `NodeNotFound`, the annotated read is non-empty with `snapshot.projection_id == quran-annotated-v1` and seed attribution on every edge, and the service / file-backend / tool / CLI payloads are identical after canonicalization. Verse (`ayah`), word (token) and root (`root_family`, lexicon-gated projection-free) legs remain green. |
+| 2 | SC2 — User can find paths between two graph nodes with each edge's provenance shown | ✓ VERIFIED | `graph_paths` 11/11 green in this process (reachability/shortest/up-to-K, per-edge structural-vs-assertion provenance, parallel asserted edges keep own provenance, K pre-flight error, truncated searches refuse no-path claims); `quran_graph_api.rs` dispatches over `traverse::up_to_k_paths`; CLI `Path --mode` covered by `graph_s2.trycmd` (`quran_graph_snapshots` 1/1). |
+| 3 | SC3 — User can export a subgraph with edge provenance intact | ✓ VERIFIED | `graph_export` 5/5 green (assertions travel with kept edges, restricted/tombstoned ids byte-absent, truncation notice with reason, DOT/SVG identities + banner); `quran_graph_export.rs` composes `visible_export_sets` → `export_json_with_notice` before serialization. The new `--projection` on export opens through `open_for_projection` (`quran_cli.rs:4448-4451`) and then uses the same unchanged `load_projection_sets` → render path. |
+| 4 | SC4 — Graph queries explain why each result was returned | ✓ VERIFIED | `graph_explain` 4/4 green (canonicalized CLI≈HTTP≈tools parity on neighbors / all path modes / subgraph / pattern, unanimous truncated-plus-reason); `Explanation` carries start/end, ordered path, edge types + per-edge provenance, confidence, applied filters, snapshot identity, completion, duration. |
+| 5 | Structural projection builds from the active edition into SQLite and its manifest inspects with a generation stamp | ✓ VERIFIED | `graph_neighbors::structural_build_inspect_neighbors_canonical_quotation` + `graph_doctor::doctor_manifest_current_passes_on_fresh_build` + `doctor_manifest_mismatch_warns_after_generation_bump` green; migration `0022` present and `migrate-check` OK (30 migrations, checksums stable). |
+| 6 | SQLite adapter shows the same bounded/authorized/deterministic behavior as the reference backend | ✓ VERIFIED | `cargo test -p quran-graph` → conformance 20/20 green in this process (per-field pre-flight rejection, fanout truncation reason, node/edge exhaustion incomplete, cycle termination, cancellation, restricted intermediates absent, insertion-order determinism, NodeNotFound vs truncated-empty); `arch-check` OK (no `storage-sqlite → quran-graph` edge). |
+| 7 | Same node pair can carry multiple attributed assertions without constraint violation | ✓ VERIFIED | `graph_neighbors::one_triple_carries_multiple_attributed_assertions` green; NULL-safe partial unique indexes in `0022_quran_graph_fix.up.sql`. |
+| 8 | Review lifecycle (propose/suggest/accept/reject/correct-with-supersede), tombstones hidden from traversal+export while retained, rebuilds never discard annotations/history | ✓ VERIFIED | `graph_review` 8/8 + `graph_build::rebuild_preserves_authority_and_review_history_ac_p4_03` green; tombstone byte-absence asserted in `graph_export`. |
+| 9 | Word-root projection builds only from the active attributed dataset, typed unavailable otherwise | ✓ VERIFIED | `graph_build::od11_dataset_license_blocked_wordroot_requires_active_dataset`, `wordroot_build_from_synthetic_dataset`, `od12_linguist_blocked_annotated_seed_stays_mechanics_only` green (7/7 suite). |
+| 10 | Every CLI read op has an HTTP route and a typed tool returning identical (canonicalized) results with projection-pinned reproducibility | ✓ VERIFIED | `server/tests/graph.rs` 11/11 green in this process (5 enveloped routes incl. root-family, ETag/304, 422/404, truncation-as-200, no-mutation fence, + the new `graph_neighbors_route_threads_projection_selector`); `graph_tools` 6/6 green; `graph_explain` parity green; OpenAPI has all 5 `/api/v1/quran/graph/*` paths and `openapi_spec_covers_every_route` green. |
+| 11 | Doctor is read-only (drift/dangling/tombstone checks, never mutates); repair/GC are explicit, confirmed and audited; owner gates and deferral ledger recorded | ✓ VERIFIED | `graph_doctor` 10/10 green (`doctor_run_leaves_state_untouched` proves immutability, `repair_refuses_without_confirmation`, `repair_tombstone_gc_collects_only_old_tombstones`, repair quarantine/rebuild turn doctor green); `phase-04-owner-gates.md` records OD-11/OD-12 + P4-X BLOCKED; `phase-04-deferrals.md` SC1 row now names the selector/check and the new §7 records the deliberately structural-only reads. |
 
-**Score:** 4/4 truths verified (0 present, behavior-unverified)
+**Score:** 11/11 truths verified (0 present, behavior-unverified)
+
+### Gap-Closure Must-Haves (04-06)
+
+| # | Truth (04-06 frontmatter) | Status | Evidence |
+|---|---------------------------|--------|----------|
+| G1 | A caller can read the neighbor view of a concept/entity node on CLI, HTTP, and the `quran.graph_neighbors` tool, while the default read scope stays structural | ✓ VERIFIED | Concept test legs (a)-(e) green; HTTP body field `GraphNeighborsBody.projection` → `options.projection` (`api.rs:1844`) asserted by `graph_neighbors_route_threads_projection_selector`; tool param forwarded (`quran_graph_tools.rs:268`) |
+| G2 | Omitting the selector reads structural exactly as today; unknown/unbuilt family is a typed `GraphError::UnknownProjection` (`QAI-GRAPH-0001`; CLI NOT_FOUND, HTTP 404), never empty success | ✓ VERIFIED | CLI snapshot `--projection quran-not-built-v1` asserts `? 5` + `[QAI-GRAPH-0001]` (`graph_s2.trycmd:73-76`); test (f) asserts `UnknownProjection`; `graph_error_status` maps `QAI-GRAPH-0001` → 404 (`api.rs:1736`); explicit-structural snapshot segment byte-identical (8 nodes / 7 edges) |
+| G3 | Annotated concept/entity nodes stay reference-plus-hash with `pending-scholar` attribution and the seed's attribution assertion id under any selector | ✓ VERIFIED | Test (b): every edge `.assertion_id == report.attribution_assertion_id`; every `Concept`/`Entity` node `reviewed_by == "pending-scholar"` |
+| G4 | `qai quran graph export --db --projection <family>` exports that family through the same pre-serialization policy filter as the default export | ✓ VERIFIED | `export_db` opens via `GraphApiService::open_for_projection(db_path, graph_projection(projection))` (`quran_cli.rs:4448-4451`) and reuses the unchanged `load_projection_sets` → policy-filtered render path (byte-absence test green). Wiring verified; export-with-non-default-family behavior is untested — see `advisory:` |
+| G5 | The D-01 evidence ledger SC1 row names the selector and the concept-neighborhood check, and records which reads remain intentionally structural-only | ✓ VERIFIED | `phase-04-deferrals.md:84` SC1 row names `ReadOptions.projection`, `--projection`, the HTTP/tool `projection` field, the check commands, and the structural-only boundary; new §7 (`:67-71`) records `path`/`subgraph`/`pattern`/`inspect` |
+
+**Gap-closure key links:** `ReadOptions.projection` → `FileGraphBackend::service` → `open_for_projection` ✓ WIRED · HTTP body `projection` → `ReadOptions.projection` ✓ WIRED (`api.rs:1844`) · `GraphNeighborsParams.projection` → same field ✓ WIRED (`quran_graph_tools.rs:268`) · CLI `--projection` + `--file` → typed USAGE ✓ WIRED (`quran_cli.rs:3667-3668`, `:4397-4398`) · annotated publish path untouched (04-06 modifies no build file) ✓ · corrected SC1 ledger row points at the concept-neighborhood test ✓.
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `migrations/sqlite/0022_quran_graph_fix.up.sql` | multi-assertion key, disputed CHECK, authority scope, attrs_json | ✓ VERIFIED | 111 lines, present; migrate-check OK (26 migrations, checksums stable — count grew 22→26 from later phases, no checksum drift) |
-| `crates/application/src/quran_graph_store.rs` | SqliteGraphStore adapter | ✓ VERIFIED | 374 lines; struct + open/open_active/manifest/export_sets/neighbors/subgraph/pattern_query; wired into api/export/tools/doctor |
-| `crates/application/src/quran_graph_build.rs` | structural + word-root + annotated builders, fenced publish | ✓ VERIFIED | 1634 lines; reserve/stage/verify/publish, collect_structural_input, build_wordroot (D-03 gate), build_annotated, parse_annotated_seed (WR-10 src check at L1299-1302), clear_projection_adjacency; real SQL INSERTs |
-| `crates/application/src/quran_graph_annotations.rs` | review lifecycle service | ✓ VERIFIED | 1562 lines; propose/suggest/accept/reject/dispute/correct, review_queue/history, visible_export_sets; assertion+provenance+audit+outbox in one UnitOfWork |
-| `crates/application/src/quran_graph_api.rs` | read services + Explanation contract | ✓ VERIFIED | 1254 lines; all 7 read ops + typed args + GraphApiService + Explanation + GraphBackend/FileGraphBackend; consumed by CLI/server/tools |
-| `crates/application/src/quran_graph_export.rs` | export + DOT/SVG rendering | ✓ VERIFIED | 277 lines; assemble_export, hop_layers, render_dot, render_svg; zero new deps |
-| `crates/application/src/quran_graph_tools.rs` | 5 typed agent tools | ✓ VERIFIED | 478 lines; GraphToolBackend over read trait; suggestion_warnings with algorithm attribution (L106-124); service-identical payloads |
-| `crates/application/src/quran_graph_doctor.rs` | read-only checks + confirmed repair/GC | ✓ VERIFIED | 1236 lines; run_quran_graph_checks (rolled-back UnitOfWork L141/152), repair_quarantine_dangling, repair_tombstone_gc (julianday retention), repair_rebuild_projection |
-| `crates/quran-graph/src/model.rs` + `traverse.rs` + `mem.rs` + `export.rs` | port contract + reference traversal | ✓ VERIFIED | 526/441/605/257 lines; 19-predicate vocabulary, QueryBudgets, up_to_k_paths, MemGraphStore + dump, retain_visible/allowlist; WR-11 edge-pruning fix at mem.rs:230 |
-| `crates/quran-graph/tests/conformance.rs` | backend-generic parity harness | ✓ VERIFIED | 20 tests (was 19, +1 WR-11 `truncated_neighbors_keep_no_edges_to_dropped_nodes` green on mem+sqlite); no_query_language pin intact |
-| `crates/application/tests/graph_*.rs` (8 suites) | integration/contract suites | ✓ VERIFIED | 53 tests total, all green in this process: neighbors 2, review 8, build 7 (was 6, +1 WR-10 `annotated_seed_typo_src_fails_at_parse_not_as_dangling_edge`), paths 11, export 5, tools 6, explain 4, doctor 10 |
-| `crates/server/tests/graph.rs` | HTTP contract tests | ✓ VERIFIED | 979 lines; 10/10 green in this process (envelope, ETag/304, 422/404/403, truncation, no-mutation fence) |
-| `crates/cli/tests/quran/graph_s1.trycmd` + `graph_s2.trycmd` | CLI snapshots | ✓ VERIFIED | s1 20 lines, s2 63 lines; `quran_graph_snapshots` 1/1 green (one-line WR-11 correction: 1 node/7 edges → 1 node/0 edges, same truncation flag/reason) |
-| `docs/08-api/quran-v1-openapi.json` | 5 graph paths | ✓ VERIFIED | Parses; all 5 `/api/v1/quran/graph/*` paths present; `openapi_spec_covers_every_route` green |
-| `docs/05-followups/phase-04-owner-gates.md` | BLOCKED owner gates | ✓ VERIFIED | OD-11/OD-12/P4-X01/X02/X03/X05 BLOCKED with closers; agent-uncloseable fence intact |
-| `docs/05-followups/phase-04-deferrals.md` | deferral ledger + D-01 matrix | ✓ VERIFIED | SC1–SC4 rows with file+check pairs; deferrals mapped to Phases 5/6/7/11/12 |
-| `fixtures/quran/graph/concept-seed-v1.json` + `annotation-goldens.json` | seed fixtures | ✓ VERIFIED | Versioned, synthetic-labeled, attributed; validated by conformance run |
-| `04-VALIDATION.md` / `04-SECURITY.md` / `04-REVIEW.md` + FIX + DISPOSITION / `04-UI-SPEC.md` | refreshed gate evidence | ✓ VERIFIED | Validation 15/15 green 2026-10-13, Nyquist-compliant; Security threats_open 0 (17/17 closed); Review 0 critical / 12 warnings (3 fixed + 9 accepted with rationale) / 10 info; UI-SPEC checker-approved 7/7 |
+| `migrations/sqlite/0022_quran_graph_fix.up.sql` | multi-assertion key, disputed CHECK, authority scope | ✓ VERIFIED | present; `migrate-check` OK |
+| `crates/application/src/quran_graph_store.rs` | `SqliteGraphStore` adapter | ✓ VERIFIED | wired into `quran_graph_api.rs`, export, CLI, doctor |
+| `crates/application/src/quran_graph_build.rs` | structural + word-root + annotated builders, fenced publish | ✓ VERIFIED | real SQL inserts; annotated projection now **read** via the selector (prior "built-but-unread" warning resolved) |
+| `crates/application/src/quran_graph_annotations.rs` | review lifecycle service | ✓ VERIFIED | assertion+provenance+audit+outbox in one UnitOfWork |
+| `crates/application/src/quran_graph_api.rs` | read services + `Explanation` contract + `ReadOptions.projection` | ✓ VERIFIED | `projection: Option<String>` (`:164`); `service(projection)` (`:1203`) |
+| `crates/application/src/quran_graph_export.rs` | export + DOT/SVG rendering | ✓ VERIFIED | `visible_export_sets` → `export_json_with_notice` before serialization |
+| `crates/application/src/quran_graph_tools.rs` | typed agent tools | ✓ VERIFIED | `options.projection = params.projection` (`:268`) |
+| `crates/application/src/quran_graph_doctor.rs` | read-only checks + confirmed repair/GC | ✓ VERIFIED | 10/10 green |
+| `crates/quran-graph/src/{model,traverse,mem,export,structural}.rs` | port contract + reference traversal | ✓ VERIFIED | conformance 20/20 both backends |
+| `crates/quran-graph/tests/conformance.rs` | backend-generic parity harness | ✓ VERIFIED | 20 tests × 2 backends green |
+| `crates/application/tests/graph_*.rs` (8 suites) | integration/contract suites | ✓ VERIFIED | 54 tests green in this process: build 7, doctor 10, explain 4, export 5, neighbors 3 (+1 new), paths 11, review 8, tools 6 |
+| `crates/server/tests/graph.rs` | HTTP contract tests | ✓ VERIFIED | 11/11 green incl. no-mutation fence + new projection-selector route test |
+| `crates/tool-registry/tests/conformance.rs` | tool-registry conformance | ✓ VERIFIED | 10/10 green (updated for `projection: None` literal) |
+| `crates/cli/tests/quran/graph_s1.trycmd` + `graph_s2.trycmd` | CLI snapshots | ✓ VERIFIED | `quran_graph_snapshots` green; s2 carries the explicit-structural + unknown-family segments |
+| `docs/08-api/quran-v1-openapi.json` | 5 graph paths + neighbors `projection` property | ✓ VERIFIED | all 5 present; `projection` property present (asserted) |
+| `docs/05-followups/phase-04-owner-gates.md` | BLOCKED owner gates | ✓ VERIFIED | OD-11/OD-12, P4-X BLOCKED |
+| `docs/05-followups/phase-04-deferrals.md` | deferral ledger + D-01 matrix | ✓ VERIFIED | SC1 row corrected (`:84`); §7 structural-only boundary added (`:67-71`) |
+| `fixtures/quran/graph/{concept-seed-v1,annotation-goldens}.json` | seed fixtures | ✓ VERIFIED | versioned, synthetic-labeled, attributed; exercised by build/conformance |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|----|-----|--------|---------|
-| `quran_graph_store.rs` | `quran-graph` traverse logic | snapshot-on-open + delegation to reference expansion (pre-flight, per-batch cancel, in-expansion authz, stable-ID ordering) | ✓ WIRED | Conformance 20 tests × 2 backends green (mem + sqlite); arch-check clean (adapter edge stays application→quran-graph) |
-| build publish | active pointer | single-transaction fenced flip + generation stamp from active edition row | ✓ WIRED | `publish_structural_build`; manifest corpus_generation asserted in graph_neighbors |
-| neighbor ayah hits | canonical reader | `verify_canonical_quotation` per hit, never graph record text (quran_cli.rs:463, quran_tools.rs:727) | ✓ WIRED | Byte-identical asserts green |
-| annotation writes | authority+audit | assertion + provenance + audit + outbox in one UnitOfWork | ✓ WIRED | graph_review chain-validity pin green |
-| export assembly | policy filter | `retain_visible` + `assertion_allowlist_predicate` + `visible_export_sets` before serialization (quran_graph_export.rs:78) | ✓ WIRED | Byte-absence of restricted/tombstoned ids asserted in graph_export |
-| HTTP handlers | read services | thin over `quran_graph_api` via GraphBackend trait; code-string error mapping (422/404/403/200+truncated) | ✓ WIRED | 5 routes at api.rs:2225-2229; graph.rs 10/10 incl. ETag/304; no quran-graph edge in server (arch-check clean) |
-| tools | read services | GraphToolBackend returns service-identical payloads; BackendMeta pins projection_id+builder_version+corpus_generation | ✓ WIRED | graph_tools 6/6; TOOL_NAMES now 15 (12 phase-04 graph+reader tools + 3 later-phase additions, purely additive); research_checksum envelope additive, phase-04 payload paths intact |
-| CLI doctor/repair | services | Doctor read-only verb + DoctorRepair confirm-wrapped verbs; repair audit on dedicated subject URN | ✓ WIRED | graph_doctor repair cases green (4/4 incl. retention refusal + audit) |
-| OpenAPI doc | routes | extended in same change | ✓ WIRED | 5 graph paths in openapi.json; openapi_spec_covers_every_route green; no drift |
+| `quran_graph_store.rs` | `quran-graph` traversal | snapshot-on-open + reference expansion semantics | ✓ WIRED | conformance 20×2 green; arch-check clean |
+| build publish | active pointer | single-transaction fenced flip + generation stamp | ✓ WIRED | `flip_to_active`; manifest generation asserted in `graph_neighbors` |
+| neighbor ayah hits | canonical reader | `verify_canonical_quotation` per hit, never graph text | ✓ WIRED | byte-identical asserts green |
+| annotation writes | authority + audit | assertion + provenance + audit + outbox in one UnitOfWork | ✓ WIRED | `graph_review` chain-validity green |
+| export assembly | policy filter | `visible_export_sets` + `retain_visible`/`assertion_allowlist_predicate` before serialization | ✓ WIRED | byte-absence asserted |
+| HTTP handlers | read services | thin over `quran_graph_api`; 422/404/200+truncated mapping | ✓ WIRED | 5 routes; `server/tests/graph.rs` 11/11 green |
+| tools | read services | `GraphToolBackend`; `BackendMeta` pins projection+builder+generation | ✓ WIRED | `graph_tools` 6/6 green |
+| **request selector → projection family** | **read service** | `ReadOptions.projection` → `FileGraphBackend::service(projection)` → `open_for_projection` | ✓ WIRED | was the SC1 gap; now the single resolution point serves CLI/HTTP/tool |
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data Variable | Source | Produces Real Data | Status |
 |----------|---------------|--------|--------------------|--------|
-| neighbors CLI `--db` | ayah hit text | canonical reader via `verify_canonical_quotation` (resolver-read hash, ExactMatch) | Yes — refs-only graph rows, display text from reader | ✓ FLOWING |
-| export bytes | nodes/edges/assertions | `SqliteGraphStore::export_sets` (pinned snapshot) → `visible_export_sets` → `export_json_with_notice` | Yes — travel-with-edges + byte-absence both asserted | ✓ FLOWING |
-| HTTP graph responses | result payloads | `FileGraphBackend` opens active structural projection per request → read services | Yes — enveloped, ETag via snapshot_meta edition hash | ✓ FLOWING |
-| tool results | payloads | `GraphToolBackend` over live read trait | Yes — service-identical asserts green | ✓ FLOWING |
-| word-root edges | morphology analyses | active attributed dataset via `require_active_dataset` gate; typed UnavailableDataset otherwise | Yes — no heuristic root invention; synthetic labeling enforced | ✓ FLOWING |
-| TRANSLATES edges | translation edition refs | translation edition registry, never passages | Yes — passage-text absence from projection bytes proven | ✓ FLOWING |
+| neighbors CLI `--db` | ayah hit text | canonical reader via `verify_canonical_quotation` | Yes | ✓ FLOWING |
+| export bytes | nodes/edges/assertions | `SqliteGraphStore::export_sets` → `visible_export_sets` → `export_json_with_notice` | Yes | ✓ FLOWING |
+| HTTP graph responses | result payloads | `FileGraphBackend` opens the requested projection family per request | Yes | ✓ FLOWING |
+| tool results | payloads | `GraphToolBackend` over the live read trait | Yes | ✓ FLOWING |
+| word-root edges | morphology analyses | active attributed dataset via the D-03 gate | Yes | ✓ FLOWING |
+| root-family ranked ayahs | morphology occurrences | `quran_morphology::root_search` (lexicon-gated, no projection build) | Yes | ✓ FLOWING |
+| **concept/entity nodes** | **concept neighborhood** | `quran-annotated-v1` read via the selector; asserted non-empty with seed attribution and `pending-scholar` | Yes | ✓ FLOWING (was ✗ DISCONNECTED) |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| WR-11 regression (both backends) | `cargo test -p quran-graph --test conformance truncated_neighbors_keep_no_edges_to_dropped_nodes` | 1 pass | ✓ PASS |
-| WR-10 regression | `cargo test -p application --test graph_build annotated_seed_typo_src_fails_at_parse_not_as_dangling_edge` | 1 pass | ✓ PASS |
-| WR-12 regression | `cargo test -p application --lib quran_cli::export_count_tests` | 1 pass | ✓ PASS |
-| read services | `cargo test -p application --test graph_paths` | 11 pass | ✓ PASS |
-| export policy | `cargo test -p application --test graph_export` | 5 pass | ✓ PASS |
-| parity + explainability | `cargo test -p application --test graph_explain` | 4 pass | ✓ PASS |
-| doctor + repair | `cargo test -p application --test graph_doctor` | 10 pass | ✓ PASS |
-| tools | `cargo test -p application --test graph_tools` | 6 pass | ✓ PASS |
-| neighbors + review | `cargo test -p application --test graph_neighbors` / `--test graph_review` | 2 + 8 pass | ✓ PASS |
-| builders | `cargo test -p application --test graph_build` | 7 pass | ✓ PASS |
-| quran-graph full | `cargo test -p quran-graph` | 22 + 20 + 2 + 1 + 5 pass | ✓ PASS |
-| server graph contract | `cargo test -p server --test graph` | 10 pass | ✓ PASS |
-| CLI snapshots | `cargo test -p cli --test quran quran_graph` | 1 pass | ✓ PASS |
-| openapi coverage | `cargo test -p server --test api openapi_spec_covers_every_route` | 1 pass | ✓ PASS |
-| architecture gate | `cargo run -p xtask -- arch-check` | OK | ✓ PASS |
-| migration gate | `cargo run -p xtask -- migrate-check` | OK, 26 migrations stable | ✓ PASS |
+| concept neighborhood reachable only via annotated selector (service/backend/tool/CLI + unknown family) | `cargo test -p application --test graph_neighbors` | 3 pass, 0 failed (incl. new concept test) | ✓ PASS |
+| application graph suites (8 targets) | `cargo test -p application --test graph_build --test graph_doctor --test graph_explain --test graph_export --test graph_neighbors --test graph_paths --test graph_review --test graph_tools` | 54 pass, 0 failed | ✓ PASS |
+| quran-graph crate (lib + conformance + no-query-language + structural + traversal) | `cargo test -p quran-graph` | 22 + 20 + 2 + 1 + 5 pass, 0 failed | ✓ PASS |
+| server graph contract (incl. projection-selector route) | `cargo test -p server --test graph` | 11 pass, 0 failed | ✓ PASS |
+| tool-registry (lib + conformance) | `cargo test -p tool-registry` | 6 + 10 pass, 0 failed | ✓ PASS |
+| CLI graph snapshots | `cargo test -p cli --test quran quran_graph` | 1 pass (s1 + s2 segments) | ✓ PASS |
+| OpenAPI ↔ routes | `cargo test -p server --test api openapi_spec_covers_every_route` | 1 pass | ✓ PASS |
+| architecture gate | `cargo run -q -p xtask -- arch-check` | OK — no forbidden dependency edges | ✓ PASS |
+| migration gate | `cargo run -q -p xtask -- migrate-check` | OK — 30 migrations ordered; checksums stable | ✓ PASS |
 
 ### Probe Execution
 
 No phase-declared or conventional `scripts/*/tests/probe-*.sh` probes exist for this phase. Skipped.
 
+### Test Quality Audit
+
+| Test File | Linked Req | Active | Skipped | Circular | Assertion Level | Verdict |
+|-----------|-----------|--------|---------|----------|-----------------|---------|
+| `graph_neighbors.rs` | REQ-quran-graph | 3 | 0 | none | Behavioral (build→inspect→neighbors→quotation; concept reachability across 4 surfaces + typed failures) | ✓ PASS |
+| `graph_review.rs` | REQ-quran-graph | 8 | 0 | none | Behavioral (state machine + tombstone byte-absence) | ✓ PASS |
+| `graph_build.rs` | REQ-quran-graph | 7 | 0 | none | Behavioral (rebuild preservation, typed gate) | ✓ PASS |
+| `graph_paths.rs` | REQ-quran-graph | 11 | 0 | none | Value/Behavioral (provenance fields) | ✓ PASS |
+| `graph_export.rs` | REQ-quran-graph | 5 | 0 | none | Behavioral (policy byte-absence) | ✓ PASS |
+| `graph_tools.rs` | REQ-quran-graph | 6 | 0 | none | Value (envelope fields + checksum) | ✓ PASS |
+| `graph_explain.rs` | REQ-quran-graph | 4 | 0 | none | Behavioral (3-surface parity) | ✓ PASS |
+| `graph_doctor.rs` | REQ-quran-graph | 10 | 0 | none | Behavioral (immutability before/after) | ✓ PASS |
+| `server/tests/graph.rs` | REQ-quran-graph | 11 | 0 | none | Status/Value (route contract incl. fence + selector threading) | ✓ PASS |
+| `quran-graph/tests/conformance.rs` | REQ-quran-graph | 20 | 0 | none | Behavioral (both backends) | ✓ PASS |
+
+**Disabled tests on requirements:** 0. **Circular patterns detected:** 0. **Insufficient assertions:** 0.
+
 ### Requirements Coverage
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|-------------|-------------|--------|----------|
-| REQ-quran-graph | 04-01, 04-02, 04-03, 04-04, 04-05 (all five plans claim it) | First-class graph representation: node/edge types, edge provenance, graph search, explainability, semi-automated annotation (PRD §10) | ✓ SATISFIED | 19-predicate vocabulary + multi-assertion authority; provenance on every edge; search (neighbors/paths/subgraph/pattern/root-family) on CLI+HTTP+tools with parity proof; Explanation on every result; suggest→human-decide lifecycle with pending labeling; tombstone/retention semantics; doctor+repair operability; owner gates honestly BLOCKED |
+| REQ-quran-graph | 04-01, 04-02, 04-03, 04-04, 04-05, 04-06 (all six plans declare it) | First-class graph representation independent of vector search: node/edge types, edge provenance, graph search, explainability, semi-automated annotation (PRD §10) | ✓ SATISFIED | 19-predicate vocabulary + multi-assertion authority; provenance on every edge; graph search (neighbors/paths/subgraph/pattern/root-family) on CLI+HTTP+tools with parity proof; `Explanation` on every result; suggest→human-decide lifecycle with pending labeling; tombstone/retention semantics; doctor+repair operability; read-scope selector reaching the annotated projection; owner gates honestly BLOCKED. All four ROADMAP success criteria now met. |
 
-No orphaned requirements: REQUIREMENTS.md maps exactly REQ-quran-graph to Phase 4, and all five plans declare it. No other requirement IDs appear in any Phase 4 plan frontmatter. (REQUIREMENTS.md still shows REQ-quran-graph as `Pending` — traceability checkbox flip is the ship/roadmap step, not a code gap.)
+**Orphaned requirements:** none. `REQUIREMENTS.md` maps exactly `REQ-quran-graph` to Phase 4 (row `:106` shows `Complete`, checkbox `:30` checked) and all six Phase-4 plans declare it; no other ID appears in any Phase-4 plan frontmatter.
+
+### Decision Coverage
+
+All trackable CONTEXT.md decisions are honored by shipped artifacts (14/14; `not_honored: []`).
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| — | — | `TODO/FIXME/XXX/TBD/unimplemented!/todo!` scan over all 7 `quran_graph_*.rs` + `quran-graph/src/*` | — | None found (clean) |
-| accepted warnings WR-01…WR-09 | 04-REVIEW.md + 04-REVIEW-FIX.md | 9 warnings explicitly dispositioned as accepted/investigated-no-defect/deferred with rationale (DOT/SVG raw-sets D-13 scope; single-projection read scope; path-filter effective-reported; shallow bounded-sample documented; julianday verified non-NULL + fail-safe; audit-key stability; CLI compat; single-operator; forward-declared scoping) | ℹ️ Info | Not blocking: each was evaluated against SC1–SC4; authoritative JSON/traversal paths unaffected; follow-ups recorded for Phases 5/11/12 |
-| info IN-01…IN-10 | 04-REVIEW.md | 10 info-level observations (DOT escaping, pool churn, empty-meta refs, CLI-path strings, case sensitivity, write-tx reads, GC counts, file-export assertions, read-path file creation, empty assertion id) | ℹ️ Info | Local-operator / polish only; none breaks a must-have |
-| fixed WR-10/WR-11/WR-12 | ed9c367, 1cd0e3d+c0b0321, 3cac160 | Real defects, each fixed with a fail-without/pass-with regression test | — | Closed; suites green (see spot-checks) |
-
-No blockers. No debt markers. The stub-pattern grep matches (`_ => {}` in match arms) are benign no-op patterns, not stubs. Pre-existing `cargo fmt --check` drift in 3 Phase-3 test files was normalized tree-wide by a later fmt commit (6736afc); all Phase-4 files rustfmt-clean.
+| — | — | `TODO/FIXME/XXX/TBD/unimplemented!/todo!` scan over all 7 `quran_graph_*.rs` + the 04-06-modified files | — | None found (clean — no debt markers, no blocker) |
+| annotated projection | `quran_graph_build.rs` | Built-but-unread projection (dead output) | ✅ Resolved | Now read through `ReadOptions.projection`; the prior ⚠️ warning is closed |
+| accepted code-review warnings WR-01/03/04/… | 04-REVIEW.md | Each dispositioned inline on a verified-closed phase | ℹ️ Info | Recorded under `advisory:` |
+| UI-review warnings | 04-UI-REVIEW.md | `qai graph` next-command path, missing `dispute` CLI verb, SVG `<title>` | ℹ️ Info | Carried forward under `advisory:`; no failing test |
 
 ### Human Verification Required
 
-None. All four success criteria are proven by automated suites re-run by the verifier in its own process (53 application graph tests + 20×2 conformance rows + 10 server + CLI snapshots + gates). The 2 VALIDATION.md manual-only rows are visual-legibility judgments (walkthrough legibility, SVG/DOT layout taste), not functional gaps — coordinates are explicitly out of contract, no interactive GUI/TUI ships in this phase (deferred to Phase 5 with ledger entries), and UI-SPEC is checker-approved 7/7. Static DOT/SVG output is file-asserted (node/edge identity + truncation banner).
+None. Every truth above is exercised by automated suites re-run by this verifier in its own process (50 quran-graph + 54 application graph + 11 server + tool-registry + CLI snapshots + gates). Static DOT/SVG output is file-asserted (node/edge identity + truncation banner) with coordinates explicitly out of contract; no interactive GUI/TUI ships in this phase (deferred to Phase 5).
 
 ### Gaps Summary
 
-No gaps. Stale-refresh confirms the phase goal is achieved at HEAD: every must-have truth, artifact (exists + substantive + wired), key link, and data flow verified against the actual codebase with independently re-run behavioral evidence. The 3 review-fix commits strictly improve correctness (WR-10 parse-time typo attribution, WR-11 truncation edge-pruning on both backends, WR-12 filtered-payload message counts) with regression tests; unrelated Phase 05/06 changes are purely additive (TOOL_NAMES growth, research_checksum, serve wiring, +4 migrations) and leave every Phase-04 logic path intact. The 9 remaining warnings are explicitly accepted limitations with recorded rationale and follow-ups, not goal-blocking defects. Phase goal achieved. Ready to proceed.
+No gaps. The single prior gap (G-04-SC1) is genuinely closed in the codebase, not merely claimed:
+
+- The selector exists and is resolved in exactly one place. `ReadOptions.projection` (`quran_graph_api.rs:164`, default `None`) is honored by `FileGraphBackend::service(projection)` (`:1203-1210`), which maps `None` to `STRUCTURAL_PROJECTION_ID` — the default read scope is unchanged and `GraphApiService::open` remains its structural shorthand.
+- The concept/entity neighborhood is now reachable on all three surfaces: CLI (`--projection` on `neighbors`/`export`, `quran_cli.rs:3665-3672`, `:4384-4402`), HTTP (`GraphNeighborsBody.projection` → `options.projection`, `api.rs:1844`), and the `quran.graph_neighbors` tool (`GraphNeighborsParams.projection` v1.1.0 → the same field, `quran_graph_tools.rs:268`).
+- A new behavioral integration test (`graph_neighbors.rs:204`) proves the structural default hides `concept:mercy` (typed `NodeNotFound`, never empty-success), the annotated selector reveals it (non-empty, `projection_id == quran-annotated-v1`, seed attribution on every edge, `pending-scholar` on concept/entity nodes), and the service / file-backend / tool / CLI payloads are identical after canonicalization; it also proves an unknown family is a typed `UnknownProjection`.
+- The CLI snapshot pins the default byte-identical under an explicit `--projection quran-structural-v1` and asserts `? 5` + `QAI-GRAPH-0001` for an unknown family; `graph_error_status` maps `QAI-GRAPH-0001` → HTTP 404.
+- The evidence ledger is honest: the SC1 row now names the selector and the check, and §7 records the reads (`path`/`subgraph`/`pattern`/`inspect`) that remain intentionally structural-only this cycle.
+
+No regressions in the previously-verified truths: all eight application graph suites, the 50 quran-graph tests (conformance on both backends), the 11 server contract tests, tool-registry, CLI snapshots, OpenAPI coverage, `arch-check`, and `migrate-check` are green in this process. The only suite deltas are additive (`graph_neighbors` 2→3, `server/graph` 10→11). One coverage-only advisory remains (export-selector behavior not directly tested for a non-default family); it is not a defect and does not block the goal.
 
 ---
 
-_Verified: 2026-10-13T00:00:00Z_
+_Verified: 2026-10-16T11:50:26Z_
 _Verifier: the agent (gsd-verifier)_
