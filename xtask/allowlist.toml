@@ -136,6 +136,14 @@ workspace = { allow = ["domain"] }
 [tafsir]
 workspace = { allow = ["domain"] }
 
+# hadith-ingestion: source-format parsers + validator + discover → stage →
+# validate → activate pipeline (Phase 6, plan 06-04). Pure library; no sqlx/
+# storage-sqlite edge in the default build — staged records live in-memory
+# and are activated through the application layer. workspace dep on `domain`
+# (ContentHash/SourceVersionId/Timestamp) and `sources` (source catalog trait).
+[hadith-ingestion]
+workspace = { allow = ["domain", "sources"] }
+
 # retrieval: the backend-agnostic retrieval port (Phase 8 groundwork).
 # Depends on `domain` types via `storage` for typed error diagnostics. The
 # memvid-core edge is optional and gated behind the `memvid` feature, so the
@@ -291,6 +299,14 @@ allow = []
 [tafsir.external.registry]
 allow = ["serde", "serde_json", "thiserror", "uuid"]
 [tafsir.external.git]
+allow = []
+
+# hadith-ingestion externals: serde/serde_json for parsed records, thiserror
+# for typed parse/validation errors. No other external edges; matches the
+# crate's current direct dependency set (see Cargo.toml).
+[hadith-ingestion.external.registry]
+allow = ["serde", "serde_json", "thiserror"]
+[hadith-ingestion.external.git]
 allow = []
 
 # retrieval externals: serde types for the port, thiserror for typed errors,
