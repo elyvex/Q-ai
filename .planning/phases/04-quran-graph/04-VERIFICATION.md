@@ -1,22 +1,9 @@
 ---
 phase: 04-quran-graph
-verified: 2026-10-16T11:50:26Z
+verified: 2026-10-16T19:22:46Z
 status: passed
 score: 11/11 must-haves verified
 covered_files:
-  - .planning/phases/04-quran-graph/04-01-PLAN.md
-  - .planning/phases/04-quran-graph/04-01-SUMMARY.md
-  - .planning/phases/04-quran-graph/04-02-PLAN.md
-  - .planning/phases/04-quran-graph/04-02-SUMMARY.md
-  - .planning/phases/04-quran-graph/04-03-PLAN.md
-  - .planning/phases/04-quran-graph/04-03-SUMMARY.md
-  - .planning/phases/04-quran-graph/04-04-PLAN.md
-  - .planning/phases/04-quran-graph/04-04-SUMMARY.md
-  - .planning/phases/04-quran-graph/04-05-PLAN.md
-  - .planning/phases/04-quran-graph/04-05-SUMMARY.md
-  - .planning/phases/04-quran-graph/04-06-PLAN.md
-  - .planning/phases/04-quran-graph/04-06-SUMMARY.md
-  - .planning/phases/04-quran-graph/04-VALIDATION.md
   - crates/application/src/quran_cli.rs
   - crates/application/src/quran_graph_annotations.rs
   - crates/application/src/quran_graph_api.rs
@@ -54,14 +41,13 @@ covered_files:
   - fixtures/quran/graph/concept-seed-v1.json
   - migrations/sqlite/0022_quran_graph_fix.up.sql
   - migrations/sqlite/checksums.json
-covered_digest: "v3:sha256:3296563edf968fa2701e8db942edca28ae8c2c47872cd6efc23b4ec9574c08f7"
+covered_digest: "v3:sha256:43e522ce407b1d90e46d0e135fb8c391927be4338816d8790b259cc2e9c4fe96"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
-  previous_status: gaps_found
-  previous_score: 10/11
-  gaps_closed:
-    - "SC1 — User can open a neighbor view around any verse, word, root, or concept (the concept/entity leg was unreachable; a projection selector now reaches it on CLI, HTTP, and the tool while the structural default is unchanged)"
+  previous_status: passed
+  previous_score: 11/11
+  gaps_closed: []
   gaps_remaining: []
   regressions: []
 advisory:
@@ -98,9 +84,9 @@ advisory:
 # Phase 04: Quran Graph Verification Report
 
 **Phase Goal:** Users can explore structural and linguistic relationships of the Quran as a navigable graph.
-**Verified:** 2026-10-16T11:50:26Z
+**Verified:** 2026-10-16T19:22:46Z
 **Status:** passed
-**Re-verification:** Yes — after gap closure. The prior report (`2026-10-16T10:43:42Z`) returned `gaps_found` 10/11 with one SC1 gap: concept/entity nodes were written only into the `quran-annotated-v1` projection and no read surface selected a projection, so the "concept" leg of SC1 was unreachable. Gap-closure plan `04-06-PLAN.md` executed (`b4ad0e2`, `cc6702b`, `d4bf736`, `b069e14`, `efaf8a8`). This run re-derived must-haves from ROADMAP success criteria + every PLAN frontmatter, re-checked the previously-verified truths against HEAD (`efaf8a8`) with independently re-run suites, and verified the gap closure against the actual code (not the SUMMARY). `crates/application/src/verse_link.rs` (uncommitted Phase-06 WIP) is excluded from the covered set and was not treated as a regression.
+**Re-verification:** Yes — final re-verification after all downstream phases (through phase 06, including 06-05 verse-link plumbing). The previous report (`2026-10-16T11:50:26Z`) returned `passed` 11/11. This run re-derived must-haves from ROADMAP success criteria + every PLAN frontmatter, re-checked every previously-verified truth against HEAD (`fc786ca`) with independently re-run suites (quran-graph conformance 20+20, application graph 54, server graph 11, CLI snapshots, OpenAPI coverage, arch-check, migrate-check), and verified no regression from downstream verse-link plumbing (`crates/cli/src/lib.rs`, `crates/server/src/api.rs`, `cli/tests/parity_cross_surface.rs`, `server/tests/{api,citation_open,graph}.rs`) — graph behavior is unchanged. Covered set excludes Phase-06 artifacts not part of Phase 4 and adds none.
 
 ## Goal Achievement
 
@@ -256,5 +242,5 @@ No regressions in the previously-verified truths: all eight application graph su
 
 ---
 
-_Verified: 2026-10-16T11:50:26Z_
+_Verified: 2026-10-16T19:22:46Z_
 _Verifier: the agent (gsd-verifier)_
