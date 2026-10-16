@@ -19,7 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3.5: Residual Closure (INSERTED)** - Engineering remainder of Phases 1-3, status truth restoration, owner-gate readiness (completed 2026-10-02)
 - [x] **Phase 4: Quran Graph** - Graph store, traversal, annotations, visualization (completed 2026-09-29)
 - [x] **Phase 5: Rich Quran Experience** - Web GUI, TUI cockpit, research tools, result contract
-- [ ] **Phase 6: Hadith & Tafsir** - Structured records, grading, verse links, tafsir indexing
+- [x] **Phase 6: Hadith & Tafsir** - Structured records, grading, verse links, tafsir indexing (completed 2026-10-16)
 - [ ] **Phase 7: Isnad & Narrator Research** - Identity review, chain paths, uncertainty
 - [ ] **Phase 8: Multi-RAG Platform** - Full-text, vector, hybrid, reranking, generic RAG projects
 - [ ] **Phase 9: Comparative Scripture** - Edition-aware scripture model, parallel-passage research
@@ -250,7 +250,7 @@ Plans:
   4. Scholarly disagreement is shown side-by-side, never silently merged
   5. Computational identity matches are labeled as uncertain, never as certainty
 
-**Plans**: 4/4 plans executed
+**Plans**: 5/5 plans complete
 
 Plans:
 **Wave 1**
@@ -368,7 +368,7 @@ Phase 3.5 is an INSERTED gap-closure phase; it runs after Phase 4 and does not g
 | 3.5. Residual Closure (INSERTED) | 4/4 | Complete (W1–W10 evidence matrix; owner gates OD-01…OD-14 open) | 2026-10-02 |
 | 4. Quran Graph | 6/6 | Complete    | 2026-10-16 |
 | 5. Rich Quran Experience | 9/9 | Complete (owner gates OD-04/OD-11/OD-12 open) | 2026-10-09 |
-| 6. Hadith & Tafsir | 4/4 | In Progress | - |
+| 6. Hadith & Tafsir | 5/5 | Complete    | 2026-10-16 |
 | 7. Isnad & Narrator Research | 0/TBD | Not started | - |
 | 8. Multi-RAG Platform | 0/TBD | Not started | - |
 | 9. Comparative Scripture | 0/TBD | Not started | - |
