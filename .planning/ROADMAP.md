@@ -250,7 +250,7 @@ Plans:
   4. Scholarly disagreement is shown side-by-side, never silently merged
   5. Computational identity matches are labeled as uncertain, never as certainty
 
-**Plans**: 4 plans
+**Plans**: 3/4 plans executed
 
 Plans:
 **Wave 1**
@@ -263,7 +263,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 06-03-PLAN.md — Verse linking, owner gate, and disagreement display
+- [x] 06-03-PLAN.md — Verse linking, owner gate, and disagreement display
 
 **Wave 4** *(blocked on Wave 3)*
 
@@ -368,7 +368,7 @@ Phase 3.5 is an INSERTED gap-closure phase; it runs after Phase 4 and does not g
 | 3.5. Residual Closure (INSERTED) | 4/4 | Complete (W1–W10 evidence matrix; owner gates OD-01…OD-14 open) | 2026-10-02 |
 | 4. Quran Graph | 6/6 | Complete    | 2026-10-16 |
 | 5. Rich Quran Experience | 9/9 | Complete (owner gates OD-04/OD-11/OD-12 open) | 2026-10-09 |
-| 6. Hadith & Tafsir | 2/4 | In Progress | - |
+| 6. Hadith & Tafsir | 3/4 | In Progress | - |
 | 7. Isnad & Narrator Research | 0/TBD | Not started | - |
 | 8. Multi-RAG Platform | 0/TBD | Not started | - |
 | 9. Comparative Scripture | 0/TBD | Not started | - |

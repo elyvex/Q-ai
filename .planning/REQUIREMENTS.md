@@ -32,10 +32,10 @@
 
 ### Hadith, Tafsir & Scripture
 
-- [ ] **REQ-hadith-corpus**: Source-aware structured hadith records with metadata, Shia collections, attributed grading, hadith tools (PRD §14)
+- [x] **REQ-hadith-corpus**: Source-aware structured hadith records with metadata, Shia collections, attributed grading, hadith tools (PRD §14)
   - Acceptance: complete only when it identifies collection+edition, preserves source numbering, separates isnad/matn where supported, attributes gradings, represents disagreement, resolves citations exactly, and never presents computational identity matching as certainty (PRD §46)
 - [ ] **REQ-isnad-narrator-graph**: Isnad/narrator graph with node/edge types and identity-uncertainty handling (PRD §15)
-- [ ] **REQ-tafsir-comparative**: Tafsir indexed by work/author/dimensions; comparative scripture (Torah, Tanakh/Hebrew Bible, NT) with comparative tools (PRD §16, §17)
+- [x] **REQ-tafsir-comparative**: Tafsir indexed by work/author/dimensions; comparative scripture (Torah, Tanakh/Hebrew Bible, NT) with comparative tools (PRD §16, §17)
 
 ### Retrieval, Answers & Sources
 
@@ -108,8 +108,8 @@ Deferred post-MVP extensions (from PRD §44.2 excludes — acknowledged, not in 
 | REQ-quran-research-tools | Phase 5 | Complete |
 | REQ-quran-result-contract | Phase 5 | Pending |
 | REQ-tui-cli | Phase 5 | Pending |
-| REQ-hadith-corpus | Phase 6 | Pending |
-| REQ-tafsir-comparative | Phase 6 | Pending |
+| REQ-hadith-corpus | Phase 6 | Complete |
+| REQ-tafsir-comparative | Phase 6 | Complete |
 | REQ-isnad-narrator-graph | Phase 7 | Pending |
 | REQ-multi-rag | Phase 8 | Pending |
 | REQ-generic-rag-platform | Phase 8 | Pending |
