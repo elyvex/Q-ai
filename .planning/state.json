@@ -36,7 +36,7 @@
     {
       "number": "6",
       "name": "Hadith & Tafsir",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "number": "7",
@@ -74,5 +74,5 @@
     "label": "Advance to the next step (plan phase 06)",
     "reason": "Phase 06 of 13 — needs a plan"
   },
-  "updated_at": "2026-10-13T06:39:23.189Z"
+  "updated_at": "2026-10-16T10:31:06.002Z"
 }
