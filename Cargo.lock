@@ -1693,6 +1693,13 @@ dependencies = [
 [[package]]
 name = "hadith-ingestion"
 version = "0.0.0"
+dependencies = [
+ "domain",
+ "serde",
+ "serde_json",
+ "sources",
+ "thiserror 2.0.20",
+]
 
 [[package]]
 name = "hashbrown"
