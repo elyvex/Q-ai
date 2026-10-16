@@ -106,4 +106,4 @@ Proposed (NOT locked — explicit decision points during roadmap execution): ADR
 | Deny-by-default tools, human approvals | Untrusted retrieval; no silent canonical modification | — Pending |
 
 ---
-*Last updated: 2026-10-06 after Phase 2 complete (canonical Quran core validated; phases 1–4 shipped)*
+*Last updated: 2026-10-16 after Phase 2 complete (canonical Quran core validated; phases 1–5 shipped)*

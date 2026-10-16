@@ -20,7 +20,7 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-10-06)
+See: .planning/PROJECT.md (updated 2026-10-16)
 
 **Core value:** Trustworthy Quran research: exact canonical text before generated interpretation, every factual claim traceable to its source.
 **Current focus:** Phase 06 — Hadith & Tafsir
@@ -155,7 +155,10 @@ None yet.
 
 ### Blockers/Concerns
 
-- ADR-0101 initial Quran dataset + license needs human sign-off before Phase 2 import work
+- ⚠️ [Phase 2] OD-01/OD-02/OD-03 unanswered (dataset identity + license, named editorial reviewer, independent reference corpus) — real canonical activation stays blocked; Phase 2 ships synthetic fixtures only (closing actions: docs/05-followups/phase-02-owner-gates.md)
+- ⚠️ [Phase 2] D-15 read-path exemption (verify_quotation enforced on the emission frame; canonical-assembled direct reads structurally exempt) is owner-ratifiable, not ratified — guarded by crates/application/tests/answer_path_ledger.rs
+- ⚠️ [Phase 2] citations crate coverage 79.27% vs the published 85% floor (gate row held at 79%) — add verdict-mapping/resolver-error coverage, then raise the threshold
+- ⚠️ [Phase 2] 5 open code-review info findings (IN-01…IN-05) recorded, not triaged — .planning/phases/02-canonical-quran-core/02-REVIEW-DISPOSITION.md
 - ADR-0201/0202/0701/0301 (retrieval/graph/vector/RAG) undecided — Phase 4/8 plans must include decision points
 - ADR-0702 foundational subset (outbox/revisions/jobs/tombstones) required from Phases 0–3
 
@@ -169,9 +172,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-13T07:53:14Z
+Last session: 2026-10-16T10:34:30Z
 Stopped at: Phase 02 complete, ready to plan Phase 06
-Resume file: .planning/phases/05-rich-quran-experience/05-CONTEXT.md
+Resume file: None
 
 ## Deferred Verification
 
