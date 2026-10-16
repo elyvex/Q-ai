@@ -74,8 +74,10 @@ impl HadithBackend for HadithToolBackend {
             .await
             .map_err(reader_error)?;
 
-        let gradings =
+        let mut gradings =
             self.reader.get_gradings_for_hadith(&record.id).await.map_err(reader_error)?;
+        // Side-by-side display: sort by scholar name, never merge (D-03/D-04).
+        gradings.sort_by(|a, b| a.scholar_name.cmp(&b.scholar_name));
 
         let view = HadithView {
             id: record.id.to_string(),
@@ -186,7 +188,8 @@ impl HadithBackend for HadithToolBackend {
             tool: "hadith.gradings",
             detail: format!("invalid hadith id: {hadith_id}"),
         })?;
-        let gradings = self.reader.get_gradings_for_hadith(&id).await.map_err(reader_error)?;
+        let mut gradings = self.reader.get_gradings_for_hadith(&id).await.map_err(reader_error)?;
+        gradings.sort_by(|a, b| a.scholar_name.cmp(&b.scholar_name));
         Ok(gradings
             .iter()
             .map(|g| tool_registry::GradingRecord {

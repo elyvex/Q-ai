@@ -7,6 +7,7 @@
 
 pub mod audit_bridge;
 pub mod db;
+pub mod disagreement;
 pub mod hadith_reader;
 pub mod hadith_search;
 pub mod hadith_tools;
@@ -37,7 +38,6 @@ pub mod tafsir_reader;
 pub mod tafsir_search;
 pub mod tafsir_tools;
 pub mod verse_link;
-
 pub use config::Config;
 pub use domain::redaction;
 
