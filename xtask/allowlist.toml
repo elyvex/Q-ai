@@ -18,7 +18,7 @@
 workspace = { allow = [] }
 
 [application]
-workspace = { allow = ["domain", "storage", "storage-sqlite", "provenance", "audit", "jobs", "sources", "config", "observability", "quran-core", "quran-corpus", "quran-normalization", "quran-search", "quran-morphology", "quran-graph", "citations", "tools", "tool-registry", "hadith-core", "tafsir"] }
+workspace = { allow = ["domain", "storage", "storage-sqlite", "provenance", "audit", "jobs", "sources", "config", "observability", "quran-core", "quran-corpus", "quran-normalization", "quran-search", "quran-morphology", "quran-graph", "citations", "tools", "tool-registry", "hadith-core", "tafsir", "isnad-graph"] }
 
 [storage]
 workspace = { allow = ["domain"] }
@@ -135,6 +135,12 @@ workspace = { allow = ["domain"] }
 # application -> tafsir is the port direction (services consume the types).
 [tafsir]
 workspace = { allow = ["domain"] }
+
+
+# isnad-graph: narrator/isnad research domain types (Phase 7).
+# Composes over quran-graph + domain; no storage/sqlx.
+[isnad-graph]
+workspace = { allow = ["domain", "quran-graph"] }
 
 # hadith-ingestion: source-format parsers + validator + discover → stage →
 # validate → activate pipeline (Phase 6, plan 06-04). Pure library; no sqlx/
@@ -329,4 +335,9 @@ workspace = { allow = ["domain", "storage", "storage-sqlite", "quran-core", "qur
 [evaluation.external.registry]
 allow = ["serde", "serde_json", "thiserror", "tokio", "tempfile"]
 [evaluation.external.git]
+allow = []
+
+[isnad-graph.external.registry]
+allow = ["serde", "serde_json", "uuid"]
+[isnad-graph.external.git]
 allow = []

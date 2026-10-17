@@ -875,6 +875,49 @@ pub async fn dispatch_registered_tool(
                 serde_json::from_value(params).map_err(|err| bad_params("tafsir.search", err))?;
             Ok(serialized(&reader.search_tafsir(params).await?))
         }
+        "isnad.narrator" => {
+            let params: tool_registry::GetNarratorParams =
+                serde_json::from_value(params).map_err(|err| bad_params("isnad.narrator", err))?;
+            Ok(serialized(&reader.get_narrator(&params.id).await?))
+        }
+        "isnad.rijal" => {
+            let params: tool_registry::GetNarratorParams =
+                serde_json::from_value(params).map_err(|err| bad_params("isnad.rijal", err))?;
+            Ok(serialized(&reader.get_rijal(&params.id).await?))
+        }
+        "isnad.trace" => {
+            let params: tool_registry::TraceParams =
+                serde_json::from_value(params).map_err(|err| bad_params("isnad.trace", err))?;
+            Ok(serialized(&reader.trace(params).await?))
+        }
+        "isnad.identity_propose" => {
+            let params: tool_registry::IdentityProposalParams =
+                serde_json::from_value(params).map_err(|err| bad_params("isnad.identity_propose", err))?;
+            Ok(serialized(&reader.propose_identity(params).await?))
+        }
+        "isnad.identity_accept" => {
+            let params: tool_registry::IdentityDecisionParams =
+                serde_json::from_value(params).map_err(|err| bad_params("isnad.identity_accept", err))?;
+            Ok(serialized(&reader.accept_identity(params).await?))
+        }
+        "isnad.identity_reject" => {
+            let params: tool_registry::IdentityDecisionParams =
+                serde_json::from_value(params).map_err(|err| bad_params("isnad.identity_reject", err))?;
+            Ok(serialized(&reader.reject_identity(params).await?))
+        }
+        "isnad.identity_dispute" => {
+            let params: tool_registry::IdentityDecisionParams =
+                serde_json::from_value(params).map_err(|err| bad_params("isnad.identity_dispute", err))?;
+            Ok(serialized(&reader.dispute_identity(params).await?))
+        }
+        "isnad.identity_supersede" => {
+            // params: { id, new_proposal, reviewer }
+            let id = params.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let reviewer = params.get("reviewer").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let new_proposal: tool_registry::IdentityProposalParams = serde_json::from_value(params.get("new_proposal").cloned().unwrap_or(serde_json::Value::Null))
+                .map_err(|err| bad_params("isnad.identity_supersede", err))?;
+            Ok(serialized(&reader.supersede_identity(&id, new_proposal, &reviewer).await?))
+        }
         _ => Err(ToolError::InvalidInput {
             tool: "quran.tool",
             detail: format!("unknown tool `{name}`"),
