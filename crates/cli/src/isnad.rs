@@ -49,7 +49,19 @@ pub enum IdentityAction {
         #[arg(long)]
         id: String,
         #[arg(long)]
-        new_id: String,
+        claim: String,
+        #[arg(long)]
+        evidence: String,
+        #[arg(long)]
+        source_location: Option<String>,
+        #[arg(long)]
+        provenance_layer: String,
+        #[arg(long)]
+        algorithm: Option<String>,
+        #[arg(long)]
+        algorithm_version: Option<String>,
+        #[arg(long)]
+        confidence: Option<f64>,
         #[arg(long)]
         reviewer: String,
     },
@@ -373,16 +385,25 @@ async fn handle_isnad_async(action: IsnadAction, db_path: &str, json: bool) -> i
                     Err(err) => print_tool_error(&err, json),
                 }
             }
-            IdentityAction::Supersede { id, new_id, reviewer } => {
-                let _ = new_id;
+            IdentityAction::Supersede {
+                id,
+                claim,
+                evidence,
+                source_location,
+                provenance_layer,
+                algorithm,
+                algorithm_version,
+                confidence,
+                reviewer,
+            } => {
                 let proposal = IdentityProposalParams {
-                    claim: serde_json::json!({}),
-                    evidence: serde_json::json!({}),
-                    source_location: String::new(),
-                    provenance_layer: "B".to_string(),
-                    algorithm: None,
-                    algorithm_version: None,
-                    confidence: None,
+                    claim: parse_json(&claim),
+                    evidence: parse_json(&evidence),
+                    source_location: source_location.unwrap_or_default(),
+                    provenance_layer,
+                    algorithm,
+                    algorithm_version,
+                    confidence,
                 };
                 match backend.backend_supersede_identity(&id, &proposal, &reviewer).await {
                     Ok(tr) => {
