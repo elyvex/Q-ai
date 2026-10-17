@@ -168,6 +168,7 @@ dependencies = [
  "config",
  "domain",
  "hadith-core",
+ "isnad-graph",
  "jobs",
  "lru 0.12.5",
  "observability",
@@ -2079,6 +2080,13 @@ checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 [[package]]
 name = "isnad-graph"
 version = "0.0.0"
+dependencies = [
+ "domain",
+ "quran-graph",
+ "serde",
+ "serde_json",
+ "uuid",
+]
 
 [[package]]
 name = "itertools"
