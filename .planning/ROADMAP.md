@@ -302,7 +302,7 @@ Plans:
   4. Operator can debug any retrieval in the RAG view and reproduce the same result set
   5. Tombstoned or deactivated sources disappear from results immediately
 
-**Plans**: 4/6 plans executed
+**Plans**: 5/6 plans executed
 
 Plans:
 
@@ -310,7 +310,7 @@ Plans:
 - [x] 08-02-PLAN.md — Config (TOML) + project lifecycle (create/import) + portability
 - [x] 08-03-PLAN.md — Hybrid retrieval (FTS5 + vector, RRF, metadata filters)
 - [x] 08-04-PLAN.md — Routing transparency (route_decision + checksum) + debug view (CLI/TUI/server)
-- [ ] 08-05-PLAN.md — Tombstoning/deactivation propagation + immediate disappearance
+- [x] 08-05-PLAN.md — Tombstoning/deactivation propagation + immediate disappearance
 - [ ] 08-06-PLAN.md — Cross-surface parity + owner gates + deferrals + validation map + phase gate
 
 ### Phase 9: Comparative Scripture:
@@ -386,7 +386,7 @@ Phase 3.5 is an INSERTED gap-closure phase; it runs after Phase 4 and does not g
 | 5. Rich Quran Experience | 9/9 | Complete (owner gates OD-04/OD-11/OD-12 open) | 2026-10-09 |
 | 6. Hadith & Tafsir | 5/5 | Complete    | 2026-10-16 |
 | 7. Isnad & Narrator Research | 5/5 | Complete    | 2026-10-17 |
-| 8. Multi-RAG Platform | 4/6 | In Progress|  |
+| 8. Multi-RAG Platform | 5/6 | In Progress|  |
 | 9. Comparative Scripture | 0/TBD | Not started | - |
 | 10. Agentic Research & Tool Creation | 0/TBD | Not started | - |
 | 11. Server & Management | 0/TBD | Not started | - |
