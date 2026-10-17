@@ -539,6 +539,16 @@ async fn tool_handler(
         });
     }
 
+    // Phase 8: mutating RAG tools write durable state; deny by default on HTTP route.
+    if tool_registry::is_mutating_rag_tool(&name) && !state.allow_isnad_mutations {
+        return tool_error_response(tools::ToolError::Backend {
+            code: "QAI-RAG-0326".to_string(),
+            detail: format!(
+                "tool `{name}` mutates RAG state and is disabled on the HTTP route; set policy.tool_execution_default = \"allow\" to enable"
+            ),
+        });
+    }
+
     // The graph registry opens on the already-open handle — no backend or
     // database handle is re-opened (`GraphBackend` is the same trait the
     // application graph tools read through).

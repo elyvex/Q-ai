@@ -46,6 +46,7 @@ pub mod tafsir_tools;
 pub mod verse_link;
 pub use config::Config;
 pub use domain::redaction;
+pub use rag::RouteDecision;
 
 use observability::{Format, InitOptions, init_with_options};
 use storage::Database as _;

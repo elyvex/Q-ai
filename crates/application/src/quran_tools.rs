@@ -921,6 +921,44 @@ pub async fn dispatch_registered_tool(
             .map_err(|err| bad_params("isnad.identity_supersede", err))?;
             Ok(serialized(&reader.supersede_identity(&id, new_proposal, &reviewer).await?))
         }
+        "rag.create_project" | "rag.create" => {
+            let name = params.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let config_toml = params
+                .get("config_toml")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            Ok(serialized(&reader.rag_create_project(&name, &config_toml).await?))
+        }
+        "rag.import" => {
+            let project = params.get("project").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let docs = params.get("docs").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+            Ok(serialized(&reader.rag_import(&project, &docs).await?))
+        }
+        "rag.query" => {
+            let project = params.get("project").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let query = params.get("query").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            Ok(serialized(&reader.rag_query(&project, &query).await?))
+        }
+        "rag.debug" => {
+            let project = params.get("project").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let query = params.get("query").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            Ok(serialized(&reader.rag_debug(&project, &query).await?))
+        }
+        "rag.source_status" | "rag.source_activate" | "rag.source_deactivate" | "rag.source_tombstone" => {
+            let project = params.get("project").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let source = params.get("source").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let status = if name == "rag.source_activate" {
+                "active"
+            } else if name == "rag.source_deactivate" {
+                "deactivated"
+            } else if name == "rag.source_tombstone" {
+                "tombstoned"
+            } else {
+                params.get("status").and_then(|v| v.as_str()).unwrap_or("active")
+            };
+            Ok(serialized(&reader.rag_source_status(&project, &source, status).await?))
+        }
         _ => Err(ToolError::InvalidInput {
             tool: "quran.tool",
             detail: format!("unknown tool `{name}`"),

@@ -682,12 +682,13 @@ pub struct ToolRegistry {
     hadith_backend: Option<Arc<dyn HadithBackend>>,
     tafsir_backend: Option<Arc<dyn TafsirBackend>>,
     isnad_backend: Option<Arc<dyn IsnadBackend>>,
+    rag_backend: Option<Arc<dyn RagBackend>>,
 }
 
 impl ToolRegistry {
     /// Wrap a backend.
     pub fn new(backend: Arc<dyn QuranBackend>) -> Self {
-        Self { backend, hadith_backend: None, tafsir_backend: None, isnad_backend: None }
+        Self { backend, hadith_backend: None, tafsir_backend: None, isnad_backend: None, rag_backend: None }
     }
 
     /// Wrap a backend with a hadith backend.
@@ -700,6 +701,7 @@ impl ToolRegistry {
             hadith_backend: Some(hadith_backend),
             tafsir_backend: None,
             isnad_backend: None,
+            rag_backend: None,
         }
     }
 
@@ -718,6 +720,7 @@ impl ToolRegistry {
             hadith_backend: None,
             tafsir_backend: None,
             isnad_backend: Some(isnad_backend),
+            rag_backend: None,
         }
     }
 
@@ -730,6 +733,90 @@ impl ToolRegistry {
         self.isnad_backend.clone()
     }
 
+    /// Wrap a backend with a RAG backend.
+    pub fn with_rag(
+        backend: Arc<dyn QuranBackend>,
+        rag_backend: Arc<dyn RagBackend>,
+    ) -> Self {
+        Self {
+            backend,
+            hadith_backend: None,
+            tafsir_backend: None,
+            isnad_backend: None,
+            rag_backend: Some(rag_backend),
+        }
+    }
+
+    /// Set the RAG backend after construction.
+    pub fn set_rag_backend(&mut self, rag_backend: Arc<dyn RagBackend>) {
+        self.rag_backend = Some(rag_backend);
+    }
+
+    pub fn rag_backend(&self) -> Option<Arc<dyn RagBackend>> {
+        self.rag_backend.clone()
+    }
+
+    pub async fn rag_create_project(
+        &self,
+        name: &str,
+        config_toml: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.rag_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-RAG-0310".into(),
+            detail: "rag backend not configured".into(),
+        })?;
+        b.backend_create_project(name, config_toml).await
+    }
+
+    pub async fn rag_import(
+        &self,
+        project: &str,
+        docs: &[serde_json::Value],
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.rag_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-RAG-0310".into(),
+            detail: "rag backend not configured".into(),
+        })?;
+        b.backend_import(project, docs).await
+    }
+
+    pub async fn rag_query(
+        &self,
+        project: &str,
+        query: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.rag_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-RAG-0310".into(),
+            detail: "rag backend not configured".into(),
+        })?;
+        b.backend_query(project, query).await
+    }
+
+    pub async fn rag_debug(
+        &self,
+        project: &str,
+        query: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.rag_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-RAG-0310".into(),
+            detail: "rag backend not configured".into(),
+        })?;
+        b.backend_debug(project, query).await
+    }
+
+    pub async fn rag_source_status(
+        &self,
+        project: &str,
+        source: &str,
+        status: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.rag_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-RAG-0310".into(),
+            detail: "rag backend not configured".into(),
+        })?;
+        b.backend_source_status(project, source, status).await
+    }
+
     /// Wrap a backend with a tafsir backend.
     pub fn with_tafsir(
         backend: Arc<dyn QuranBackend>,
@@ -740,6 +827,7 @@ impl ToolRegistry {
             hadith_backend: None,
             tafsir_backend: Some(tafsir_backend),
             isnad_backend: None,
+            rag_backend: None,
         }
     }
 
@@ -1899,15 +1987,28 @@ pub trait RagBackend: Send + Sync {
 }
 
 /// RAG tool names.
-pub const RAG_TOOL_NAMES: [&str; 5] = [
+pub const RAG_TOOL_NAMES: [&str; 9] = [
     "rag.create_project",
     "rag.import",
     "rag.query",
     "rag.debug",
     "rag.source_status",
+    "rag.source_activate",
+    "rag.source_deactivate",
+    "rag.source_tombstone",
+    "rag.create",
 ];
 
 /// RAG tools that write durable state.
 pub fn is_mutating_rag_tool(name: &str) -> bool {
-    matches!(name, "rag.create_project" | "rag.import" | "rag.source_status")
+    matches!(
+        name,
+        "rag.create_project"
+            | "rag.create"
+            | "rag.import"
+            | "rag.source_status"
+            | "rag.source_activate"
+            | "rag.source_deactivate"
+            | "rag.source_tombstone"
+    )
 }

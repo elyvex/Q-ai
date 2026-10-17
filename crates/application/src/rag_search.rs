@@ -134,6 +134,15 @@ impl RagSearchService {
         &self.reader
     }
 
+    /// Convenience constructor using default local embedder + score reranker.
+    pub fn with_defaults(db: std::sync::Arc<SqliteDatabase>) -> Self {
+        let embedder: std::sync::Arc<dyn EmbeddingProvider> =
+            std::sync::Arc::new(embeddings::LocalHashEmbedding::default());
+        let reranker: std::sync::Arc<dyn Reranker> =
+            std::sync::Arc::new(reranking::ScoreReranker);
+        Self::new(db, embedder, reranker)
+    }
+
     pub async fn search(
         &self,
         project: &str,
@@ -209,6 +218,7 @@ impl RagSearchService {
 
         // apply metadata filters
         let merged = rag::hybrid::apply_filters_with_metadata(&merged, &filters, &metadata_map);
+        let merged_count = merged.len();
 
         // rerank
         let candidates: Vec<reranking::RankedCandidate> = merged
@@ -229,6 +239,7 @@ impl RagSearchService {
         let reranked = self.reranker.rerank(query_text, &candidates);
 
         // truncate
+        let reranked_count_before_truncate = reranked.len();
         let reranked = if limit == usize::MAX {
             reranked
         } else {
@@ -246,6 +257,12 @@ impl RagSearchService {
             });
         }
 
+        let excluded_count = self
+            .reader
+            .list_sources(project)
+            .await
+            .map(|srcs| srcs.iter().filter(|s| s.status != rag::SourceStatus::Active).count())
+            .unwrap_or(0);
         let ids: Vec<String> = hits.iter().map(|h| h.doc_id.clone()).collect();
         let rd = RouteDecision {
             router: proj.config.router.name.clone(),
@@ -254,6 +271,10 @@ impl RagSearchService {
             scores: hits.iter().map(|h| (h.doc_id.clone(), h.score)).collect(),
             final_ranking: ids.clone(),
             checksum: RouteDecision::compute_checksum(&proj.config.router.name, query_text, &ids),
+            candidates: docs.len(),
+            merged: merged_count,
+            reranked: reranked_count_before_truncate,
+            excluded: excluded_count,
         };
 
         Ok((hits, rd))

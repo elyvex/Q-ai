@@ -81,6 +81,10 @@ pub struct RouteDecision {
     pub scores: Vec<(String, f32)>,
     pub final_ranking: Vec<String>,
     pub checksum: String,
+    pub candidates: usize,
+    pub merged: usize,
+    pub reranked: usize,
+    pub excluded: usize,
 }
 
 impl RouteDecision {

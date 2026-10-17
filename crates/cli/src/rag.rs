@@ -1,6 +1,6 @@
 //! `qai rag …` commands (Phase 8).
 
-use clap::{Args, Subcommand};
+use clap::Subcommand;
 use std::sync::Arc;
 use application::rag_reader::RagReader;
 use storage_sqlite::SqliteDatabase;
@@ -73,18 +73,18 @@ pub fn handle_rag(action: RagAction, json: bool) -> i32 {
 }
 
 async fn handle_rag_async(action: RagAction, json: bool) -> i32 {
-    use application::quran_cli::CommandOutput;
+    use tool_registry::RagBackend;
 
     match action {
         RagAction::Create { name, dir } => {
             if name.trim().is_empty() || name.contains('/') || name.contains('\\') {
-                let o = CommandOutput::err(exit_code::USAGE, "invalid project name".to_string());
+                let o = application::quran_cli::CommandOutput::err(exit_code::USAGE, "invalid project name".to_string());
                 if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
                 return o.exit;
             }
             let project_dir = dir.unwrap_or_else(|| std::path::PathBuf::from(&name));
             if let Err(e) = std::fs::create_dir_all(&project_dir) {
-                let o = CommandOutput::err(exit_code::GENERIC, e.to_string());
+                let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string());
                 if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
                 return o.exit;
             }
@@ -107,7 +107,7 @@ path = "./docs"
 glob = "**/*.md"
 "#, name);
             if let Err(e) = std::fs::write(project_dir.join("config.toml"), &config_str) {
-                let o = CommandOutput::err(exit_code::GENERIC, e.to_string());
+                let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string());
                 if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
                 return o.exit;
             }
@@ -115,14 +115,14 @@ glob = "**/*.md"
             let db_path_str = db_path.to_string_lossy().to_string();
             let migrations = migrations_dir();
             if let Err(e) = storage_sqlite::migrate::apply_migrations(&db_path_str, &migrations).await {
-                let o = CommandOutput::err(exit_code::GENERIC, e.to_string());
+                let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string());
                 if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
                 return o.exit;
             }
             let db = match SqliteDatabase::new(&db_path_str, 4, true).await {
                 Ok(db) => Arc::new(db),
                 Err(e) => {
-                    let o = CommandOutput::err(exit_code::GENERIC, e.to_string());
+                    let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string());
                     if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
                     return o.exit;
                 }
@@ -134,7 +134,7 @@ glob = "**/*.md"
                     exit_code::OK
                 }
                 Err(e) => {
-                    let o = CommandOutput::err(exit_code::GENERIC, e.to_string());
+                    let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string());
                     if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
                     o.exit
                 }
@@ -149,7 +149,7 @@ glob = "**/*.md"
             let db = match SqliteDatabase::new(&db_path_str, 4, true).await {
                 Ok(db) => Arc::new(db),
                 Err(e) => {
-                    let o = CommandOutput::err(exit_code::GENERIC, e.to_string());
+                    let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string());
                     if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
                     return o.exit;
                 }
@@ -168,7 +168,7 @@ glob = "**/*.md"
             if docs.is_dir() {
                 walk_dir(&docs, &docs, &glob_str, &mut files);
             } else {
-                let o = CommandOutput::err(exit_code::USAGE, format!("not a directory: {}", docs.display()));
+                let o = application::quran_cli::CommandOutput::err(exit_code::USAGE, format!("not a directory: {}", docs.display()));
                 if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
                 return o.exit;
             }
@@ -179,22 +179,188 @@ glob = "**/*.md"
                     exit_code::OK
                 }
                 Err(e) => {
-                    let o = CommandOutput::err(exit_code::GENERIC, e.to_string());
+                    let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string());
                     if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
                     o.exit
                 }
             }
         }
-        RagAction::Query { project, query, filter: _, limit: _ } => {
-            println!("0 hit(s) for \"{}\"", query);
-            exit_code::OK
+        RagAction::Query { project, query, filter: _, limit } => {
+            let project_dir = std::path::PathBuf::from(&project);
+            let db_path = project_dir.join("index.db");
+            let db_path_str = db_path.to_string_lossy().to_string();
+            let migrations = migrations_dir();
+            let _ = storage_sqlite::migrate::apply_migrations(&db_path_str, &migrations).await;
+            let db = match SqliteDatabase::new(&db_path_str, 4, true).await {
+                Ok(db) => Arc::new(db),
+                Err(e) => {
+                    let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string());
+                    if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
+                    return o.exit;
+                }
+            };
+            let backend = application::rag_tools::RagToolBackend::from_db(db.clone());
+            match backend.backend_query(&project, &query).await {
+                Ok(tr) => {
+                    let hits = tr.results["hits"].as_array().cloned().unwrap_or_default();
+                    if hits.is_empty() {
+                        println!("0 hit(s) for \"{}\"", query);
+                        return exit_code::OK;
+                    }
+                    println!("{} hit(s)", hits.len());
+                    for h in &hits {
+                        let rank = h.get("rank").and_then(|v| v.as_i64()).unwrap_or(0);
+                        let doc_id = h.get("doc_id").and_then(|v| v.as_str()).unwrap_or("");
+                        let score = h.get("score").cloned().unwrap_or(serde_json::Value::Null);
+                        println!("{}. {} — {}", rank, doc_id, score);
+                    }
+                    let rd = &tr.results["route_decision"];
+                    let router = rd.get("router").and_then(|v| v.as_str()).unwrap_or("");
+                    let checksum = rd.get("checksum").and_then(|v| v.as_str()).unwrap_or("");
+                    println!("route: {} (checksum {})", router, checksum);
+                    let _ = limit;
+                    exit_code::OK
+                }
+                Err(e) => {
+                    let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string());
+                    if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
+                    o.exit
+                }
+            }
         }
         RagAction::Debug { project, query } => {
-            println!("route: hybrid-rrf");
-            exit_code::OK
+            let project_dir = std::path::PathBuf::from(&project);
+            let db_path = project_dir.join("index.db");
+            let db_path_str = db_path.to_string_lossy().to_string();
+            let migrations = migrations_dir();
+            let _ = storage_sqlite::migrate::apply_migrations(&db_path_str, &migrations).await;
+            let db = match SqliteDatabase::new(&db_path_str, 4, true).await {
+                Ok(db) => Arc::new(db),
+                Err(e) => {
+                    let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string());
+                    if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
+                    return o.exit;
+                }
+            };
+            let backend = application::rag_tools::RagToolBackend::from_db(db.clone());
+            match backend.backend_debug(&project, &query).await {
+                Ok(tr) => {
+                    let rd = &tr.results["route_decision"];
+                    let router = rd.get("router").and_then(|v| v.as_str()).unwrap_or("");
+                    println!("route: {}", router);
+                    let tools = rd.get("tools").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+                    let tools_str: Vec<String> = tools.iter().filter_map(|v| v.as_str().map(String::from)).collect();
+                    println!("  tools: {}", tools_str.join(", "));
+                    let sources = rd.get("sources").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+                    let sources_str: Vec<String> = sources.iter().filter_map(|v| v.as_str().map(String::from)).collect();
+                    println!("  sources: {}", sources_str.join(", "));
+                    let candidates = rd.get("candidates").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let merged = rd.get("merged").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let reranked = rd.get("reranked").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let final_count = rd.get("final_ranking").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+                    println!("  candidates: {}", candidates);
+                    println!("  merged (RRF): {}", merged);
+                    println!("  reranked: {}", reranked);
+                    println!("  final: {}", final_count);
+                    let checksum = rd.get("checksum").and_then(|v| v.as_str()).unwrap_or("");
+                    println!("  checksum: {}", checksum);
+                    let excluded = rd.get("excluded").and_then(|v| v.as_u64()).unwrap_or(0);
+                    if excluded > 0 {
+                        println!("  excluded (non-active): {}", excluded);
+                    }
+                    exit_code::OK
+                }
+                Err(e) => {
+                    let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string());
+                    if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
+                    o.exit
+                }
+            }
         }
         RagAction::Source { action } => {
-            let _ = action;
+            match action {
+                SourceAction::Activate { project, source } => {
+                    let project_dir = std::path::PathBuf::from(&project);
+                    let db_path = project_dir.join("index.db");
+                    let db_path_str = db_path.to_string_lossy().to_string();
+                    let migrations = migrations_dir();
+                    let _ = storage_sqlite::migrate::apply_migrations(&db_path_str, &migrations).await;
+                    let db = match SqliteDatabase::new(&db_path_str, 4, true).await {
+                        Ok(db) => Arc::new(db),
+                        Err(e) => {
+                            let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string());
+                            if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
+                            return o.exit;
+                        }
+                    };
+                    let backend = application::rag_tools::RagToolBackend::from_db(db.clone());
+                    match backend.backend_source_status(&project, &source, "active").await {
+                        Ok(_) => { println!("activated {}", source); exit_code::OK }
+                        Err(e) => { let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string()); if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); } o.exit }
+                    };
+                }
+                SourceAction::Deactivate { project, source } => {
+                    let project_dir = std::path::PathBuf::from(&project);
+                    let db_path = project_dir.join("index.db");
+                    let db_path_str = db_path.to_string_lossy().to_string();
+                    let migrations = migrations_dir();
+                    let _ = storage_sqlite::migrate::apply_migrations(&db_path_str, &migrations).await;
+                    let db = match SqliteDatabase::new(&db_path_str, 4, true).await {
+                        Ok(db) => Arc::new(db),
+                        Err(e) => {
+                            let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string());
+                            if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
+                            return o.exit;
+                        }
+                    };
+                    let backend = application::rag_tools::RagToolBackend::from_db(db.clone());
+                    match backend.backend_source_status(&project, &source, "deactivated").await {
+                        Ok(_) => { println!("deactivated {}", source); exit_code::OK }
+                        Err(e) => { let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string()); if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); } o.exit }
+                    };
+                }
+                SourceAction::Tombstone { project, source, yes } => {
+                    if !yes {
+                        // interactive confirmation
+                        if !json {
+                            print!("Type APPROVE to tombstone `{}`: ", source);
+                            use std::io::Write;
+                            let _ = std::io::stdout().flush();
+                        }
+                        let mut input = String::new();
+                        if std::io::stdin().read_line(&mut input).is_err() || input.trim() != "APPROVE" {
+                            println!("refusing to tombstone without --yes");
+                            return exit_code::GENERIC;
+                        }
+                    }
+                    let project_dir = std::path::PathBuf::from(&project);
+                    let db_path = project_dir.join("index.db");
+                    let db_path_str = db_path.to_string_lossy().to_string();
+                    let migrations = migrations_dir();
+                    let _ = storage_sqlite::migrate::apply_migrations(&db_path_str, &migrations).await;
+                    let db = match SqliteDatabase::new(&db_path_str, 4, true).await {
+                        Ok(db) => Arc::new(db),
+                        Err(e) => {
+                            let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string());
+                            if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
+                            return o.exit;
+                        }
+                    };
+                    let backend = application::rag_tools::RagToolBackend::from_db(db.clone());
+                    match backend.backend_source_status(&project, &source, "tombstoned").await {
+                        Ok(tr) => {
+                            let seq = tr.results.get("audit_seq").and_then(|v| v.as_i64()).unwrap_or(0);
+                            println!("tombstoned {} (audit #{})", source, seq);
+                            exit_code::OK
+                        }
+                        Err(e) => {
+                            let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string());
+                            if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
+                            o.exit
+                        }
+                    };
+                }
+            }
             exit_code::OK
         }
     }

@@ -53,6 +53,7 @@ pub trait RagReader: Send + Sync {
     async fn list_sources(&self, project: &str) -> Result<Vec<RagSource>, RagReaderError>;
     async fn insert_source(&self, source: &RagSource) -> Result<(), RagReaderError>;
     async fn set_source_status(&self, project: &str, source: &str, status: &str) -> Result<(), RagReaderError>;
+    async fn source_audit_seq(&self, project: &str, source: &str) -> Result<Option<i64>, RagReaderError>;
     async fn insert_document(&self, doc: &RagDocument, embedding: &[f32]) -> Result<(), RagReaderError>;
     async fn list_documents(&self, project: &str) -> Result<Vec<RagDocument>, RagReaderError>;
     async fn search_fts(&self, project: &str, query: &str) -> Result<Vec<String>, RagReaderError>;
@@ -252,9 +253,20 @@ impl RagReader for SqliteRagReader {
         }
         let pid = self.project_id(project).await?;
         let tombstoned_at = if status == "tombstoned" { Some(Self::now()) } else { None };
-        sqlx::query("UPDATE rag_sources SET status = ?, tombstoned_at = ? WHERE id = ? AND project_id = ?")
+        let audit_seq = if status == "tombstoned" {
+            let max_seq: Option<i64> = sqlx::query_scalar("SELECT MAX(audit_seq) FROM rag_sources WHERE project_id = ?")
+                .bind(&pid)
+                .fetch_one(self.db.read_pool())
+                .await
+                .map_err(|e| RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
+            Some(max_seq.unwrap_or(0) + 1)
+        } else {
+            None
+        };
+        sqlx::query("UPDATE rag_sources SET status = ?, tombstoned_at = ?, audit_seq = COALESCE(?, audit_seq) WHERE id = ? AND project_id = ?")
             .bind(status)
             .bind(tombstoned_at)
+            .bind(audit_seq)
             .bind(source)
             .bind(&pid)
             .execute(self.db.write_pool())
@@ -271,6 +283,18 @@ impl RagReader for SqliteRagReader {
                 .map_err(|e| RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
         }
         Ok(())
+    }
+
+    async fn source_audit_seq(&self, project: &str, source: &str) -> Result<Option<i64>, RagReaderError> {
+        let pid = self.project_id(project).await?;
+        let seq: Option<i64> = sqlx::query_scalar("SELECT audit_seq FROM rag_sources WHERE id = ? AND project_id = ?")
+            .bind(source)
+            .bind(&pid)
+            .fetch_optional(self.db.read_pool())
+            .await
+            .map_err(|e| RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?
+            .flatten();
+        Ok(seq)
     }
 
     async fn insert_document(&self, doc: &RagDocument, embedding: &[f32]) -> Result<(), RagReaderError> {

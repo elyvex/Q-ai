@@ -12,6 +12,7 @@ use tool_registry::RagBackend;
 use tools::{AnalysisSource, ToolError, ToolResult, reproducibility, research_checksum};
 
 use crate::rag_reader::{RagReader, SqliteRagReader};
+use storage_sqlite::SqliteDatabase;
 use crate::rag_search::RagSearchService;
 
 pub struct RagToolBackend {
@@ -25,6 +26,12 @@ impl RagToolBackend {
     }
     pub fn reader(&self) -> &SqliteRagReader {
         &self.reader
+    }
+
+    pub fn from_db(db: std::sync::Arc<SqliteDatabase>) -> Self {
+        let reader = std::sync::Arc::new(crate::rag_reader::SqliteRagReader::new(db.clone()));
+        let search = std::sync::Arc::new(crate::rag_search::RagSearchService::with_defaults(db));
+        Self::new(reader, search)
     }
 }
 
@@ -136,6 +143,10 @@ impl RagBackend for RagToolBackend {
             "scores": rd.scores,
             "final_ranking": rd.final_ranking,
             "checksum": rd.checksum,
+            "candidates": rd.candidates,
+            "merged": rd.merged,
+            "reranked": rd.reranked,
+            "excluded": rd.excluded,
         });
         let results = serde_json::json!({ "hits": hits_arr, "route_decision": rd_json });
         let payload = results.clone();
@@ -165,8 +176,9 @@ impl RagBackend for RagToolBackend {
     async fn backend_source_status(&self, project: &str, source: &str, status: &str) -> Result<ToolResult<Value>, ToolError> {
         let started = Instant::now();
         self.reader.set_source_status(project, source, status).await.map_err(reader_err)?;
+        let audit_seq = self.reader.source_audit_seq(project, source).await.map_err(reader_err)?;
         let q = serde_json::json!({ "project": project, "source": source, "status": status });
-        let results = serde_json::json!({ "ok": true });
+        let results = serde_json::json!({ "ok": true, "audit_seq": audit_seq });
         let payload = results.clone();
         let result = ToolResult {
             tool_name: "rag.source_status".to_string(),
