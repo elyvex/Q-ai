@@ -568,9 +568,23 @@ impl App {
             },
             Screen::AnnotationReview => render_annotation_review(frame, &self.annotations),
             Screen::RagDebug => render_rag_debug(frame, &RagState::Unavailable),
-            Screen::IsnadNarrator => render_annotation_review(frame, &self.annotations),
-            Screen::IsnadTrace => render_hint(frame, "Isnad trace", "trace an isnad chain"),
-            Screen::IsnadIdentity => render_annotation_review(frame, &self.annotations),
+            // WR-09: the isnad screens are palette reachable but no
+            // narrator-selection / trace-input / identity-queue state exists
+            // in the cockpit yet, so each renders an honest, actionable empty
+            // state — never the annotation-review rows, which are unrelated.
+            Screen::IsnadNarrator => render_hint(
+                frame,
+                "Isnad narrator",
+                "no narrator selected yet — use `qai isnad narrator --id <slug>`",
+            ),
+            Screen::IsnadTrace => {
+                render_hint(frame, "Isnad trace", "use `qai isnad trace --from <id> --to <id>`")
+            }
+            Screen::IsnadIdentity => render_hint(
+                frame,
+                "Isnad identity",
+                "use `qai isnad identity` to propose or review assertions",
+            ),
         }
     }
 }
