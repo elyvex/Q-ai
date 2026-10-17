@@ -31,6 +31,9 @@ pub enum Screen {
     Doctor,
     Jobs,
     Index,
+    IsnadNarrator,
+    IsnadTrace,
+    IsnadIdentity,
 }
 
 impl Screen {
@@ -46,6 +49,9 @@ impl Screen {
             Screen::Doctor,
             Screen::Jobs,
             Screen::Index,
+            Screen::IsnadNarrator,
+            Screen::IsnadTrace,
+            Screen::IsnadIdentity,
         ]
     }
 
@@ -61,6 +67,9 @@ impl Screen {
             Screen::Doctor => "Doctor",
             Screen::Jobs => "Jobs",
             Screen::Index => "Index",
+            Screen::IsnadNarrator => "Isnad narrator",
+            Screen::IsnadTrace => "Isnad trace",
+            Screen::IsnadIdentity => "Isnad identity",
         }
     }
 
@@ -76,6 +85,9 @@ impl Screen {
             "doctor" => Some(Screen::Doctor),
             "jobs" => Some(Screen::Jobs),
             "index" => Some(Screen::Index),
+            "isnad-narrator" => Some(Screen::IsnadNarrator),
+            "isnad-trace" => Some(Screen::IsnadTrace),
+            "isnad-identity" => Some(Screen::IsnadIdentity),
             _ => None,
         }
     }

@@ -568,6 +568,9 @@ impl App {
             },
             Screen::AnnotationReview => render_annotation_review(frame, &self.annotations),
             Screen::RagDebug => render_rag_debug(frame, &RagState::Unavailable),
+            Screen::IsnadNarrator => render_annotation_review(frame, &self.annotations),
+            Screen::IsnadTrace => render_hint(frame, "Isnad trace", "trace an isnad chain"),
+            Screen::IsnadIdentity => render_annotation_review(frame, &self.annotations),
         }
     }
 }

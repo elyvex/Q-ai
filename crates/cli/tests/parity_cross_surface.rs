@@ -377,6 +377,7 @@ async fn legs() -> Legs {
         ),
         graph: Arc::new(FileGraphBackend::structural(&seed.db_path)),
         verse_links: None,
+        isnad: None,
     };
     Legs { reader_registry, graph_registry, state, seed }
 }
