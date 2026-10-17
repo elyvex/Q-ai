@@ -44,7 +44,15 @@ impl IsnadBackend for IsnadToolBackend {
             code: e.code().to_string(),
             detail: e.to_string(),
         })?;
-        let rijal = self.reader.get_rijal_sources(id).await.unwrap_or_default();
+        // Secondary read: a failure must be visible as explicit incompleteness
+        // (never conflated with "genuinely zero scholars").
+        let (rijal, rijal_warning) = match self.reader.get_rijal_sources(id).await {
+            Ok(v) => (v, None),
+            Err(e) => (
+                Vec::new(),
+                Some(format!("rijal sources unavailable [{}]: {}", e.code(), e)),
+            ),
+        };
         let results = json!({ "narrator": narrator, "rijal_sources": rijal });
         let payload = results.clone();
         let query = json!({ "id": id });
@@ -62,7 +70,7 @@ impl IsnadBackend for IsnadToolBackend {
             }],
             results,
             confidence: None,
-            warnings: Vec::new(),
+            warnings: rijal_warning.into_iter().collect(),
             execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
             reproducibility: reproducibility(
                 "isnad.narrator",

@@ -312,3 +312,39 @@ async fn non_narrator_edge_endpoint_is_skipped_not_fatal() {
     );
 }
 
+/// WR-02 regression: a failing secondary rijal read must surface as an
+/// explicit warning, not be silently downgraded to "zero scholars".
+#[tokio::test]
+async fn rijal_read_failure_is_an_explicit_warning() {
+    use application::isnad_tools::IsnadToolBackend;
+    use tool_registry::IsnadBackend;
+
+    let (_dir, db) = migrated_db().await;
+    sqlx::query(
+        "INSERT INTO narrators (id, slug, primary_name, name_variants_json, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .bind("narrator:x")
+    .bind("x")
+    .bind("X")
+    .bind("[]")
+    .bind("{}")
+    .bind("2026-01-01T00:00:00Z")
+    .execute(db.write_pool())
+    .await
+    .unwrap();
+
+    // Force the secondary read to fail.
+    sqlx::query("DROP TABLE narrator_rijal_sources").execute(db.write_pool()).await.unwrap();
+
+    let reader: Arc<dyn IsnadReader> = Arc::new(IsnadReaderService::new(db.clone()));
+    let backend = IsnadToolBackend::new(reader);
+    let result = backend.backend_get_narrator("narrator:x").await.unwrap();
+    assert_eq!(result.results["rijal_sources"].as_array().unwrap().len(), 0);
+    assert!(
+        result.warnings.iter().any(|w| w.contains("rijal sources unavailable")),
+        "expected an explicit rijal warning, got {:?}",
+        result.warnings
+    );
+}
+
+
