@@ -207,39 +207,10 @@ impl IsnadReader for IsnadReaderService {
     ) -> Result<Assertion, IsnadReaderError> {
         let id = format!("nia:{}", uuid::Uuid::new_v4());
         let now = chrono_now();
-        let layer = match proposal.provenance_layer.as_str() {
-            "D" => "D",
-            _ => "B",
-        };
+        let layer = validate_proposal(&proposal)?;
         let confidence = proposal.confidence;
-        validate_confidence(confidence)?;
-        // D-gate: if D, require algorithm+version+confidence
-        if layer == "D"
-            && (proposal.algorithm.is_none()
-                || proposal.algorithm_version.is_none()
-                || confidence.is_none())
-        {
-            return Err(IsnadReaderError::InvalidInput(
-                "D-layer requires algorithm, version, confidence".into(),
-            ));
-        }
-        sqlx::query(
-            r#"INSERT INTO narrator_identity_assertions
-               (id, assertion_kind, claim_json, evidence_json, source_location, reviewer, decision, decided_at, supersedes_id, provenance_layer, algorithm, algorithm_version, confidence, created_at)
-               VALUES (?, 'narrator_identity', ?, ?, ?, NULL, 'pending', NULL, NULL, ?, ?, ?, ?, ?)"#
-        )
-        .bind(&id)
-        .bind(serde_json::to_string(&proposal.claim).unwrap_or_default())
-        .bind(serde_json::to_string(&proposal.evidence).unwrap_or_default())
-        .bind(&proposal.source_location)
-        .bind(layer)
-        .bind(&proposal.algorithm)
-        .bind(&proposal.algorithm_version)
-        .bind(confidence)
-        .bind(&now)
-        .execute(self.db.write_pool())
-        .await
-        .map_err(|e| IsnadReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
+        Self::insert_identity_assertion(self.db.write_pool(), &id, &proposal, layer, None, &now)
+            .await?;
         Ok(Assertion {
             id,
             kind: AssertionKind::NarratorIdentity,
@@ -273,27 +244,97 @@ impl IsnadReader for IsnadReaderService {
         new_proposal: IsnadIdentityProposal,
         reviewer: &str,
     ) -> Result<Assertion, IsnadReaderError> {
-        // mark old superseded
-        self.decide(id, reviewer, "superseded").await?;
-        // create new with supersedes_id = id
-        let mut assertion = self.propose_identity(new_proposal).await?;
-        // update supersedes_id in DB
-        sqlx::query("UPDATE narrator_identity_assertions SET supersedes_id = ? WHERE id = ?")
-            .bind(id)
-            .bind(&assertion.id)
-            .execute(self.db.write_pool())
-            .await
-            .map_err(|e| {
-                IsnadReaderError::Storage(StorageError::ConstraintViolation {
-                    message: e.to_string(),
-                })
-            })?;
-        assertion.supersedes_id = Some(id.to_string());
-        Ok(assertion)
+        if reviewer.trim().is_empty() {
+            return Err(IsnadReaderError::InvalidInput("reviewer must not be empty".into()));
+        }
+        // Validate everything BEFORE the first write so a rejected proposal
+        // cannot leave the predecessor tombstoned with no successor (T-07-04).
+        let layer = validate_proposal(&new_proposal)?;
+        let new_id = format!("nia:{}", uuid::Uuid::new_v4());
+        let now = chrono_now();
+
+        // One transaction: tombstone predecessor + create the chained
+        // successor. Either both land or neither does.
+        let mut tx = self.db.write_pool().begin().await.map_err(storage_err)?;
+        let decided = sqlx::query(
+            "UPDATE narrator_identity_assertions SET decision = 'superseded', reviewer = ?, decided_at = ? WHERE id = ? AND decision = 'pending'",
+        )
+        .bind(reviewer.trim())
+        .bind(&now)
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(storage_err)?;
+        if decided.rows_affected() == 0 {
+            let exists: Option<String> =
+                sqlx::query_scalar("SELECT id FROM narrator_identity_assertions WHERE id = ?")
+                    .bind(id)
+                    .fetch_optional(&mut *tx)
+                    .await
+                    .unwrap_or(None);
+            return Err(if exists.is_some() {
+                IsnadReaderError::CheckViolation("already decided".into())
+            } else {
+                IsnadReaderError::NotFound(id.to_string())
+            });
+        }
+        // supersedes_id is bound in the INSERT — never a follow-up UPDATE.
+        Self::insert_identity_assertion(&mut *tx, &new_id, &new_proposal, layer, Some(id), &now)
+            .await?;
+        tx.commit().await.map_err(storage_err)?;
+
+        let confidence = new_proposal.confidence;
+        Ok(Assertion {
+            id: new_id,
+            kind: AssertionKind::NarratorIdentity,
+            claim: new_proposal.claim,
+            evidence: new_proposal.evidence,
+            source_location: new_proposal.source_location,
+            reviewer: None,
+            decision: AssertionDecision::Pending,
+            decided_at: None,
+            supersedes_id: Some(id.to_string()),
+            layer: if layer == "D" { ProvenanceLayer::D } else { ProvenanceLayer::B },
+            algorithm: new_proposal.algorithm,
+            algorithm_version: new_proposal.algorithm_version,
+            confidence,
+            created_at: now,
+        })
     }
 }
 
 impl IsnadReaderService {
+    /// Single INSERT for a narrator-identity assertion. `supersedes_id` is
+    /// bound here (never a follow-up UPDATE) so a supersession is one write.
+    async fn insert_identity_assertion(
+        exec: impl sqlx::Executor<'_, Database = sqlx::Sqlite>,
+        id: &str,
+        proposal: &IsnadIdentityProposal,
+        layer: &str,
+        supersedes_id: Option<&str>,
+        created_at: &str,
+    ) -> Result<(), IsnadReaderError> {
+        sqlx::query(
+            r#"INSERT INTO narrator_identity_assertions
+               (id, assertion_kind, claim_json, evidence_json, source_location, reviewer, decision, decided_at, supersedes_id, provenance_layer, algorithm, algorithm_version, confidence, created_at)
+               VALUES (?, 'narrator_identity', ?, ?, ?, NULL, 'pending', NULL, ?, ?, ?, ?, ?, ?)"#,
+        )
+        .bind(id)
+        .bind(serde_json::to_string(&proposal.claim).unwrap_or_default())
+        .bind(serde_json::to_string(&proposal.evidence).unwrap_or_default())
+        .bind(&proposal.source_location)
+        .bind(supersedes_id)
+        .bind(layer)
+        .bind(&proposal.algorithm)
+        .bind(&proposal.algorithm_version)
+        .bind(proposal.confidence)
+        .bind(created_at)
+        .execute(exec)
+        .await
+        .map_err(storage_err)?;
+        Ok(())
+    }
+
     async fn decide(
         &self,
         id: &str,
@@ -334,6 +375,32 @@ fn chrono_now() -> String {
     Timestamp::now().to_string()
 }
 
+fn storage_err(e: sqlx::Error) -> IsnadReaderError {
+    IsnadReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() })
+}
+
+/// Effective provenance layer, defaulting anything that is not `D` to `B`.
+fn layer_of(provenance_layer: &str) -> &'static str {
+    if provenance_layer == "D" { "D" } else { "B" }
+}
+
+/// Shared pre-write validation for `propose` and `supersede`: confidence
+/// domain (WR-06) plus the D-layer algorithm/version/confidence gate.
+fn validate_proposal(proposal: &IsnadIdentityProposal) -> Result<&'static str, IsnadReaderError> {
+    let layer = layer_of(&proposal.provenance_layer);
+    validate_confidence(proposal.confidence)?;
+    if layer == "D"
+        && (proposal.algorithm.is_none()
+            || proposal.algorithm_version.is_none()
+            || proposal.confidence.is_none())
+    {
+        return Err(IsnadReaderError::InvalidInput(
+            "D-layer requires algorithm, version, confidence".into(),
+        ));
+    }
+    Ok(layer)
+}
+
 /// WR-06: confidence is attributed research metadata; reject values outside
 /// the `0.0..=1.0` domain (and non-finite values) before they reach the DB,
 /// whose CHECK only enforces NOT NULL.
@@ -347,4 +414,3 @@ fn validate_confidence(confidence: Option<f64>) -> Result<(), IsnadReaderError> 
     }
     Ok(())
 }
-

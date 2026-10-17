@@ -116,6 +116,58 @@ async fn supersede_creates_new_referencing_old_old_retained() {
     assert!(exists.is_some());
 }
 
+/// WR-03 regression: a supersede that is refused after validation must not
+/// leave the predecessor tombstoned or a successor row behind.
+#[tokio::test]
+async fn failed_supersede_leaves_no_orphan_tombstone() {
+    let (_dir, db) = migrated_db().await;
+    let svc = IsnadReaderService::new(db.clone());
+    let old = svc.propose_identity(proposal()).await.unwrap();
+    svc.accept_identity(&old.id, "rev-1").await.unwrap();
+
+    let count = || async {
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM narrator_identity_assertions")
+            .fetch_one(db.read_pool())
+            .await
+            .unwrap()
+    };
+    let before = count().await;
+
+    let res = svc.supersede_identity(&old.id, proposal(), "rev-2").await;
+    assert!(res.is_err(), "superseding an already-decided assertion must fail");
+
+    assert_eq!(before, count().await, "a refused supersede must write nothing");
+    let decision: String =
+        sqlx::query_scalar("SELECT decision FROM narrator_identity_assertions WHERE id = ?")
+            .bind(&old.id)
+            .fetch_one(db.read_pool())
+            .await
+            .unwrap();
+    assert_eq!(decision, "accepted", "the predecessor must not be tombstoned");
+}
+
+/// WR-03 regression: the successor's `supersedes_id` is bound in the INSERT
+/// (no follow-up UPDATE), so it is present the moment the row exists.
+#[tokio::test]
+async fn supersede_binds_supersedes_id_in_the_insert() {
+    let (_dir, db) = migrated_db().await;
+    let svc = IsnadReaderService::new(db.clone());
+    let old = svc.propose_identity(proposal()).await.unwrap();
+    let mut next = proposal();
+    next.claim = serde_json::json!({"name": "Y", "replacement": true});
+    let new = svc.supersede_identity(&old.id, next, "rev-1").await.unwrap();
+
+    let (supersedes, claim): (Option<String>, String) = sqlx::query_as(
+        "SELECT supersedes_id, claim_json FROM narrator_identity_assertions WHERE id = ?",
+    )
+    .bind(&new.id)
+    .fetch_one(db.read_pool())
+    .await
+    .unwrap();
+    assert_eq!(supersedes.as_deref(), Some(old.id.as_str()));
+    assert!(claim.contains("replacement"), "the replacement claim is persisted: {claim}");
+}
+
 #[tokio::test]
 async fn supersession_chain_resolves_latest() {
     let (_dir, db) = migrated_db().await;
