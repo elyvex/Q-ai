@@ -250,6 +250,7 @@ fn assertion_kind_str(kind: AssertionKind) -> &'static str {
         AssertionKind::EntityLink => "entity_link",
         AssertionKind::FamilyLink => "family_link",
         AssertionKind::Import => "import",
+        AssertionKind::NarratorIdentity => "narrator_identity",
     }
 }
 
