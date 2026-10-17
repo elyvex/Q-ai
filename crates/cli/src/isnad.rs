@@ -231,9 +231,18 @@ async fn handle_isnad_async(action: IsnadAction, db_path: &str, json: bool) -> i
                                 let conf = attrs.get("confidence").and_then(|v| v.as_f64());
                                 let conf_str =
                                     conf.map(|c| format!("{:.2}", c)).unwrap_or_default();
+                                // D-07/07-01-PLAN:174 — the (uncertain) suffix applies
+                                // only until the link is confirmed; the label IS the
+                                // uncertainty signal (rejected links never reach here).
+                                let label = attrs
+                                    .get("label")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("uncertain");
+                                let suffix =
+                                    if label == "confirmed" { "" } else { " (uncertain)" };
                                 human.push_str(&format!(
-                                    "  {} -{}-> {} {} {} (uncertain)\n",
-                                    src, edge, dst, prov, conf_str
+                                    "  {} -{}-> {} {} {}{}\n",
+                                    src, edge, dst, prov, conf_str, suffix
                                 ));
                             }
                         }
