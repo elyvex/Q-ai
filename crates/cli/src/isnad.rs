@@ -270,8 +270,14 @@ async fn handle_isnad_async(action: IsnadAction, db_path: &str, json: bool) -> i
                 algorithm_version,
                 confidence,
             } => {
-                let claim_v = parse_json(&claim);
-                let evidence_v = parse_json(&evidence);
+                let claim_v = match parse_json(&claim) {
+                    Ok(v) => v,
+                    Err(e) => return usage_error(&format!("--claim: {e}"), json),
+                };
+                let evidence_v = match parse_json(&evidence) {
+                    Ok(v) => v,
+                    Err(e) => return usage_error(&format!("--evidence: {e}"), json),
+                };
                 let params = IdentityProposalParams {
                     claim: claim_v,
                     evidence: evidence_v,
@@ -404,9 +410,17 @@ async fn handle_isnad_async(action: IsnadAction, db_path: &str, json: bool) -> i
                 confidence,
                 reviewer,
             } => {
+                let claim_v = match parse_json(&claim) {
+                    Ok(v) => v,
+                    Err(e) => return usage_error(&format!("--claim: {e}"), json),
+                };
+                let evidence_v = match parse_json(&evidence) {
+                    Ok(v) => v,
+                    Err(e) => return usage_error(&format!("--evidence: {e}"), json),
+                };
                 let proposal = IdentityProposalParams {
-                    claim: parse_json(&claim),
-                    evidence: parse_json(&evidence),
+                    claim: claim_v,
+                    evidence: evidence_v,
                     source_location: source_location.unwrap_or_default(),
                     provenance_layer,
                     algorithm,
@@ -455,8 +469,21 @@ async fn fetch_decided(db: &Arc<SqliteDatabase>, id: &str) -> (Option<String>, O
     }
 }
 
-fn parse_json(s: &str) -> serde_json::Value {
-    serde_json::from_str(s).unwrap_or_else(|_| serde_json::Value::String(s.to_string()))
+/// WR-10: reject malformed `--claim`/`--evidence` JSON with a usage error
+/// rather than silently downgrading it to a JSON string, which would persist
+/// a non-object claim under the `claim_json` column.
+fn parse_json(s: &str) -> Result<serde_json::Value, String> {
+    serde_json::from_str(s).map_err(|e| format!("invalid JSON: {e}"))
+}
+
+/// Print a usage error (human or JSON) and return the usage exit code.
+fn usage_error(detail: &str, json: bool) -> i32 {
+    if json {
+        println!("{}", serde_json::json!({ "error": detail }));
+    } else {
+        println!("{detail}");
+    }
+    exit_code::USAGE
 }
 
 fn print_tool_error(err: &tools::ToolError, json: bool) -> i32 {
