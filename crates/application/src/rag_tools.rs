@@ -175,7 +175,7 @@ impl RagBackend for RagToolBackend {
 
     async fn backend_source_status(&self, project: &str, source: &str, status: &str) -> Result<ToolResult<Value>, ToolError> {
         let started = Instant::now();
-        self.reader.set_source_status(project, source, status).await.map_err(reader_err)?;
+        self.reader.set_source_status(project, source, status, None).await.map_err(reader_err)?;
         let audit_seq = self.reader.source_audit_seq(project, source).await.map_err(reader_err)?;
         let q = serde_json::json!({ "project": project, "source": source, "status": status });
         let results = serde_json::json!({ "ok": true, "audit_seq": audit_seq });

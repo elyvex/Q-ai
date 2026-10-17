@@ -52,7 +52,7 @@ pub trait RagReader: Send + Sync {
     async fn import_documents(&self, project: &str, source_path: &str, glob: &str, files: Vec<(String, String, serde_json::Value)>) -> Result<(usize, usize), RagReaderError>;
     async fn list_sources(&self, project: &str) -> Result<Vec<RagSource>, RagReaderError>;
     async fn insert_source(&self, source: &RagSource) -> Result<(), RagReaderError>;
-    async fn set_source_status(&self, project: &str, source: &str, status: &str) -> Result<(), RagReaderError>;
+    async fn set_source_status(&self, project: &str, source: &str, status: &str, audit_seq: Option<i64>) -> Result<(), RagReaderError>;
     async fn source_audit_seq(&self, project: &str, source: &str) -> Result<Option<i64>, RagReaderError>;
     async fn insert_document(&self, doc: &RagDocument, embedding: &[f32]) -> Result<(), RagReaderError>;
     async fn list_documents(&self, project: &str) -> Result<Vec<RagDocument>, RagReaderError>;
@@ -247,41 +247,115 @@ impl RagReader for SqliteRagReader {
         Ok(())
     }
 
-    async fn set_source_status(&self, project: &str, source: &str, status: &str) -> Result<(), RagReaderError> {
+    async fn set_source_status(&self, project: &str, source: &str, status: &str, audit_seq: Option<i64>) -> Result<(), RagReaderError> {
         if rag::SourceStatus::from_str(status).is_none() {
             return Err(RagReaderError::InvalidStatus(status.to_string()));
         }
-        let pid = self.project_id(project).await?;
-        let tombstoned_at = if status == "tombstoned" { Some(Self::now()) } else { None };
-        let audit_seq = if status == "tombstoned" {
-            let max_seq: Option<i64> = sqlx::query_scalar("SELECT MAX(audit_seq) FROM rag_sources WHERE project_id = ?")
-                .bind(&pid)
-                .fetch_one(self.db.read_pool())
-                .await
+        // Single transaction for status update + propagation deletes.
+        let mut tx = self.db.write_pool().begin().await
+            .map_err(|e| RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
+
+        let pid: String = match sqlx::query_scalar("SELECT id FROM rag_projects WHERE name = ?")
+            .bind(project)
+            .fetch_optional(&mut *tx)
+            .await
+        {
+            Ok(Some(v)) => v,
+            Ok(None) => {
+                let _ = tx.rollback().await;
+                return Err(RagReaderError::ProjectNotFound(project.to_string()));
+            }
+            Err(e) => {
+                let _ = tx.rollback().await;
+                return Err(RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }));
+            }
+        };
+
+        let current: Option<String> = match sqlx::query_scalar("SELECT status FROM rag_sources WHERE id = ? AND project_id = ?")
+            .bind(source)
+            .bind(&pid)
+            .fetch_optional(&mut *tx)
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = tx.rollback().await;
+                return Err(RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }));
+            }
+        };
+        let Some(current_status) = current else {
+            let _ = tx.rollback().await;
+            return Err(RagReaderError::Storage(StorageError::NotFound { urn: format!("rag_source:{source}") }));
+        };
+
+        // Idempotent: already in target status.
+        if current_status == status {
+            tx.commit().await
                 .map_err(|e| RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
-            Some(max_seq.unwrap_or(0) + 1)
+            return Ok(());
+        }
+
+        // Tombstoned is terminal: cannot reactivate.
+        if current_status == "tombstoned" && status != "tombstoned" {
+            let _ = tx.rollback().await;
+            return Err(RagReaderError::InvalidStatus(format!("cannot reactivate tombstoned source: {source}")));
+        }
+
+        let tombstoned_at = if status == "tombstoned" { Some(Self::now()) } else { None };
+
+        let audit_val = if status == "tombstoned" {
+            match audit_seq {
+                Some(v) => Some(v),
+                None => {
+                    let max_seq: Option<i64> = sqlx::query_scalar("SELECT MAX(audit_seq) FROM rag_sources WHERE project_id = ?")
+                        .bind(&pid)
+                        .fetch_one(&mut *tx)
+                        .await
+                        .map_err(|e| RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
+                    Some(max_seq.unwrap_or(0) + 1)
+                }
+            }
         } else {
             None
         };
-        sqlx::query("UPDATE rag_sources SET status = ?, tombstoned_at = ?, audit_seq = COALESCE(?, audit_seq) WHERE id = ? AND project_id = ?")
+
+        if let Err(e) = sqlx::query("UPDATE rag_sources SET status = ?, tombstoned_at = ?, audit_seq = COALESCE(?, audit_seq) WHERE id = ? AND project_id = ?")
             .bind(status)
             .bind(tombstoned_at)
-            .bind(audit_seq)
+            .bind(audit_val)
             .bind(source)
             .bind(&pid)
-            .execute(self.db.write_pool())
+            .execute(&mut *tx)
             .await
-            .map_err(|e| RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
+        {
+            let _ = tx.rollback().await;
+            return Err(RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }));
+        }
+
         if status == "deactivated" || status == "tombstoned" {
-            self.delete_embeddings_for_source(project, source).await?;
-            let pid = self.project_id(project).await?;
-            sqlx::query("DELETE FROM rag_documents_fts WHERE doc_id IN (SELECT id FROM rag_documents WHERE project_id = ? AND source_id = ?)")
+            // delete embeddings
+            if let Err(e) = sqlx::query("DELETE FROM rag_embeddings WHERE doc_id IN (SELECT id FROM rag_documents WHERE project_id = ? AND source_id = ?)")
                 .bind(&pid)
                 .bind(source)
-                .execute(self.db.write_pool())
+                .execute(&mut *tx)
                 .await
-                .map_err(|e| RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
+            {
+                let _ = tx.rollback().await;
+                return Err(RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }));
+            }
+            if let Err(e) = sqlx::query("DELETE FROM rag_documents_fts WHERE doc_id IN (SELECT id FROM rag_documents WHERE project_id = ? AND source_id = ?)")
+                .bind(&pid)
+                .bind(source)
+                .execute(&mut *tx)
+                .await
+            {
+                let _ = tx.rollback().await;
+                return Err(RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }));
+            }
         }
+
+        tx.commit().await
+            .map_err(|e| RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
         Ok(())
     }
 
@@ -368,45 +442,49 @@ impl RagReader for SqliteRagReader {
 
     async fn search_fts(&self, project: &str, query: &str) -> Result<Vec<String>, RagReaderError> {
         let pid = self.project_id(project).await?;
-        // active doc ids only
-        let active_docs: Vec<String> = sqlx::query_scalar(
-            r#"SELECT d.id FROM rag_documents d
-               JOIN rag_sources s ON s.id = d.source_id AND s.project_id = d.project_id
-               WHERE d.project_id = ? AND s.status = 'active'"#,
-        )
-        .bind(&pid)
-        .fetch_all(self.db.read_pool())
-        .await
-        .map_err(|e| RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
-        let set: std::collections::HashSet<String> = active_docs.into_iter().collect();
 
         // Escape FTS5 query by quoting as a phrase (mitigate injection).
         let escaped = format!("\"{}\"", query.replace('"', "\"\""));
 
-        let rows = sqlx::query("SELECT doc_id FROM rag_documents_fts WHERE text MATCH ? ORDER BY bm25(rag_documents_fts)")
+        // SQL-level active filter: only active sources' docs.
+        let sql = r#"SELECT f.doc_id FROM rag_documents_fts f
+            WHERE f.text MATCH ?
+              AND f.doc_id IN (
+                SELECT d.id FROM rag_documents d
+                JOIN rag_sources s ON s.id = d.source_id AND s.project_id = d.project_id
+                WHERE d.project_id = ? AND s.status = 'active'
+              )
+            ORDER BY bm25(rag_documents_fts)"#;
+
+        let rows = sqlx::query(sql)
             .bind(&escaped)
+            .bind(&pid)
             .fetch_all(self.db.read_pool())
             .await;
         let mut out = Vec::new();
         if let Ok(rows) = rows {
             for row in rows {
                 let id: String = row.get("doc_id");
-                if set.contains(&id) {
-                    out.push(id);
-                }
+                out.push(id);
             }
         } else {
             // fallback: try raw query
-            let rows = sqlx::query("SELECT doc_id FROM rag_documents_fts WHERE text MATCH ?")
+            let fallback_sql = r#"SELECT f.doc_id FROM rag_documents_fts f
+                WHERE f.text MATCH ?
+                  AND f.doc_id IN (
+                    SELECT d.id FROM rag_documents d
+                    JOIN rag_sources s ON s.id = d.source_id AND s.project_id = d.project_id
+                    WHERE d.project_id = ? AND s.status = 'active'
+                  )"#;
+            let rows = sqlx::query(fallback_sql)
                 .bind(query)
+                .bind(&pid)
                 .fetch_all(self.db.read_pool())
                 .await;
             if let Ok(rows) = rows {
                 for row in rows {
                     let id: String = row.get("doc_id");
-                    if set.contains(&id) {
-                        out.push(id);
-                    }
+                    out.push(id);
                 }
             }
         }
