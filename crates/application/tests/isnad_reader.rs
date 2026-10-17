@@ -375,3 +375,64 @@ async fn rijal_read_failure_is_an_explicit_warning() {
         result.warnings
     );
 }
+
+/// WR-07 regression: once the isnad backend is wired onto the shared
+/// registry, the shared dispatcher routes `isnad.*` through it (the single
+/// name→tool table the server and CLI now share). Without the wiring the
+/// same dispatch fails with the typed backend-not-configured error — never a
+/// silent success.
+#[tokio::test]
+async fn isnad_tools_dispatch_through_the_shared_registry() {
+    use application::isnad_tools::IsnadToolBackend;
+    use application::quran_tools::{ReaderToolBackend, dispatch_registered_tool};
+
+    let (dir, db) = migrated_db().await;
+    sqlx::query(
+        "INSERT INTO narrators (id, slug, primary_name, name_variants_json, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .bind("narrator:x")
+    .bind("x")
+    .bind("X")
+    .bind("[]")
+    .bind("{}")
+    .bind("2026-01-01T00:00:00Z")
+    .execute(db.write_pool())
+    .await
+    .unwrap();
+
+    let path = dir.path().join("qai.db");
+    let reader =
+        Arc::new(application::quran_cli::open_reader(path.to_str().unwrap()).await.unwrap());
+    // The graph registry is unused for `isnad.*`; any registry works here.
+    let graph_registry = ReaderToolBackend::registry(reader.clone());
+
+    // Unwired: the shared table reaches the arm but the backend is absent.
+    let unwired = ReaderToolBackend::registry(reader.clone());
+    assert!(
+        dispatch_registered_tool(
+            &unwired,
+            &graph_registry,
+            "isnad.narrator",
+            serde_json::json!({ "id": "narrator:x" }),
+        )
+        .await
+        .is_err(),
+        "an unwired registry must fail closed, not silently succeed"
+    );
+
+    // Wired: the same dispatch now serves the narrator through the backend.
+    let mut wired = ReaderToolBackend::registry(reader);
+    let isnad_reader: Arc<dyn IsnadReader> = Arc::new(IsnadReaderService::new(db.clone()));
+    wired.set_isnad_backend(Arc::new(IsnadToolBackend::new(isnad_reader)));
+
+    let value = dispatch_registered_tool(
+        &wired,
+        &graph_registry,
+        "isnad.narrator",
+        serde_json::json!({ "id": "narrator:x" }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(value["tool_name"], "isnad.narrator");
+    assert!(value["research_checksum"]["hex"].is_string());
+}

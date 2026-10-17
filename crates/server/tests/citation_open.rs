@@ -101,7 +101,6 @@ fn state() -> AppState {
         lexicon: Arc::new(StubLexicon),
         graph: Arc::new(StubGraph),
         verse_links: None,
-        isnad: None,
     }
 }
 

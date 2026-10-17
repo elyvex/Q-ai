@@ -39,7 +39,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use quran_core::{AyahOptions, AyahView, Surah};
 use serde::{Deserialize, Serialize};
-use tool_registry::{BackendMeta, IsnadBackend, ToolRegistry};
+use tool_registry::{BackendMeta, ToolRegistry};
 use tools::{ToolError, ToolResult};
 
 /// API version string.
@@ -168,8 +168,6 @@ pub struct AppState {
     pub graph: Arc<dyn application::quran_graph_api::GraphBackend>,
     /// Optional verse-link service (Phase 6 SC3).
     pub verse_links: Option<std::sync::Arc<application::verse_link::VerseLinkService>>,
-    /// Optional isnad reader service (Phase 7).
-    pub isnad: Option<std::sync::Arc<application::isnad_reader::IsnadReaderService>>,
 }
 
 fn empty_meta() -> Meta {
@@ -517,120 +515,6 @@ async fn context_handler(
 /// (projected, never recomputed — T-05-02). Unknown names and bad params
 /// bodies are typed 4xx errors through the existing `tool_status` mapping
 /// (T-05-23: never a panic, never an empty 200).
-async fn run_isnad_dispatch(
-    backend: &application::isnad_tools::IsnadToolBackend,
-    name: &str,
-    params: serde_json::Value,
-) -> Result<tools::ToolResult<serde_json::Value>, tools::ToolError> {
-    match name {
-        "isnad.narrator" => {
-            let p: tool_registry::GetNarratorParams = match serde_json::from_value(params) {
-                Ok(v) => v,
-                Err(e) => {
-                    return Err(tools::ToolError::InvalidInput {
-                        tool: "isnad.narrator",
-                        detail: format!("bad params: {e}"),
-                    });
-                }
-            };
-            backend.backend_get_narrator(&p.id).await
-        }
-        "isnad.rijal" => {
-            let p: tool_registry::GetNarratorParams = match serde_json::from_value(params) {
-                Ok(v) => v,
-                Err(e) => {
-                    return Err(tools::ToolError::InvalidInput {
-                        tool: "isnad.rijal",
-                        detail: format!("bad params: {e}"),
-                    });
-                }
-            };
-            backend.backend_get_rijal(&p.id).await
-        }
-        "isnad.trace" => {
-            let p: tool_registry::TraceParams = match serde_json::from_value(params) {
-                Ok(v) => v,
-                Err(e) => {
-                    return Err(tools::ToolError::InvalidInput {
-                        tool: "isnad.trace",
-                        detail: format!("bad params: {e}"),
-                    });
-                }
-            };
-            backend.backend_trace(&p).await
-        }
-        "isnad.identity_propose" => {
-            let p: tool_registry::IdentityProposalParams = match serde_json::from_value(params) {
-                Ok(v) => v,
-                Err(e) => {
-                    return Err(tools::ToolError::InvalidInput {
-                        tool: "isnad.identity_propose",
-                        detail: format!("bad params: {e}"),
-                    });
-                }
-            };
-            backend.backend_propose_identity(&p).await
-        }
-        "isnad.identity_accept" => {
-            let p: tool_registry::IdentityDecisionParams = match serde_json::from_value(params) {
-                Ok(v) => v,
-                Err(e) => {
-                    return Err(tools::ToolError::InvalidInput {
-                        tool: "isnad.identity_accept",
-                        detail: format!("bad params: {e}"),
-                    });
-                }
-            };
-            backend.backend_accept_identity(&p).await
-        }
-        "isnad.identity_reject" => {
-            let p: tool_registry::IdentityDecisionParams = match serde_json::from_value(params) {
-                Ok(v) => v,
-                Err(e) => {
-                    return Err(tools::ToolError::InvalidInput {
-                        tool: "isnad.identity_reject",
-                        detail: format!("bad params: {e}"),
-                    });
-                }
-            };
-            backend.backend_reject_identity(&p).await
-        }
-        "isnad.identity_dispute" => {
-            let p: tool_registry::IdentityDecisionParams = match serde_json::from_value(params) {
-                Ok(v) => v,
-                Err(e) => {
-                    return Err(tools::ToolError::InvalidInput {
-                        tool: "isnad.identity_dispute",
-                        detail: format!("bad params: {e}"),
-                    });
-                }
-            };
-            backend.backend_dispute_identity(&p).await
-        }
-        "isnad.identity_supersede" => {
-            let id = params.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let reviewer =
-                params.get("reviewer").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let new_proposal: tool_registry::IdentityProposalParams = match serde_json::from_value(
-                params.get("new_proposal").cloned().unwrap_or(serde_json::Value::Null),
-            ) {
-                Ok(v) => v,
-                Err(e) => {
-                    return Err(tools::ToolError::InvalidInput {
-                        tool: "isnad.identity_supersede",
-                        detail: format!("bad params: {e}"),
-                    });
-                }
-            };
-            backend.backend_supersede_identity(&id, &new_proposal, &reviewer).await
-        }
-        other => Err(tools::ToolError::InvalidInput {
-            tool: "quran.tool",
-            detail: format!("unknown tool `{other}`"),
-        }),
-    }
-}
-
 async fn tool_handler(
     State(state): State<AppState>,
     Path(name): Path<String>,
@@ -642,33 +526,10 @@ async fn tool_handler(
     let graph_registry =
         application::quran_graph_tools::GraphToolBackend::registry(state.graph.clone());
 
-    // Phase 7: isnad tools may be served through the AppState.isnad handle
-    // (mirroring the verse_links pattern) when the ToolRegistry was not wired
-    // with an isnad backend. Intercept here so the generic route resolves
-    // them with the same ToolResult envelope.
-    if name.starts_with("isnad.")
-        && let Some(service) = state.isnad.as_ref().cloned()
-    {
-        let reader: std::sync::Arc<dyn application::isnad_reader::IsnadReader> = service;
-        let backend = application::isnad_tools::IsnadToolBackend::new(reader);
-        let result = run_isnad_dispatch(&backend, &name, params.clone()).await;
-        match result {
-            Ok(value) => {
-                let checksum = value.research_checksum.hex.clone();
-                let mut meta = empty_meta();
-                meta.research_checksum = format!("sha256:{checksum}");
-                let data = serde_json::to_value(&value).unwrap_or(serde_json::Value::Null);
-                return json_response(
-                    StatusCode::OK,
-                    &Envelope { api_version: API_VERSION, data, meta },
-                    None,
-                    false,
-                );
-            }
-            Err(error) => return tool_error_response(error),
-        }
-    }
-
+    // Phase 7 (WR-07): `isnad.*` is dispatched through the SAME shared
+    // name→tool table as every other tool — the serve arm wires the isnad
+    // backend onto `state.tools` (the reader registry), so identity and
+    // `research_checksum` cannot drift between CLI and HTTP.
     match application::quran_tools::dispatch_registered_tool(
         &state.tools,
         &graph_registry,
