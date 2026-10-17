@@ -226,10 +226,8 @@ async fn handle_isnad_async(action: IsnadAction, db_path: &str, json: bool) -> i
                             }
                         }
                     }
-                    if truncated {
-                        if let Some(r) = reason {
-                            human.push_str(&format!("incomplete: {}\n", r));
-                        }
+                    if let Some(r) = reason {
+                        human.push_str(&format!("incomplete: {}\n", r));
                     }
                     let jsonv = serde_json::to_value(&tr).unwrap_or(serde_json::Value::Null);
                     if json {

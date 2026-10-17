@@ -182,13 +182,22 @@ impl IsnadReader for IsnadReaderService {
         // need mutable for bounded_paths? method takes &self? bounded_paths takes &self in trait? GraphStore::bounded_paths(&self,...). ok.
         let authz = quran_graph::AuthzScope::all_visible();
         let cancel = std::sync::atomic::AtomicBool::new(false);
-        let res = store
+        let skipped = store.skipped_edges();
+        let mut res = store
             .bounded_paths(src, dst, budgets.max_hops, &budgets, &cancel, &authz)
             .map_err(|e| {
                 IsnadReaderError::Storage(StorageError::ConstraintViolation {
                     message: e.to_string(),
                 })
             })?;
+        // CR-01: edges whose endpoint is not a loaded narrator node are
+        // skipped at load; report that rather than returning a silently
+        // partial "complete" trace.
+        if skipped > 0 && !res.truncated {
+            res.incomplete_reason = Some(format!(
+                "{skipped} isnad edge(s) skipped: endpoint not in the narrator projection"
+            ));
+        }
         Ok(res)
     }
 

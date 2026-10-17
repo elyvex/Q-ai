@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use application::isnad_reader::{IsnadReader, IsnadReaderService};
-use isnad_graph::{ConfidenceBand, NarratorId, NarratorRecord};
+use isnad_graph::{ConfidenceBand, NarratorId};
 use storage_sqlite::SqliteDatabase;
 use tempfile::tempdir;
 
@@ -251,3 +251,64 @@ async fn d_layer_gate_requires_fields() {
     assert_eq!(ConfidenceBand::of(0.7), ConfidenceBand::Medium);
     assert_eq!(ConfidenceBand::of(0.69), ConfidenceBand::Low);
 }
+
+/// CR-01 regression: an `isnad_edges` row whose endpoint is not a loaded
+/// narrator node (e.g. `narrator:* -NARRATES-> hadith:*`, the D-07-03
+/// backfill shape) must be skipped-with-count, never abort the projection.
+#[tokio::test]
+async fn non_narrator_edge_endpoint_is_skipped_not_fatal() {
+    use quran_graph::QueryBudgets;
+
+    let (_dir, db) = migrated_db().await;
+    for slug in ["a", "b"] {
+        sqlx::query(
+            "INSERT INTO narrators (id, slug, primary_name, name_variants_json, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(format!("narrator:{slug}"))
+        .bind(slug)
+        .bind(slug.to_uppercase())
+        .bind("[]")
+        .bind("{}")
+        .bind("2026-01-01T00:00:00Z")
+        .execute(db.write_pool())
+        .await
+        .unwrap();
+    }
+    for (edge_id, src, edge, dst) in [
+        ("e1", "narrator:a", "TRANSMITS", "narrator:b"),
+        ("e2", "narrator:b", "NARRATES", "hadith:1"),
+    ] {
+        sqlx::query(
+            "INSERT INTO isnad_edges (id, src_stable_id, edge, dst_stable_id, assertion_id, provenance_layer, confidence, label, algorithm, algorithm_version, reviewer, decided_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(edge_id)
+        .bind(src)
+        .bind(edge)
+        .bind(dst)
+        .bind(Option::<String>::None)
+        .bind("B")
+        .bind(Option::<f64>::None)
+        .bind("uncertain")
+        .bind(Option::<String>::None)
+        .bind(Option::<String>::None)
+        .bind(Option::<String>::None)
+        .bind(Option::<String>::None)
+        .bind("2026-01-01T00:00:00Z")
+        .execute(db.write_pool())
+        .await
+        .unwrap();
+    }
+
+    let svc = IsnadReaderService::new(db.clone());
+    let res = svc
+        .trace_paths("narrator:a", "narrator:b", 10, QueryBudgets::default())
+        .await
+        .expect("dangling hadith endpoint must not abort the projection");
+    assert!(!res.paths.is_empty(), "the narrator->narrator path survives");
+    assert!(
+        res.incomplete_reason.as_deref().unwrap_or("").contains("skipped"),
+        "skipped edge must be reported: {:?}",
+        res.incomplete_reason
+    );
+}
+

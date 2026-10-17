@@ -1,8 +1,15 @@
 //! SQLite-backed [`GraphStore`](quran_graph::GraphStore) read-view for isnad
-//! (Phase 7). Loads `narrators` + `isnad_edges` into a `MemGraphStore`
-//! under projection family `isnad-narrator-v1`. Tombstoned edges
-//! (rejected/superseded assertions, or label 'rejected') are excluded at
-//! load time; disputed stays effective.
+//! (Phase 7). Loads `narrators` as nodes and `isnad_edges` as edges into a
+//! `MemGraphStore` under projection family `isnad-narrator-v1`.
+//!
+//! Load-time filtering: edges labelled `rejected` are dropped, and edges
+//! whose `src`/`dst` is not one of the loaded narrator nodes are skipped
+//! (counted in [`SqliteIsnadGraphStore::skipped_edges`], never fatal) —
+//! the schema places no FK on `src_stable_id`/`dst_stable_id`, so a
+//! `narrator:* -NARRATES-> hadith:*` row (D-07-03 backfill) must not abort
+//! the whole projection. Assertion tombstoning (superseded/rejected/
+//! disputed assertions) is applied at traversal time by
+//! `MemGraphStore::is_edge_visible`; disputed stays effective.
 
 use std::sync::atomic::AtomicBool;
 
@@ -16,6 +23,9 @@ use storage_sqlite::SqliteDatabase;
 pub struct SqliteIsnadGraphStore {
     projection_id: String,
     inner: MemGraphStore,
+    /// `isnad_edges` rows skipped because an endpoint was not a loaded
+    /// narrator node (surfaced as explicit incompleteness by readers).
+    skipped_edges: usize,
 }
 
 impl SqliteIsnadGraphStore {
@@ -98,6 +108,11 @@ impl SqliteIsnadGraphStore {
             }
             nodes.push(GraphNode::new(stable_id, NodeKind::Narrator, attrs));
         }
+        // Endpoints that exist in this projection: only loaded narrators are
+        // nodes, so an edge referencing any other stable id (e.g. `hadith:*`
+        // from the D-07-03 backfill) cannot be staged.
+        let known: std::collections::BTreeSet<String> =
+            nodes.iter().map(|n| n.stable_id.clone()).collect();
         inner
             .stage_nodes(nodes)
             .map_err(|e| GraphError::BuildFailed { stage: "open".into(), detail: e.to_string() })?;
@@ -110,9 +125,19 @@ impl SqliteIsnadGraphStore {
         .await
         .map_err(|e| GraphError::BuildFailed { stage: "open".into(), detail: e.to_string() })?;
         let mut edges = Vec::new();
+        let mut skipped_edges = 0usize;
         for row in &edge_rows {
             let label: String = row.get("label");
             if label == "rejected" {
+                continue;
+            }
+            let edge_str: String = row.get("edge");
+            let src: String = row.get("src_stable_id");
+            let dst: String = row.get("dst_stable_id");
+            // Skip-with-count, never abort: an endpoint outside the loaded
+            // narrator set is a dangling edge for this projection.
+            if !known.contains(&src) || !known.contains(&dst) {
+                skipped_edges += 1;
                 continue;
             }
             let assertion_id: Option<String> = row.get("assertion_id");
@@ -123,9 +148,6 @@ impl SqliteIsnadGraphStore {
             {
                 continue;
             }
-            let edge_str: String = row.get("edge");
-            let src: String = row.get("src_stable_id");
-            let dst: String = row.get("dst_stable_id");
             let attrs = serde_json::json!({
                 "label": label,
                 "confidence": row.get::<Option<f64>,_>("confidence"),
@@ -139,7 +161,7 @@ impl SqliteIsnadGraphStore {
             .stage_edges(edges)
             .map_err(|e| GraphError::BuildFailed { stage: "open".into(), detail: e.to_string() })?;
 
-        Ok(Self { projection_id, inner })
+        Ok(Self { projection_id, inner, skipped_edges })
     }
 
     pub fn manifest(&self) -> ProjectionManifest {
@@ -159,6 +181,12 @@ impl SqliteIsnadGraphStore {
 
     pub fn get_assertion(&self, id: &str) -> Option<&Assertion> {
         self.inner.get_assertion(id)
+    }
+
+    /// Count of `isnad_edges` rows skipped at load because an endpoint was
+    /// not a loaded narrator node.
+    pub fn skipped_edges(&self) -> usize {
+        self.skipped_edges
     }
 }
 
