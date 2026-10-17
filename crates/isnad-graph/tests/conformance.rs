@@ -1,8 +1,6 @@
 //! Phase 7 (plan 07-04) — isnad-graph conformance tests.
 
-use isnad_graph::{
-    Assertion, AssertionDecision, AssertionKind, ConfidenceBand, NarratorId, NarratorRecord,
-};
+use isnad_graph::{AssertionDecision, AssertionKind, ConfidenceBand};
 use quran_graph::{
     Assertion as GraphAssertion, AuthzScope, GraphEdge, GraphNode, GraphStore, MemGraphStore,
     NodeKind, ProvenanceLayer, QueryBudgets, is_allowed_edge, up_to_k_paths,
@@ -128,9 +126,9 @@ fn budget_exhaustion_propagates_truncated() {
     }
     for i in 0..39 {
         edges.push(GraphEdge::structural(
-            &format!("n{}", i),
+            format!("n{}", i),
             "TRANSMITS",
-            &format!("n{}", i + 1),
+            format!("n{}", i + 1),
             serde_json::json!({}),
         ));
     }

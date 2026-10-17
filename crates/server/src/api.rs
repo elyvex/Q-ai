@@ -2674,7 +2674,7 @@ mod tests {
 
     #[test]
     fn envelope_meta_serializes_with_required_keys() {
-        let mut meta = empty_meta();
+        let meta = empty_meta();
         let value = serde_json::to_value(&meta).unwrap();
         for key in [
             "edition",
