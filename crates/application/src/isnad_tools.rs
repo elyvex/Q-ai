@@ -80,7 +80,10 @@ impl IsnadBackend for IsnadToolBackend {
                 &json!({}),
                 &payload,
             )
-            .expect("checksum"),
+            .map_err(|e| ToolError::Backend {
+                code: "QAI-ISNAD-0001".into(),
+                detail: e.to_string(),
+            })?,
         })
     }
     async fn backend_get_rijal(
@@ -126,7 +129,10 @@ impl IsnadBackend for IsnadToolBackend {
                 &json!({}),
                 &payload,
             )
-            .expect("checksum"),
+            .map_err(|e| ToolError::Backend {
+                code: "QAI-ISNAD-0001".into(),
+                detail: e.to_string(),
+            })?,
         })
     }
     async fn backend_trace(
@@ -175,7 +181,10 @@ impl IsnadBackend for IsnadToolBackend {
                 &json!({}),
                 &payload,
             )
-            .expect("checksum"),
+            .map_err(|e| ToolError::Backend {
+                code: "QAI-ISNAD-0001".into(),
+                detail: e.to_string(),
+            })?,
         })
     }
     async fn backend_propose_identity(
@@ -222,7 +231,10 @@ impl IsnadBackend for IsnadToolBackend {
                 &json!({}),
                 &payload,
             )
-            .expect("checksum"),
+            .map_err(|e| ToolError::Backend {
+                code: "QAI-ISNAD-0001".into(),
+                detail: e.to_string(),
+            })?,
         })
     }
     async fn backend_accept_identity(
@@ -302,7 +314,10 @@ impl IsnadBackend for IsnadToolBackend {
                 &json!({}),
                 &payload,
             )
-            .expect("checksum"),
+            .map_err(|e| ToolError::Backend {
+                code: "QAI-ISNAD-0001".into(),
+                detail: e.to_string(),
+            })?,
         })
     }
 }
@@ -349,7 +364,10 @@ impl IsnadToolBackend {
                 &json!({}),
                 &payload,
             )
-            .expect("checksum"),
+            .map_err(|e| ToolError::Backend {
+                code: "QAI-ISNAD-0001".into(),
+                detail: e.to_string(),
+            })?,
         })
     }
 }
