@@ -167,6 +167,7 @@ dependencies = [
  "citations",
  "config",
  "domain",
+ "embeddings",
  "hadith-core",
  "isnad-graph",
  "jobs",
@@ -180,6 +181,8 @@ dependencies = [
  "quran-morphology",
  "quran-normalization",
  "quran-search",
+ "rag",
+ "reranking",
  "serde",
  "serde_json",
  "sources",
@@ -1318,6 +1321,12 @@ dependencies = [
 [[package]]
 name = "embeddings"
 version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.20",
+]
 
 [[package]]
 name = "encoding_rs"
@@ -3371,6 +3380,17 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 [[package]]
 name = "rag"
 version = "0.0.0"
+dependencies = [
+ "async-trait",
+ "embeddings",
+ "reranking",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.20",
+ "toml",
+ "uuid",
+]
 
 [[package]]
 name = "rand"
@@ -3689,6 +3709,11 @@ dependencies = [
 [[package]]
 name = "reranking"
 version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+]
 
 [[package]]
 name = "retrieval"
