@@ -26,12 +26,12 @@ requirements-completed: [REQ-isnad-narrator-graph]
 actuals:
   tokens: 12000
   tasks: 2
-  commits: 1
+  commits: 3
 metrics:
   duration: 0
   completed: 2026-10-17
   tasks: 2
-  commits: 1
+  commits: 3
 status: complete
 ---
 
