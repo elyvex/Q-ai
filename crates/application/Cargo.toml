@@ -18,6 +18,9 @@ observability = { path = "../observability" }
 hadith-core = { path = "../hadith-core" }
 isnad-graph = { path = "../isnad-graph" }
 tafsir = { path = "../tafsir" }
+rag = { path = "../rag" }
+embeddings = { path = "../embeddings" }
+reranking = { path = "../reranking" }
 quran-core = { path = "../quran-core" }
 quran-corpus = { path = "../quran-corpus" }
 quran-search = { path = "../quran-search" }

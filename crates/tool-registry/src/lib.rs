@@ -1862,3 +1862,52 @@ pub fn is_mutating_isnad_tool(name: &str) -> bool {
             | "isnad.identity_supersede"
     )
 }
+
+// ============================================================================
+// RAG tools (Phase 8)
+// ============================================================================
+
+/// The RAG backend trait: implemented by `application` for the real reader.
+#[async_trait]
+pub trait RagBackend: Send + Sync {
+    async fn backend_create_project(
+        &self,
+        name: &str,
+        config_toml: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_import(
+        &self,
+        project: &str,
+        docs: &[serde_json::Value],
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_query(
+        &self,
+        project: &str,
+        query: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_debug(
+        &self,
+        project: &str,
+        query: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_source_status(
+        &self,
+        project: &str,
+        source: &str,
+        status: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+}
+
+/// RAG tool names.
+pub const RAG_TOOL_NAMES: [&str; 5] = [
+    "rag.create_project",
+    "rag.import",
+    "rag.query",
+    "rag.debug",
+    "rag.source_status",
+];
+
+/// RAG tools that write durable state.
+pub fn is_mutating_rag_tool(name: &str) -> bool {
+    matches!(name, "rag.create_project" | "rag.import" | "rag.source_status")
+}
