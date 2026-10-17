@@ -1,6 +1,8 @@
 //! Phase 7 (plan 07-04) — isnad-graph conformance tests.
 
-use isnad_graph::{Assertion, AssertionDecision, AssertionKind, ConfidenceBand, NarratorId, NarratorRecord};
+use isnad_graph::{
+    Assertion, AssertionDecision, AssertionKind, ConfidenceBand, NarratorId, NarratorRecord,
+};
 use quran_graph::{
     Assertion as GraphAssertion, AuthzScope, GraphEdge, GraphNode, GraphStore, MemGraphStore,
     NodeKind, ProvenanceLayer, QueryBudgets, is_allowed_edge, up_to_k_paths,
@@ -105,7 +107,8 @@ fn up_to_k_paths_returns_assertion_id_per_edge() {
     let cancel = AtomicBool::new(false);
     let authz = AuthzScope::all_visible();
     let budgets = QueryBudgets::default();
-    let res = up_to_k_paths(&store, "narrator:a", "hadith:1", 5, &budgets, &cancel, &authz).unwrap();
+    let res =
+        up_to_k_paths(&store, "narrator:a", "hadith:1", 5, &budgets, &cancel, &authz).unwrap();
     assert!(!res.truncated);
     assert!(!res.paths.is_empty());
     for path in &res.paths {
@@ -137,9 +140,7 @@ fn budget_exhaustion_propagates_truncated() {
     let cancel = AtomicBool::new(false);
     let authz = AuthzScope::all_visible();
     let tight = QueryBudgets { max_nodes: 5, ..QueryBudgets::default() };
-    let res = store
-        .bounded_paths("n0", "n39", 40, &tight, &cancel, &authz)
-        .unwrap();
+    let res = store.bounded_paths("n0", "n39", 40, &tight, &cancel, &authz).unwrap();
     assert!(res.truncated);
     assert!(res.incomplete_reason.is_some());
     assert!(!res.incomplete_reason.as_ref().unwrap().is_empty());

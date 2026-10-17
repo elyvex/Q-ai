@@ -55,9 +55,9 @@ macro_rules! typed_id {
         }
 
         impl FromStr for $name {
-            type Err = crate::primitives::UuidParseError;
+            type Err = $crate::primitives::UuidParseError;
             fn from_str(s: &str) -> Result<Self, Self::Err> {
-                let id = Uuid::parse_str(s).map_err(|_| crate::primitives::UuidParseError)?;
+                let id = Uuid::parse_str(s).map_err(|_| $crate::primitives::UuidParseError)?;
                 Ok(Self(id))
             }
         }

@@ -695,7 +695,12 @@ impl ToolRegistry {
         backend: Arc<dyn QuranBackend>,
         hadith_backend: Arc<dyn HadithBackend>,
     ) -> Self {
-        Self { backend, hadith_backend: Some(hadith_backend), tafsir_backend: None, isnad_backend: None }
+        Self {
+            backend,
+            hadith_backend: Some(hadith_backend),
+            tafsir_backend: None,
+            isnad_backend: None,
+        }
     }
 
     /// Set the hadith backend after construction.
@@ -708,7 +713,12 @@ impl ToolRegistry {
         backend: Arc<dyn QuranBackend>,
         isnad_backend: Arc<dyn IsnadBackend>,
     ) -> Self {
-        Self { backend, hadith_backend: None, tafsir_backend: None, isnad_backend: Some(isnad_backend) }
+        Self {
+            backend,
+            hadith_backend: None,
+            tafsir_backend: None,
+            isnad_backend: Some(isnad_backend),
+        }
     }
 
     /// Set the isnad backend after construction.
@@ -725,7 +735,12 @@ impl ToolRegistry {
         backend: Arc<dyn QuranBackend>,
         tafsir_backend: Arc<dyn TafsirBackend>,
     ) -> Self {
-        Self { backend, hadith_backend: None, tafsir_backend: Some(tafsir_backend), isnad_backend: None }
+        Self {
+            backend,
+            hadith_backend: None,
+            tafsir_backend: Some(tafsir_backend),
+            isnad_backend: None,
+        }
     }
 
     /// Set the tafsir backend after construction.
@@ -1258,35 +1273,82 @@ impl ToolRegistry {
 
     /// `isnad.narrator`: fetch a narrator record + rijal sources.
     pub async fn get_narrator(&self, id: &str) -> Result<ToolResult<serde_json::Value>, ToolError> {
-        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend { code: "QAI-ISNAD-0310".into(), detail: "isnad backend not configured".into() })?;
+        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-ISNAD-0310".into(),
+            detail: "isnad backend not configured".into(),
+        })?;
         b.backend_get_narrator(id).await
     }
-    pub async fn get_rijal(&self, narrator_id: &str) -> Result<ToolResult<serde_json::Value>, ToolError> {
-        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend { code: "QAI-ISNAD-0310".into(), detail: "isnad backend not configured".into() })?;
+    pub async fn get_rijal(
+        &self,
+        narrator_id: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-ISNAD-0310".into(),
+            detail: "isnad backend not configured".into(),
+        })?;
         b.backend_get_rijal(narrator_id).await
     }
-    pub async fn trace(&self, params: TraceParams) -> Result<ToolResult<serde_json::Value>, ToolError> {
-        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend { code: "QAI-ISNAD-0310".into(), detail: "isnad backend not configured".into() })?;
+    pub async fn trace(
+        &self,
+        params: TraceParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-ISNAD-0310".into(),
+            detail: "isnad backend not configured".into(),
+        })?;
         b.backend_trace(&params).await
     }
-    pub async fn propose_identity(&self, params: IdentityProposalParams) -> Result<ToolResult<serde_json::Value>, ToolError> {
-        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend { code: "QAI-ISNAD-0310".into(), detail: "isnad backend not configured".into() })?;
+    pub async fn propose_identity(
+        &self,
+        params: IdentityProposalParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-ISNAD-0310".into(),
+            detail: "isnad backend not configured".into(),
+        })?;
         b.backend_propose_identity(&params).await
     }
-    pub async fn accept_identity(&self, params: IdentityDecisionParams) -> Result<ToolResult<serde_json::Value>, ToolError> {
-        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend { code: "QAI-ISNAD-0310".into(), detail: "isnad backend not configured".into() })?;
+    pub async fn accept_identity(
+        &self,
+        params: IdentityDecisionParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-ISNAD-0310".into(),
+            detail: "isnad backend not configured".into(),
+        })?;
         b.backend_accept_identity(&params).await
     }
-    pub async fn reject_identity(&self, params: IdentityDecisionParams) -> Result<ToolResult<serde_json::Value>, ToolError> {
-        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend { code: "QAI-ISNAD-0310".into(), detail: "isnad backend not configured".into() })?;
+    pub async fn reject_identity(
+        &self,
+        params: IdentityDecisionParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-ISNAD-0310".into(),
+            detail: "isnad backend not configured".into(),
+        })?;
         b.backend_reject_identity(&params).await
     }
-    pub async fn dispute_identity(&self, params: IdentityDecisionParams) -> Result<ToolResult<serde_json::Value>, ToolError> {
-        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend { code: "QAI-ISNAD-0310".into(), detail: "isnad backend not configured".into() })?;
+    pub async fn dispute_identity(
+        &self,
+        params: IdentityDecisionParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-ISNAD-0310".into(),
+            detail: "isnad backend not configured".into(),
+        })?;
         b.backend_dispute_identity(&params).await
     }
-    pub async fn supersede_identity(&self, id: &str, new_proposal: IdentityProposalParams, reviewer: &str) -> Result<ToolResult<serde_json::Value>, ToolError> {
-        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend { code: "QAI-ISNAD-0310".into(), detail: "isnad backend not configured".into() })?;
+    pub async fn supersede_identity(
+        &self,
+        id: &str,
+        new_proposal: IdentityProposalParams,
+        reviewer: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-ISNAD-0310".into(),
+            detail: "isnad backend not configured".into(),
+        })?;
         b.backend_supersede_identity(id, &new_proposal, reviewer).await
     }
 }
@@ -1717,18 +1779,44 @@ pub struct IdentityDecisionParams {
 /// The isnad backend trait.
 #[async_trait]
 pub trait IsnadBackend: Send + Sync {
-    async fn backend_get_narrator(&self, id: &str) -> Result<ToolResult<serde_json::Value>, ToolError>;
-    async fn backend_get_rijal(&self, narrator_id: &str) -> Result<ToolResult<serde_json::Value>, ToolError>;
-    async fn backend_trace(&self, params: &TraceParams) -> Result<ToolResult<serde_json::Value>, ToolError>;
-    async fn backend_propose_identity(&self, params: &IdentityProposalParams) -> Result<ToolResult<serde_json::Value>, ToolError>;
-    async fn backend_accept_identity(&self, params: &IdentityDecisionParams) -> Result<ToolResult<serde_json::Value>, ToolError>;
-    async fn backend_reject_identity(&self, params: &IdentityDecisionParams) -> Result<ToolResult<serde_json::Value>, ToolError>;
-    async fn backend_dispute_identity(&self, params: &IdentityDecisionParams) -> Result<ToolResult<serde_json::Value>, ToolError>;
-    async fn backend_supersede_identity(&self, id: &str, new_proposal: &IdentityProposalParams, reviewer: &str) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_get_narrator(
+        &self,
+        id: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_get_rijal(
+        &self,
+        narrator_id: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_trace(
+        &self,
+        params: &TraceParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_propose_identity(
+        &self,
+        params: &IdentityProposalParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_accept_identity(
+        &self,
+        params: &IdentityDecisionParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_reject_identity(
+        &self,
+        params: &IdentityDecisionParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_dispute_identity(
+        &self,
+        params: &IdentityDecisionParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_supersede_identity(
+        &self,
+        id: &str,
+        new_proposal: &IdentityProposalParams,
+        reviewer: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
 }
 
 /// Isnad tool names.
-pub const ISNAD_TOOL_NAMES: [&'static str; 6] = [
+pub const ISNAD_TOOL_NAMES: [&str; 6] = [
     "isnad.narrator",
     "isnad.rijal",
     "isnad.trace",

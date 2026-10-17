@@ -3,9 +3,7 @@
 use clap::Subcommand;
 use std::sync::Arc;
 use storage_sqlite::SqliteDatabase;
-use tool_registry::{
-    IdentityDecisionParams, IdentityProposalParams, IsnadBackend, TraceParams,
-};
+use tool_registry::{IdentityDecisionParams, IdentityProposalParams, IsnadBackend, TraceParams};
 
 use crate::exit_code;
 
@@ -117,8 +115,10 @@ async fn handle_isnad_async(action: IsnadAction, db_path: &str, json: bool) -> i
             Ok(tr) => {
                 let narrator = &tr.results["narrator"];
                 let rijal = tr.results["rijal_sources"].as_array().cloned().unwrap_or_default();
-                let stable_id = narrator.get("id").and_then(|v| v.as_str()).unwrap_or(&id).to_string();
-                let primary_name = narrator.get("primary_name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let stable_id =
+                    narrator.get("id").and_then(|v| v.as_str()).unwrap_or(&id).to_string();
+                let primary_name =
+                    narrator.get("primary_name").and_then(|v| v.as_str()).unwrap_or("").to_string();
                 let variants: Vec<String> = narrator
                     .get("name_variants")
                     .and_then(|v| v.as_array())
@@ -134,7 +134,8 @@ async fn handle_isnad_async(action: IsnadAction, db_path: &str, json: bool) -> i
                 for r in &rijal {
                     let scholar = r.get("scholar_name").and_then(|v| v.as_str()).unwrap_or("");
                     let cite = r.get("source_citation").and_then(|v| v.as_str()).unwrap_or("");
-                    let grade = r.get("grading_value").and_then(|v| v.as_str()).unwrap_or("no grade");
+                    let grade =
+                        r.get("grading_value").and_then(|v| v.as_str()).unwrap_or("no grade");
                     let decision = r.get("decision").and_then(|v| v.as_str()).unwrap_or("");
                     human.push_str(&format!("{} — {} — {} ({})\n", scholar, cite, grade, decision));
                 }
@@ -159,9 +160,13 @@ async fn handle_isnad_async(action: IsnadAction, db_path: &str, json: bool) -> i
                     for r in &rijal {
                         let scholar = r.get("scholar_name").and_then(|v| v.as_str()).unwrap_or("");
                         let cite = r.get("source_citation").and_then(|v| v.as_str()).unwrap_or("");
-                        let grade = r.get("grading_value").and_then(|v| v.as_str()).unwrap_or("no grade");
+                        let grade =
+                            r.get("grading_value").and_then(|v| v.as_str()).unwrap_or("no grade");
                         let decision = r.get("decision").and_then(|v| v.as_str()).unwrap_or("");
-                        human.push_str(&format!("{} — {} — {} ({})\n", scholar, cite, grade, decision));
+                        human.push_str(&format!(
+                            "{} — {} — {} ({})\n",
+                            scholar, cite, grade, decision
+                        ));
                     }
                 }
                 let jsonv = serde_json::to_value(&tr).unwrap_or(serde_json::Value::Null);
@@ -179,7 +184,8 @@ async fn handle_isnad_async(action: IsnadAction, db_path: &str, json: bool) -> i
             match backend.backend_trace(&params).await {
                 Ok(tr) => {
                     let res = &tr.results;
-                    let paths = res.get("paths").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+                    let paths =
+                        res.get("paths").and_then(|v| v.as_array()).cloned().unwrap_or_default();
                     let truncated = res.get("truncated").and_then(|v| v.as_bool()).unwrap_or(false);
                     let reason = res.get("incomplete_reason").and_then(|v| v.as_str());
                     let mut human = String::new();
@@ -195,16 +201,28 @@ async fn handle_isnad_async(action: IsnadAction, db_path: &str, json: bool) -> i
                     } else {
                         human.push_str(&format!("{} path(s)\n", paths.len()));
                         for path in &paths {
-                            let edges = path.get("edges").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+                            let edges = path
+                                .get("edges")
+                                .and_then(|v| v.as_array())
+                                .cloned()
+                                .unwrap_or_default();
                             for e in &edges {
                                 let src = e.get("src").and_then(|v| v.as_str()).unwrap_or("");
                                 let edge = e.get("edge").and_then(|v| v.as_str()).unwrap_or("");
                                 let dst = e.get("dst").and_then(|v| v.as_str()).unwrap_or("");
-                                let attrs = e.get("attrs").cloned().unwrap_or(serde_json::Value::Null);
-                                let prov = attrs.get("provenance_layer").and_then(|v| v.as_str()).unwrap_or("B");
+                                let attrs =
+                                    e.get("attrs").cloned().unwrap_or(serde_json::Value::Null);
+                                let prov = attrs
+                                    .get("provenance_layer")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("B");
                                 let conf = attrs.get("confidence").and_then(|v| v.as_f64());
-                                let conf_str = conf.map(|c| format!("{:.2}", c)).unwrap_or_default();
-                                human.push_str(&format!("  {} -{}-> {} {} {} (uncertain)\n", src, edge, dst, prov, conf_str));
+                                let conf_str =
+                                    conf.map(|c| format!("{:.2}", c)).unwrap_or_default();
+                                human.push_str(&format!(
+                                    "  {} -{}-> {} {} {} (uncertain)\n",
+                                    src, edge, dst, prov, conf_str
+                                ));
                             }
                         }
                     }
@@ -225,7 +243,15 @@ async fn handle_isnad_async(action: IsnadAction, db_path: &str, json: bool) -> i
             }
         }
         IsnadAction::Identity { action } => match action {
-            IdentityAction::Propose { claim, evidence, source_location, provenance_layer, algorithm, algorithm_version, confidence } => {
+            IdentityAction::Propose {
+                claim,
+                evidence,
+                source_location,
+                provenance_layer,
+                algorithm,
+                algorithm_version,
+                confidence,
+            } => {
                 let claim_v = parse_json(&claim);
                 let evidence_v = parse_json(&evidence);
                 let params = IdentityProposalParams {
@@ -241,12 +267,20 @@ async fn handle_isnad_async(action: IsnadAction, db_path: &str, json: bool) -> i
                     Ok(tr) => {
                         let assertion = &tr.results;
                         let id = assertion.get("id").and_then(|v| v.as_str()).unwrap_or("");
-                        let created = assertion.get("created_at").and_then(|v| v.as_str()).unwrap_or("");
-                        let actor = assertion.get("algorithm").and_then(|v| v.as_str()).unwrap_or("unreviewed");
-                        let human = format!("proposed {} (pending) by {} at {}\n", id, actor, created);
+                        let created =
+                            assertion.get("created_at").and_then(|v| v.as_str()).unwrap_or("");
+                        let actor = assertion
+                            .get("algorithm")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unreviewed");
+                        let human =
+                            format!("proposed {} (pending) by {} at {}\n", id, actor, created);
                         let jsonv = serde_json::to_value(&tr).unwrap_or(serde_json::Value::Null);
                         if json {
-                            println!("{}", serde_json::to_string_pretty(&jsonv).unwrap_or_default());
+                            println!(
+                                "{}",
+                                serde_json::to_string_pretty(&jsonv).unwrap_or_default()
+                            );
                         } else {
                             print!("{}", human);
                         }
@@ -262,10 +296,16 @@ async fn handle_isnad_async(action: IsnadAction, db_path: &str, json: bool) -> i
                         let (decided_at, rev) = fetch_decided(&db, &id).await;
                         let reviewer = rev.unwrap_or(reviewer);
                         let decided_at = decided_at.unwrap_or_default();
-                        let human = format!("accepted {} (accepted) by {} at {}\n", id, reviewer, decided_at);
+                        let human = format!(
+                            "accepted {} (accepted) by {} at {}\n",
+                            id, reviewer, decided_at
+                        );
                         let jsonv = serde_json::to_value(&tr).unwrap_or(serde_json::Value::Null);
                         if json {
-                            println!("{}", serde_json::to_string_pretty(&jsonv).unwrap_or_default());
+                            println!(
+                                "{}",
+                                serde_json::to_string_pretty(&jsonv).unwrap_or_default()
+                            );
                         } else {
                             print!("{}", human);
                         }
@@ -277,7 +317,10 @@ async fn handle_isnad_async(action: IsnadAction, db_path: &str, json: bool) -> i
             IdentityAction::Reject { id, reviewer, yes } => {
                 if !yes {
                     if json {
-                        println!("{}", serde_json::json!({"error": "refusing to reject without --yes"}));
+                        println!(
+                            "{}",
+                            serde_json::json!({"error": "refusing to reject without --yes"})
+                        );
                     } else {
                         println!("refusing to reject without --yes");
                     }
@@ -289,10 +332,16 @@ async fn handle_isnad_async(action: IsnadAction, db_path: &str, json: bool) -> i
                         let (decided_at, rev) = fetch_decided(&db, &id).await;
                         let reviewer = rev.unwrap_or(reviewer);
                         let decided_at = decided_at.unwrap_or_default();
-                        let human = format!("rejected {} (rejected) by {} at {}\n", id, reviewer, decided_at);
+                        let human = format!(
+                            "rejected {} (rejected) by {} at {}\n",
+                            id, reviewer, decided_at
+                        );
                         let jsonv = serde_json::to_value(&tr).unwrap_or(serde_json::Value::Null);
                         if json {
-                            println!("{}", serde_json::to_string_pretty(&jsonv).unwrap_or_default());
+                            println!(
+                                "{}",
+                                serde_json::to_string_pretty(&jsonv).unwrap_or_default()
+                            );
                         } else {
                             print!("{}", human);
                         }
@@ -308,10 +357,16 @@ async fn handle_isnad_async(action: IsnadAction, db_path: &str, json: bool) -> i
                         let (decided_at, rev) = fetch_decided(&db, &id).await;
                         let reviewer = rev.unwrap_or(reviewer);
                         let decided_at = decided_at.unwrap_or_default();
-                        let human = format!("disputed {} (disputed) by {} at {}\n", id, reviewer, decided_at);
+                        let human = format!(
+                            "disputed {} (disputed) by {} at {}\n",
+                            id, reviewer, decided_at
+                        );
                         let jsonv = serde_json::to_value(&tr).unwrap_or(serde_json::Value::Null);
                         if json {
-                            println!("{}", serde_json::to_string_pretty(&jsonv).unwrap_or_default());
+                            println!(
+                                "{}",
+                                serde_json::to_string_pretty(&jsonv).unwrap_or_default()
+                            );
                         } else {
                             print!("{}", human);
                         }
@@ -336,10 +391,16 @@ async fn handle_isnad_async(action: IsnadAction, db_path: &str, json: bool) -> i
                         let (decided_at, rev) = fetch_decided(&db, &id).await;
                         let reviewer = rev.unwrap_or(reviewer);
                         let decided_at = decided_at.unwrap_or_default();
-                        let human = format!("superseded {} (superseded) by {} at {}\n", id, reviewer, decided_at);
+                        let human = format!(
+                            "superseded {} (superseded) by {} at {}\n",
+                            id, reviewer, decided_at
+                        );
                         let jsonv = serde_json::to_value(&tr).unwrap_or(serde_json::Value::Null);
                         if json {
-                            println!("{}", serde_json::to_string_pretty(&jsonv).unwrap_or_default());
+                            println!(
+                                "{}",
+                                serde_json::to_string_pretty(&jsonv).unwrap_or_default()
+                            );
                         } else {
                             print!("{}", human);
                         }
@@ -354,12 +415,13 @@ async fn handle_isnad_async(action: IsnadAction, db_path: &str, json: bool) -> i
 
 async fn fetch_decided(db: &Arc<SqliteDatabase>, id: &str) -> (Option<String>, Option<String>) {
     use sqlx::Row;
-    let row = sqlx::query("SELECT decided_at, reviewer FROM narrator_identity_assertions WHERE id = ?")
-        .bind(id)
-        .fetch_optional(db.read_pool())
-        .await
-        .ok()
-        .flatten();
+    let row =
+        sqlx::query("SELECT decided_at, reviewer FROM narrator_identity_assertions WHERE id = ?")
+            .bind(id)
+            .fetch_optional(db.read_pool())
+            .await
+            .ok()
+            .flatten();
     match row {
         Some(r) => (r.get("decided_at"), r.get("reviewer")),
         None => (None, None),

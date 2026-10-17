@@ -10,7 +10,13 @@ const FORBIDDEN_KEYS: &[&str] = &["consensus", "majority"];
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JsonHadith {
-    #[serde(alias = "collection", alias = "collection_name", alias = "collection_slug", alias = "name", alias = "slug")]
+    #[serde(
+        alias = "collection",
+        alias = "collection_name",
+        alias = "collection_slug",
+        alias = "name",
+        alias = "slug"
+    )]
     pub collection: String,
     #[serde(alias = "source_number", alias = "hadith_number", alias = "number", alias = "id")]
     pub source_number: String,
@@ -69,11 +75,8 @@ impl HadithParserImpl {
 
 impl JsonHadith {
     fn into_parsed(self) -> Result<ParsedHadith, ParseError> {
-        let gradings = self
-            .gradings
-            .into_iter()
-            .map(|g| g.into_parsed())
-            .collect::<Result<Vec<_>, _>>()?;
+        let gradings =
+            self.gradings.into_iter().map(|g| g.into_parsed()).collect::<Result<Vec<_>, _>>()?;
         Ok(ParsedHadith {
             collection: self.collection,
             source_number: self.source_number,
@@ -98,8 +101,8 @@ impl JsonGrading {
 }
 
 fn reject_forbidden_keys(input: &str) -> Result<(), ParseError> {
-    let value: serde_json::Value =
-        serde_json::from_str(input).map_err(|e| ParseError { message: e.to_string(), location: None })?;
+    let value: serde_json::Value = serde_json::from_str(input)
+        .map_err(|e| ParseError { message: e.to_string(), location: None })?;
     if contains_forbidden(&value) {
         return Err(ParseError {
             message: "consensus-merged grading fields are not allowed".to_string(),

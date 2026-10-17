@@ -49,12 +49,13 @@ async fn accept_sets_reviewer_and_decided_at() {
     let a = svc.propose_identity(proposal()).await.unwrap();
     svc.accept_identity(&a.id, "rev-1").await.unwrap();
 
-    let row: (String, Option<String>, Option<String>) =
-        sqlx::query_as("SELECT decision, reviewer, decided_at FROM narrator_identity_assertions WHERE id = ?")
-            .bind(&a.id)
-            .fetch_one(db.read_pool())
-            .await
-            .unwrap();
+    let row: (String, Option<String>, Option<String>) = sqlx::query_as(
+        "SELECT decision, reviewer, decided_at FROM narrator_identity_assertions WHERE id = ?",
+    )
+    .bind(&a.id)
+    .fetch_one(db.read_pool())
+    .await
+    .unwrap();
     assert_eq!(row.0, "accepted");
     assert_eq!(row.1.as_deref(), Some("rev-1"));
     assert!(row.2.is_some());
@@ -173,7 +174,11 @@ async fn traversal_excludes_tombstoned_disputed_effective() {
     svc.accept_identity(&accepted.id, "rev").await.unwrap();
 
     // edges
-    for (aid, dst) in [(&rejected.id, "narrator:t1"), (&disputed.id, "narrator:t2"), (&accepted.id, "narrator:t3")] {
+    for (aid, dst) in [
+        (&rejected.id, "narrator:t1"),
+        (&disputed.id, "narrator:t2"),
+        (&accepted.id, "narrator:t3"),
+    ] {
         sqlx::query(
             "INSERT INTO isnad_edges (id, src_stable_id, edge, dst_stable_id, assertion_id, provenance_layer, confidence, label, algorithm, algorithm_version, reviewer, decided_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
@@ -195,12 +200,20 @@ async fn traversal_excludes_tombstoned_disputed_effective() {
         .unwrap();
     }
 
-    use quran_graph::{AuthzScope, EdgeFilter, Direction};
+    use quran_graph::{AuthzScope, Direction, EdgeFilter};
     let store = SqliteIsnadGraphStore::open(&db).await.unwrap();
     let budgets = QueryBudgets::default();
     let cancel = std::sync::atomic::AtomicBool::new(false);
     let authz = AuthzScope::all_visible();
-    let view = store.neighbors("narrator:s", &EdgeFilter::one("TRANSMITS", Direction::Outgoing), &budgets, &cancel, &authz).unwrap();
+    let view = store
+        .neighbors(
+            "narrator:s",
+            &EdgeFilter::one("TRANSMITS", Direction::Outgoing),
+            &budgets,
+            &cancel,
+            &authz,
+        )
+        .unwrap();
     // rejected edge excluded, disputed+accepted included
     assert_eq!(view.edges.len(), 2);
     assert!(view.edges.iter().all(|e| e.dst != "narrator:t1"));
@@ -276,7 +289,8 @@ async fn empty_path_complete() {
         .unwrap();
     }
     let svc = IsnadReaderService::new(db.clone());
-    let res = svc.trace_paths("narrator:a", "narrator:b", 10, QueryBudgets::default()).await.unwrap();
+    let res =
+        svc.trace_paths("narrator:a", "narrator:b", 10, QueryBudgets::default()).await.unwrap();
     assert!(!res.truncated);
     assert!(res.paths.is_empty());
 }

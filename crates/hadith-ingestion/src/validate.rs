@@ -3,15 +3,9 @@
 use crate::{ParsedHadith, ValidationError};
 use std::collections::HashSet;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct HadithValidator {
     known_collections: HashSet<String>,
-}
-
-impl Default for HadithValidator {
-    fn default() -> Self {
-        Self { known_collections: HashSet::new() }
-    }
 }
 
 impl HadithValidator {
@@ -43,8 +37,7 @@ impl HadithValidator {
             });
         }
         // Consensus-merged grading values are forbidden.
-        for (key, _) in &hadith.extra {
-            let lower = key.to_lowercase();
+        for key in hadith.extra.keys() {            let lower = key.to_lowercase();
             if lower.contains("consensus") || lower.contains("majority") {
                 return Err(ValidationError {
                     code: "QAI-HAD-ING-0003".to_string(),
@@ -68,8 +61,7 @@ impl HadithValidator {
                     location: None,
                 });
             }
-            for (key, _) in &grading.extra {
-                let lower = key.to_lowercase();
+            for key in grading.extra.keys() {                let lower = key.to_lowercase();
                 if lower.contains("consensus") || lower.contains("majority") {
                     return Err(ValidationError {
                         code: "QAI-HAD-ING-0003".to_string(),

@@ -72,16 +72,19 @@ impl SqliteIsnadGraphStore {
         }
 
         // Load narrators as nodes.
-        let narrator_rows = sqlx::query("SELECT id, slug, primary_name, name_variants_json, metadata_json FROM narrators")
-            .fetch_all(pool)
-            .await
-            .map_err(|e| GraphError::BuildFailed { stage: "open".into(), detail: e.to_string() })?;
+        let narrator_rows = sqlx::query(
+            "SELECT id, slug, primary_name, name_variants_json, metadata_json FROM narrators",
+        )
+        .fetch_all(pool)
+        .await
+        .map_err(|e| GraphError::BuildFailed { stage: "open".into(), detail: e.to_string() })?;
         let mut nodes = Vec::new();
         for row in &narrator_rows {
             let id: String = row.get("id");
             // stable id is narrator:{slug}; use id column (already stable)
             let slug: String = row.get("slug");
-            let stable_id = if id.starts_with("narrator:") { id.clone() } else { format!("narrator:{}", slug) };
+            let stable_id =
+                if id.starts_with("narrator:") { id.clone() } else { format!("narrator:{}", slug) };
             let primary_name: String = row.get("primary_name");
             let variants: String = row.get("name_variants_json");
             let metadata: String = row.get("metadata_json");
@@ -95,7 +98,9 @@ impl SqliteIsnadGraphStore {
             }
             nodes.push(GraphNode::new(stable_id, NodeKind::Narrator, attrs));
         }
-        inner.stage_nodes(nodes).map_err(|e| GraphError::BuildFailed { stage: "open".into(), detail: e.to_string() })?;
+        inner
+            .stage_nodes(nodes)
+            .map_err(|e| GraphError::BuildFailed { stage: "open".into(), detail: e.to_string() })?;
 
         // Load isnad_edges, filtering tombstoned.
         let edge_rows = sqlx::query(
@@ -112,12 +117,11 @@ impl SqliteIsnadGraphStore {
             }
             let assertion_id: Option<String> = row.get("assertion_id");
             // check assertion effectiveness
-            if let Some(aid) = &assertion_id {
-                if let Some(a) = inner.get_assertion(aid) {
-                    if !a.is_effective() {
-                        continue;
-                    }
-                }
+            if let Some(aid) = &assertion_id
+                && let Some(a) = inner.get_assertion(aid)
+                && !a.is_effective()
+            {
+                continue;
             }
             let edge_str: String = row.get("edge");
             let src: String = row.get("src_stable_id");
@@ -128,16 +132,12 @@ impl SqliteIsnadGraphStore {
                 "provenance_layer": row.get::<String,_>("provenance_layer"),
             });
             let aid_clean = assertion_id.clone().filter(|s| !s.is_empty());
-            let ge = GraphEdge {
-                src,
-                edge: edge_str,
-                dst,
-                assertion_id: aid_clean,
-                attrs,
-            };
+            let ge = GraphEdge { src, edge: edge_str, dst, assertion_id: aid_clean, attrs };
             edges.push(ge);
         }
-        inner.stage_edges(edges).map_err(|e| GraphError::BuildFailed { stage: "open".into(), detail: e.to_string() })?;
+        inner
+            .stage_edges(edges)
+            .map_err(|e| GraphError::BuildFailed { stage: "open".into(), detail: e.to_string() })?;
 
         Ok(Self { projection_id, inner })
     }
@@ -163,29 +163,75 @@ impl SqliteIsnadGraphStore {
 }
 
 impl GraphStore for SqliteIsnadGraphStore {
-    fn resolve_node(&self, stable_id: &str, budgets: &QueryBudgets, cancel: &AtomicBool, authz: &AuthzScope) -> Result<Option<GraphNode>, GraphError> {
+    fn resolve_node(
+        &self,
+        stable_id: &str,
+        budgets: &QueryBudgets,
+        cancel: &AtomicBool,
+        authz: &AuthzScope,
+    ) -> Result<Option<GraphNode>, GraphError> {
         self.inner.resolve_node(stable_id, budgets, cancel, authz)
     }
-    fn neighbors(&self, stable_id: &str, filter: &EdgeFilter, budgets: &QueryBudgets, cancel: &AtomicBool, authz: &AuthzScope) -> Result<TraversalResult, GraphError> {
+    fn neighbors(
+        &self,
+        stable_id: &str,
+        filter: &EdgeFilter,
+        budgets: &QueryBudgets,
+        cancel: &AtomicBool,
+        authz: &AuthzScope,
+    ) -> Result<TraversalResult, GraphError> {
         self.inner.neighbors(stable_id, filter, budgets, cancel, authz)
     }
-    fn bounded_paths(&self, src: &str, dst: &str, max_hops: usize, budgets: &QueryBudgets, cancel: &AtomicBool, authz: &AuthzScope) -> Result<PathsResult, GraphError> {
+    fn bounded_paths(
+        &self,
+        src: &str,
+        dst: &str,
+        max_hops: usize,
+        budgets: &QueryBudgets,
+        cancel: &AtomicBool,
+        authz: &AuthzScope,
+    ) -> Result<PathsResult, GraphError> {
         self.inner.bounded_paths(src, dst, max_hops, budgets, cancel, authz)
     }
-    fn subgraph(&self, seeds: &[String], budgets: &QueryBudgets, cancel: &AtomicBool, authz: &AuthzScope) -> Result<TraversalResult, GraphError> {
+    fn subgraph(
+        &self,
+        seeds: &[String],
+        budgets: &QueryBudgets,
+        cancel: &AtomicBool,
+        authz: &AuthzScope,
+    ) -> Result<TraversalResult, GraphError> {
         self.inner.subgraph(seeds, budgets, cancel, authz)
     }
-    fn pattern_query(&self, pattern: &quran_graph::pattern::Pattern, seeds: &[String], budgets: &QueryBudgets, cancel: &AtomicBool, authz: &AuthzScope) -> Result<TraversalResult, GraphError> {
+    fn pattern_query(
+        &self,
+        pattern: &quran_graph::pattern::Pattern,
+        seeds: &[String],
+        budgets: &QueryBudgets,
+        cancel: &AtomicBool,
+        authz: &AuthzScope,
+    ) -> Result<TraversalResult, GraphError> {
         self.inner.pattern_query(pattern, seeds, budgets, cancel, authz)
     }
-    fn stage_nodes(&mut self, nodes: Vec<GraphNode>) -> Result<(), GraphError> { self.inner.stage_nodes(nodes) }
-    fn stage_edges(&mut self, edges: Vec<GraphEdge>) -> Result<(), GraphError> { self.inner.stage_edges(edges) }
-    fn inspect(&self) -> BuildInspection { self.inner.inspect() }
-    fn clear_staged(&mut self) { self.inner.clear_staged(); }
-    fn capabilities(&self) -> Vec<String> { self.inner.capabilities() }
+    fn stage_nodes(&mut self, nodes: Vec<GraphNode>) -> Result<(), GraphError> {
+        self.inner.stage_nodes(nodes)
+    }
+    fn stage_edges(&mut self, edges: Vec<GraphEdge>) -> Result<(), GraphError> {
+        self.inner.stage_edges(edges)
+    }
+    fn inspect(&self) -> BuildInspection {
+        self.inner.inspect()
+    }
+    fn clear_staged(&mut self) {
+        self.inner.clear_staged();
+    }
+    fn capabilities(&self) -> Vec<String> {
+        self.inner.capabilities()
+    }
 }
 
 fn parse_json(raw: String) -> serde_json::Value {
-    if raw.trim().is_empty() { return serde_json::Value::Null; }
+    if raw.trim().is_empty() {
+        return serde_json::Value::Null;
+    }
     serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null)
 }

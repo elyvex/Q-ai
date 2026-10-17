@@ -4,9 +4,12 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use isnad_graph::{NarratorId, NarratorRecord, RijalSource};
 use domain::Timestamp;
-use quran_graph::{Assertion, AssertionDecision, AssertionKind, GraphStore, PathsResult, ProvenanceLayer, QueryBudgets};
+use isnad_graph::{NarratorId, NarratorRecord, RijalSource};
+use quran_graph::{
+    Assertion, AssertionDecision, AssertionKind, GraphStore, PathsResult, ProvenanceLayer,
+    QueryBudgets,
+};
 use sqlx::Row;
 use storage::error::StorageError;
 use storage_sqlite::SqliteDatabase;
@@ -45,21 +48,44 @@ impl storage::error::Diagnostic for IsnadReaderError {
             Self::CheckViolation(_) => storage::error::DiagnosticCode::new("QAI-ISNAD", 4),
         }
     }
-    fn summary(&self) -> String { self.to_string() }
-    fn remedy(&self) -> Option<String> { Some("Check input and retry.".into()) }
-    fn next_command(&self) -> Option<String> { Some("qai isnad --help".into()) }
+    fn summary(&self) -> String {
+        self.to_string()
+    }
+    fn remedy(&self) -> Option<String> {
+        Some("Check input and retry.".into())
+    }
+    fn next_command(&self) -> Option<String> {
+        Some("qai isnad --help".into())
+    }
 }
 
 #[async_trait]
 pub trait IsnadReader: Send + Sync {
     async fn get_narrator(&self, id: &str) -> Result<NarratorRecord, IsnadReaderError>;
-    async fn get_rijal_sources(&self, narrator_id: &str) -> Result<Vec<RijalSource>, IsnadReaderError>;
-    async fn trace_paths(&self, src: &str, dst: &str, k: usize, budgets: QueryBudgets) -> Result<PathsResult, IsnadReaderError>;
-    async fn propose_identity(&self, proposal: IsnadIdentityProposal) -> Result<Assertion, IsnadReaderError>;
+    async fn get_rijal_sources(
+        &self,
+        narrator_id: &str,
+    ) -> Result<Vec<RijalSource>, IsnadReaderError>;
+    async fn trace_paths(
+        &self,
+        src: &str,
+        dst: &str,
+        k: usize,
+        budgets: QueryBudgets,
+    ) -> Result<PathsResult, IsnadReaderError>;
+    async fn propose_identity(
+        &self,
+        proposal: IsnadIdentityProposal,
+    ) -> Result<Assertion, IsnadReaderError>;
     async fn accept_identity(&self, id: &str, reviewer: &str) -> Result<(), IsnadReaderError>;
     async fn reject_identity(&self, id: &str, reviewer: &str) -> Result<(), IsnadReaderError>;
     async fn dispute_identity(&self, id: &str, reviewer: &str) -> Result<(), IsnadReaderError>;
-    async fn supersede_identity(&self, id: &str, new_proposal: IsnadIdentityProposal, reviewer: &str) -> Result<Assertion, IsnadReaderError>;
+    async fn supersede_identity(
+        &self,
+        id: &str,
+        new_proposal: IsnadIdentityProposal,
+        reviewer: &str,
+    ) -> Result<Assertion, IsnadReaderError>;
 }
 
 pub struct IsnadReaderService {
@@ -67,7 +93,9 @@ pub struct IsnadReaderService {
 }
 
 impl IsnadReaderService {
-    pub fn new(db: Arc<SqliteDatabase>) -> Self { Self { db } }
+    pub fn new(db: Arc<SqliteDatabase>) -> Self {
+        Self { db }
+    }
 }
 
 #[async_trait]
@@ -82,8 +110,13 @@ impl IsnadReader for IsnadReaderService {
         let row = row.ok_or_else(|| IsnadReaderError::NotFound(id.to_string()))?;
         let slug: String = row.get("slug");
         let idstr: String = row.get("id");
-        let stable = if idstr.starts_with("narrator:") { idstr.clone() } else { format!("narrator:{}", slug) };
-        let nid: NarratorId = stable.parse().map_err(|e: String| IsnadReaderError::InvalidInput(e))?;
+        let stable = if idstr.starts_with("narrator:") {
+            idstr.clone()
+        } else {
+            format!("narrator:{}", slug)
+        };
+        let nid: NarratorId =
+            stable.parse().map_err(|e: String| IsnadReaderError::InvalidInput(e))?;
         let variants: String = row.get("name_variants_json");
         let metadata: String = row.get("metadata_json");
         Ok(NarratorRecord {
@@ -96,7 +129,10 @@ impl IsnadReader for IsnadReaderService {
         })
     }
 
-    async fn get_rijal_sources(&self, narrator_id: &str) -> Result<Vec<RijalSource>, IsnadReaderError> {
+    async fn get_rijal_sources(
+        &self,
+        narrator_id: &str,
+    ) -> Result<Vec<RijalSource>, IsnadReaderError> {
         let slug = narrator_id.strip_prefix("narrator:").unwrap_or(narrator_id);
         let rows = sqlx::query("SELECT id, narrator_id, scholar_name, source_citation, grading_value, evidence_json, reviewer, decision, decided_at, supersedes_id, provenance_layer, confidence, created_at FROM narrator_rijal_sources WHERE narrator_id = ? OR narrator_id = ?")
             .bind(narrator_id)
@@ -107,7 +143,8 @@ impl IsnadReader for IsnadReaderService {
         let mut out = Vec::new();
         for row in &rows {
             let nid: String = row.get("narrator_id");
-            let nid_parsed: NarratorId = nid.parse().map_err(|e: String| IsnadReaderError::InvalidInput(e))?;
+            let nid_parsed: NarratorId =
+                nid.parse().map_err(|e: String| IsnadReaderError::InvalidInput(e))?;
             let evidence: String = row.get("evidence_json");
             out.push(RijalSource {
                 id: row.get("id"),
@@ -128,30 +165,53 @@ impl IsnadReader for IsnadReaderService {
         Ok(out)
     }
 
-    async fn trace_paths(&self, src: &str, dst: &str, k: usize, mut budgets: QueryBudgets) -> Result<PathsResult, IsnadReaderError> {
-        if k > 0 { budgets.max_paths = k; }
+    async fn trace_paths(
+        &self,
+        src: &str,
+        dst: &str,
+        k: usize,
+        mut budgets: QueryBudgets,
+    ) -> Result<PathsResult, IsnadReaderError> {
+        if k > 0 {
+            budgets.max_paths = k;
+        }
         budgets.check().map_err(|e| IsnadReaderError::InvalidInput(e.to_string()))?;
-        let store = SqliteIsnadGraphStore::open(&self.db).await.map_err(|e| IsnadReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
+        let store = SqliteIsnadGraphStore::open(&self.db).await.map_err(|e| {
+            IsnadReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() })
+        })?;
         // need mutable for bounded_paths? method takes &self? bounded_paths takes &self in trait? GraphStore::bounded_paths(&self,...). ok.
         let authz = quran_graph::AuthzScope::all_visible();
         let cancel = std::sync::atomic::AtomicBool::new(false);
-        let res = store.bounded_paths(src, dst, budgets.max_hops, &budgets, &cancel, &authz)
-            .map_err(|e| IsnadReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
+        let res = store
+            .bounded_paths(src, dst, budgets.max_hops, &budgets, &cancel, &authz)
+            .map_err(|e| {
+                IsnadReaderError::Storage(StorageError::ConstraintViolation {
+                    message: e.to_string(),
+                })
+            })?;
         Ok(res)
     }
 
-    async fn propose_identity(&self, proposal: IsnadIdentityProposal) -> Result<Assertion, IsnadReaderError> {
+    async fn propose_identity(
+        &self,
+        proposal: IsnadIdentityProposal,
+    ) -> Result<Assertion, IsnadReaderError> {
         let id = format!("nia:{}", uuid::Uuid::new_v4());
         let now = chrono_now();
         let layer = match proposal.provenance_layer.as_str() {
-            "D" => "D", _ => "B",
+            "D" => "D",
+            _ => "B",
         };
         let confidence = proposal.confidence;
         // D-gate: if D, require algorithm+version+confidence
-        if layer == "D" {
-            if proposal.algorithm.is_none() || proposal.algorithm_version.is_none() || confidence.is_none() {
-                return Err(IsnadReaderError::InvalidInput("D-layer requires algorithm, version, confidence".into()));
-            }
+        if layer == "D"
+            && (proposal.algorithm.is_none()
+                || proposal.algorithm_version.is_none()
+                || confidence.is_none())
+        {
+            return Err(IsnadReaderError::InvalidInput(
+                "D-layer requires algorithm, version, confidence".into(),
+            ));
         }
         sqlx::query(
             r#"INSERT INTO narrator_identity_assertions
@@ -197,7 +257,12 @@ impl IsnadReader for IsnadReaderService {
     async fn dispute_identity(&self, id: &str, reviewer: &str) -> Result<(), IsnadReaderError> {
         self.decide(id, reviewer, "disputed").await
     }
-    async fn supersede_identity(&self, id: &str, new_proposal: IsnadIdentityProposal, reviewer: &str) -> Result<Assertion, IsnadReaderError> {
+    async fn supersede_identity(
+        &self,
+        id: &str,
+        new_proposal: IsnadIdentityProposal,
+        reviewer: &str,
+    ) -> Result<Assertion, IsnadReaderError> {
         // mark old superseded
         self.decide(id, reviewer, "superseded").await?;
         // create new with supersedes_id = id
@@ -208,14 +273,23 @@ impl IsnadReader for IsnadReaderService {
             .bind(&assertion.id)
             .execute(self.db.write_pool())
             .await
-            .map_err(|e| IsnadReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
+            .map_err(|e| {
+                IsnadReaderError::Storage(StorageError::ConstraintViolation {
+                    message: e.to_string(),
+                })
+            })?;
         assertion.supersedes_id = Some(id.to_string());
         Ok(assertion)
     }
 }
 
 impl IsnadReaderService {
-    async fn decide(&self, id: &str, reviewer: &str, decision: &str) -> Result<(), IsnadReaderError> {
+    async fn decide(
+        &self,
+        id: &str,
+        reviewer: &str,
+        decision: &str,
+    ) -> Result<(), IsnadReaderError> {
         if reviewer.trim().is_empty() {
             return Err(IsnadReaderError::InvalidInput("reviewer must not be empty".into()));
         }
@@ -231,8 +305,12 @@ impl IsnadReaderService {
         .await
         .map_err(|e| IsnadReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
         if result.rows_affected() == 0 {
-            let exists: Option<String> = sqlx::query_scalar("SELECT id FROM narrator_identity_assertions WHERE id = ?")
-                .bind(id).fetch_optional(self.db.read_pool()).await.unwrap_or(None);
+            let exists: Option<String> =
+                sqlx::query_scalar("SELECT id FROM narrator_identity_assertions WHERE id = ?")
+                    .bind(id)
+                    .fetch_optional(self.db.read_pool())
+                    .await
+                    .unwrap_or(None);
             if exists.is_some() {
                 return Err(IsnadReaderError::CheckViolation("already decided".into()));
             }

@@ -169,7 +169,7 @@ impl DisagreementSource for storage_sqlite::SqliteDatabase {
                 decision: row
                     .get::<String, _>(7)
                     .parse()
-                    .map_err(|e| DisagreementError::SourceNotFound(e))?,
+                    .map_err(DisagreementError::SourceNotFound)?,
                 decided_at: match decided_at {
                     Some(s) => {
                         Some(s.parse().map_err(|_| DisagreementError::InvalidId(s.clone()))?)

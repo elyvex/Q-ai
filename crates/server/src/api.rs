@@ -524,71 +524,110 @@ async fn run_isnad_dispatch(
 ) -> Result<tools::ToolResult<serde_json::Value>, tools::ToolError> {
     match name {
         "isnad.narrator" => {
-            let p: tool_registry::GetNarratorParams =
-                match serde_json::from_value(params) {
-                    Ok(v) => v,
-                    Err(e) => return Err(tools::ToolError::InvalidInput { tool: "isnad.narrator", detail: format!("bad params: {e}") }),
-                };
+            let p: tool_registry::GetNarratorParams = match serde_json::from_value(params) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Err(tools::ToolError::InvalidInput {
+                        tool: "isnad.narrator",
+                        detail: format!("bad params: {e}"),
+                    });
+                }
+            };
             backend.backend_get_narrator(&p.id).await
         }
         "isnad.rijal" => {
-            let p: tool_registry::GetNarratorParams =
-                match serde_json::from_value(params) {
-                    Ok(v) => v,
-                    Err(e) => return Err(tools::ToolError::InvalidInput { tool: "isnad.rijal", detail: format!("bad params: {e}") }),
-                };
+            let p: tool_registry::GetNarratorParams = match serde_json::from_value(params) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Err(tools::ToolError::InvalidInput {
+                        tool: "isnad.rijal",
+                        detail: format!("bad params: {e}"),
+                    });
+                }
+            };
             backend.backend_get_rijal(&p.id).await
         }
         "isnad.trace" => {
-            let p: tool_registry::TraceParams =
-                match serde_json::from_value(params) {
-                    Ok(v) => v,
-                    Err(e) => return Err(tools::ToolError::InvalidInput { tool: "isnad.trace", detail: format!("bad params: {e}") }),
-                };
+            let p: tool_registry::TraceParams = match serde_json::from_value(params) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Err(tools::ToolError::InvalidInput {
+                        tool: "isnad.trace",
+                        detail: format!("bad params: {e}"),
+                    });
+                }
+            };
             backend.backend_trace(&p).await
         }
         "isnad.identity_propose" => {
-            let p: tool_registry::IdentityProposalParams =
-                match serde_json::from_value(params) {
-                    Ok(v) => v,
-                    Err(e) => return Err(tools::ToolError::InvalidInput { tool: "isnad.identity_propose", detail: format!("bad params: {e}") }),
-                };
+            let p: tool_registry::IdentityProposalParams = match serde_json::from_value(params) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Err(tools::ToolError::InvalidInput {
+                        tool: "isnad.identity_propose",
+                        detail: format!("bad params: {e}"),
+                    });
+                }
+            };
             backend.backend_propose_identity(&p).await
         }
         "isnad.identity_accept" => {
-            let p: tool_registry::IdentityDecisionParams =
-                match serde_json::from_value(params) {
-                    Ok(v) => v,
-                    Err(e) => return Err(tools::ToolError::InvalidInput { tool: "isnad.identity_accept", detail: format!("bad params: {e}") }),
-                };
+            let p: tool_registry::IdentityDecisionParams = match serde_json::from_value(params) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Err(tools::ToolError::InvalidInput {
+                        tool: "isnad.identity_accept",
+                        detail: format!("bad params: {e}"),
+                    });
+                }
+            };
             backend.backend_accept_identity(&p).await
         }
         "isnad.identity_reject" => {
-            let p: tool_registry::IdentityDecisionParams =
-                match serde_json::from_value(params) {
-                    Ok(v) => v,
-                    Err(e) => return Err(tools::ToolError::InvalidInput { tool: "isnad.identity_reject", detail: format!("bad params: {e}") }),
-                };
+            let p: tool_registry::IdentityDecisionParams = match serde_json::from_value(params) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Err(tools::ToolError::InvalidInput {
+                        tool: "isnad.identity_reject",
+                        detail: format!("bad params: {e}"),
+                    });
+                }
+            };
             backend.backend_reject_identity(&p).await
         }
         "isnad.identity_dispute" => {
-            let p: tool_registry::IdentityDecisionParams =
-                match serde_json::from_value(params) {
-                    Ok(v) => v,
-                    Err(e) => return Err(tools::ToolError::InvalidInput { tool: "isnad.identity_dispute", detail: format!("bad params: {e}") }),
-                };
+            let p: tool_registry::IdentityDecisionParams = match serde_json::from_value(params) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Err(tools::ToolError::InvalidInput {
+                        tool: "isnad.identity_dispute",
+                        detail: format!("bad params: {e}"),
+                    });
+                }
+            };
             backend.backend_dispute_identity(&p).await
         }
         "isnad.identity_supersede" => {
             let id = params.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let reviewer = params.get("reviewer").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let new_proposal: tool_registry::IdentityProposalParams = match serde_json::from_value(params.get("new_proposal").cloned().unwrap_or(serde_json::Value::Null)) {
+            let reviewer =
+                params.get("reviewer").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let new_proposal: tool_registry::IdentityProposalParams = match serde_json::from_value(
+                params.get("new_proposal").cloned().unwrap_or(serde_json::Value::Null),
+            ) {
                 Ok(v) => v,
-                Err(e) => return Err(tools::ToolError::InvalidInput { tool: "isnad.identity_supersede", detail: format!("bad params: {e}") }),
+                Err(e) => {
+                    return Err(tools::ToolError::InvalidInput {
+                        tool: "isnad.identity_supersede",
+                        detail: format!("bad params: {e}"),
+                    });
+                }
             };
             backend.backend_supersede_identity(&id, &new_proposal, &reviewer).await
         }
-        other => Err(tools::ToolError::InvalidInput { tool: "quran.tool", detail: format!("unknown tool `{other}`") }),
+        other => Err(tools::ToolError::InvalidInput {
+            tool: "quran.tool",
+            detail: format!("unknown tool `{other}`"),
+        }),
     }
 }
 
@@ -607,21 +646,24 @@ async fn tool_handler(
     // (mirroring the verse_links pattern) when the ToolRegistry was not wired
     // with an isnad backend. Intercept here so the generic route resolves
     // them with the same ToolResult envelope.
-    if name.starts_with("isnad.") && state.isnad.is_some() {
-        let service = state.isnad.as_ref().unwrap().clone();
+    if name.starts_with("isnad.")
+        && let Some(service) = state.isnad.as_ref().cloned()
+    {
         let reader: std::sync::Arc<dyn application::isnad_reader::IsnadReader> = service;
         let backend = application::isnad_tools::IsnadToolBackend::new(reader);
         let result = run_isnad_dispatch(&backend, &name, params.clone()).await;
         match result {
             Ok(value) => {
-                let checksum = value
-                    .research_checksum
-                    .hex
-                    .clone();
+                let checksum = value.research_checksum.hex.clone();
                 let mut meta = empty_meta();
                 meta.research_checksum = format!("sha256:{checksum}");
                 let data = serde_json::to_value(&value).unwrap_or(serde_json::Value::Null);
-                return json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, false);
+                return json_response(
+                    StatusCode::OK,
+                    &Envelope { api_version: API_VERSION, data, meta },
+                    None,
+                    false,
+                );
             }
             Err(error) => return tool_error_response(error),
         }
@@ -2356,7 +2398,6 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-
 #[derive(serde::Deserialize)]
 struct HadithSearchBody {
     query: String,
@@ -2383,14 +2424,16 @@ async fn hadith_get_handler(
     let params = tool_registry::GetHadithParams { reference };
     match state.tools.get_hadith(params).await {
         Ok((result, _meta)) => {
-            let checksum = result
-                .research_checksum
-                .hex
-                .clone();
+            let checksum = result.research_checksum.hex.clone();
             let mut meta = empty_meta();
             meta.research_checksum = format!("sha256:{checksum}");
             let data = serde_json::to_value(&result).unwrap_or(serde_json::Value::Null);
-            json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, false)
+            json_response(
+                StatusCode::OK,
+                &Envelope { api_version: API_VERSION, data, meta },
+                None,
+                false,
+            )
         }
         Err(error) => tool_error_response(error),
     }
@@ -2411,7 +2454,12 @@ async fn hadith_search_handler(
             let mut meta = empty_meta();
             meta.research_checksum = format!("sha256:{checksum}");
             let data = serde_json::to_value(&result).unwrap_or(serde_json::Value::Null);
-            json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, false)
+            json_response(
+                StatusCode::OK,
+                &Envelope { api_version: API_VERSION, data, meta },
+                None,
+                false,
+            )
         }
         Err(error) => tool_error_response(error),
     }
@@ -2434,7 +2482,12 @@ async fn hadith_gradings_handler(
             let mut meta = empty_meta();
             meta.research_checksum = format!("sha256:{checksum}");
             let data = serde_json::to_value(&result).unwrap_or(serde_json::Value::Null);
-            json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, false)
+            json_response(
+                StatusCode::OK,
+                &Envelope { api_version: API_VERSION, data, meta },
+                None,
+                false,
+            )
         }
         Err(error) => tool_error_response(error),
     }
@@ -2451,7 +2504,12 @@ async fn tafsir_get_handler(
             let mut meta = empty_meta();
             meta.research_checksum = format!("sha256:{checksum}");
             let data = serde_json::to_value(&result).unwrap_or(serde_json::Value::Null);
-            json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, false)
+            json_response(
+                StatusCode::OK,
+                &Envelope { api_version: API_VERSION, data, meta },
+                None,
+                false,
+            )
         }
         Err(error) => tool_error_response(error),
     }
@@ -2472,7 +2530,12 @@ async fn tafsir_search_handler(
             let mut meta = empty_meta();
             meta.research_checksum = format!("sha256:{checksum}");
             let data = serde_json::to_value(&result).unwrap_or(serde_json::Value::Null);
-            json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, false)
+            json_response(
+                StatusCode::OK,
+                &Envelope { api_version: API_VERSION, data, meta },
+                None,
+                false,
+            )
         }
         Err(error) => tool_error_response(error),
     }
@@ -2491,7 +2554,14 @@ async fn verse_links_handler(
 ) -> Response {
     let meta = empty_meta();
     let data = match state.verse_links.as_ref() {
-        Some(service) => match application::verse_link::VerseLinker::get_links_for_verse(service.as_ref(), surah, ayah, q.include_uncertain).await {
+        Some(service) => match application::verse_link::VerseLinker::get_links_for_verse(
+            service.as_ref(),
+            surah,
+            ayah,
+            q.include_uncertain,
+        )
+        .await
+        {
             Ok(links) => serde_json::to_value(&links).unwrap_or_else(|_| serde_json::json!([])),
             Err(_) => serde_json::json!([]),
         },

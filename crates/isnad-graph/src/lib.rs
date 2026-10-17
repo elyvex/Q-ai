@@ -6,12 +6,12 @@
 //! AuthzScope, traversal) and adds narrator/isnad-specific domain types.
 //! No new external crates — only existing workspace dependencies.
 
+pub use quran_graph::traverse;
+pub use quran_graph::traverse::up_to_k_paths;
 pub use quran_graph::{
     Assertion, AssertionDecision, AssertionKind, AuthzScope, GraphEdge, GraphNode, NodeKind,
     ProvenanceLayer, QueryBudgets,
 };
-pub use quran_graph::traverse;
-pub use quran_graph::traverse::up_to_k_paths;
 
 use serde::{Deserialize, Serialize};
 use std::fmt;

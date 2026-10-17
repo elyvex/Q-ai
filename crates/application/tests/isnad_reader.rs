@@ -60,7 +60,8 @@ async fn rijal_sources_per_scholar_not_merged() {
     .await
     .unwrap();
 
-    for (scholar, cite) in [("Ibn Hajar", "Tahdhib al-Tahdhib"), ("al-Dhahabi", "Mizan al-I'tidal")] {
+    for (scholar, cite) in [("Ibn Hajar", "Tahdhib al-Tahdhib"), ("al-Dhahabi", "Mizan al-I'tidal")]
+    {
         sqlx::query(
             "INSERT INTO narrator_rijal_sources (id, narrator_id, scholar_name, source_citation, grading_value, evidence_json, reviewer, decision, decided_at, supersedes_id, provenance_layer, confidence, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )

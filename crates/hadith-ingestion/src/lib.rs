@@ -3,12 +3,12 @@
 pub mod parser;
 pub mod validate;
 
+pub use domain::SourceId;
 pub use parser::{
-    HadithParser, HadithParserImpl, JsonHadithParser, HadithJsonParser, JsonParser, JsonHadith,
-    JsonGrading, parse,
+    HadithJsonParser, HadithParser, HadithParserImpl, JsonGrading, JsonHadith, JsonHadithParser,
+    JsonParser, parse,
 };
 pub use sources::{Source, ValidationError, ValidationReport};
-pub use domain::SourceId;
 pub use validate::HadithValidator;
 
 use std::collections::HashMap;
@@ -66,11 +66,7 @@ impl IngestionPipeline {
         }
     }
 
-    pub fn stage<S: ToString>(
-        &self,
-        source_id: S,
-        data: &[ParsedHadith],
-    ) -> Vec<StagedRecord> {
+    pub fn stage<S: ToString>(&self, source_id: S, data: &[ParsedHadith]) -> Vec<StagedRecord> {
         let key = source_id.to_string();
         let mut records = Vec::new();
         for hadith in data {
@@ -202,7 +198,12 @@ mod tests {
     #[test]
     fn validate_requires_fields() {
         let validator = HadithValidator::default();
-        let mut h = ParsedHadith { collection: "bukhari".into(), source_number: "1".into(), matn_text: "m".into(), ..Default::default() };
+        let mut h = ParsedHadith {
+            collection: "bukhari".into(),
+            source_number: "1".into(),
+            matn_text: "m".into(),
+            ..Default::default()
+        };
         assert!(validator.validate(&h).is_ok());
 
         h.source_number = "   ".into();
@@ -215,7 +216,18 @@ mod tests {
         assert!(validator.validate(&h).is_err());
 
         // grading fields
-        let mut h2 = ParsedHadith { collection: "bukhari".into(), source_number: "1".into(), matn_text: "m".into(), gradings: vec![ParsedGrading { scholar_name: "".into(), grading_value: "g".into(), source_citation: "c".into(), ..Default::default() }], ..Default::default() };
+        let mut h2 = ParsedHadith {
+            collection: "bukhari".into(),
+            source_number: "1".into(),
+            matn_text: "m".into(),
+            gradings: vec![ParsedGrading {
+                scholar_name: "".into(),
+                grading_value: "g".into(),
+                source_citation: "c".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
         assert!(validator.validate(&h2).is_err());
         h2.gradings[0].scholar_name = "s".into();
         h2.gradings[0].source_citation = "".into();
@@ -225,20 +237,40 @@ mod tests {
     #[test]
     fn validate_with_collections() {
         let v = HadithValidator::with_collections(["bukhari"]);
-        let ok = ParsedHadith { collection: "bukhari".into(), source_number: "1".into(), matn_text: "m".into(), ..Default::default() };
+        let ok = ParsedHadith {
+            collection: "bukhari".into(),
+            source_number: "1".into(),
+            matn_text: "m".into(),
+            ..Default::default()
+        };
         assert!(v.validate(&ok).is_ok());
-        let bad = ParsedHadith { collection: "tirmidhi".into(), source_number: "1".into(), matn_text: "m".into(), ..Default::default() };
+        let bad = ParsedHadith {
+            collection: "tirmidhi".into(),
+            source_number: "1".into(),
+            matn_text: "m".into(),
+            ..Default::default()
+        };
         assert!(v.validate(&bad).is_err());
     }
 
     #[test]
     fn validate_rejects_consensus_extra() {
         let v = HadithValidator::default();
-        let mut h = ParsedHadith { collection: "bukhari".into(), source_number: "1".into(), matn_text: "m".into(), ..Default::default() };
+        let mut h = ParsedHadith {
+            collection: "bukhari".into(),
+            source_number: "1".into(),
+            matn_text: "m".into(),
+            ..Default::default()
+        };
         h.extra.insert("consensus_grading".into(), serde_json::json!(true));
         assert!(v.validate(&h).is_err());
         h.extra.clear();
-        let mut g = ParsedGrading { scholar_name: "s".into(), grading_value: "g".into(), source_citation: "c".into(), ..Default::default() };
+        let mut g = ParsedGrading {
+            scholar_name: "s".into(),
+            grading_value: "g".into(),
+            source_citation: "c".into(),
+            ..Default::default()
+        };
         g.extra.insert("majority".into(), serde_json::json!(true));
         h.gradings = vec![g];
         assert!(v.validate(&h).is_err());
@@ -267,7 +299,8 @@ mod tests {
     #[test]
     fn pipeline_rejects_consensus_grading() {
         let _pipeline = IngestionPipeline::new();
-        let bad = r#"[{"collection":"bukhari","source_number":"1","matn_text":"m","consensus":"true"}]"#;
+        let bad =
+            r#"[{"collection":"bukhari","source_number":"1","matn_text":"m","consensus":"true"}]"#;
         // parse rejects first
         assert!(parse(bad).is_err());
     }
@@ -294,7 +327,9 @@ mod tests {
     fn pipeline_source_number_preserved() {
         let pipeline = IngestionPipeline::new();
         let src = pipeline.discover("url");
-        let parsed = parse(r#"[{"collection":"bukhari","source_number":"bukhari:42","matn_text":"m"}]"#).unwrap();
+        let parsed =
+            parse(r#"[{"collection":"bukhari","source_number":"bukhari:42","matn_text":"m"}]"#)
+                .unwrap();
         pipeline.stage(src.id, &parsed);
         pipeline.activate(src.id).unwrap();
         let active = pipeline.active(src.id);

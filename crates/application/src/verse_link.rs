@@ -214,6 +214,7 @@ pub struct VerseLink {
 
 impl VerseLink {
     /// A fresh computational suggestion: always `Uncertain`, never certain.
+    #[allow(clippy::too_many_arguments)]
     pub fn suggested(
         source_type: LinkSourceType,
         source_id: String,
@@ -370,11 +371,11 @@ pub fn score_overlap(source_text: &str, verse_text: &str) -> Result<f64, LinkErr
     let mut shared = 0usize;
     for token in verse.split_whitespace() {
         verse_len += 1;
-        if let Some(count) = counts.get_mut(token) {
-            if *count > 0 {
-                *count -= 1;
-                shared += 1;
-            }
+        if let Some(count) = counts.get_mut(token)
+            && *count > 0
+        {
+            *count -= 1;
+            shared += 1;
         }
     }
     if verse_len == 0 {

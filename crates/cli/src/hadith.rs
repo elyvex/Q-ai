@@ -3,8 +3,8 @@
 use clap::Subcommand;
 use std::sync::Arc;
 use storage_sqlite::SqliteDatabase;
-use tool_registry::HadithRef;
 use tool_registry::HadithBackend;
+use tool_registry::HadithRef;
 
 use crate::exit_code;
 
@@ -45,7 +45,11 @@ async fn handle_hadith_async(action: HadithAction, db_path: &str, json: bool) ->
         Ok(db) => Arc::new(db),
         Err(err) => {
             let o = CommandOutput::err(exit_code::GENERIC, err.to_string());
-            if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
+            if json {
+                println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default());
+            } else {
+                println!("{}", o.human);
+            }
             return o.exit;
         }
     };
@@ -57,11 +61,19 @@ async fn handle_hadith_async(action: HadithAction, db_path: &str, json: bool) ->
         HadithAction::Get { reference } => {
             let parsed = match HadithRef::parse(&reference) {
                 Some(r) => r,
-                None => return finish(CommandOutput::err(exit_code::USAGE, "bad reference".to_string()), json),
+                None => {
+                    return finish(
+                        CommandOutput::err(exit_code::USAGE, "bad reference".to_string()),
+                        json,
+                    );
+                }
             };
             match backend.backend_get_hadith(&parsed).await {
                 Ok((view, _meta)) => {
-                    let human = format!("{}: {} — {}", view.collection_slug, view.source_number, view.matn_text);
+                    let human = format!(
+                        "{}: {} — {}",
+                        view.collection_slug, view.source_number, view.matn_text
+                    );
                     let jsonv = serde_json::to_value(&view).unwrap_or(serde_json::Value::Null);
                     CommandOutput::ok(human, jsonv)
                 }
@@ -77,7 +89,8 @@ async fn handle_hadith_async(action: HadithAction, db_path: &str, json: bool) ->
             };
             match backend.backend_search_hadith(&params).await {
                 Ok(result) => {
-                    let human = format!("hadith.search: {} hits", result.canonical_references.len());
+                    let human =
+                        format!("hadith.search: {} hits", result.canonical_references.len());
                     let jsonv = serde_json::to_value(&result).unwrap_or(serde_json::Value::Null);
                     CommandOutput::ok(human, jsonv)
                 }
@@ -87,11 +100,18 @@ async fn handle_hadith_async(action: HadithAction, db_path: &str, json: bool) ->
         HadithAction::Gradings { reference } => {
             let parsed = match HadithRef::parse(&reference) {
                 Some(r) => r,
-                None => return finish(CommandOutput::err(exit_code::USAGE, "bad reference".to_string()), json),
+                None => {
+                    return finish(
+                        CommandOutput::err(exit_code::USAGE, "bad reference".to_string()),
+                        json,
+                    );
+                }
             };
             let (view, _meta) = match backend.backend_get_hadith(&parsed).await {
                 Ok(v) => v,
-                Err(err) => return finish(CommandOutput::err(exit_code::GENERIC, err.to_string()), json),
+                Err(err) => {
+                    return finish(CommandOutput::err(exit_code::GENERIC, err.to_string()), json);
+                }
             };
             match backend.backend_get_gradings(&view.id).await {
                 Ok(gradings) => {

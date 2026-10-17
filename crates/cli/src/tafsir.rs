@@ -3,8 +3,8 @@
 use clap::Subcommand;
 use std::sync::Arc;
 use storage_sqlite::SqliteDatabase;
-use tool_registry::TafsirRef;
 use tool_registry::TafsirBackend;
+use tool_registry::TafsirRef;
 
 use crate::exit_code;
 
@@ -47,7 +47,11 @@ async fn handle_tafsir_async(action: TafsirAction, db_path: &str, json: bool) ->
         Ok(db) => Arc::new(db),
         Err(err) => {
             let o = CommandOutput::err(exit_code::GENERIC, err.to_string());
-            if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
+            if json {
+                println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default());
+            } else {
+                println!("{}", o.human);
+            }
             return o.exit;
         }
     };
@@ -58,11 +62,19 @@ async fn handle_tafsir_async(action: TafsirAction, db_path: &str, json: bool) ->
     let output: CommandOutput = match action {
         TafsirAction::Get { reference } => {
             if reference.trim().is_empty() {
-                return finish(CommandOutput::err(exit_code::USAGE, "bad reference".to_string()), json);
+                return finish(
+                    CommandOutput::err(exit_code::USAGE, "bad reference".to_string()),
+                    json,
+                );
             }
             let parsed = match TafsirRef::parse(&reference) {
                 Some(r) => r,
-                None => return finish(CommandOutput::err(exit_code::USAGE, "bad reference".to_string()), json),
+                None => {
+                    return finish(
+                        CommandOutput::err(exit_code::USAGE, "bad reference".to_string()),
+                        json,
+                    );
+                }
             };
             match backend.backend_get_tafsir(&parsed).await {
                 Ok((view, _meta)) => {
@@ -74,14 +86,12 @@ async fn handle_tafsir_async(action: TafsirAction, db_path: &str, json: bool) ->
             }
         }
         TafsirAction::Search { query, work, profile: _ } => {
-            let params = TafsirSearchToolParams {
-                query: query.clone(),
-                work_slug: work,
-                limit: None,
-            };
+            let params =
+                TafsirSearchToolParams { query: query.clone(), work_slug: work, limit: None };
             match backend.backend_search_tafsir(&params).await {
                 Ok(result) => {
-                    let human = format!("tafsir.search: {} hits", result.canonical_references.len());
+                    let human =
+                        format!("tafsir.search: {} hits", result.canonical_references.len());
                     let jsonv = serde_json::to_value(&result).unwrap_or(serde_json::Value::Null);
                     CommandOutput::ok(human, jsonv)
                 }
