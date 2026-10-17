@@ -48,10 +48,9 @@ impl IsnadBackend for IsnadToolBackend {
         // (never conflated with "genuinely zero scholars").
         let (rijal, rijal_warning) = match self.reader.get_rijal_sources(id).await {
             Ok(v) => (v, None),
-            Err(e) => (
-                Vec::new(),
-                Some(format!("rijal sources unavailable [{}]: {}", e.code(), e)),
-            ),
+            Err(e) => {
+                (Vec::new(), Some(format!("rijal sources unavailable [{}]: {}", e.code(), e)))
+            }
         };
         let results = json!({ "narrator": narrator, "rijal_sources": rijal });
         let payload = results.clone();

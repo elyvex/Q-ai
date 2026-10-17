@@ -375,5 +375,3 @@ async fn rijal_read_failure_is_an_explicit_warning() {
         result.warnings
     );
 }
-
-
