@@ -7,6 +7,7 @@
 pub mod doctor;
 pub mod exit_code;
 pub mod hadith;
+pub mod isnad;
 pub mod links;
 pub mod quran;
 pub mod tafsir;
@@ -138,6 +139,11 @@ pub enum Commands {
     Links {
         #[command(subcommand)]
         action: links::LinksAction,
+    },
+    /// Isnad & narrator research commands (Phase 7).
+    Isnad {
+        #[command(subcommand)]
+        action: isnad::IsnadAction,
     },
     /// Shell completions (Phase 1).
     Completions {
@@ -357,12 +363,11 @@ pub fn dispatch(cli: Cli) -> i32 {
                         // Full D-13 tool surface: the two direct-read tools plus
                         // the attributed search/lexicon tools, wired to the
                         // serving-index root the API search backend uses.
-                        let tools = std::sync::Arc::new(
-                            application::quran_tools::ReaderToolBackend::registry_with_index_root(
-                                reader.clone(),
-                                application::quran_index::index_root_for_db(&db_path),
-                            ),
+                        let tools = application::quran_tools::ReaderToolBackend::registry_with_index_root(
+                            reader.clone(),
+                            application::quran_index::index_root_for_db(&db_path),
                         );
+                        let tools = std::sync::Arc::new(tools);
                         let api = std::sync::Arc::new(server::api::ReaderBackend::new(reader));
                         let search = match application::quran_search_api::SearchApiService::open(
                             &db_path,
@@ -403,6 +408,13 @@ pub fn dispatch(cli: Cli) -> i32 {
                             )),
                             Err(_) => None,
                         };
+                        // Phase 7: isnad reader service over the same SQLite database.
+                        let isnad = match storage_sqlite::SqliteDatabase::new(&db_path, 4, true).await {
+                            Ok(db) => Some(std::sync::Arc::new(
+                                application::isnad_reader::IsnadReaderService::new(std::sync::Arc::new(db)),
+                            )),
+                            Err(_) => None,
+                        };
                         // Long-lived worker host (D-13): the serve process
                         // owns durable execution; one-shot commands only
                         // enqueue. The host task is always awaited below —
@@ -428,7 +440,7 @@ pub fn dispatch(cli: Cli) -> i32 {
                         tokio::select! {
                             served = server::api::serve(
                                 &bind,
-                                server::api::AppState { tools, api, search, lexicon, graph, verse_links },
+                                server::api::AppState { tools, api, search, lexicon, graph, verse_links, isnad },
                             ) => {
                                 let _ = shutdown_tx.send(true);
                                 let joined = match host.await {
@@ -569,6 +581,10 @@ pub fn dispatch(cli: Cli) -> i32 {
         Commands::Links { action } => {
             let db_path = cfg.storage.sqlite.path.clone();
             links::handle_links(action, &db_path, cli.json)
+        }
+        Commands::Isnad { action } => {
+            let db_path = cfg.storage.sqlite.path.clone();
+            isnad::handle_isnad(action, &db_path, cli.json)
         }
     }
 }
