@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use embeddings::EmbeddingProvider;
 use rag::{RagConfig, RagDocument, RagProject, RagSource};
 use sqlx::Row;
 use storage::error::StorageError;
@@ -14,6 +15,8 @@ pub enum RagReaderError {
     Storage(#[from] StorageError),
     #[error("project not found: {0}")]
     ProjectNotFound(String),
+    #[error("project already exists: {0}")]
+    DuplicateProject(String),
     #[error("invalid config: {0}")]
     ConfigInvalid(String),
     #[error("invalid status: {0}")]
@@ -26,6 +29,7 @@ impl storage::error::Diagnostic for RagReaderError {
             Self::Storage(_) => storage::error::DiagnosticCode::new("QAI-RAG", 1),
             Self::ProjectNotFound(_) => storage::error::DiagnosticCode::new("QAI-RAG", 2),
             Self::ConfigInvalid(_) => storage::error::DiagnosticCode::new("QAI-RAG", 3),
+            Self::DuplicateProject(_) => storage::error::DiagnosticCode::new("QAI-RAG", 5),
             Self::InvalidStatus(_) => storage::error::DiagnosticCode::new("QAI-RAG", 4),
         }
     }
@@ -45,6 +49,8 @@ pub trait RagReader: Send + Sync {
     async fn create_project(&self, name: &str, config_toml: &str) -> Result<RagProject, RagReaderError>;
     async fn get_project(&self, name: &str) -> Result<RagProject, RagReaderError>;
     async fn list_projects(&self) -> Result<Vec<RagProject>, RagReaderError>;
+    async fn import_documents(&self, project: &str, source_path: &str, glob: &str, files: Vec<(String, String, serde_json::Value)>) -> Result<(usize, usize), RagReaderError>;
+    async fn list_sources(&self, project: &str) -> Result<Vec<RagSource>, RagReaderError>;
     async fn insert_source(&self, source: &RagSource) -> Result<(), RagReaderError>;
     async fn set_source_status(&self, project: &str, source: &str, status: &str) -> Result<(), RagReaderError>;
     async fn insert_document(&self, doc: &RagDocument, embedding: &[f32]) -> Result<(), RagReaderError>;
@@ -87,6 +93,15 @@ impl RagReader for SqliteRagReader {
     async fn create_project(&self, name: &str, config_toml: &str) -> Result<RagProject, RagReaderError> {
         let cfg = RagConfig::from_toml_str(config_toml)
             .map_err(|e| RagReaderError::ConfigInvalid(e.to_string()))?;
+        // duplicate check
+        let exists: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rag_projects WHERE name = ?")
+            .bind(name)
+            .fetch_one(self.db.read_pool())
+            .await
+            .map_err(|e| RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
+        if exists > 0 {
+            return Err(RagReaderError::DuplicateProject(name.to_string()));
+        }
         let id = uuid::Uuid::new_v4().to_string();
         let now = Self::now();
         sqlx::query(
@@ -97,8 +112,8 @@ impl RagReader for SqliteRagReader {
         .bind(name)
         .bind(config_toml)
         .bind(&cfg.embedding.provider)
-        .bind(cfg.embedding.dim as i64)
-        .bind(&cfg.reranker.name)
+        .bind(cfg.embedding.dimension as i64)
+        .bind(&cfg.reranker.provider)
         .bind(&cfg.router.name)
         .bind(&now)
         .bind(&now)
@@ -142,6 +157,78 @@ impl RagReader for SqliteRagReader {
         Ok(out)
     }
 
+    async fn import_documents(&self, project: &str, source_path: &str, glob: &str, files: Vec<(String, String, serde_json::Value)>) -> Result<(usize, usize), RagReaderError> {
+        let proj = self.get_project(project).await?;
+        let source = RagSource {
+            id: uuid::Uuid::new_v4().to_string(),
+            project_id: proj.id.clone(),
+            path: source_path.to_string(),
+            glob: glob.to_string(),
+            status: rag::SourceStatus::Active,
+        };
+        self.insert_source(&source).await?;
+        let embedder = embeddings::LocalHashEmbedding::new(proj.config.embedding.dimension);
+        let mut imported = 0usize;
+        let mut skipped = 0usize;
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for (path, text, metadata) in files {
+            if text.trim().is_empty() {
+                skipped += 1;
+                continue;
+            }
+            if !seen.insert(path.clone()) {
+                skipped += 1;
+                continue;
+            }
+            // unchanged by path: skip if already exists
+            let exists: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rag_documents WHERE project_id = ? AND path = ?")
+                .bind(&proj.id)
+                .bind(&path)
+                .fetch_one(self.db.read_pool())
+                .await
+                .map_err(|e| RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
+            if exists > 0 {
+                skipped += 1;
+                continue;
+            }
+            let doc = RagDocument {
+                id: uuid::Uuid::new_v4().to_string(),
+                project_id: proj.id.clone(),
+                source_id: source.id.clone(),
+                path,
+                title: None,
+                text: text.clone(),
+                metadata,
+            };
+            let emb = embedder.embed(&text);
+            self.insert_document(&doc, &emb).await?;
+            imported += 1;
+        }
+        Ok((imported, skipped))
+    }
+
+    async fn list_sources(&self, project: &str) -> Result<Vec<RagSource>, RagReaderError> {
+        let pid = self.project_id(project).await?;
+        let rows = sqlx::query("SELECT id, project_id, path, glob, status FROM rag_sources WHERE project_id = ?")
+            .bind(&pid)
+            .fetch_all(self.db.read_pool())
+            .await
+            .map_err(|e| RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
+        let mut out = Vec::new();
+        for row in rows {
+            let status_str: String = row.get("status");
+            let status = rag::SourceStatus::from_str(&status_str).unwrap_or(rag::SourceStatus::Active);
+            out.push(RagSource {
+                id: row.get("id"),
+                project_id: row.get("project_id"),
+                path: row.get("path"),
+                glob: row.get("glob"),
+                status,
+            });
+        }
+        Ok(out)
+    }
+
     async fn insert_source(&self, source: &RagSource) -> Result<(), RagReaderError> {
         sqlx::query(
             r#"INSERT INTO rag_sources (id, project_id, path, glob, status, tombstoned_at, audit_seq, created_at)
@@ -173,8 +260,15 @@ impl RagReader for SqliteRagReader {
             .execute(self.db.write_pool())
             .await
             .map_err(|e| RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
-        if status == "tombstoned" {
+        if status == "deactivated" || status == "tombstoned" {
             self.delete_embeddings_for_source(project, source).await?;
+            let pid = self.project_id(project).await?;
+            sqlx::query("DELETE FROM rag_documents_fts WHERE doc_id IN (SELECT id FROM rag_documents WHERE project_id = ? AND source_id = ?)")
+                .bind(&pid)
+                .bind(source)
+                .execute(self.db.write_pool())
+                .await
+                .map_err(|e| RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
         }
         Ok(())
     }
@@ -250,16 +344,23 @@ impl RagReader for SqliteRagReader {
 
     async fn search_fts(&self, project: &str, query: &str) -> Result<Vec<String>, RagReaderError> {
         let pid = self.project_id(project).await?;
-        // get project doc ids
-        let doc_ids: Vec<String> = sqlx::query_scalar("SELECT id FROM rag_documents WHERE project_id = ?")
-            .bind(&pid)
-            .fetch_all(self.db.read_pool())
-            .await
-            .map_err(|e| RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
-        let set: std::collections::HashSet<String> = doc_ids.into_iter().collect();
-        // FTS match
-        let rows = sqlx::query("SELECT doc_id FROM rag_documents_fts WHERE text MATCH ?")
-            .bind(query)
+        // active doc ids only
+        let active_docs: Vec<String> = sqlx::query_scalar(
+            r#"SELECT d.id FROM rag_documents d
+               JOIN rag_sources s ON s.id = d.source_id AND s.project_id = d.project_id
+               WHERE d.project_id = ? AND s.status = 'active'"#,
+        )
+        .bind(&pid)
+        .fetch_all(self.db.read_pool())
+        .await
+        .map_err(|e| RagReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
+        let set: std::collections::HashSet<String> = active_docs.into_iter().collect();
+
+        // Escape FTS5 query by quoting as a phrase (mitigate injection).
+        let escaped = format!("\"{}\"", query.replace('"', "\"\""));
+
+        let rows = sqlx::query("SELECT doc_id FROM rag_documents_fts WHERE text MATCH ? ORDER BY bm25(rag_documents_fts)")
+            .bind(&escaped)
             .fetch_all(self.db.read_pool())
             .await;
         let mut out = Vec::new();
@@ -268,6 +369,20 @@ impl RagReader for SqliteRagReader {
                 let id: String = row.get("doc_id");
                 if set.contains(&id) {
                     out.push(id);
+                }
+            }
+        } else {
+            // fallback: try raw query
+            let rows = sqlx::query("SELECT doc_id FROM rag_documents_fts WHERE text MATCH ?")
+                .bind(query)
+                .fetch_all(self.db.read_pool())
+                .await;
+            if let Ok(rows) = rows {
+                for row in rows {
+                    let id: String = row.get("doc_id");
+                    if set.contains(&id) {
+                        out.push(id);
+                    }
                 }
             }
         }

@@ -8,7 +8,7 @@ pub mod tombstone;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-pub use config::{RagConfig, ConfigError};
+pub use config::{RagConfig, ConfigError, RagConfigError, ProjectMeta, EmbeddingCfg, RerankerCfg, RouterCfg, SourceCfg};
 pub use project::ProjectDescriptor;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

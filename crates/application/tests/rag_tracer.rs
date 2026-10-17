@@ -14,7 +14,8 @@ async fn rag_tracer_e2e() {
     let db = Arc::new(SqliteDatabase::new(&path_str, 4, true).await.unwrap());
     let reader = Arc::new(SqliteRagReader::new(db.clone()));
     let embedder: Arc<dyn EmbeddingProvider> = Arc::new(embeddings::LocalHashEmbedding::new(32));
-    let search = Arc::new(RagSearchService::new(reader.clone(), embedder));
+    let reranker: Arc<dyn reranking::Reranker> = Arc::new(reranking::ScoreReranker);
+    let search = Arc::new(RagSearchService::new(db.clone(), embedder, reranker));
     let backend = RagToolBackend::new(reader.clone(), search);
 
     let config_toml = r#"

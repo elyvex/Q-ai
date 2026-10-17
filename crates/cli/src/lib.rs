@@ -10,6 +10,7 @@ pub mod hadith;
 pub mod isnad;
 pub mod links;
 pub mod quran;
+pub mod rag;
 pub mod tafsir;
 
 use clap::{Parser, Subcommand};
@@ -144,6 +145,11 @@ pub enum Commands {
     Isnad {
         #[command(subcommand)]
         action: isnad::IsnadAction,
+    },
+    /// Multi-RAG platform commands (Phase 8).
+    Rag {
+        #[command(subcommand)]
+        action: rag::RagAction,
     },
     /// Shell completions (Phase 1).
     Completions {
@@ -602,6 +608,9 @@ pub fn dispatch(cli: Cli) -> i32 {
         Commands::Isnad { action } => {
             let db_path = cfg.storage.sqlite.path.clone();
             isnad::handle_isnad(action, &db_path, cli.json)
+        }
+        Commands::Rag { action } => {
+            rag::handle_rag(action, cli.json)
         }
     }
 }
