@@ -39,7 +39,7 @@
 
 ### Retrieval, Answers & Sources
 
-- [ ] **REQ-multi-rag**: Multiple independently configured RAG systems with structure-aware ingestion/chunking, smart retrieval (deterministic + model-assisted router), routing rules, tool-plan visibility (PRD §18, §19, §20)
+- [x] **REQ-multi-rag**: Multiple independently configured RAG systems with structure-aware ingestion/chunking, smart retrieval (deterministic + model-assisted router), routing rules, tool-plan visibility (PRD §18, §19, §20)
 - [ ] **REQ-generic-rag-platform**: Generic document processing/chunking, portable RAG projects, declarative RAG config, composition, import sources, web views, generic-content storage (PRD §25.5–§25.12)
 - [ ] **REQ-answer-contract**: Structured evidence answers: sections, claim-level citations, citation validation, side-by-side disagreement (PRD §21)
 - [ ] **REQ-source-catalog-trust**: Central source catalog (records, states, internet updates, signed manifests, update safety, genealogy) + per-source trust profiles (PRD §22, §23)
@@ -111,7 +111,7 @@ Deferred post-MVP extensions (from PRD §44.2 excludes — acknowledged, not in 
 | REQ-hadith-corpus | Phase 6 | Complete |
 | REQ-tafsir-comparative | Phase 6 | Complete |
 | REQ-isnad-narrator-graph | Phase 7 | Complete |
-| REQ-multi-rag | Phase 8 | Pending |
+| REQ-multi-rag | Phase 8 | Complete |
 | REQ-generic-rag-platform | Phase 8 | Pending |
 | REQ-knowledge-domains | Phase 9 | Pending |
 | REQ-agents-tools-runtime | Phase 10 | Pending |
