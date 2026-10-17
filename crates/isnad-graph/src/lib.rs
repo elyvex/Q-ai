@@ -21,9 +21,26 @@ use std::fmt;
 #[serde(transparent)]
 pub struct NarratorId(String);
 
+/// T-07-05: the slug becomes a primary key and a canonical reference, so it
+/// is constrained at the one place both constructors route through: a short,
+/// ASCII, URL-safe token (letters, digits, `-`, `_`).
+fn validate_slug(slug: &str) -> Result<(), String> {
+    if slug.is_empty()
+        || slug.len() > 128
+        || !slug.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err(format!(
+            "invalid narrator slug `{slug}`: expected 1..=128 chars of [A-Za-z0-9_-]"
+        ));
+    }
+    Ok(())
+}
+
 impl NarratorId {
-    pub fn new(slug: &str) -> Self {
-        Self(format!("narrator:{}", slug))
+    /// Construct from a trusted slug, validating its charset/length.
+    pub fn new(slug: &str) -> Result<Self, String> {
+        validate_slug(slug)?;
+        Ok(Self(format!("narrator:{}", slug)))
     }
 
     pub fn as_str(&self) -> &str {
@@ -44,9 +61,10 @@ impl fmt::Display for NarratorId {
 impl std::str::FromStr for NarratorId {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if !s.starts_with("narrator:") || s.len() <= "narrator:".len() {
-            return Err(format!("invalid narrator id `{s}`"));
-        }
+        let slug = s
+            .strip_prefix("narrator:")
+            .ok_or_else(|| format!("invalid narrator id `{s}`: missing `narrator:` prefix"))?;
+        validate_slug(slug)?;
         Ok(Self(s.to_string()))
     }
 }
@@ -130,7 +148,7 @@ mod tests {
 
     #[test]
     fn narrator_id_stable_form() {
-        let id = NarratorId::new("abu-hurayra");
+        let id = NarratorId::new("abu-hurayra").unwrap();
         assert_eq!(id.to_string(), "narrator:abu-hurayra");
         assert_eq!(id.slug(), "abu-hurayra");
         let parsed: NarratorId = "narrator:abu-hurayra".parse().unwrap();
@@ -138,9 +156,24 @@ mod tests {
     }
 
     #[test]
+    fn narrator_id_rejects_invalid_slugs() {
+        // T-07-05: charset/length validation on both constructors.
+        for bad in ["", "has space", "semi;colon", "sl/ash", "dot.dot", "quote'd", "../escape"] {
+            assert!(NarratorId::new(bad).is_err(), "`{bad}` must be rejected by new");
+            assert!(
+                format!("narrator:{bad}").parse::<NarratorId>().is_err(),
+                "`narrator:{bad}` must be rejected by from_str"
+            );
+        }
+        assert!(NarratorId::new(&"a".repeat(129)).is_err(), "over-length slug rejected");
+        assert!(NarratorId::new(&"a".repeat(128)).is_ok(), "128-char slug accepted");
+        assert!("abu-hurayra".parse::<NarratorId>().is_err(), "missing prefix rejected");
+    }
+
+    #[test]
     fn narrator_roundtrip_serde() {
         let rec = NarratorRecord {
-            id: NarratorId::new("x"),
+            id: NarratorId::new("x").unwrap(),
             slug: "x".into(),
             primary_name: "Name".into(),
             name_variants: vec!["N".into()],
@@ -156,7 +189,7 @@ mod tests {
     fn rijal_source_per_scholar_no_consensus() {
         let rs = RijalSource {
             id: "r1".into(),
-            narrator_id: NarratorId::new("x"),
+            narrator_id: NarratorId::new("x").unwrap(),
             scholar_name: "Ibn Hajar".into(),
             source_citation: "Tahdhib".into(),
             grading_value: Some("thiqa".into()),
