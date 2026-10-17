@@ -447,7 +447,17 @@ pub fn dispatch(cli: Cli) -> i32 {
                         tokio::select! {
                             served = server::api::serve(
                                 &bind,
-                                server::api::AppState { tools, api, search, lexicon, graph, verse_links },
+                                server::api::AppState {
+                                    tools,
+                                    api,
+                                    search,
+                                    lexicon,
+                                    graph,
+                                    verse_links,
+                                    // WR-08: HTTP mutations are deny-by-default.
+                                    allow_isnad_mutations: cfg.policy.tool_execution_default
+                                        == "allow",
+                                },
                             ) => {
                                 let _ = shutdown_tx.send(true);
                                 let joined = match host.await {

@@ -168,6 +168,10 @@ pub struct AppState {
     pub graph: Arc<dyn application::quran_graph_api::GraphBackend>,
     /// Optional verse-link service (Phase 6 SC3).
     pub verse_links: Option<std::sync::Arc<application::verse_link::VerseLinkService>>,
+    /// WR-08: whether mutating isnad identity tools are permitted on the
+    /// generic (unauthenticated) tool route. Deny-by-default; the serve arm
+    /// sets this from `policy.tool_execution_default == "allow"`.
+    pub allow_isnad_mutations: bool,
 }
 
 fn empty_meta() -> Meta {
@@ -237,6 +241,8 @@ fn tool_status(error: &ToolError) -> StatusCode {
             "QAI-QUR-0306" | "QAI-QUR-0307" | "QAI-QUR-0308" | "QAI-QUR-0309" | "QAI-QUR-0322"
             | "QAI-QUR-0324" | "QAI-QUR-0325" => StatusCode::NOT_FOUND,
             "QAI-QUR-0326" => StatusCode::FORBIDDEN,
+            // WR-08: mutating isnad identity tool refused on the HTTP route.
+            "QAI-ISNAD-0326" => StatusCode::FORBIDDEN,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         },
     }
@@ -520,6 +526,19 @@ async fn tool_handler(
     Path(name): Path<String>,
     Json(params): Json<serde_json::Value>,
 ) -> Response {
+    // WR-08: mutating isnad identity tools write durable state, but this
+    // generic route is unauthenticated and framed read-only. Deny them by
+    // default; `policy.tool_execution_default = "allow"` opts in. The local
+    // CLI (`qai isnad …`) is the trusted operator surface and is unaffected.
+    if tool_registry::is_mutating_isnad_tool(&name) && !state.allow_isnad_mutations {
+        return tool_error_response(tools::ToolError::Backend {
+            code: "QAI-ISNAD-0326".to_string(),
+            detail: format!(
+                "tool `{name}` mutates narrator-identity state and is disabled on the HTTP route; set policy.tool_execution_default = \"allow\" to enable"
+            ),
+        });
+    }
+
     // The graph registry opens on the already-open handle — no backend or
     // database handle is re-opened (`GraphBackend` is the same trait the
     // application graph tools read through).

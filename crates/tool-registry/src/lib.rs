@@ -1358,6 +1358,26 @@ mod tests {
     use super::*;
     use quran_core::{AyahNumber, EditionSelector, SurahNumber};
 
+    #[test]
+    fn mutating_isnad_tools_are_classified() {
+        // WR-08: the mutation gate keys off this predicate, so it must name
+        // exactly the INSERT/UPDATE isnad tools and nothing read-only.
+        for name in [
+            "isnad.identity_propose",
+            "isnad.identity_accept",
+            "isnad.identity_reject",
+            "isnad.identity_dispute",
+            "isnad.identity_supersede",
+        ] {
+            assert!(is_mutating_isnad_tool(name), "{name} must be classified mutating");
+        }
+        for name in
+            ["isnad.narrator", "isnad.rijal", "isnad.trace", "quran.get_ayah", "hadith.get", "nope"]
+        {
+            assert!(!is_mutating_isnad_tool(name), "{name} must not be classified mutating");
+        }
+    }
+
     struct FakeBackend;
 
     fn test_view() -> (AyahView, BackendMeta) {
@@ -1824,3 +1844,21 @@ pub const ISNAD_TOOL_NAMES: [&str; 6] = [
     "isnad.identity_accept",
     "isnad.identity_reject",
 ];
+
+/// Isnad tools that write durable state (INSERT/UPDATE). The read-only isnad
+/// tools (`isnad.narrator`, `isnad.rijal`, `isnad.trace`) are excluded.
+///
+/// WR-08: the generic HTTP tool route is unauthenticated, so the server uses
+/// this to deny every mutating isnad tool unless explicitly opted in
+/// (`policy.tool_execution_default = "allow"`), rather than exposing
+/// INSERT/UPDATE capabilities on a read-only route by default.
+pub fn is_mutating_isnad_tool(name: &str) -> bool {
+    matches!(
+        name,
+        "isnad.identity_propose"
+            | "isnad.identity_accept"
+            | "isnad.identity_reject"
+            | "isnad.identity_dispute"
+            | "isnad.identity_supersede"
+    )
+}
