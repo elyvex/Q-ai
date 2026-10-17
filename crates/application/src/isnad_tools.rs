@@ -252,7 +252,7 @@ impl IsnadBackend for IsnadToolBackend {
         self.reader.accept_identity(&params.id, &params.reviewer).await.map_err(|e| {
             ToolError::Backend { code: e.code().to_string(), detail: e.to_string() }
         })?;
-        self.make_decision_result("isnad.identity_accept", params)
+        self.make_decision_result("isnad.identity_accept", "accepted", params)
     }
     async fn backend_reject_identity(
         &self,
@@ -261,7 +261,7 @@ impl IsnadBackend for IsnadToolBackend {
         self.reader.reject_identity(&params.id, &params.reviewer).await.map_err(|e| {
             ToolError::Backend { code: e.code().to_string(), detail: e.to_string() }
         })?;
-        self.make_decision_result("isnad.identity_reject", params)
+        self.make_decision_result("isnad.identity_reject", "rejected", params)
     }
     async fn backend_dispute_identity(
         &self,
@@ -270,7 +270,7 @@ impl IsnadBackend for IsnadToolBackend {
         self.reader.dispute_identity(&params.id, &params.reviewer).await.map_err(|e| {
             ToolError::Backend { code: e.code().to_string(), detail: e.to_string() }
         })?;
-        self.make_decision_result("isnad.identity_dispute", params)
+        self.make_decision_result("isnad.identity_dispute", "disputed", params)
     }
     async fn backend_supersede_identity(
         &self,
@@ -334,10 +334,11 @@ impl IsnadToolBackend {
     fn make_decision_result(
         &self,
         name: &str,
+        decision: &str,
         params: &IdentityDecisionParams,
     ) -> Result<ToolResult<serde_json::Value>, ToolError> {
         let started = std::time::Instant::now();
-        let results = json!({ "id": params.id, "decision": name });
+        let results = json!({ "id": params.id, "decision": decision });
         let payload = results.clone();
         let query = serde_json::to_value(params).unwrap_or(serde_json::Value::Null);
         Ok(ToolResult {
