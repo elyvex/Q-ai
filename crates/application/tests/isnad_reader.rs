@@ -252,6 +252,35 @@ async fn d_layer_gate_requires_fields() {
     assert_eq!(ConfidenceBand::of(0.69), ConfidenceBand::Low);
 }
 
+/// WR-06 regression: out-of-domain / non-finite confidence must be rejected
+/// before insert (the DB CHECK only enforces NOT NULL).
+#[tokio::test]
+async fn confidence_out_of_domain_is_rejected() {
+    let (_dir, db) = migrated_db().await;
+    let svc = IsnadReaderService::new(db.clone());
+    let proposal = |confidence: Option<f64>| application::isnad_reader::IsnadIdentityProposal {
+        claim: serde_json::json!({}),
+        evidence: serde_json::json!({}),
+        source_location: "loc".into(),
+        provenance_layer: "B".into(),
+        algorithm: None,
+        algorithm_version: None,
+        confidence,
+    };
+    for bad in [Some(1e9), Some(-1.0), Some(f64::NAN), Some(f64::INFINITY)] {
+        assert!(
+            svc.propose_identity(proposal(bad)).await.is_err(),
+            "confidence {bad:?} must be rejected"
+        );
+    }
+    for ok in [None, Some(0.0), Some(0.5), Some(1.0)] {
+        assert!(
+            svc.propose_identity(proposal(ok)).await.is_ok(),
+            "confidence {ok:?} must be accepted"
+        );
+    }
+}
+
 /// CR-01 regression: an `isnad_edges` row whose endpoint is not a loaded
 /// narrator node (e.g. `narrator:* -NARRATES-> hadith:*`, the D-07-03
 /// backfill shape) must be skipped-with-count, never abort the projection.

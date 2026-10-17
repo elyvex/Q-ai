@@ -212,6 +212,7 @@ impl IsnadReader for IsnadReaderService {
             _ => "B",
         };
         let confidence = proposal.confidence;
+        validate_confidence(confidence)?;
         // D-gate: if D, require algorithm+version+confidence
         if layer == "D"
             && (proposal.algorithm.is_none()
@@ -332,3 +333,18 @@ impl IsnadReaderService {
 fn chrono_now() -> String {
     Timestamp::now().to_string()
 }
+
+/// WR-06: confidence is attributed research metadata; reject values outside
+/// the `0.0..=1.0` domain (and non-finite values) before they reach the DB,
+/// whose CHECK only enforces NOT NULL.
+fn validate_confidence(confidence: Option<f64>) -> Result<(), IsnadReaderError> {
+    if let Some(c) = confidence
+        && !(c.is_finite() && (0.0..=1.0).contains(&c))
+    {
+        return Err(IsnadReaderError::InvalidInput(
+            "confidence must be a finite value within 0.0..=1.0".into(),
+        ));
+    }
+    Ok(())
+}
+
