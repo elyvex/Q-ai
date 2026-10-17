@@ -37,7 +37,8 @@ impl HadithValidator {
             });
         }
         // Consensus-merged grading values are forbidden.
-        for key in hadith.extra.keys() {            let lower = key.to_lowercase();
+        for key in hadith.extra.keys() {
+            let lower = key.to_lowercase();
             if lower.contains("consensus") || lower.contains("majority") {
                 return Err(ValidationError {
                     code: "QAI-HAD-ING-0003".to_string(),
@@ -61,7 +62,8 @@ impl HadithValidator {
                     location: None,
                 });
             }
-            for key in grading.extra.keys() {                let lower = key.to_lowercase();
+            for key in grading.extra.keys() {
+                let lower = key.to_lowercase();
                 if lower.contains("consensus") || lower.contains("majority") {
                     return Err(ValidationError {
                         code: "QAI-HAD-ING-0003".to_string(),
