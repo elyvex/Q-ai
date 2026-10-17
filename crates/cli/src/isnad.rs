@@ -238,8 +238,7 @@ async fn handle_isnad_async(action: IsnadAction, db_path: &str, json: bool) -> i
                                     .get("label")
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("uncertain");
-                                let suffix =
-                                    if label == "confirmed" { "" } else { " (uncertain)" };
+                                let suffix = if label == "confirmed" { "" } else { " (uncertain)" };
                                 human.push_str(&format!(
                                     "  {} -{}-> {} {} {}{}\n",
                                     src, edge, dst, prov, conf_str, suffix
