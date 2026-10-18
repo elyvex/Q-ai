@@ -189,6 +189,12 @@ pub const TAFSIR_GET_VERSION: SemVer = SemVer::new(1, 0, 0);
 pub const TAFSIR_SEARCH_VERSION: SemVer = SemVer::new(1, 0, 0);
 /// Tool versions for scripture get (Phase 9, plan 09-01).
 pub const SCRIPTURE_GET_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions for scripture search (Phase 9, plan 09-02).
+pub const SCRIPTURE_SEARCH_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions for scripture translations (Phase 9, plan 09-02).
+pub const SCRIPTURE_TRANSLATIONS_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions for scripture editions (Phase 9, plan 09-02).
+pub const SCRIPTURE_EDITIONS_VERSION: SemVer = SemVer::new(1, 0, 0);
 
 /// A hadith reference: collection slug + source number.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -980,7 +986,7 @@ impl ToolRegistry {
     }
 
     /// The full registered tool set (§12 tool plan; D-13; Phase 6 hadith + tafsir tools).
-    pub const TOOL_NAMES: [&'static str; 18] = [
+    pub const TOOL_NAMES: [&'static str; 21] = [
         "quran.get_ayah",
         "quran.get_context",
         "quran.search",
@@ -999,6 +1005,9 @@ impl ToolRegistry {
         "tafsir.get",
         "tafsir.search",
         "scripture.get",
+        "scripture.search",
+        "scripture.translations",
+        "scripture.editions",
     ];
 
     /// Registered tool names.
@@ -1546,6 +1555,84 @@ impl ToolRegistry {
         Ok((result, meta))
     }
 
+    /// `scripture.search`: normalized search over scripture verses.
+    pub async fn search_scripture(
+        &self,
+        params: ScriptureSearchToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        if params.query.trim().is_empty() {
+            return Err(ToolError::InvalidInput {
+                tool: "scripture.search",
+                detail: "query text must not be empty".to_string(),
+            });
+        }
+        let scripture_backend = self.scripture_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-SCR-0310".to_string(),
+            detail: "scripture backend not configured".to_string(),
+        })?;
+        scripture_backend.backend_search_scripture(&params).await
+    }
+
+    /// `scripture.translations`: fetch translations for a verse.
+    pub async fn get_scripture_translations(
+        &self,
+        verse_id: String,
+        language: Option<String>,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let scripture_backend = self.scripture_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-SCR-0310".to_string(),
+            detail: "scripture backend not configured".to_string(),
+        })?;
+        let lang = language.unwrap_or_default();
+        let value = scripture_backend.backend_get_translation(&verse_id, &lang).await?;
+        // Wrap raw value into ToolResult? backend returns raw Value, not ToolResult. 
+        // To keep typed tool parity, return via backend directly is not ToolResult. 
+        // But ToolRegistry methods should return ToolResult. Hmm.
+        Ok(ToolResult {
+            tool_name: "scripture.translations".to_string(),
+            tool_version: SCRIPTURE_TRANSLATIONS_VERSION,
+            query: serde_json::json!({"verse_id": verse_id, "language": lang}),
+            normalization_rules: Vec::new(),
+            edition_id: None,
+            edition_version: None,
+            results: value.clone(),
+            canonical_references: vec![verse_id.clone()],
+            analysis_sources: vec![AnalysisSource { kind: "scripture".to_string(), reference: verse_id }],
+            confidence: None,
+            warnings: Vec::new(),
+            execution_time_ms: 0.0,
+            reproducibility: reproducibility("scripture.translations", SCRIPTURE_TRANSLATIONS_VERSION, &serde_json::json!({}), None, None, BTreeMap::new(), 0),
+            research_checksum: research_checksum("scripture.translations", SCRIPTURE_TRANSLATIONS_VERSION, &serde_json::json!({}), &serde_json::json!({}), &value).expect("checksum"),
+        })
+    }
+
+    /// `scripture.editions`: list editions.
+    pub async fn list_scripture_editions(
+        &self,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let scripture_backend = self.scripture_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-SCR-0310".to_string(),
+            detail: "scripture backend not configured".to_string(),
+        })?;
+        let value = scripture_backend.backend_list_editions().await?;
+        Ok(ToolResult {
+            tool_name: "scripture.editions".to_string(),
+            tool_version: SCRIPTURE_EDITIONS_VERSION,
+            query: serde_json::json!({}),
+            normalization_rules: Vec::new(),
+            edition_id: None,
+            edition_version: None,
+            results: value.clone(),
+            canonical_references: Vec::new(),
+            analysis_sources: Vec::new(),
+            confidence: None,
+            warnings: Vec::new(),
+            execution_time_ms: 0.0,
+            reproducibility: reproducibility("scripture.editions", SCRIPTURE_EDITIONS_VERSION, &serde_json::json!({}), None, None, BTreeMap::new(), 0),
+            research_checksum: research_checksum("scripture.editions", SCRIPTURE_EDITIONS_VERSION, &serde_json::json!({}), &serde_json::json!({}), &value).expect("checksum"),
+        })
+    }
+
     /// `tafsir.search`: normalized search over tafsir records.
     pub async fn search_tafsir(
         &self,
@@ -1917,6 +2004,9 @@ mod tests {
                 "tafsir.get",
                 "tafsir.search",
                 "scripture.get",
+                "scripture.search",
+                "scripture.translations",
+                "scripture.editions",
             ]
         );
     }

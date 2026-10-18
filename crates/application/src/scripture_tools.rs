@@ -4,10 +4,13 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use scripture::ScriptureView;
-use tool_registry::{BackendMeta, ScriptureBackend, ScriptureRef, ScriptureSearchToolParams};
-use tools::{ToolError, ToolResult};
+use tool_registry::{BackendMeta, ScriptureBackend, ScriptureRef, ScriptureSearchToolParams, SCRIPTURE_SEARCH_VERSION};
+use std::time::Instant;
+use std::collections::BTreeMap;
+use tools::{AnalysisSource, ToolError, ToolResult, reproducibility, research_checksum};
 
 use crate::scripture_reader::{ScriptureReader, ScriptureReaderError, ScriptureReaderService};
+use crate::scripture_search::{ScriptureSearchService, ScriptureSearchParams};
 
 /// Map reader error to tool error.
 fn reader_error(error: ScriptureReaderError) -> ToolError {
@@ -18,14 +21,22 @@ fn reader_error(error: ScriptureReaderError) -> ToolError {
 /// The scripture tool backend.
 pub struct ScriptureToolBackend {
     reader: Arc<ScriptureReaderService>,
+    search: Arc<ScriptureSearchService>,
 }
 
 impl ScriptureToolBackend {
     pub fn new(reader: Arc<ScriptureReaderService>) -> Self {
-        Self { reader }
+        let search = Arc::new(ScriptureSearchService::new(
+            reader.database_arc(),
+            reader.clone() as Arc<dyn ScriptureReader>,
+        ));
+        Self { reader, search }
     }
     pub fn reader(&self) -> &ScriptureReaderService {
         &self.reader
+    }
+    pub fn search(&self) -> &ScriptureSearchService {
+        &self.search
     }
 }
 
@@ -73,11 +84,94 @@ impl ScriptureBackend for ScriptureToolBackend {
 
     async fn backend_search_scripture(
         &self,
-        _params: &ScriptureSearchToolParams,
+        params: &ScriptureSearchToolParams,
     ) -> Result<ToolResult<serde_json::Value>, ToolError> {
-        Err(ToolError::Backend {
+        let started = Instant::now();
+        if params.query.trim().is_empty() {
+            return Err(ToolError::InvalidInput {
+                tool: "scripture.search",
+                detail: "query text must not be empty".to_string(),
+            });
+        }
+
+        let search_params = ScriptureSearchParams {
+            query: params.query.clone(),
+            edition: params.edition.clone(),
+            limit: params.limit,
+        };
+        let results = self.search.search(&search_params).await.map_err(|e| {
+            use storage::error::Diagnostic;
+            ToolError::Backend { code: e.code().to_string(), detail: e.to_string() }
+        })?;
+
+        let canonical_references: Vec<String> =
+            results.iter().map(|r| r.verse_id.to_string()).collect();
+        let analysis_sources: Vec<AnalysisSource> = canonical_references
+            .iter()
+            .map(|r| AnalysisSource { kind: "scripture".to_string(), reference: r.clone() })
+            .collect();
+
+        let payload = serde_json::to_value(&results).unwrap_or(serde_json::Value::Null);
+        let query = serde_json::to_value(params).unwrap_or(serde_json::Value::Null);
+
+        let result = ToolResult {
+            tool_name: "scripture.search".to_string(),
+            tool_version: SCRIPTURE_SEARCH_VERSION,
+            query: query.clone(),
+            normalization_rules: vec!["N01".to_string(), "N03".to_string()],
+            edition_id: None,
+            edition_version: None,
+            results: payload.clone(),
+            canonical_references,
+            analysis_sources,
+            confidence: None,
+            warnings: Vec::new(),
+            execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
+            reproducibility: reproducibility(
+                "scripture.search",
+                SCRIPTURE_SEARCH_VERSION,
+                &query,
+                None,
+                None,
+                BTreeMap::new(),
+                0,
+            ),
+            research_checksum: research_checksum(
+                "scripture.search",
+                SCRIPTURE_SEARCH_VERSION,
+                &query,
+                &serde_json::json!({}),
+                &payload,
+            )
+            .expect("research checksum input is JSON-serializable"),
+        };
+        Ok(result)
+    }
+
+    async fn backend_list_editions(&self) -> Result<serde_json::Value, ToolError> {
+        let editions = self.reader.list_editions(None).await.map_err(|e| {
+            use storage::error::Diagnostic;
+            ToolError::Backend { code: e.code().to_string(), detail: e.to_string() }
+        })?;
+        serde_json::to_value(editions).map_err(|e| ToolError::Backend {
             code: "QAI-SCR-0310".to_string(),
-            detail: "scripture.search is not supported by this backend".to_string(),
+            detail: e.to_string(),
+        })
+    }
+
+    async fn backend_get_translation(&self, verse_id: &str, language: &str) -> Result<serde_json::Value, ToolError> {
+        let vid: scripture::ScriptureVerseId = verse_id.parse().map_err(|_| ToolError::InvalidInput {
+            tool: "scripture.translations",
+            detail: "invalid verse id".to_string(),
+        })?;
+        let lang = if language.trim().is_empty() { None } else { Some(language) };
+        let translations = self.reader.get_translations(&vid, lang).await.map_err(|e| {
+            use storage::error::Diagnostic;
+            ToolError::Backend { code: e.code().to_string(), detail: e.to_string() }
+        })?;
+        serde_json::to_value(translations).map_err(|e| ToolError::Backend {
+            code: "QAI-SCR-0310".to_string(),
+            detail: e.to_string(),
         })
     }
 }

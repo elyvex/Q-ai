@@ -424,7 +424,7 @@ async fn search_tool_returns_attributed_envelope() {
     // The registry ships twelve `quran.*` tools (two reads + five D-13
     // lexicon/search + five graph) plus three `hadith.*` and two `tafsir.*`
     // read tools (Phase 6); the backend only serves the ones it wires.
-    assert_eq!(registry.tool_names().len(), 17);
+    assert_eq!(registry.tool_names().len(), 21);
     assert!(registry.tool_names().contains(&"quran.search"));
 
     let surface = first_token_surface(&db).await;

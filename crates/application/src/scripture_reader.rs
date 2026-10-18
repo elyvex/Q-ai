@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use domain::{ContentHash, HashAlgorithm, SemVer, SourceVersionId, Timestamp};
 use scripture::{
     ScriptureBook, ScriptureBookId, ScriptureEdition, ScriptureEditionId,
-    ScriptureEditionStatistics, ScriptureStatus, ScriptureVerse, ScriptureVerseId, Tradition,
+    ScriptureEditionStatistics, ScriptureStatus, ScriptureTranslation, ScriptureVerse, ScriptureVerseId, Tradition,
 };
 use sqlx::Row;
 use storage::error::StorageError;
@@ -145,6 +145,20 @@ fn verse_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<ScriptureVerse, Scrip
     })
 }
 
+
+fn translation_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<ScriptureTranslation, ScriptureReaderError> {
+    Ok(ScriptureTranslation {
+        id: row.get(0),
+        verse_id: row.get::<String, _>(1).parse::<ScriptureVerseId>().map_err(|_| ScriptureReaderError::InvalidHash(row.get::<String, _>(1)))?,
+        language: parse_language(&row.get::<String, _>(2))?,
+        translator: row.get(3),
+        text: row.get(4),
+        text_hash: parse_hash(&row.get::<String, _>(5))?,
+        status: parse_status(&row.get::<String, _>(6))?,
+        created_at: parse_timestamp(&row.get::<String, _>(7))?,
+    })
+}
+
 #[async_trait]
 pub trait ScriptureReader: Send + Sync {
     async fn insert_edition(&self, edition: &ScriptureEdition) -> Result<(), ScriptureReaderError>;
@@ -154,6 +168,8 @@ pub trait ScriptureReader: Send + Sync {
     async fn get_books(&self, edition_id: &ScriptureEditionId) -> Result<Vec<ScriptureBook>, ScriptureReaderError>;
     async fn insert_verse(&self, verse: &ScriptureVerse) -> Result<(), ScriptureReaderError>;
     async fn get_verse(&self, id: &ScriptureVerseId) -> Result<ScriptureVerse, ScriptureReaderError>;
+    async fn insert_translation(&self, translation: &ScriptureTranslation) -> Result<(), ScriptureReaderError>;
+    async fn get_translations(&self, verse_id: &ScriptureVerseId, language: Option<&str>) -> Result<Vec<ScriptureTranslation>, ScriptureReaderError>;
     async fn list_editions(&self, status: Option<ScriptureStatus>) -> Result<Vec<ScriptureEdition>, ScriptureReaderError>;
 }
 
@@ -167,6 +183,9 @@ impl ScriptureReaderService {
     }
     pub fn database(&self) -> &SqliteDatabase {
         &self.db
+    }
+    pub fn database_arc(&self) -> Arc<SqliteDatabase> {
+        self.db.clone()
     }
 }
 
@@ -284,6 +303,52 @@ impl ScriptureReader for ScriptureReaderService {
         .map_err(|e| ScriptureReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?
         .ok_or_else(|| ScriptureReaderError::VerseNotFound(id.to_string()))?;
         verse_from_row(&row)
+    }
+
+    async fn insert_translation(&self, translation: &ScriptureTranslation) -> Result<(), ScriptureReaderError> {
+        sqlx::query(
+            r#"INSERT INTO scripture_translations
+               (id, verse_id, language, translator, text, text_hash, status, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#,
+        )
+        .bind(&translation.id)
+        .bind(translation.verse_id.to_string())
+        .bind(translation.language.to_string())
+        .bind(&translation.translator)
+        .bind(&translation.text)
+        .bind(encode_hash(&translation.text_hash))
+        .bind(translation.status.as_str())
+        .bind(translation.created_at.to_string())
+        .execute(self.db.write_pool())
+        .await
+        .map_err(|e| ScriptureReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?;
+        Ok(())
+    }
+
+    async fn get_translations(&self, verse_id: &ScriptureVerseId, language: Option<&str>) -> Result<Vec<ScriptureTranslation>, ScriptureReaderError> {
+        let rows = if let Some(lang) = language {
+            sqlx::query(
+                "SELECT id, verse_id, language, translator, text, text_hash, status, created_at FROM scripture_translations WHERE verse_id = ? AND language = ?",
+            )
+            .bind(verse_id.to_string())
+            .bind(lang)
+            .fetch_all(self.db.read_pool())
+            .await
+            .map_err(|e| ScriptureReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?
+        } else {
+            sqlx::query(
+                "SELECT id, verse_id, language, translator, text, text_hash, status, created_at FROM scripture_translations WHERE verse_id = ?",
+            )
+            .bind(verse_id.to_string())
+            .fetch_all(self.db.read_pool())
+            .await
+            .map_err(|e| ScriptureReaderError::Storage(StorageError::ConstraintViolation { message: e.to_string() }))?
+        };
+        let mut out = Vec::with_capacity(rows.len());
+        for row in &rows {
+            out.push(translation_from_row(row)?);
+        }
+        Ok(out)
     }
 
     async fn list_editions(&self, status: Option<ScriptureStatus>) -> Result<Vec<ScriptureEdition>, ScriptureReaderError> {

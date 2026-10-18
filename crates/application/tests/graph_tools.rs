@@ -67,6 +67,10 @@ async fn graph_tools_register_twelve_names_with_version_consts() {
             "hadith.gradings",
             "tafsir.get",
             "tafsir.search",
+            "scripture.get",
+            "scripture.search",
+            "scripture.translations",
+            "scripture.editions",
         ]
     );
     // The neighbors tool gained an optional `projection` input (additive), so

@@ -11,6 +11,7 @@ pub mod isnad;
 pub mod links;
 pub mod quran;
 pub mod rag;
+pub mod scripture;
 pub mod tafsir;
 
 use clap::{Parser, Subcommand};
@@ -135,6 +136,11 @@ pub enum Commands {
     Tafsir {
         #[command(subcommand)]
         action: tafsir::TafsirAction,
+    },
+    /// Scripture commands.
+    Scripture {
+        #[command(subcommand)]
+        action: scripture::ScriptureAction,
     },
     /// Verse link commands.
     Links {
@@ -600,6 +606,10 @@ pub fn dispatch(cli: Cli) -> i32 {
         Commands::Tafsir { action } => {
             let db_path = cfg.storage.sqlite.path.clone();
             tafsir::handle_tafsir(action, &db_path, cli.json)
+        }
+        Commands::Scripture { action } => {
+            let db_path = cfg.storage.sqlite.path.clone();
+            scripture::handle_scripture(action, &db_path, cli.json)
         }
         Commands::Links { action } => {
             let db_path = cfg.storage.sqlite.path.clone();
