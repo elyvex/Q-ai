@@ -21,7 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: Rich Quran Experience** - Web GUI, TUI cockpit, research tools, result contract
 - [x] **Phase 6: Hadith & Tafsir** - Structured records, grading, verse links, tafsir indexing (completed 2026-10-16)
 - [x] **Phase 7: Isnad & Narrator Research** - Identity review, chain paths, uncertainty (completed 2026-10-17)
-- [ ] **Phase 8: Multi-RAG Platform** - Full-text, vector, hybrid, reranking, generic RAG projects
+- [x] **Phase 8: Multi-RAG Platform** - Full-text, vector, hybrid, reranking, generic RAG projects (completed 2026-10-18)
 - [ ] **Phase 9: Comparative Scripture** - Edition-aware scripture model, parallel-passage research
 - [ ] **Phase 10: Agentic Research & Tool Creation** - Agents, tool sandbox, workflows, MVP acceptance
 - [ ] **Phase 11: Server & Management** - Versioned API, streaming, auth, catalog, governance
@@ -311,7 +311,7 @@ Plans:
 - [x] 08-03-PLAN.md — Hybrid retrieval (FTS5 + vector, RRF, metadata filters)
 - [x] 08-04-PLAN.md — Routing transparency (route_decision + checksum) + debug view (CLI/TUI/server)
 - [x] 08-05-PLAN.md — Tombstoning/deactivation propagation + immediate disappearance
-- [ ] 08-06-PLAN.md — Cross-surface parity + owner gates + deferrals + validation map + phase gate
+- [x] 08-06-PLAN.md — Cross-surface parity + owner gates + deferrals + validation map + phase gate
 
 ### Phase 9: Comparative Scripture:
 
@@ -324,7 +324,16 @@ Plans:
   2. User can run parallel-passage research with computational suggestions explicitly labeled as such
   3. User can include or exclude any knowledge domain (Quran, hadith, tafsir, scripture, books) per query
 
-**Plans**: TBD
+**Plans**: 3/6 plans executed
+
+Plans:
+
+- [x] 09-01-PLAN.md — TRACER: scripture edition/book/verse domain types + migrations 0039-0041 + reader + scripture.get tool
+- [x] 09-02-PLAN.md — Translations (0042) + search forms/FTS (0043) + scripture.search/translations tools + CLI
+- [x] 09-03-PLAN.md — Parallel passages: migration 0044 + verse_links scripture source + owner gate + scripture.parallel_passages
+- [ ] 09-04-PLAN.md — KnowledgeDomain filter + cross-domain research aggregator
+- [ ] 09-05-PLAN.md — HTTP routes + TUI panels + cross-surface parity
+- [ ] 09-06-PLAN.md — Owner gates + deferrals + validation map + phase gate
 
 ### Phase 10: Agentic Research & Tool Creation
 
@@ -386,8 +395,8 @@ Phase 3.5 is an INSERTED gap-closure phase; it runs after Phase 4 and does not g
 | 5. Rich Quran Experience | 9/9 | Complete (owner gates OD-04/OD-11/OD-12 open) | 2026-10-09 |
 | 6. Hadith & Tafsir | 5/5 | Complete    | 2026-10-16 |
 | 7. Isnad & Narrator Research | 5/5 | Complete    | 2026-10-17 |
-| 8. Multi-RAG Platform | 5/6 | In Progress|  |
-| 9. Comparative Scripture | 0/TBD | Not started | - |
+| 8. Multi-RAG Platform | 6/6 | Complete    | 2026-10-18 |
+| 9. Comparative Scripture | 3/6 | In Progress|  |
 | 10. Agentic Research & Tool Creation | 0/TBD | Not started | - |
 | 11. Server & Management | 0/TBD | Not started | - |
 | 12. Production Hardening | 0/TBD | Not started | - |
