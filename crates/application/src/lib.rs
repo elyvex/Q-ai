@@ -38,6 +38,8 @@ pub mod quran_search_api;
 pub mod quran_search_cache;
 pub mod quran_tools;
 pub mod rag_reader;
+pub mod scripture_reader;
+pub mod scripture_tools;
 pub mod rag_search;
 pub mod rag_tools;
 pub mod tafsir_reader;
