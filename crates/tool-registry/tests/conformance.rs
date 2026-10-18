@@ -435,7 +435,7 @@ impl QuranBackend for TruncatedBackend {
 fn all_twelve_tools_resolve_stable_names() {
     let registry = ToolRegistry::new(Arc::new(ConformableBackend));
     let names = registry.tool_names();
-    assert_eq!(names.len(), 21);
+    assert_eq!(names.len(), 22);
     for name in &names {
         assert!(
             name.starts_with("quran.")
@@ -724,7 +724,7 @@ async fn registered_but_unimplemented_tool_returns_typed_unsupported() {
     // All 12 tools must return the typed-unsupported error, distinguishable
     // from a real empty result.
     let names = registry.tool_names();
-    assert_eq!(names.len(), 21);
+    assert_eq!(names.len(), 22);
     for name in &names {
         let err = match *name {
             "quran.get_ayah" => registry
@@ -844,6 +844,10 @@ async fn registered_but_unimplemented_tool_returns_typed_unsupported() {
                 .unwrap_err(),
             "scripture.editions" => registry
                 .list_scripture_editions()
+                .await
+                .unwrap_err(),
+            "scripture.parallel_passages" => registry
+                .parallel_passages_scripture("tanakh:genesis:1:1".into())
                 .await
                 .unwrap_err(),
             "tafsir.get" => registry

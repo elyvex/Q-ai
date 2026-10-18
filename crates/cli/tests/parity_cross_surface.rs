@@ -459,7 +459,7 @@ fn fixtures_cover_all_tool_names() {
     uncovered.sort_unstable();
     assert_eq!(
         uncovered,
-        ["hadith.get", "hadith.gradings", "hadith.search", "scripture.editions", "scripture.get", "scripture.search", "scripture.translations", "tafsir.get", "tafsir.search"],
+        ["hadith.get", "hadith.gradings", "hadith.search", "scripture.editions", "scripture.get", "scripture.parallel_passages", "scripture.search", "scripture.translations", "tafsir.get", "tafsir.search"],
         "unexpected uncovered tools (hadith/tafsir/scripture parity lands later)"
     );
 }

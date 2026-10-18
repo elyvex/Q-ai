@@ -71,6 +71,7 @@ async fn graph_tools_register_twelve_names_with_version_consts() {
             "scripture.search",
             "scripture.translations",
             "scripture.editions",
+            "scripture.parallel_passages",
         ]
     );
     // The neighbors tool gained an optional `projection` input (additive), so

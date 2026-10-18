@@ -3,7 +3,6 @@
 use clap::Subcommand;
 use std::sync::Arc;
 use storage_sqlite::SqliteDatabase;
-use tool_registry::ScriptureBackend;
 
 use crate::exit_code;
 
@@ -30,6 +29,37 @@ pub enum ScriptureAction {
         #[arg(long)]
         language: Option<String>,
     },
+    /// Parallel passages / verse links.
+    Link {
+        #[command(subcommand)]
+        action: LinkAction,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum LinkAction {
+    /// Run computational matching for a scripture verse.
+    Suggest {
+        scripture_verse_id: String,
+    },
+    /// Confirm a link (owner gate).
+    Confirm {
+        link_id: String,
+        #[arg(long)]
+        reviewer: String,
+    },
+    /// Reject a link (owner gate).
+    Reject {
+        link_id: String,
+        #[arg(long)]
+        reviewer: String,
+    },
+    /// List links for a Quran verse.
+    List {
+        quran_ref: String,
+        #[arg(long)]
+        include_uncertain: bool,
+    },
 }
 
 pub fn handle_scripture(action: ScriptureAction, db_path: &str, json: bool) -> i32 {
@@ -46,7 +76,8 @@ pub fn handle_scripture(action: ScriptureAction, db_path: &str, json: bool) -> i
 async fn handle_scripture_async(action: ScriptureAction, db_path: &str, json: bool) -> i32 {
     use application::scripture_reader::ScriptureReaderService;
     use application::scripture_tools::ScriptureToolBackend;
-    use tool_registry::ScriptureRef;
+    use application::verse_link::VerseLinker;
+    use tool_registry::{ScriptureBackend, ScriptureRef};
     use tool_registry::ScriptureSearchToolParams;
 
     let db = match SqliteDatabase::new(db_path, 4, true).await {
@@ -63,7 +94,6 @@ async fn handle_scripture_async(action: ScriptureAction, db_path: &str, json: bo
     };
     let reader = Arc::new(ScriptureReaderService::new(db.clone()));
     let backend = ScriptureToolBackend::new(reader.clone());
-    // ensure search service used? backend has own search; ok
 
     let output = match action {
         ScriptureAction::Editions => {
@@ -98,6 +128,78 @@ async fn handle_scripture_async(action: ScriptureAction, db_path: &str, json: bo
             match backend.backend_get_translation(&verse_id, language.as_deref().unwrap_or("")).await {
                 Ok(v) => application::quran_cli::CommandOutput::ok("translations".to_string(), v),
                 Err(e) => application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string()),
+            }
+        }
+        ScriptureAction::Link { action } => {
+            let service = backend.links();
+            // ensure service type
+            let _ = &service;
+            match action {
+                LinkAction::Suggest { scripture_verse_id } => {
+                    match service.suggest_scripture_links(&scripture_verse_id).await {
+                        Ok(links) => {
+                            // label uncertain explicitly
+                            let human = format!("scripture.link.suggest: {} uncertain suggestions", links.len());
+                            let jsonv = serde_json::to_value(&links).unwrap_or(serde_json::Value::Null);
+                            application::quran_cli::CommandOutput::ok(human, jsonv)
+                        }
+                        Err(e) => application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string()),
+                    }
+                }
+                LinkAction::Confirm { link_id, reviewer } => {
+                    let id = match link_id.parse::<application::verse_link::VerseLinkId>() {
+                        Ok(v) => v,
+                        Err(_) => {
+                            let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, "invalid link id".to_string());
+                            if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
+                            return o.exit;
+                        }
+                    };
+                    match service.confirm_link(&id, &reviewer).await {
+                        Ok(()) => application::quran_cli::CommandOutput::ok("confirmed".to_string(), serde_json::json!({"link_id": link_id})),
+                        Err(e) => application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string()),
+                    }
+                }
+                LinkAction::Reject { link_id, reviewer } => {
+                    let id = match link_id.parse::<application::verse_link::VerseLinkId>() {
+                        Ok(v) => v,
+                        Err(_) => {
+                            let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, "invalid link id".to_string());
+                            if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
+                            return o.exit;
+                        }
+                    };
+                    match service.reject_link(&id, &reviewer).await {
+                        Ok(()) => application::quran_cli::CommandOutput::ok("rejected".to_string(), serde_json::json!({"link_id": link_id})),
+                        Err(e) => application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string()),
+                    }
+                }
+                LinkAction::List { quran_ref, include_uncertain } => {
+                    let parts: Vec<&str> = quran_ref.split(':').collect();
+                    if parts.len() != 2 {
+                        let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, "quran ref must be surah:ayah".to_string());
+                        if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
+                        return o.exit;
+                    }
+                    let surah: u16 = match parts[0].parse() { Ok(v) => v, Err(_) => {
+                        let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, "invalid surah".to_string());
+                        if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
+                        return o.exit;
+                    }};
+                    let ayah: u32 = match parts[1].parse() { Ok(v) => v, Err(_) => {
+                        let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, "invalid ayah".to_string());
+                        if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
+                        return o.exit;
+                    }};
+                    match service.get_links_for_verse(surah, ayah, include_uncertain).await {
+                        Ok(links) => {
+                            let human = format!("scripture.link.list: {} links", links.len());
+                            let jsonv = serde_json::to_value(&links).unwrap_or(serde_json::Value::Null);
+                            application::quran_cli::CommandOutput::ok(human, jsonv)
+                        }
+                        Err(e) => application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string()),
+                    }
+                }
             }
         }
     };

@@ -24,7 +24,7 @@ use tool_registry::{
     GraphRootFamilyParams, GraphSubgraphParams, HadithSearchToolParams, LEMMA_TOOL_VERSION,
     LemmaToolParams, MORPHOLOGY_TOOL_VERSION, MorphologyToolParams, QuranBackend,
     ROOT_TOOL_VERSION, RootToolParams, SEARCH_TOOL_VERSION, SearchToolParams,
-    TafsirSearchToolParams, ToolRegistry,
+    TafsirSearchToolParams, GetScriptureParams, ScriptureSearchToolParams, ToolRegistry,
 };
 use tools::{AnalysisSource, ToolError, ToolResult, reproducibility, research_checksum};
 
@@ -958,6 +958,29 @@ pub async fn dispatch_registered_tool(
                 params.get("status").and_then(|v| v.as_str()).unwrap_or("active")
             };
             Ok(serialized(&reader.rag_source_status(&project, &source, status).await?))
+        }
+        "scripture.get" => {
+            let params: GetScriptureParams =
+                serde_json::from_value(params).map_err(|err| bad_params("scripture.get", err))?;
+            let (result, _) = reader.get_scripture(params).await?;
+            Ok(serialized(&result))
+        }
+        "scripture.search" => {
+            let params: ScriptureSearchToolParams =
+                serde_json::from_value(params).map_err(|err| bad_params("scripture.search", err))?;
+            Ok(serialized(&reader.search_scripture(params).await?))
+        }
+        "scripture.translations" => {
+            let verse_id = params.get("verse_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let language = params.get("language").and_then(|v| v.as_str()).map(|s| s.to_string());
+            Ok(serialized(&reader.get_scripture_translations(verse_id, language).await?))
+        }
+        "scripture.editions" => {
+            Ok(serialized(&reader.list_scripture_editions().await?))
+        }
+        "scripture.parallel_passages" => {
+            let reference = params.get("reference").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            Ok(serialized(&reader.parallel_passages_scripture(reference).await?))
         }
         _ => Err(ToolError::InvalidInput {
             tool: "quran.tool",

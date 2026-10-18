@@ -195,6 +195,8 @@ pub const SCRIPTURE_SEARCH_VERSION: SemVer = SemVer::new(1, 0, 0);
 pub const SCRIPTURE_TRANSLATIONS_VERSION: SemVer = SemVer::new(1, 0, 0);
 /// Tool versions for scripture editions (Phase 9, plan 09-02).
 pub const SCRIPTURE_EDITIONS_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions for scripture parallel passages (Phase 9, plan 09-03).
+pub const SCRIPTURE_PARALLEL_PASSAGES_VERSION: SemVer = SemVer::new(1, 0, 0);
 
 /// A hadith reference: collection slug + source number.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -533,7 +535,10 @@ pub trait ScriptureBackend: Send + Sync {
     }
 
     /// Parallel passages (default unsupported).
-    async fn backend_parallel_passages(&self, _quran_ref: &str) -> Result<serde_json::Value, ToolError> {
+    async fn backend_parallel_passages(
+        &self,
+        _quran_ref: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
         Err(ToolError::Backend {
             code: "QAI-SCR-0310".to_string(),
             detail: "scripture parallel passages is not supported by this backend".to_string(),
@@ -986,7 +991,7 @@ impl ToolRegistry {
     }
 
     /// The full registered tool set (§12 tool plan; D-13; Phase 6 hadith + tafsir tools).
-    pub const TOOL_NAMES: [&'static str; 21] = [
+    pub const TOOL_NAMES: [&'static str; 22] = [
         "quran.get_ayah",
         "quran.get_context",
         "quran.search",
@@ -1008,6 +1013,7 @@ impl ToolRegistry {
         "scripture.search",
         "scripture.translations",
         "scripture.editions",
+        "scripture.parallel_passages",
     ];
 
     /// Registered tool names.
@@ -1633,6 +1639,27 @@ impl ToolRegistry {
         })
     }
 
+    /// `scripture.parallel_passages`: computational parallel passages for a
+    /// Quran reference or scripture verse id.
+    pub async fn parallel_passages_scripture(
+        &self,
+        reference: String,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let scripture_backend = self.scripture_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-SCR-0310".to_string(),
+            detail: "scripture backend not configured".to_string(),
+        })?;
+        scripture_backend.backend_parallel_passages(&reference).await
+    }
+
+    /// Alias for `parallel_passages_scripture`.
+    pub async fn scripture_parallel_passages(
+        &self,
+        reference: String,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        self.parallel_passages_scripture(reference).await
+    }
+
     /// `tafsir.search`: normalized search over tafsir records.
     pub async fn search_tafsir(
         &self,
@@ -2007,6 +2034,7 @@ mod tests {
                 "scripture.search",
                 "scripture.translations",
                 "scripture.editions",
+                "scripture.parallel_passages",
             ]
         );
     }

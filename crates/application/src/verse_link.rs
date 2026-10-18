@@ -80,6 +80,8 @@ pub enum LinkSourceType {
     Hadith,
     /// A tafsir record (`tafsir_records.id`).
     Tafsir,
+    /// A scripture verse (`scripture_verses.id`).
+    Scripture,
 }
 
 impl LinkSourceType {
@@ -88,6 +90,7 @@ impl LinkSourceType {
         match self {
             Self::Hadith => "hadith",
             Self::Tafsir => "tafsir",
+            Self::Scripture => "scripture",
         }
     }
 }
@@ -104,6 +107,7 @@ impl std::str::FromStr for LinkSourceType {
         match s {
             "hadith" => Ok(Self::Hadith),
             "tafsir" => Ok(Self::Tafsir),
+            "scripture" => Ok(Self::Scripture),
             other => Err(format!("unknown link source type `{other}`")),
         }
     }
@@ -486,6 +490,17 @@ impl VerseLinkService {
                         })
                     })?
             }
+            LinkSourceType::Scripture => {
+                sqlx::query_scalar("SELECT text FROM scripture_verses WHERE id = ?")
+                    .bind(source_id)
+                    .fetch_optional(self.db.read_pool())
+                    .await
+                    .map_err(|e| {
+                        LinkError::Storage(StorageError::ConstraintViolation {
+                            message: e.to_string(),
+                        })
+                    })?
+            }
         };
         text.ok_or_else(|| LinkError::SourceNotFound(format!("{source_type}:{source_id}")))
     }
@@ -543,6 +558,31 @@ impl VerseLinkService {
             })
             .collect();
         self.suggest_links(source_type, source_id, &candidates).await
+    }
+
+    /// Suggest scripture→Quran parallel passages: load the scripture verse
+    /// text as the source, score every Quran ayah, and persist matches as
+    /// `Uncertain` links.
+    pub async fn suggest_scripture_links(
+        &self,
+        scripture_verse_id: &str,
+    ) -> Result<Vec<VerseLink>, LinkError> {
+        let rows = sqlx::query("SELECT surah, ayah, text FROM quran_ayahs")
+            .fetch_all(self.db.read_pool())
+            .await
+            .map_err(|e| {
+                LinkError::Storage(StorageError::ConstraintViolation { message: e.to_string() })
+            })?;
+        let candidates: Vec<VerseCandidate> = rows
+            .iter()
+            .map(|row| VerseCandidate {
+                surah: row.get::<i64, _>(0) as u16,
+                ayah: row.get::<i64, _>(1) as u32,
+                text: row.get(2),
+            })
+            .collect();
+        self.suggest_links(LinkSourceType::Scripture, scripture_verse_id, &candidates)
+            .await
     }
 
     /// Decide a link (shared confirm/reject path): requires a non-empty
@@ -721,6 +761,7 @@ mod tests {
     fn source_type_and_label_roundtrip_strings() {
         assert_eq!("hadith".parse::<LinkSourceType>().unwrap(), LinkSourceType::Hadith);
         assert_eq!("tafsir".parse::<LinkSourceType>().unwrap(), LinkSourceType::Tafsir);
+        assert_eq!("scripture".parse::<LinkSourceType>().unwrap(), LinkSourceType::Scripture);
         assert!("quran".parse::<LinkSourceType>().is_err());
         assert_eq!("uncertain".parse::<LinkLabel>().unwrap(), LinkLabel::Uncertain);
         assert_eq!("confirmed".parse::<LinkLabel>().unwrap(), LinkLabel::Confirmed);

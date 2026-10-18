@@ -4,13 +4,14 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use scripture::ScriptureView;
-use tool_registry::{BackendMeta, ScriptureBackend, ScriptureRef, ScriptureSearchToolParams, SCRIPTURE_SEARCH_VERSION};
+use tool_registry::{BackendMeta, ScriptureBackend, ScriptureRef, ScriptureSearchToolParams, SCRIPTURE_SEARCH_VERSION, SCRIPTURE_PARALLEL_PASSAGES_VERSION};
 use std::time::Instant;
 use std::collections::BTreeMap;
 use tools::{AnalysisSource, ToolError, ToolResult, reproducibility, research_checksum};
 
 use crate::scripture_reader::{ScriptureReader, ScriptureReaderError, ScriptureReaderService};
 use crate::scripture_search::{ScriptureSearchService, ScriptureSearchParams};
+use crate::verse_link::{VerseLinkService, VerseLinker};
 
 /// Map reader error to tool error.
 fn reader_error(error: ScriptureReaderError) -> ToolError {
@@ -22,6 +23,7 @@ fn reader_error(error: ScriptureReaderError) -> ToolError {
 pub struct ScriptureToolBackend {
     reader: Arc<ScriptureReaderService>,
     search: Arc<ScriptureSearchService>,
+    links: Arc<VerseLinkService>,
 }
 
 impl ScriptureToolBackend {
@@ -30,13 +32,17 @@ impl ScriptureToolBackend {
             reader.database_arc(),
             reader.clone() as Arc<dyn ScriptureReader>,
         ));
-        Self { reader, search }
+        let links = Arc::new(VerseLinkService::new(reader.database_arc()));
+        Self { reader, search, links }
     }
     pub fn reader(&self) -> &ScriptureReaderService {
         &self.reader
     }
     pub fn search(&self) -> &ScriptureSearchService {
         &self.search
+    }
+    pub fn links(&self) -> &VerseLinkService {
+        &self.links
     }
 }
 
@@ -174,6 +180,96 @@ impl ScriptureBackend for ScriptureToolBackend {
             detail: e.to_string(),
         })
     }
+
+    async fn backend_parallel_passages(
+        &self,
+        reference: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        use std::time::Instant;
+        use std::collections::BTreeMap;
+
+        let started = Instant::now();
+
+        let links = if let Some((s, a)) = parse_quran_ref(reference) {
+            self.links.get_links_for_verse(s, a, true).await.map_err(|e| {
+                use storage::error::Diagnostic;
+                ToolError::Backend { code: e.code().to_string(), detail: e.to_string() }
+            })?
+        } else {
+            self.links.suggest_scripture_links(reference).await.map_err(|e| {
+                use storage::error::Diagnostic;
+                ToolError::Backend { code: e.code().to_string(), detail: e.to_string() }
+            })?
+        };
+
+        let canonical_references: Vec<String> = links
+            .iter()
+            .map(|l| format!("{}:{}", l.target_surah, l.target_ayah))
+            .collect();
+        let analysis_sources: Vec<AnalysisSource> = links
+            .iter()
+            .map(|l| AnalysisSource { kind: "scripture".to_string(), reference: l.source_id.clone() })
+            .collect();
+
+        let mut tagged: Vec<serde_json::Value> = Vec::new();
+        let mut warnings: Vec<String> = Vec::new();
+        for l in &links {
+            let mut v = serde_json::to_value(l).unwrap_or(serde_json::Value::Null);
+            if l.label != crate::verse_link::LinkLabel::Confirmed {
+                if let Some(obj) = v.as_object_mut() {
+                    obj.insert("marker".to_string(), serde_json::json!("uncertain computational suggestion"));
+                }
+                warnings.push("uncertain computational suggestion".to_string());
+            }
+            tagged.push(v);
+        }
+
+        let payload = serde_json::to_value(&tagged).unwrap_or(serde_json::Value::Null);
+        let query = serde_json::json!({ "reference": reference });
+
+        let result = ToolResult {
+            tool_name: "scripture.parallel_passages".to_string(),
+            tool_version: SCRIPTURE_PARALLEL_PASSAGES_VERSION,
+            query: query.clone(),
+            normalization_rules: Vec::new(),
+            edition_id: None,
+            edition_version: None,
+            results: payload.clone(),
+            canonical_references,
+            analysis_sources,
+            confidence: None,
+            warnings,
+            execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
+            reproducibility: reproducibility(
+                "scripture.parallel_passages",
+                SCRIPTURE_PARALLEL_PASSAGES_VERSION,
+                &query,
+                None,
+                None,
+                BTreeMap::new(),
+                0,
+            ),
+            research_checksum: research_checksum(
+                "scripture.parallel_passages",
+                SCRIPTURE_PARALLEL_PASSAGES_VERSION,
+                &query,
+                &serde_json::json!({}),
+                &payload,
+            )
+            .expect("research checksum input is JSON-serializable"),
+        };
+        Ok(result)
+    }
+
+}
+
+fn parse_quran_ref(s: &str) -> Option<(u16, u32)> {
+    let parts: Vec<&str> = s.split(':').collect();
+    if parts.len() != 2 { return None; }
+    let surah: u16 = parts[0].trim().parse().ok()?;
+    let ayah: u32 = parts[1].trim().parse().ok()?;
+    if surah == 0 || ayah == 0 { return None; }
+    Some((surah, ayah))
 }
 
 #[cfg(test)]
