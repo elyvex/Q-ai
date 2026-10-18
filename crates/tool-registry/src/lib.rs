@@ -187,6 +187,8 @@ pub const HADITH_GRADINGS_VERSION: SemVer = SemVer::new(1, 0, 0);
 pub const TAFSIR_GET_VERSION: SemVer = SemVer::new(1, 0, 0);
 /// Tool versions for tafsir search (Phase 6, plan 06-02).
 pub const TAFSIR_SEARCH_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions for scripture get (Phase 9, plan 09-01).
+pub const SCRIPTURE_GET_VERSION: SemVer = SemVer::new(1, 0, 0);
 
 /// A hadith reference: collection slug + source number.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -417,6 +419,118 @@ pub trait TafsirBackend: Send + Sync {
         Err(ToolError::Backend {
             code: "QAI-TAF-0310".to_string(),
             detail: "tafsir.search is not supported by this backend".to_string(),
+        })
+    }
+}
+
+// ============================================================================
+// Scripture tools (Phase 9, plan 09-01)
+// ============================================================================
+
+/// Re-export of the scripture domain view.
+pub use scripture::ScriptureView;
+
+/// A scripture reference: edition + book + chapter + verse.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScriptureRef {
+    /// Edition slug or id.
+    pub edition: String,
+    /// Book slug.
+    pub book: String,
+    /// Chapter number.
+    pub chapter: u32,
+    /// Verse number.
+    pub verse: u32,
+}
+
+impl ScriptureRef {
+    /// Parse a reference string `edition:book:chapter:verse`.
+    pub fn parse(s: &str) -> Option<Self> {
+        let parts: Vec<&str> = s.split(':').collect();
+        if parts.len() != 4 {
+            return None;
+        }
+        let chapter: u32 = parts[2].parse().ok()?;
+        let verse: u32 = parts[3].parse().ok()?;
+        if chapter == 0 || verse == 0 || parts[0].is_empty() || parts[1].is_empty() {
+            return None;
+        }
+        Some(Self {
+            edition: parts[0].to_string(),
+            book: parts[1].to_string(),
+            chapter,
+            verse,
+        })
+    }
+}
+
+impl std::fmt::Display for ScriptureRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}:{}:{}", self.edition, self.book, self.chapter, self.verse)
+    }
+}
+
+/// Parameters for `scripture.get`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetScriptureParams {
+    /// Reference string in format `edition:book:chapter:verse`.
+    pub reference: String,
+}
+
+/// Parameters for `scripture.search` (placeholder).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScriptureSearchToolParams {
+    /// Query text.
+    pub query: String,
+    /// Optional edition filter.
+    #[serde(default)]
+    pub edition: Option<String>,
+    /// Result cap.
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+/// The scripture backend trait: implemented by `application`.
+#[async_trait]
+pub trait ScriptureBackend: Send + Sync {
+    /// Fetch one scripture view by reference.
+    async fn backend_get_scripture(
+        &self,
+        reference: &ScriptureRef,
+    ) -> Result<(ScriptureView, BackendMeta), ToolError>;
+
+    /// Search scripture (default unsupported).
+    async fn backend_search_scripture(
+        &self,
+        _params: &ScriptureSearchToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        Err(ToolError::Backend {
+            code: "QAI-SCR-0310".to_string(),
+            detail: "scripture.search is not supported by this backend".to_string(),
+        })
+    }
+
+    /// List editions (default unsupported).
+    async fn backend_list_editions(&self) -> Result<serde_json::Value, ToolError> {
+        Err(ToolError::Backend {
+            code: "QAI-SCR-0310".to_string(),
+            detail: "scripture list editions is not supported by this backend".to_string(),
+        })
+    }
+
+    /// Get a translation (default unsupported).
+    async fn backend_get_translation(&self, _verse_id: &str, _language: &str) -> Result<serde_json::Value, ToolError> {
+        Err(ToolError::Backend {
+            code: "QAI-SCR-0310".to_string(),
+            detail: "scripture translation is not supported by this backend".to_string(),
+        })
+    }
+
+    /// Parallel passages (default unsupported).
+    async fn backend_parallel_passages(&self, _quran_ref: &str) -> Result<serde_json::Value, ToolError> {
+        Err(ToolError::Backend {
+            code: "QAI-SCR-0310".to_string(),
+            detail: "scripture parallel passages is not supported by this backend".to_string(),
         })
     }
 }
@@ -681,6 +795,7 @@ pub struct ToolRegistry {
     backend: Arc<dyn QuranBackend>,
     hadith_backend: Option<Arc<dyn HadithBackend>>,
     tafsir_backend: Option<Arc<dyn TafsirBackend>>,
+    scripture_backend: Option<Arc<dyn ScriptureBackend>>,
     isnad_backend: Option<Arc<dyn IsnadBackend>>,
     rag_backend: Option<Arc<dyn RagBackend>>,
 }
@@ -688,7 +803,7 @@ pub struct ToolRegistry {
 impl ToolRegistry {
     /// Wrap a backend.
     pub fn new(backend: Arc<dyn QuranBackend>) -> Self {
-        Self { backend, hadith_backend: None, tafsir_backend: None, isnad_backend: None, rag_backend: None }
+        Self { backend, hadith_backend: None, tafsir_backend: None, scripture_backend: None, isnad_backend: None, rag_backend: None }
     }
 
     /// Wrap a backend with a hadith backend.
@@ -700,6 +815,7 @@ impl ToolRegistry {
             backend,
             hadith_backend: Some(hadith_backend),
             tafsir_backend: None,
+            scripture_backend: None,
             isnad_backend: None,
             rag_backend: None,
         }
@@ -719,6 +835,7 @@ impl ToolRegistry {
             backend,
             hadith_backend: None,
             tafsir_backend: None,
+            scripture_backend: None,
             isnad_backend: Some(isnad_backend),
             rag_backend: None,
         }
@@ -742,6 +859,7 @@ impl ToolRegistry {
             backend,
             hadith_backend: None,
             tafsir_backend: None,
+            scripture_backend: None,
             isnad_backend: None,
             rag_backend: Some(rag_backend),
         }
@@ -826,6 +944,7 @@ impl ToolRegistry {
             backend,
             hadith_backend: None,
             tafsir_backend: Some(tafsir_backend),
+            scripture_backend: None,
             isnad_backend: None,
             rag_backend: None,
         }
@@ -836,8 +955,32 @@ impl ToolRegistry {
         self.tafsir_backend = Some(tafsir_backend);
     }
 
+    /// Wrap a backend with a scripture backend.
+    pub fn with_scripture(
+        backend: Arc<dyn QuranBackend>,
+        scripture_backend: Arc<dyn ScriptureBackend>,
+    ) -> Self {
+        Self {
+            backend,
+            hadith_backend: None,
+            tafsir_backend: None,
+            scripture_backend: Some(scripture_backend),
+            isnad_backend: None,
+            rag_backend: None,
+        }
+    }
+
+    /// Set the scripture backend after construction.
+    pub fn set_scripture_backend(&mut self, scripture_backend: Arc<dyn ScriptureBackend>) {
+        self.scripture_backend = Some(scripture_backend);
+    }
+
+    pub fn scripture_backend(&self) -> Option<Arc<dyn ScriptureBackend>> {
+        self.scripture_backend.clone()
+    }
+
     /// The full registered tool set (§12 tool plan; D-13; Phase 6 hadith + tafsir tools).
-    pub const TOOL_NAMES: [&'static str; 17] = [
+    pub const TOOL_NAMES: [&'static str; 18] = [
         "quran.get_ayah",
         "quran.get_context",
         "quran.search",
@@ -855,6 +998,7 @@ impl ToolRegistry {
         "hadith.gradings",
         "tafsir.get",
         "tafsir.search",
+        "scripture.get",
     ];
 
     /// Registered tool names.
@@ -1341,6 +1485,67 @@ impl ToolRegistry {
         Ok((result, meta))
     }
 
+    /// `scripture.get`: fetch one scripture view by reference.
+    pub async fn get_scripture(
+        &self,
+        params: GetScriptureParams,
+    ) -> Result<(ToolResult<ScriptureView>, BackendMeta), ToolError> {
+        let scripture_backend = self.scripture_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-SCR-0310".to_string(),
+            detail: "scripture backend not configured".to_string(),
+        })?;
+        let started = Instant::now();
+        let reference =
+            ScriptureRef::parse(&params.reference).ok_or_else(|| ToolError::InvalidInput {
+                tool: "scripture.get",
+                detail: "reference must be in format `edition:book:chapter:verse`".to_string(),
+            })?;
+        let query = serde_json::to_value(&params).unwrap_or(serde_json::Value::Null);
+        let (view, meta) = scripture_backend.backend_get_scripture(&reference).await?;
+        let canonical = view.verse.id.to_string();
+        let payload = serde_json::to_value(&view).unwrap_or(serde_json::Value::Null);
+        let result = ToolResult {
+            tool_name: "scripture.get".to_string(),
+            tool_version: SCRIPTURE_GET_VERSION,
+            query: query.clone(),
+            normalization_rules: Vec::new(),
+            edition_id: Some(meta.edition_id.clone()),
+            edition_version: Some(meta.edition_version.clone()),
+            canonical_references: vec![canonical.clone()],
+            analysis_sources: vec![AnalysisSource {
+                kind: "scripture".to_string(),
+                reference: canonical,
+            }],
+            results: view,
+            confidence: None,
+            warnings: Vec::new(),
+            execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
+            reproducibility: reproducibility(
+                "scripture.get",
+                SCRIPTURE_GET_VERSION,
+                &query,
+                Some(&meta.edition_slug),
+                Some(&meta.edition_version),
+                BTreeMap::new(),
+                meta.corpus_generation,
+            ),
+            research_checksum: research_checksum(
+                "scripture.get",
+                SCRIPTURE_GET_VERSION,
+                &query,
+                &serde_json::json!({
+                    "reference": params.reference,
+                    "edition_slug": meta.edition_slug,
+                    "edition_version": meta.edition_version,
+                    "corpus_generation": meta.corpus_generation,
+                }),
+                &payload,
+            )
+            .expect("research checksum input is JSON-serializable"),
+        };
+        Ok((result, meta))
+    }
+
     /// `tafsir.search`: normalized search over tafsir records.
     pub async fn search_tafsir(
         &self,
@@ -1711,6 +1916,7 @@ mod tests {
                 "hadith.gradings",
                 "tafsir.get",
                 "tafsir.search",
+                "scripture.get",
             ]
         );
     }

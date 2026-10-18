@@ -435,12 +435,13 @@ impl QuranBackend for TruncatedBackend {
 fn all_twelve_tools_resolve_stable_names() {
     let registry = ToolRegistry::new(Arc::new(ConformableBackend));
     let names = registry.tool_names();
-    assert_eq!(names.len(), 17);
+    assert_eq!(names.len(), 18);
     for name in &names {
         assert!(
             name.starts_with("quran.")
                 || name.starts_with("hadith.")
-                || name.starts_with("tafsir."),
+                || name.starts_with("tafsir.")
+                || name.starts_with("scripture."),
             "tool name must be quran.*, hadith.*, or tafsir.*: {name}"
         );
     }
@@ -723,7 +724,7 @@ async fn registered_but_unimplemented_tool_returns_typed_unsupported() {
     // All 12 tools must return the typed-unsupported error, distinguishable
     // from a real empty result.
     let names = registry.tool_names();
-    assert_eq!(names.len(), 17);
+    assert_eq!(names.len(), 18);
     for name in &names {
         let err = match *name {
             "quran.get_ayah" => registry
@@ -829,6 +830,10 @@ async fn registered_but_unimplemented_tool_returns_typed_unsupported() {
             "hadith.gradings" => {
                 registry.get_gradings("00000000-0000-4000-8000-000000000000").await.unwrap_err()
             }
+            "scripture.get" => registry
+                .get_scripture(tool_registry::GetScriptureParams { reference: "tanakh:genesis:1:1".into() })
+                .await
+                .unwrap_err(),
             "tafsir.get" => registry
                 .get_tafsir(tool_registry::GetTafsirParams { reference: "tafsir-tabari:2".into() })
                 .await
@@ -849,6 +854,8 @@ async fn registered_but_unimplemented_tool_returns_typed_unsupported() {
             "QAI-HAD-0310"
         } else if name.starts_with("tafsir.") {
             "QAI-TAF-0310"
+        } else if name.starts_with("scripture.") {
+            "QAI-SCR-0310"
         } else {
             "QAI-QUR-0310"
         };
