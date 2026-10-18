@@ -15,6 +15,8 @@ pub mod isnad_graph_store;
 pub mod isnad_reader;
 pub mod isnad_tools;
 pub mod job_queue;
+pub mod knowledge_domain;
+pub mod cross_domain;
 pub mod quran;
 pub mod quran_cli;
 pub mod quran_counting;
