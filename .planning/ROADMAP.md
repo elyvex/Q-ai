@@ -401,5 +401,23 @@ Phase 3.5 is an INSERTED gap-closure phase; it runs after Phase 4 and does not g
 | 11. Server & Management | 1/TBD | Complete    | 2026-10-19 |
 | 12. Production Hardening | 1/TBD | Complete    | 2026-10-19 |
 
+### Phase 13: Web UI Redesign
+
+**Goal:** Users get a redesigned-from-scratch Vite + React web UI — elegant light (white/gray) style, animated backgrounds, polished buttons and controls — with every Q-ai feature reachable through the UI.
+**Requirements**: REQ-ux-web, REQ-quran-display, REQ-quran-research-tools, REQ-quran-result-contract
+**Depends on:** Phase 12
+**Success Criteria** (what must be TRUE):
+
+  1. User can reach every Q-ai feature (read, search, inspect, graph, hadith/tafsir, RAG, agents, management) through the redesigned UI — no feature CLI/API-only
+  2. UI ships an elegant light white/gray theme with animated background, styled buttons/controls, and consistent visual language across all views
+  3. Canonical text, translations, and annotations remain visually unmistakable in every redesigned view (layer tokens preserved)
+  4. Rebuilt SPA passes the existing build + cross-surface parity gates with no regressions
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 13 to break down)
+
+**UI hint**: yes
+
 ---
 *Notes: Roadmap phases 1–12 track PRD §43/§88 Phases 0–12; PRD Phase 9 (agentic) + Phase 10 (tool creation/workflows) merge into roadmap Phase 10 (shared runtime + acceptance gates). Single-requirement phases (4, 7, 9) are standalone major capabilities, not thin slices. MVP acceptance (§44.3) lands in Phase 10; Phases 11–12 are post-MVP.*
