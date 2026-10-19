@@ -26,6 +26,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 10: Agentic Research & Tool Creation** - Agents, tool sandbox, workflows, MVP acceptance (completed 2026-10-19)
 - [x] **Phase 11: Server & Management** - Versioned API, streaming, auth, catalog, governance (completed 2026-10-19)
 - [x] **Phase 12: Production Hardening** - PG/Qdrant adapters, TLS, Docker, backups, recovery (completed 2026-10-19)
+- [ ] **Phase 13: Web UI Redesign** - Light white/gray redesign, animated background, polished controls, full feature reachability
 
 ## Phase Details
 
@@ -563,7 +564,7 @@ New product features; backend API changes beyond defect fixes; native mobile she
 
 | Phase | Plans Complete | Status | Completed |
 |---|---|---|---|
-| 13. Web UI Redesign | 0/9 | Not started | - |
+| 13. Web UI Redesign | 0/9 | Ready to execute | - |
 
 R2 proposed `0/8` for its 8-plan structure; the consolidated 9-plan structure yields `0/9`. `[R1, R2]`
 
