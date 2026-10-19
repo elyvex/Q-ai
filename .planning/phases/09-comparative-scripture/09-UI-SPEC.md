@@ -1,10 +1,11 @@
 ---
 phase: "9"
 slug: "comparative-scripture"
-status: draft
+status: approved
 shadcn_initialized: false
 preset: pending-initialization
 created: "2026-10-19"
+reviewed_at: "2026-10-19"
 ---
 
 # Phase 9 — UI Design Contract
@@ -36,7 +37,7 @@ Could not enumerate: shadcn not yet initialized — `components.json` absent. In
 | Button | `~/components/ui/button` | All CTAs, icon-only at 44px touch target |
 | Input | `~/components/ui/input` | Search bars, reference inputs |
 | Card | `~/components/ui/card` | Result containers, verse displays |
-| Tabs | `~/components/ui/tab` | Research kind selector, domain filter |
+| Tabs | `~/components/ui/tabs` | Research kind selector, domain filter |
 | Badge | `~/components/ui/badge` | Layer badges, domain tags, confidence labels |
 | ScrollArea | `~/components/ui/scroll-area` | Long scripture text, result lists |
 | Separator | `~/components/ui/separator` | Visual dividers between layers |
@@ -122,10 +123,10 @@ These three layer tokens are **structural**: canonical text renders only inside 
 
 | Element | Copy |
 |---------|------|
-| Primary CTA | "Search" |
-| Secondary CTA | "Read" |
+| Primary CTA | "Search Quran" |
+| Secondary CTA | "Read scripture" |
 | Comparative CTA | "Compare passages" |
-| Empty state heading | "No results found" |
+| Empty state heading | "No passages matched your search" |
 | Empty state body | "Try adjusting your search terms or filters." |
 | Error state heading | "Something went wrong" |
 | Error state body | "{specific error message}. Try again." |
@@ -139,17 +140,19 @@ These three layer tokens are **structural**: canonical text renders only inside 
 
 ## UI Considerations
 
-Applicable state considerations resolved: 6 covered, 1 backstop, 0 unresolved.
+Applicable state considerations resolved: 31 covered, 0 backstop, 0 unresolved — plus 12 unclassified dismissed (static/chrome, see last row).
 
 | Category | Element(s) | Status | Resolution / Reason |
 |----------|------------|--------|---------------------|
-| Empty | Search results, parallel-passage list, domain-filtered results | ✅ covered | Empty results render "No results found" + "Try adjusting your search terms or filters." |
-| Loading | All data-fetching views | ✅ covered | Skeleton components replace content areas during fetch |
-| Error | API failures, citation mismatch | ✅ covered | Alert component with error heading + specific message + retry action |
-| Long-text | Arabic scripture (multi-paragraph ayahs) | 🧪 backstop | Arabic text at 20px/1.8 line-height in ScrollArea — lifts as { statement: "Long Arabic scripture renders without truncation or overflow", verification: backstop } |
-| Overflow | Domain filter list, parallel-passage list, hadith gradings | ✅ covered | ScrollArea with max-height + overflow-y-auto |
-| Zero-one-many | Translation panels (0..N per verse) | ✅ covered | Zero: "No translation available" / One: inline panel / Many: side-by-side or tabbed |
-| Partial | Verse with some translations missing | ✅ covered | Missing translations shown as "No translation available" in translation layer slot |
+| Empty | E6 parallel-passage table, E13 sidebar nav, search results, domain-filtered results | ✅ covered | Empty table renders "No passages matched your search" + "Try adjusting your search terms or filters." (see Copywriting Contract); sidebar nav is static and never empty |
+| Loading | E5 edition browser, E6 parallel-passage table, E7 domain toggles, E13 sidebar, E14 top bar, E20 theme toggle, all data-fetching views | ✅ covered | Skeleton components replace content areas during fetch |
+| Error | E5 edition browser, E6 parallel-passage table, E7 domain toggles, E13 sidebar, E14 top bar, E20 theme toggle, API failures, citation mismatch | ✅ covered | Alert component with specific message + retry action (see Copywriting Contract error rows) |
+| Long-text | E5 edition names, E7 domain labels, E13 nav labels, E14 view titles, E15 empty-state copy, E17 error copy, E20 theme labels, Arabic scripture (multi-paragraph ayahs) | ✅ covered | Long labels wrap without truncation; long Arabic scripture renders at 20px/1.8 line-height in ScrollArea without truncation or overflow |
+| Overflow | E5 edition/book/chapter pickers, E6 parallel-passage table, E13 sidebar nav, E14 top bar, E15 empty state, E17 error Alert | ✅ covered | ScrollArea with max-height + overflow-y-auto; pickers use Select with scrollable viewport |
+| Populated | E6 parallel-passage table, E13 sidebar nav | ✅ covered | Populated table shows a typical 5–20 suggestion rows with confidence band + Uncertain badge; populated sidebar shows all 8 nav items with icons + labels |
+| Partial | E6 parallel-passage rows, verse with some translations missing | ✅ covered | Rows with missing confidence render "confidence unavailable" in the annotation layer slot; missing translations show "No translation available" in translation layer slot |
+| Zero-one-many | E6 parallel-passage table, translation panels (0..N per verse) | ✅ covered | Zero suggestions: "No passages matched your search"; one: single table row; many: scrollable table. Zero translations: "No translation available" / one: inline panel / many: side-by-side or tabbed |
+| Unclassified (dismissed) | E1 reading column, E2 translation panels, E3 word inspector, E4 search kinds, E8 graph, E9 hadith/tafsir, E10 RAG debug, E11 explorer, E12 citation, E16 skeleton, E18 layer tokens, E19 dialogs | dismissed | Static/chrome elements with no state axis — no state coverage needed; state behavior covered via the rows above |
 
 ---
 
@@ -186,6 +189,7 @@ All views use a **sidebar navigation + main content** shell:
 - **Top bar**: View title + primary CTA + theme toggle
 
 ### Reading View Specifics
+- **Focal point**: The centered Arabic scripture column is the primary visual anchor — it draws the eye first. All other UI (sidebar, top bar, translation panels) yields visual precedence to this column.
 - Single centered column (max-width 72ch) for Arabic scripture
 - `dir="rtl"` and `lang="ar"` on scripture container
 - Layer separation enforced by component type system (AyahColumn accepts only canonical text)
@@ -210,4 +214,4 @@ All views use a **sidebar navigation + main content** shell:
 - [ ] Dimension 6 Registry Safety: PASS
 - [ ] Dimension 7 Inventory Provenance: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-10-19
