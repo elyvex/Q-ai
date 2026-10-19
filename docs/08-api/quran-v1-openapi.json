@@ -360,7 +360,7 @@
     "/api/v1/quran/tool/{name}": {
       "post": {
         "operationId": "runTool",
-        "description": "Run any registered tool by canonical name (D-16 generic typed-tool route). Dispatches through the shared name-to-tool table the CLI `quran tool` verb uses, so tool identity and `research_checksum` cannot diverge between surfaces. The payload is the registry-produced ToolResult verbatim, with its checksum in both `data.research_checksum` and `meta.research_checksum`.",
+        "description": "Run any registered tool by canonical name (D-16 generic typed-tool route). Dispatches through the shared name-to-tool table the CLI `quran tool` verb uses, so tool identity and `research_checksum` cannot diverge between surfaces. The payload is the registry-produced ToolResult verbatim, with its checksum in both `data.research_checksum` and `meta.research_checksum`. Mutating isnad identity tools (`isnad.identity_propose|accept|reject|dispute|supersede`) are denied by default on this unauthenticated route with a 403 (code `QAI-ISNAD-0326`); set `policy.tool_execution_default = \"allow\"` to enable them. Read-only isnad tools (`isnad.narrator`, `isnad.rijal`, `isnad.trace`) and all `quran.*`/`hadith.*`/`tafsir.*` tools are unaffected.",
         "parameters": [
           {
             "name": "name",
@@ -1330,6 +1330,10 @@
                 "properties": {
                   "node": {
                     "type": "string"
+                  },
+                  "projection": {
+                    "type": "string",
+                    "description": "Projection family to read (default quran-structural-v1, the structural read scope). An unknown or unbuilt family is a typed 404 (QAI-GRAPH-0001), never an empty success."
                   },
                   "edge_types": {
                     "type": "array",

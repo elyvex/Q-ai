@@ -27,11 +27,11 @@ Local-first + server (local-first default with optional server deploy).
 - ✓ Canonical Quran engine: validated import, addressing, tokens, exact lookup, integrity tests — Phase 2 (2026-10-06; UAT 37/37, threats_open 0)
 - ✓ Quran search and linguistics: normalization, roots/lemmas, morphology, frequency tools — Phase 3 (2026-09-28; owner gates OD-11/OD-12 open)
 - ✓ Quran knowledge graph: schema, traversal, annotations, visualization — Phase 4 (2026-09-29; M5 blocked on OD-11)
+- ✓ Hadith & tafsir: structured records, attributed gradings, verse links, search and cross-surface tools — Phase 6 (2026-10-16; 5/5 plans; 19/20 verified, 1 accepted behavior-unverified)
 
 ### Active
 
 - [ ] Rich Quran experience: Web GUI reading/research views, TUI, CLI tree
-- [ ] Hadith and tafsir: structured records, grading attribution, verse links
 - [ ] Isnad and narrator research: identity review, chain paths, uncertainty
 - [ ] Multi-RAG and smart routing: full-text, vector, hybrid, reranking, debugging
 - [ ] Comparative scripture: edition-aware model, parallel-passage research
@@ -103,7 +103,10 @@ Proposed (NOT locked — explicit decision points during roadmap execution): ADR
 | Layered workspace + local-first binary (ADR-0000) | Enforceable boundaries; canonical safety at type level | — Pending |
 | SQLite default, PG-portable (ADR-0001) | Local-first authority; server path without rewrite | — Pending |
 | Canonical Quran safety model (ADR-0102…0113) | Exact text + verifiable citations are the core value | ✓ Validated — Phase 2 (8/8 plans, UAT 37/37, threats_open 0) |
+| Single graph read selector (04-06 gap closure) | One read selector resolved in one place (`ReadOptions.projection` → `open_for_projection`) so CLI/HTTP/tool surfaces cannot drift; default structural read stays byte-identical | ✓ Validated — Phase 4 (neighbors/export gain `--projection`; `path`/`subgraph`/`pattern`/`inspect` stay structural-only, recorded in the deferral ledger) |
 | Deny-by-default tools, human approvals | Untrusted retrieval; no silent canonical modification | — Pending |
+| Computational verse links stay Uncertain until owner confirmation (Phase 6) | `verse_links` require reviewer + decided_at (DB CHECK); read path confirmed-only by default; scholarly disagreement assembled side-by-side, never merged | ✓ Validated — Phase 6 (19/20 verified; parity test rows owner-accepted) |
+| Hadith/tafsir ingestion + search reuse L5 normalization without mutating canonical text (Phase 6) | Derived search forms live in separate FTS tables; per-scholar gradings with attribution, no consensus field; ingestion currently in-memory (SQLite persistence deferred) | ✓ Validated — Phase 6 (10 ingestion tests, arch-check green) |
 
 ---
-*Last updated: 2026-10-06 after Phase 2 complete (canonical Quran core validated; phases 1–4 shipped)*
+*Last updated: 2026-10-16 after Phase 6 complete (Hadith & Tafsir: structured records, attributed gradings, verse links, ingestion, cross-surface tools)*

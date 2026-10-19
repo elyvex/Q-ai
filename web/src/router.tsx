@@ -7,6 +7,7 @@ import ResearchView from './views/ResearchView'
 import GraphView from './views/GraphView'
 import RagDebugView from './views/RagDebugView'
 import CitationView from './views/CitationView'
+import ExplorerView from './views/ExplorerView'
 import { fetchAyahs, type AyahView } from './api/client'
 
 export function parseReadPath(path: string): string | null {
@@ -34,7 +35,7 @@ function Nav({ path }: { path: string }) {
   return (
     <nav>
       {link('/', 'read')} {link('/research', 'research')} {link('/graph', 'graph')}{' '}
-      {link('/rag-debug', 'rag-debug')}
+      {link('/rag-debug', 'rag-debug')} {link('/explorer', 'explorer')}
     </nav>
   )
 }
@@ -80,6 +81,14 @@ export default function Router({ path }: { path: string }) {
       <>
         <Nav path={path} />
         <RagDebugView />
+      </>
+    )
+  }
+  if (path === '/explorer') {
+    return (
+      <>
+        <Nav path={path} />
+        <ExplorerView />
       </>
     )
   }

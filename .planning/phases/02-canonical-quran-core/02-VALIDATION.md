@@ -7,7 +7,7 @@ status: validated
 nyquist_compliant: true
 wave_0_complete: true
 created: "2026-09-25"
-validated: "2026-10-04"
+validated: "2026-10-13"
 ---
 
 # Phase 2 — Validation Strategy
@@ -192,3 +192,53 @@ because no genuine MISSING coverage gap was found.
 - **Legacy baseline** — the two CLI snapshot failures (`quran_search_snapshots`,
   `quran_normalize_snapshots`) are Roadmap Phase 3 work and were excluded from this
   audit; every Phase-2-owned harness passes.
+
+---
+
+## Validation Audit 2026-10-13 (stale-verification refresh)
+
+**Scope:** Re-audit of the 2026-10-04 validation at HEAD. No new plans (still
+02-01…02-08, 22 tasks); implementation files were read-only and no test or
+fixture was added. Cross-checked against `02-VERIFICATION.md` (2026-10-10,
+9/9 truths verified, WR-01/WR-02 closed).
+
+### Commands re-run and observed results
+
+| Command | Observed |
+|---------|----------|
+| `cargo test -p quran-core -p quran-corpus -p citations -p provenance` | quran-core 46 (39+1+6), quran-corpus 75 (52+6+13+4), citations 13, provenance 10 — all 0 failed (identical to 10-04) |
+| `cargo test -p storage-sqlite --test quran` | 11 passed, 0 failed |
+| `cargo test -p application --test quran_import --test quran_reader --test quran_translation --test quran_verification --test quran_doctor --test quran_tools --test quran_identity --test quran_reference --test answer_path_ledger` | 16 / 13 / 13 / 3 / 4 / **11** / 7 / 1 / 6 passed, 0 failed (`quran_tools` 9→11 via later phase-05 enhancements; still green) |
+| `cargo test -p cli --test quran -- quran_snapshots quran_verify_snapshots quran_reference_snapshots edition_identity_snapshots quran_verify_quotation_snapshots quran_catalog_snapshots` | 6 passed, 0 failed |
+| `cargo test -p cli --test catalog --test doctor_json --test corpus_integrity` | 2 / 3 / 4 passed, 0 failed |
+| `cargo test -p server --test api` | **25** passed, 0 failed (22→25 via later phase-05 enhancements; still green) |
+| `cargo test -p storage --lib quran` | 4 passed, 0 failed |
+| `cargo test -p xtask` | 25 passed, 0 failed |
+| `cargo run -q -p xtask -- arch-check` | OK — no forbidden dependency edges |
+| `cargo run -q -p xtask -- migrate-check` | OK — **26** migration(s) ordered (22→26 via later phases); checksums stable |
+| `cargo run -q -p xtask -- gen-schema` + `git diff --exit-code docs/schemas/` | SCHEMA_CLEAN |
+| Owner-gate ledger presence (`rg -c 'OD-01\|OD-02\|OD-03'`) | 11 hits — ledger intact |
+
+### Metrics
+
+| Metric | Value |
+|--------|-------|
+| Tasks audited | 22 (plans 02-01…02-08) |
+| Rows green | 22 / 22 |
+| New MISSING gaps found this refresh | 0 |
+| Tests/fixtures added this refresh | 0 (no genuine gap) |
+| Manual-only items (honest, non-automatable) | 4 (OD-01, OD-02, OD-03, D-15 ratification — unchanged) |
+| `nyquist_compliant` | true |
+
+### Findings / notes
+
+- **Post-validation drift is additive, not regressive.** Commits since 10-04
+  (rustfmt normalization, phases 05-01/05-04/05-08, 06-01) touched
+  `quran_tools.rs`, `api.rs`, and `citations` but only *added* passing tests
+  (`quran_tools` +2, `server api` +3) and migrations (+4, checksums stable).
+  Every Phase-2-owned assertion still passes at HEAD.
+- **Coverage-gate citations row** — not re-checked; per the 10-04 audit it
+  reflects a stale `lcov.info` (2026-09-25) against a raised 85% floor, owned
+  by a later plan, not a Phase 2 requirement failure.
+- **Legacy baseline** — unchanged: `quran_search_snapshots` /
+  `quran_normalize_snapshots` remain Roadmap Phase 3 scope, excluded here.

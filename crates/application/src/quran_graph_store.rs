@@ -330,6 +330,8 @@ fn parse_kind(raw: String) -> Result<NodeKind, GraphError> {
         "concept" => Ok(NodeKind::Concept),
         "entity" => Ok(NodeKind::Entity),
         "annotation" => Ok(NodeKind::Annotation),
+        "narrator" => Ok(NodeKind::Narrator),
+        "hadith" => Ok(NodeKind::Hadith),
         other => Err(build_failed("open", format!("unknown node kind '{other}'"))),
     }
 }
@@ -341,6 +343,7 @@ fn parse_assertion_kind(raw: String) -> Result<AssertionKind, GraphError> {
         "entity_link" => Ok(AssertionKind::EntityLink),
         "family_link" => Ok(AssertionKind::FamilyLink),
         "import" => Ok(AssertionKind::Import),
+        "narrator_identity" => Ok(AssertionKind::NarratorIdentity),
         other => Err(build_failed("open", format!("unknown assertion kind '{other}'"))),
     }
 }

@@ -10,7 +10,7 @@ created: "2026-09-26"
 # Phase 02 — Security
 
 > Per-phase security contract: threat register, accepted risks, and audit trail.
-> Source: `<threat_model>` blocks in `02-01-PLAN.md` … `02-07-PLAN.md` (all seven
+> Source: `<threat_model>` blocks in `02-01-PLAN.md` … `02-08-PLAN.md` (all eight
 > plans authored with a parseable threat model → `register_authored_at_plan_time: true`).
 > Posture: ASVS Level 1; unmitigated `high` blocks. L1 verification depth applied;
 > short-circuit taken per workflow (threats_open: 0, register at plan time, ASVS 1).
@@ -74,6 +74,9 @@ created: "2026-09-26"
 | T-02-37 | Repudiation | spec-less edge-probe row silently dropped | high | mitigate | All six rows enumerated with answering plan/criterion in evidence doc; gate asserts every category token + requirement id present | closed |
 | T-02-38 | Repudiation | D-15 read-path exemption closed without owner knowledge | high | mitigate | Recorded as explicit owner-ratifiable interpretation with per-path basis; never presented as satisfied locked decision | closed |
 | T-02-39 | Repudiation | task marked complete before acceptance criteria hold | medium | mitigate | TASK-002 moved active→completed only after gate evidence + evidence doc exist; rollup entry required | closed |
+| T-02-42 | Repudiation | D-15 exemption ledger overclaims completeness | high | mitigate | Rebuild the ledger on the emission frame, disposition every path with a basis, and correct the blanket claim in all four copies | closed |
+| T-02-43 | Tampering | A new emitting path is added without being recorded | high | mitigate | Checked-list source-scan guard (`answer_path_ledger.rs`) fails on an unlisted emitting marker; symbol-resolution guard catches renames/drift | closed |
+| T-02-44 | Information disclosure | Stale `file:line` anchors mislead an owner gate | low | accept | The ledger now uses `path#symbol` refs; the debug-only route emits already-public canonical text and no secret | closed |
 | T-02-SC | Tampering | npm/pip/cargo installs | high | mitigate | No package install in phase: zero `Cargo.toml`/`Cargo.lock` changes in any `(02-0X)` plan commit (the `sha2` addition predates phase execution, 2026-09-24); future installs require package-legitimacy gate + blocking human checkpoint | closed |
 
 *Status: open · closed · open — below high threshold (non-blocking)*
@@ -118,6 +121,7 @@ register threat. Tracked as follow-ups, not open threats:
 |------------|---------------|--------|------|--------|
 | 2026-09-26 | 40 | 40 | 0 | secure-phase L1 (plan-register + grep evidence + VERIFICATION 5/5) |
 | 2026-10-04 | 40 | 40 | 0 | secure-phase L1 re-run — gap plan 02-08 (D-15 ledger rebuild) is docs-only + one source-scan test; no threat-surface change, no SUMMARY threat flags |
+| 2026-10-13 | 40 | 40 | 0 | secure-phase L1 stale-refresh — re-verified high-severity mitigations in current tree (open_read_only verify path quran_cli.rs; ApprovalToken::new pub(crate) provenance/src/lib.rs:159; require_exact server/api.rs:662; QAI-QUR trigger adversarial tests; answer_path_ledger.rs guard); no SUMMARY threat flags; only post-audit commits are docs-only 02-08 + unrelated phase 05/06 work |
 
 ---
 

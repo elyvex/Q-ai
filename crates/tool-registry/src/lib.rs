@@ -32,7 +32,7 @@ pub const MORPHOLOGY_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
 /// Tool versions (§12 tool plan; D-13 lexicon surface).
 pub const FAMILY_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
 /// Tool versions (§12 tool plan; Phase 4 graph surface, D-12).
-pub const GRAPH_NEIGHBORS_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
+pub const GRAPH_NEIGHBORS_TOOL_VERSION: SemVer = SemVer::new(1, 1, 0);
 /// Tool versions (§12 tool plan; Phase 4 graph surface, D-12).
 pub const GRAPH_PATH_TOOL_VERSION: SemVer = SemVer::new(1, 0, 0);
 /// Tool versions (§12 tool plan; Phase 4 graph surface, D-12).
@@ -173,6 +173,379 @@ pub trait QuranBackend: Send + Sync {
     }
 }
 
+// ============================================================================
+// Hadith tools (Phase 6)
+// ============================================================================
+
+/// Tool versions for hadith tools (Phase 6).
+pub const HADITH_GET_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions for hadith search (Phase 6).
+pub const HADITH_SEARCH_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions for hadith gradings (Phase 6).
+pub const HADITH_GRADINGS_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions for tafsir get (Phase 6, plan 06-02).
+pub const TAFSIR_GET_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions for tafsir search (Phase 6, plan 06-02).
+pub const TAFSIR_SEARCH_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions for scripture get (Phase 9, plan 09-01).
+pub const SCRIPTURE_GET_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions for scripture search (Phase 9, plan 09-02).
+pub const SCRIPTURE_SEARCH_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions for scripture translations (Phase 9, plan 09-02).
+pub const SCRIPTURE_TRANSLATIONS_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions for scripture editions (Phase 9, plan 09-02).
+pub const SCRIPTURE_EDITIONS_VERSION: SemVer = SemVer::new(1, 0, 0);
+/// Tool versions for scripture parallel passages (Phase 9, plan 09-03).
+pub const SCRIPTURE_PARALLEL_PASSAGES_VERSION: SemVer = SemVer::new(1, 0, 0);
+
+/// A hadith reference: collection slug + source number.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HadithRef {
+    /// Collection slug (e.g., "bukhari-arabic").
+    pub collection_slug: String,
+    /// Source number, preserved verbatim (e.g., "bukhari:1234").
+    pub source_number: String,
+}
+
+impl HadithRef {
+    /// Parse a reference string like "bukhari-arabic:bukhari:1234".
+    pub fn parse(s: &str) -> Option<Self> {
+        let (slug, number) = s.split_once(':')?;
+        if slug.is_empty() || number.is_empty() {
+            return None;
+        }
+        Some(Self { collection_slug: slug.to_string(), source_number: number.to_string() })
+    }
+}
+
+impl std::fmt::Display for HadithRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.collection_slug, self.source_number)
+    }
+}
+
+/// A full hadith view with matn, isnad, and gradings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HadithView {
+    /// The hadith record id.
+    pub id: String,
+    /// Collection slug.
+    pub collection_slug: String,
+    /// Source number (preserved verbatim).
+    pub source_number: String,
+    /// Canonical matn text.
+    pub matn_text: String,
+    /// Isnad text, if separated.
+    pub isnad_text: Option<String>,
+    /// Narrator names.
+    pub narrator_names: Vec<String>,
+    /// Per-scholar grading records.
+    pub gradings: Vec<GradingRecord>,
+}
+
+/// A grading record in the tool result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GradingRecord {
+    /// The grading record id.
+    pub id: String,
+    /// Scholar name.
+    pub scholar_name: String,
+    /// Grading value.
+    pub grading_value: String,
+    /// Source citation.
+    pub source_citation: String,
+    /// Review decision.
+    pub decision: String,
+    /// Reviewer, if any.
+    pub reviewer: Option<String>,
+    /// Provenance layer.
+    pub provenance_layer: String,
+    /// Confidence, if any.
+    pub confidence: Option<f64>,
+}
+
+/// Parameters for `hadith.get`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetHadithParams {
+    /// Reference string in format `collection_slug:source_number`.
+    pub reference: String,
+}
+
+/// Parameters for `hadith.search`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HadithSearchToolParams {
+    /// Query text.
+    pub query: String,
+    /// Optional collection filter.
+    #[serde(default)]
+    pub collection_slug: Option<String>,
+    /// Result cap.
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+/// The hadith backend trait: implemented by `application` for the real reader.
+#[async_trait]
+pub trait HadithBackend: Send + Sync {
+    /// Fetch one hadith view by reference.
+    async fn backend_get_hadith(
+        &self,
+        reference: &HadithRef,
+    ) -> Result<(HadithView, BackendMeta), ToolError>;
+
+    /// Search hadith records.
+    async fn backend_search_hadith(
+        &self,
+        _params: &HadithSearchToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        Err(ToolError::Backend {
+            code: "QAI-HAD-0310".to_string(),
+            detail: "hadith.search is not supported by this backend".to_string(),
+        })
+    }
+
+    /// Fetch grading records for a hadith.
+    async fn backend_get_gradings(&self, hadith_id: &str) -> Result<Vec<GradingRecord>, ToolError>;
+}
+
+// ============================================================================
+// Tafsir tools (Phase 6, plan 06-02)
+// ============================================================================
+
+/// A tafsir reference: work slug + optional location inside the work.
+///
+/// String form is `work-slug[:chapter]` — e.g. `tafsir-tabari:2:255`, where
+/// the remainder after the first `:` is the chapter verbatim (it may itself
+/// contain `:`). Volume/page are set programmatically, not parsed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TafsirRef {
+    /// Work slug (e.g., "tafsir-tabari").
+    pub work_slug: String,
+    /// Volume number, when the work is multi-volume.
+    #[serde(default)]
+    pub volume: Option<u32>,
+    /// Page number, when the work is paginated.
+    #[serde(default)]
+    pub page: Option<u32>,
+    /// Chapter (e.g. surah name or number), when the work is chaptered.
+    #[serde(default)]
+    pub chapter: Option<String>,
+}
+
+impl TafsirRef {
+    /// Parse a reference string like "tafsir-tabari" or "tafsir-tabari:2:255".
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.split_once(':') {
+            Some((slug, chapter)) => {
+                if slug.is_empty() || chapter.is_empty() {
+                    return None;
+                }
+                Some(Self {
+                    work_slug: slug.to_string(),
+                    volume: None,
+                    page: None,
+                    chapter: Some(chapter.to_string()),
+                })
+            }
+            None => {
+                if s.is_empty() {
+                    return None;
+                }
+                Some(Self { work_slug: s.to_string(), volume: None, page: None, chapter: None })
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for TafsirRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.work_slug)?;
+        if let Some(chapter) = &self.chapter {
+            write!(f, ":{chapter}")?;
+        }
+        Ok(())
+    }
+}
+
+/// A full tafsir view with text, work, author, and dimensions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TafsirView {
+    /// The tafsir record id.
+    pub id: String,
+    /// Work slug.
+    pub work_slug: String,
+    /// Work name.
+    pub work_name: String,
+    /// Work author.
+    pub author: String,
+    /// Volume number, if any.
+    pub volume: Option<u32>,
+    /// Page number, if any.
+    pub page: Option<u32>,
+    /// Chapter, if any.
+    pub chapter: Option<String>,
+    /// Canonical tafsir text.
+    pub text: String,
+    /// Fully qualified reference (`work_slug:chapter` or `work_slug:volume:page`).
+    pub canonical_reference: String,
+}
+
+/// Parameters for `tafsir.get`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetTafsirParams {
+    /// Reference string in format `work_slug[:chapter]`.
+    pub reference: String,
+}
+
+/// Parameters for `tafsir.search`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TafsirSearchToolParams {
+    /// Query text.
+    pub query: String,
+    /// Optional work filter.
+    #[serde(default)]
+    pub work_slug: Option<String>,
+    /// Result cap.
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+/// The tafsir backend trait: implemented by `application` for the real reader.
+#[async_trait]
+pub trait TafsirBackend: Send + Sync {
+    /// Fetch one tafsir view by reference.
+    async fn backend_get_tafsir(
+        &self,
+        reference: &TafsirRef,
+    ) -> Result<(TafsirView, BackendMeta), ToolError>;
+
+    /// Search tafsir records.
+    async fn backend_search_tafsir(
+        &self,
+        _params: &TafsirSearchToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        Err(ToolError::Backend {
+            code: "QAI-TAF-0310".to_string(),
+            detail: "tafsir.search is not supported by this backend".to_string(),
+        })
+    }
+}
+
+// ============================================================================
+// Scripture tools (Phase 9, plan 09-01)
+// ============================================================================
+
+/// Re-export of the scripture domain view.
+pub use scripture::ScriptureView;
+
+/// A scripture reference: edition + book + chapter + verse.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScriptureRef {
+    /// Edition slug or id.
+    pub edition: String,
+    /// Book slug.
+    pub book: String,
+    /// Chapter number.
+    pub chapter: u32,
+    /// Verse number.
+    pub verse: u32,
+}
+
+impl ScriptureRef {
+    /// Parse a reference string `edition:book:chapter:verse`.
+    pub fn parse(s: &str) -> Option<Self> {
+        let parts: Vec<&str> = s.split(':').collect();
+        if parts.len() != 4 {
+            return None;
+        }
+        let chapter: u32 = parts[2].parse().ok()?;
+        let verse: u32 = parts[3].parse().ok()?;
+        if chapter == 0 || verse == 0 || parts[0].is_empty() || parts[1].is_empty() {
+            return None;
+        }
+        Some(Self {
+            edition: parts[0].to_string(),
+            book: parts[1].to_string(),
+            chapter,
+            verse,
+        })
+    }
+}
+
+impl std::fmt::Display for ScriptureRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}:{}:{}", self.edition, self.book, self.chapter, self.verse)
+    }
+}
+
+/// Parameters for `scripture.get`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetScriptureParams {
+    /// Reference string in format `edition:book:chapter:verse`.
+    pub reference: String,
+}
+
+/// Parameters for `scripture.search` (placeholder).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScriptureSearchToolParams {
+    /// Query text.
+    pub query: String,
+    /// Optional edition filter.
+    #[serde(default)]
+    pub edition: Option<String>,
+    /// Result cap.
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+/// The scripture backend trait: implemented by `application`.
+#[async_trait]
+pub trait ScriptureBackend: Send + Sync {
+    /// Fetch one scripture view by reference.
+    async fn backend_get_scripture(
+        &self,
+        reference: &ScriptureRef,
+    ) -> Result<(ScriptureView, BackendMeta), ToolError>;
+
+    /// Search scripture (default unsupported).
+    async fn backend_search_scripture(
+        &self,
+        _params: &ScriptureSearchToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        Err(ToolError::Backend {
+            code: "QAI-SCR-0310".to_string(),
+            detail: "scripture.search is not supported by this backend".to_string(),
+        })
+    }
+
+    /// List editions (default unsupported).
+    async fn backend_list_editions(&self) -> Result<serde_json::Value, ToolError> {
+        Err(ToolError::Backend {
+            code: "QAI-SCR-0310".to_string(),
+            detail: "scripture list editions is not supported by this backend".to_string(),
+        })
+    }
+
+    /// Get a translation (default unsupported).
+    async fn backend_get_translation(&self, _verse_id: &str, _language: &str) -> Result<serde_json::Value, ToolError> {
+        Err(ToolError::Backend {
+            code: "QAI-SCR-0310".to_string(),
+            detail: "scripture translation is not supported by this backend".to_string(),
+        })
+    }
+
+    /// Parallel passages (default unsupported).
+    async fn backend_parallel_passages(
+        &self,
+        _quran_ref: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        Err(ToolError::Backend {
+            code: "QAI-SCR-0310".to_string(),
+            detail: "scripture parallel passages is not supported by this backend".to_string(),
+        })
+    }
+}
+
 /// Parameters for `quran.get_ayah`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetAyahParams {
@@ -301,6 +674,11 @@ pub struct GraphBudgetsParams {
 pub struct GraphNeighborsParams {
     /// Stable node id to open around.
     pub node: String,
+    /// Projection family to read (default `quran-structural-v1`, the
+    /// structural read scope); an unknown or unbuilt family is a typed
+    /// `QAI-GRAPH-0001` error, never an empty success.
+    #[serde(default)]
+    pub projection: Option<String>,
     /// Allowed edge predicates (`None` admits every allowlisted predicate).
     #[serde(default)]
     pub edge_types: Option<Vec<String>>,
@@ -426,17 +804,194 @@ impl From<ContextBoundaryArg> for ContextBoundary {
 /// The local tool registry.
 pub struct ToolRegistry {
     backend: Arc<dyn QuranBackend>,
+    hadith_backend: Option<Arc<dyn HadithBackend>>,
+    tafsir_backend: Option<Arc<dyn TafsirBackend>>,
+    scripture_backend: Option<Arc<dyn ScriptureBackend>>,
+    isnad_backend: Option<Arc<dyn IsnadBackend>>,
+    rag_backend: Option<Arc<dyn RagBackend>>,
 }
 
 impl ToolRegistry {
     /// Wrap a backend.
     pub fn new(backend: Arc<dyn QuranBackend>) -> Self {
-        Self { backend }
+        Self { backend, hadith_backend: None, tafsir_backend: None, scripture_backend: None, isnad_backend: None, rag_backend: None }
     }
 
-    /// The full registered tool set (§12 tool plan; D-13): the two direct-read
-    /// tools plus the attributed search/lexicon surface.
-    pub const TOOL_NAMES: [&'static str; 12] = [
+    /// Wrap a backend with a hadith backend.
+    pub fn with_hadith(
+        backend: Arc<dyn QuranBackend>,
+        hadith_backend: Arc<dyn HadithBackend>,
+    ) -> Self {
+        Self {
+            backend,
+            hadith_backend: Some(hadith_backend),
+            tafsir_backend: None,
+            scripture_backend: None,
+            isnad_backend: None,
+            rag_backend: None,
+        }
+    }
+
+    /// Set the hadith backend after construction.
+    pub fn set_hadith_backend(&mut self, hadith_backend: Arc<dyn HadithBackend>) {
+        self.hadith_backend = Some(hadith_backend);
+    }
+
+    /// Wrap a backend with an isnad backend.
+    pub fn with_isnad(
+        backend: Arc<dyn QuranBackend>,
+        isnad_backend: Arc<dyn IsnadBackend>,
+    ) -> Self {
+        Self {
+            backend,
+            hadith_backend: None,
+            tafsir_backend: None,
+            scripture_backend: None,
+            isnad_backend: Some(isnad_backend),
+            rag_backend: None,
+        }
+    }
+
+    /// Set the isnad backend after construction.
+    pub fn set_isnad_backend(&mut self, isnad_backend: Arc<dyn IsnadBackend>) {
+        self.isnad_backend = Some(isnad_backend);
+    }
+
+    pub fn isnad_backend(&self) -> Option<Arc<dyn IsnadBackend>> {
+        self.isnad_backend.clone()
+    }
+
+    /// Wrap a backend with a RAG backend.
+    pub fn with_rag(
+        backend: Arc<dyn QuranBackend>,
+        rag_backend: Arc<dyn RagBackend>,
+    ) -> Self {
+        Self {
+            backend,
+            hadith_backend: None,
+            tafsir_backend: None,
+            scripture_backend: None,
+            isnad_backend: None,
+            rag_backend: Some(rag_backend),
+        }
+    }
+
+    /// Set the RAG backend after construction.
+    pub fn set_rag_backend(&mut self, rag_backend: Arc<dyn RagBackend>) {
+        self.rag_backend = Some(rag_backend);
+    }
+
+    pub fn rag_backend(&self) -> Option<Arc<dyn RagBackend>> {
+        self.rag_backend.clone()
+    }
+
+    pub async fn rag_create_project(
+        &self,
+        name: &str,
+        config_toml: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.rag_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-RAG-0310".into(),
+            detail: "rag backend not configured".into(),
+        })?;
+        b.backend_create_project(name, config_toml).await
+    }
+
+    pub async fn rag_import(
+        &self,
+        project: &str,
+        docs: &[serde_json::Value],
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.rag_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-RAG-0310".into(),
+            detail: "rag backend not configured".into(),
+        })?;
+        b.backend_import(project, docs).await
+    }
+
+    pub async fn rag_query(
+        &self,
+        project: &str,
+        query: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.rag_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-RAG-0310".into(),
+            detail: "rag backend not configured".into(),
+        })?;
+        b.backend_query(project, query).await
+    }
+
+    pub async fn rag_debug(
+        &self,
+        project: &str,
+        query: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.rag_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-RAG-0310".into(),
+            detail: "rag backend not configured".into(),
+        })?;
+        b.backend_debug(project, query).await
+    }
+
+    pub async fn rag_source_status(
+        &self,
+        project: &str,
+        source: &str,
+        status: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.rag_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-RAG-0310".into(),
+            detail: "rag backend not configured".into(),
+        })?;
+        b.backend_source_status(project, source, status).await
+    }
+
+    /// Wrap a backend with a tafsir backend.
+    pub fn with_tafsir(
+        backend: Arc<dyn QuranBackend>,
+        tafsir_backend: Arc<dyn TafsirBackend>,
+    ) -> Self {
+        Self {
+            backend,
+            hadith_backend: None,
+            tafsir_backend: Some(tafsir_backend),
+            scripture_backend: None,
+            isnad_backend: None,
+            rag_backend: None,
+        }
+    }
+
+    /// Set the tafsir backend after construction.
+    pub fn set_tafsir_backend(&mut self, tafsir_backend: Arc<dyn TafsirBackend>) {
+        self.tafsir_backend = Some(tafsir_backend);
+    }
+
+    /// Wrap a backend with a scripture backend.
+    pub fn with_scripture(
+        backend: Arc<dyn QuranBackend>,
+        scripture_backend: Arc<dyn ScriptureBackend>,
+    ) -> Self {
+        Self {
+            backend,
+            hadith_backend: None,
+            tafsir_backend: None,
+            scripture_backend: Some(scripture_backend),
+            isnad_backend: None,
+            rag_backend: None,
+        }
+    }
+
+    /// Set the scripture backend after construction.
+    pub fn set_scripture_backend(&mut self, scripture_backend: Arc<dyn ScriptureBackend>) {
+        self.scripture_backend = Some(scripture_backend);
+    }
+
+    pub fn scripture_backend(&self) -> Option<Arc<dyn ScriptureBackend>> {
+        self.scripture_backend.clone()
+    }
+
+    /// The full registered tool set (§12 tool plan; D-13; Phase 6 hadith + tafsir tools).
+    pub const TOOL_NAMES: [&'static str; 22] = [
         "quran.get_ayah",
         "quran.get_context",
         "quran.search",
@@ -449,6 +1004,16 @@ impl ToolRegistry {
         "quran.graph_subgraph",
         "quran.graph_pattern",
         "quran.graph_root_family",
+        "hadith.get",
+        "hadith.search",
+        "hadith.gradings",
+        "tafsir.get",
+        "tafsir.search",
+        "scripture.get",
+        "scripture.search",
+        "scripture.translations",
+        "scripture.editions",
+        "scripture.parallel_passages",
     ];
 
     /// Registered tool names.
@@ -742,12 +1307,483 @@ impl ToolRegistry {
         }
         self.backend.backend_graph_root_family(&params).await
     }
+
+    /// `hadith.get`: fetch one hadith view by reference.
+    pub async fn get_hadith(
+        &self,
+        params: GetHadithParams,
+    ) -> Result<(ToolResult<HadithView>, BackendMeta), ToolError> {
+        let hadith_backend = self.hadith_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-HAD-0310".to_string(),
+            detail: "hadith backend not configured".to_string(),
+        })?;
+        let started = Instant::now();
+        let reference =
+            HadithRef::parse(&params.reference).ok_or_else(|| ToolError::InvalidInput {
+                tool: "hadith.get",
+                detail: "reference must be in format `collection_slug:source_number`".to_string(),
+            })?;
+        let query = serde_json::to_value(&params).unwrap_or(serde_json::Value::Null);
+        let (view, meta) = hadith_backend.backend_get_hadith(&reference).await?;
+        let canonical = format!("{}:{}", view.collection_slug, view.source_number);
+        let payload = serde_json::to_value(&view).unwrap_or(serde_json::Value::Null);
+        let result = ToolResult {
+            tool_name: "hadith.get".to_string(),
+            tool_version: HADITH_GET_VERSION,
+            query: query.clone(),
+            normalization_rules: Vec::new(),
+            edition_id: Some(meta.edition_id.clone()),
+            edition_version: Some(meta.edition_version.clone()),
+            canonical_references: vec![canonical.clone()],
+            analysis_sources: vec![AnalysisSource {
+                kind: "hadith".to_string(),
+                reference: canonical,
+            }],
+            results: view,
+            confidence: None,
+            warnings: Vec::new(),
+            execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
+            reproducibility: reproducibility(
+                "hadith.get",
+                HADITH_GET_VERSION,
+                &query,
+                Some(&meta.edition_slug),
+                Some(&meta.edition_version),
+                BTreeMap::new(),
+                meta.corpus_generation,
+            ),
+            research_checksum: research_checksum(
+                "hadith.get",
+                HADITH_GET_VERSION,
+                &query,
+                &serde_json::json!({
+                    "reference": params.reference,
+                    "edition_slug": meta.edition_slug,
+                    "edition_version": meta.edition_version,
+                    "corpus_generation": meta.corpus_generation,
+                }),
+                &payload,
+            )
+            .expect("research checksum input is JSON-serializable"),
+        };
+        Ok((result, meta))
+    }
+
+    /// `hadith.search`: normalized search over hadith records.
+    pub async fn search_hadith(
+        &self,
+        params: HadithSearchToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        if params.query.trim().is_empty() {
+            return Err(ToolError::InvalidInput {
+                tool: "hadith.search",
+                detail: "query text must not be empty".to_string(),
+            });
+        }
+        let hadith_backend = self.hadith_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-HAD-0310".to_string(),
+            detail: "hadith backend not configured".to_string(),
+        })?;
+        hadith_backend.backend_search_hadith(&params).await
+    }
+
+    /// `hadith.gradings`: fetch grading records for a hadith.
+    pub async fn get_gradings(
+        &self,
+        hadith_id: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let hadith_backend = self.hadith_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-HAD-0310".to_string(),
+            detail: "hadith backend not configured".to_string(),
+        })?;
+        let started = Instant::now();
+        let query = serde_json::json!({ "hadith_id": hadith_id });
+        let gradings = hadith_backend.backend_get_gradings(hadith_id).await?;
+        let results = serde_json::to_value(&gradings).unwrap_or(serde_json::Value::Null);
+        let payload = results.clone();
+        let canonical = vec![hadith_id.to_string()];
+        let result = ToolResult {
+            tool_name: "hadith.gradings".to_string(),
+            tool_version: HADITH_GRADINGS_VERSION,
+            query: query.clone(),
+            normalization_rules: Vec::new(),
+            edition_id: None,
+            edition_version: None,
+            canonical_references: canonical,
+            analysis_sources: vec![AnalysisSource {
+                kind: "hadith".to_string(),
+                reference: hadith_id.to_string(),
+            }],
+            results,
+            confidence: None,
+            warnings: Vec::new(),
+            execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
+            reproducibility: reproducibility(
+                "hadith.gradings",
+                HADITH_GRADINGS_VERSION,
+                &query,
+                None,
+                None,
+                BTreeMap::new(),
+                0,
+            ),
+            research_checksum: research_checksum(
+                "hadith.gradings",
+                HADITH_GRADINGS_VERSION,
+                &query,
+                &serde_json::json!({}),
+                &payload,
+            )
+            .expect("research checksum input is JSON-serializable"),
+        };
+        Ok(result)
+    }
+
+    /// `tafsir.get`: fetch one tafsir view by reference.
+    pub async fn get_tafsir(
+        &self,
+        params: GetTafsirParams,
+    ) -> Result<(ToolResult<TafsirView>, BackendMeta), ToolError> {
+        let tafsir_backend = self.tafsir_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-TAF-0310".to_string(),
+            detail: "tafsir backend not configured".to_string(),
+        })?;
+        let started = Instant::now();
+        let reference =
+            TafsirRef::parse(&params.reference).ok_or_else(|| ToolError::InvalidInput {
+                tool: "tafsir.get",
+                detail: "reference must be in format `work_slug[:chapter]`".to_string(),
+            })?;
+        let query = serde_json::to_value(&params).unwrap_or(serde_json::Value::Null);
+        let (view, meta) = tafsir_backend.backend_get_tafsir(&reference).await?;
+        let canonical = view.canonical_reference.clone();
+        let payload = serde_json::to_value(&view).unwrap_or(serde_json::Value::Null);
+        let result = ToolResult {
+            tool_name: "tafsir.get".to_string(),
+            tool_version: TAFSIR_GET_VERSION,
+            query: query.clone(),
+            normalization_rules: Vec::new(),
+            edition_id: Some(meta.edition_id.clone()),
+            edition_version: Some(meta.edition_version.clone()),
+            canonical_references: vec![canonical.clone()],
+            analysis_sources: vec![AnalysisSource {
+                kind: "tafsir".to_string(),
+                reference: canonical,
+            }],
+            results: view,
+            confidence: None,
+            warnings: Vec::new(),
+            execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
+            reproducibility: reproducibility(
+                "tafsir.get",
+                TAFSIR_GET_VERSION,
+                &query,
+                Some(&meta.edition_slug),
+                Some(&meta.edition_version),
+                BTreeMap::new(),
+                meta.corpus_generation,
+            ),
+            research_checksum: research_checksum(
+                "tafsir.get",
+                TAFSIR_GET_VERSION,
+                &query,
+                &serde_json::json!({
+                    "reference": params.reference,
+                    "edition_slug": meta.edition_slug,
+                    "edition_version": meta.edition_version,
+                    "corpus_generation": meta.corpus_generation,
+                }),
+                &payload,
+            )
+            .expect("research checksum input is JSON-serializable"),
+        };
+        Ok((result, meta))
+    }
+
+    /// `scripture.get`: fetch one scripture view by reference.
+    pub async fn get_scripture(
+        &self,
+        params: GetScriptureParams,
+    ) -> Result<(ToolResult<ScriptureView>, BackendMeta), ToolError> {
+        let scripture_backend = self.scripture_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-SCR-0310".to_string(),
+            detail: "scripture backend not configured".to_string(),
+        })?;
+        let started = Instant::now();
+        let reference =
+            ScriptureRef::parse(&params.reference).ok_or_else(|| ToolError::InvalidInput {
+                tool: "scripture.get",
+                detail: "reference must be in format `edition:book:chapter:verse`".to_string(),
+            })?;
+        let query = serde_json::to_value(&params).unwrap_or(serde_json::Value::Null);
+        let (view, meta) = scripture_backend.backend_get_scripture(&reference).await?;
+        let canonical = view.verse.id.to_string();
+        let payload = serde_json::to_value(&view).unwrap_or(serde_json::Value::Null);
+        let result = ToolResult {
+            tool_name: "scripture.get".to_string(),
+            tool_version: SCRIPTURE_GET_VERSION,
+            query: query.clone(),
+            normalization_rules: Vec::new(),
+            edition_id: Some(meta.edition_id.clone()),
+            edition_version: Some(meta.edition_version.clone()),
+            canonical_references: vec![canonical.clone()],
+            analysis_sources: vec![AnalysisSource {
+                kind: "scripture".to_string(),
+                reference: canonical,
+            }],
+            results: view,
+            confidence: None,
+            warnings: Vec::new(),
+            execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
+            reproducibility: reproducibility(
+                "scripture.get",
+                SCRIPTURE_GET_VERSION,
+                &query,
+                Some(&meta.edition_slug),
+                Some(&meta.edition_version),
+                BTreeMap::new(),
+                meta.corpus_generation,
+            ),
+            research_checksum: research_checksum(
+                "scripture.get",
+                SCRIPTURE_GET_VERSION,
+                &query,
+                &serde_json::json!({
+                    "reference": params.reference,
+                    "edition_slug": meta.edition_slug,
+                    "edition_version": meta.edition_version,
+                    "corpus_generation": meta.corpus_generation,
+                }),
+                &payload,
+            )
+            .expect("research checksum input is JSON-serializable"),
+        };
+        Ok((result, meta))
+    }
+
+    /// `scripture.search`: normalized search over scripture verses.
+    pub async fn search_scripture(
+        &self,
+        params: ScriptureSearchToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        if params.query.trim().is_empty() {
+            return Err(ToolError::InvalidInput {
+                tool: "scripture.search",
+                detail: "query text must not be empty".to_string(),
+            });
+        }
+        let scripture_backend = self.scripture_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-SCR-0310".to_string(),
+            detail: "scripture backend not configured".to_string(),
+        })?;
+        scripture_backend.backend_search_scripture(&params).await
+    }
+
+    /// `scripture.translations`: fetch translations for a verse.
+    pub async fn get_scripture_translations(
+        &self,
+        verse_id: String,
+        language: Option<String>,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let scripture_backend = self.scripture_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-SCR-0310".to_string(),
+            detail: "scripture backend not configured".to_string(),
+        })?;
+        let lang = language.unwrap_or_default();
+        let value = scripture_backend.backend_get_translation(&verse_id, &lang).await?;
+        // Wrap raw value into ToolResult? backend returns raw Value, not ToolResult. 
+        // To keep typed tool parity, return via backend directly is not ToolResult. 
+        // But ToolRegistry methods should return ToolResult. Hmm.
+        Ok(ToolResult {
+            tool_name: "scripture.translations".to_string(),
+            tool_version: SCRIPTURE_TRANSLATIONS_VERSION,
+            query: serde_json::json!({"verse_id": verse_id, "language": lang}),
+            normalization_rules: Vec::new(),
+            edition_id: None,
+            edition_version: None,
+            results: value.clone(),
+            canonical_references: vec![verse_id.clone()],
+            analysis_sources: vec![AnalysisSource { kind: "scripture".to_string(), reference: verse_id }],
+            confidence: None,
+            warnings: Vec::new(),
+            execution_time_ms: 0.0,
+            reproducibility: reproducibility("scripture.translations", SCRIPTURE_TRANSLATIONS_VERSION, &serde_json::json!({}), None, None, BTreeMap::new(), 0),
+            research_checksum: research_checksum("scripture.translations", SCRIPTURE_TRANSLATIONS_VERSION, &serde_json::json!({}), &serde_json::json!({}), &value).expect("checksum"),
+        })
+    }
+
+    /// `scripture.editions`: list editions.
+    pub async fn list_scripture_editions(
+        &self,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let scripture_backend = self.scripture_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-SCR-0310".to_string(),
+            detail: "scripture backend not configured".to_string(),
+        })?;
+        let value = scripture_backend.backend_list_editions().await?;
+        Ok(ToolResult {
+            tool_name: "scripture.editions".to_string(),
+            tool_version: SCRIPTURE_EDITIONS_VERSION,
+            query: serde_json::json!({}),
+            normalization_rules: Vec::new(),
+            edition_id: None,
+            edition_version: None,
+            results: value.clone(),
+            canonical_references: Vec::new(),
+            analysis_sources: Vec::new(),
+            confidence: None,
+            warnings: Vec::new(),
+            execution_time_ms: 0.0,
+            reproducibility: reproducibility("scripture.editions", SCRIPTURE_EDITIONS_VERSION, &serde_json::json!({}), None, None, BTreeMap::new(), 0),
+            research_checksum: research_checksum("scripture.editions", SCRIPTURE_EDITIONS_VERSION, &serde_json::json!({}), &serde_json::json!({}), &value).expect("checksum"),
+        })
+    }
+
+    /// `scripture.parallel_passages`: computational parallel passages for a
+    /// Quran reference or scripture verse id.
+    pub async fn parallel_passages_scripture(
+        &self,
+        reference: String,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let scripture_backend = self.scripture_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-SCR-0310".to_string(),
+            detail: "scripture backend not configured".to_string(),
+        })?;
+        scripture_backend.backend_parallel_passages(&reference).await
+    }
+
+    /// Alias for `parallel_passages_scripture`.
+    pub async fn scripture_parallel_passages(
+        &self,
+        reference: String,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        self.parallel_passages_scripture(reference).await
+    }
+
+    /// `tafsir.search`: normalized search over tafsir records.
+    pub async fn search_tafsir(
+        &self,
+        params: TafsirSearchToolParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        if params.query.trim().is_empty() {
+            return Err(ToolError::InvalidInput {
+                tool: "tafsir.search",
+                detail: "query text must not be empty".to_string(),
+            });
+        }
+        let tafsir_backend = self.tafsir_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-TAF-0310".to_string(),
+            detail: "tafsir backend not configured".to_string(),
+        })?;
+        tafsir_backend.backend_search_tafsir(&params).await
+    }
+
+    /// `isnad.narrator`: fetch a narrator record + rijal sources.
+    pub async fn get_narrator(&self, id: &str) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-ISNAD-0310".into(),
+            detail: "isnad backend not configured".into(),
+        })?;
+        b.backend_get_narrator(id).await
+    }
+    pub async fn get_rijal(
+        &self,
+        narrator_id: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-ISNAD-0310".into(),
+            detail: "isnad backend not configured".into(),
+        })?;
+        b.backend_get_rijal(narrator_id).await
+    }
+    pub async fn trace(
+        &self,
+        params: TraceParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-ISNAD-0310".into(),
+            detail: "isnad backend not configured".into(),
+        })?;
+        b.backend_trace(&params).await
+    }
+    pub async fn propose_identity(
+        &self,
+        params: IdentityProposalParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-ISNAD-0310".into(),
+            detail: "isnad backend not configured".into(),
+        })?;
+        b.backend_propose_identity(&params).await
+    }
+    pub async fn accept_identity(
+        &self,
+        params: IdentityDecisionParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-ISNAD-0310".into(),
+            detail: "isnad backend not configured".into(),
+        })?;
+        b.backend_accept_identity(&params).await
+    }
+    pub async fn reject_identity(
+        &self,
+        params: IdentityDecisionParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-ISNAD-0310".into(),
+            detail: "isnad backend not configured".into(),
+        })?;
+        b.backend_reject_identity(&params).await
+    }
+    pub async fn dispute_identity(
+        &self,
+        params: IdentityDecisionParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-ISNAD-0310".into(),
+            detail: "isnad backend not configured".into(),
+        })?;
+        b.backend_dispute_identity(&params).await
+    }
+    pub async fn supersede_identity(
+        &self,
+        id: &str,
+        new_proposal: IdentityProposalParams,
+        reviewer: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError> {
+        let b = self.isnad_backend.as_ref().ok_or_else(|| ToolError::Backend {
+            code: "QAI-ISNAD-0310".into(),
+            detail: "isnad backend not configured".into(),
+        })?;
+        b.backend_supersede_identity(id, &new_proposal, reviewer).await
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use quran_core::{AyahNumber, EditionSelector, SurahNumber};
+
+    #[test]
+    fn mutating_isnad_tools_are_classified() {
+        // WR-08: the mutation gate keys off this predicate, so it must name
+        // exactly the INSERT/UPDATE isnad tools and nothing read-only.
+        for name in [
+            "isnad.identity_propose",
+            "isnad.identity_accept",
+            "isnad.identity_reject",
+            "isnad.identity_dispute",
+            "isnad.identity_supersede",
+        ] {
+            assert!(is_mutating_isnad_tool(name), "{name} must be classified mutating");
+        }
+        for name in
+            ["isnad.narrator", "isnad.rijal", "isnad.trace", "quran.get_ayah", "hadith.get", "nope"]
+        {
+            assert!(!is_mutating_isnad_tool(name), "{name} must not be classified mutating");
+        }
+    }
 
     struct FakeBackend;
 
@@ -989,6 +2025,16 @@ mod tests {
                 "quran.graph_subgraph",
                 "quran.graph_pattern",
                 "quran.graph_root_family",
+                "hadith.get",
+                "hadith.search",
+                "hadith.gradings",
+                "tafsir.get",
+                "tafsir.search",
+                "scripture.get",
+                "scripture.search",
+                "scripture.translations",
+                "scripture.editions",
+                "scripture.parallel_passages",
             ]
         );
     }
@@ -1118,4 +2164,175 @@ mod tests {
         let _ = (AyahNumber::new(1).unwrap(), SurahNumber::new(1).unwrap());
         let _ = EditionSelector::Active;
     }
+}
+
+// ============================================================================
+// Isnad tools (Phase 7)
+// ============================================================================
+
+/// Parameters for `isnad.narrator`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetNarratorParams {
+    pub id: String,
+}
+
+/// Parameters for `isnad.trace`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TraceParams {
+    pub from: String,
+    pub to: String,
+    #[serde(default)]
+    pub k: Option<usize>,
+}
+
+/// Parameters for proposing a narrator identity.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IdentityProposalParams {
+    pub claim: serde_json::Value,
+    pub evidence: serde_json::Value,
+    #[serde(default)]
+    pub source_location: String,
+    pub provenance_layer: String,
+    #[serde(default)]
+    pub algorithm: Option<String>,
+    #[serde(default)]
+    pub algorithm_version: Option<String>,
+    #[serde(default)]
+    pub confidence: Option<f64>,
+}
+
+/// Parameters for an identity decision (accept/reject/dispute).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IdentityDecisionParams {
+    pub id: String,
+    pub reviewer: String,
+}
+
+/// The isnad backend trait.
+#[async_trait]
+pub trait IsnadBackend: Send + Sync {
+    async fn backend_get_narrator(
+        &self,
+        id: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_get_rijal(
+        &self,
+        narrator_id: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_trace(
+        &self,
+        params: &TraceParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_propose_identity(
+        &self,
+        params: &IdentityProposalParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_accept_identity(
+        &self,
+        params: &IdentityDecisionParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_reject_identity(
+        &self,
+        params: &IdentityDecisionParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_dispute_identity(
+        &self,
+        params: &IdentityDecisionParams,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_supersede_identity(
+        &self,
+        id: &str,
+        new_proposal: &IdentityProposalParams,
+        reviewer: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+}
+
+/// Isnad tool names.
+pub const ISNAD_TOOL_NAMES: [&str; 6] = [
+    "isnad.narrator",
+    "isnad.rijal",
+    "isnad.trace",
+    "isnad.identity_propose",
+    "isnad.identity_accept",
+    "isnad.identity_reject",
+];
+
+/// Isnad tools that write durable state (INSERT/UPDATE). The read-only isnad
+/// tools (`isnad.narrator`, `isnad.rijal`, `isnad.trace`) are excluded.
+///
+/// WR-08: the generic HTTP tool route is unauthenticated, so the server uses
+/// this to deny every mutating isnad tool unless explicitly opted in
+/// (`policy.tool_execution_default = "allow"`), rather than exposing
+/// INSERT/UPDATE capabilities on a read-only route by default.
+pub fn is_mutating_isnad_tool(name: &str) -> bool {
+    matches!(
+        name,
+        "isnad.identity_propose"
+            | "isnad.identity_accept"
+            | "isnad.identity_reject"
+            | "isnad.identity_dispute"
+            | "isnad.identity_supersede"
+    )
+}
+
+// ============================================================================
+// RAG tools (Phase 8)
+// ============================================================================
+
+/// The RAG backend trait: implemented by `application` for the real reader.
+#[async_trait]
+pub trait RagBackend: Send + Sync {
+    async fn backend_create_project(
+        &self,
+        name: &str,
+        config_toml: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_import(
+        &self,
+        project: &str,
+        docs: &[serde_json::Value],
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_query(
+        &self,
+        project: &str,
+        query: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_debug(
+        &self,
+        project: &str,
+        query: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+    async fn backend_source_status(
+        &self,
+        project: &str,
+        source: &str,
+        status: &str,
+    ) -> Result<ToolResult<serde_json::Value>, ToolError>;
+}
+
+/// RAG tool names.
+pub const RAG_TOOL_NAMES: [&str; 9] = [
+    "rag.create_project",
+    "rag.import",
+    "rag.query",
+    "rag.debug",
+    "rag.source_status",
+    "rag.source_activate",
+    "rag.source_deactivate",
+    "rag.source_tombstone",
+    "rag.create",
+];
+
+/// RAG tools that write durable state.
+pub fn is_mutating_rag_tool(name: &str) -> bool {
+    matches!(
+        name,
+        "rag.create_project"
+            | "rag.create"
+            | "rag.import"
+            | "rag.source_status"
+            | "rag.source_activate"
+            | "rag.source_deactivate"
+            | "rag.source_tombstone"
+    )
 }

@@ -1,44 +1,47 @@
 ---
 gsd_state_version: "1.0"
-current_phase: 05
-status: executing
-stopped_at: Phase 05 context gathered
-last_updated: "2026-10-09T19:06:05.146Z"
-last_activity: 2026-10-09
-last_activity_desc: Phase 05 marked complete
-state_head: 9dcfeb1a149e0e70ef5527d50822cc32b579b07d
+current_phase: 9
+current_phase_name: "Comparative Scripture:"
+current_plan: Not started
+status: planning
+stopped_at: Phase 8 complete, ready to plan Phase 9
+last_updated: "2026-10-18T01:58:33.876Z"
+last_activity: 2026-10-18
+last_activity_desc: Phase 8 complete, transitioned to Phase 9
+state_head: d29c48981a2484d7fc97cca01cd857e4d68a752f
 progress:
   total_phases: 13
-  completed_phases: 5
-  total_plans: 39
-  completed_plans: 39
-  percent: 38
-current_phase_name: rich-quran-experience
+  completed_phases: 8
+  total_plans: 56
+  completed_plans: 56
+  percent: 46
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-10-06)
+See: .planning/PROJECT.md (updated 2026-10-16)
 
 **Core value:** Trustworthy Quran research: exact canonical text before generated interpretation, every factual claim traceable to its source.
-**Current focus:** Phase 05 — rich-quran-experience
+**Current focus:** Phase 07 — Isnad & Narrator Research
 
 ## Current Position
 
-Phase: 05 — COMPLETE
-Plan: 9 of 9
-Status: Phase 05 complete
-Last activity: 2026-10-09 — Phase 05 marked complete
+Phase: 9 — Comparative Scripture:
+Current Plan: Not started
+Total Plans in Phase: 4
+Plan: 4 of 4
+Status: Ready to plan
+Last activity: 2026-10-18 — Phase 8 complete, transitioned to Phase 9
 
-Progress: [████░░░░░░] 38%
+Progress: [████████████████████] 45/45 plans ([█████░░░░░] 46%)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 22
+- Total plans completed: 39
 - Average duration: -
 - Total execution time: -
 
@@ -48,8 +51,11 @@ Progress: [████░░░░░░] 38%
 |-------|-------|-------|----------|
 | 02 | 8 | - | - |
 | 01 | 5 | - | - |
-| 04 | 5 | - | - |
+| 04 | 6 | - | - |
 | 03.5 | 4 | - | - |
+| 06 | 5 | - | - |
+| 7 | 5 | - | - |
+| 8 | 6 | - | - |
 
 **Recent Trend:**
 
@@ -82,6 +88,13 @@ Progress: [████░░░░░░] 38%
 | Phase 03 P07 | 28 min | 3 tasks | 7 files |
 | Phase 03 P08 | 50 min | 3 tasks | 5 files |
 | Phase 02 P08 | 5 min | 3 tasks | 7 files |
+| Phase 04 P06 | 36min | 3 tasks | 15 files |
+| Phase 06 P03 | 0 | 3 tasks | 3 files |
+| Phase 06 P04 | 45 | 3 tasks | 9 files |
+| Phase 7 P3 | 0 | 2 tasks | 9 files |
+| Phase 8 P02 | 0 | 3 tasks | 4 files |
+| Phase 08 P04 | 0 | 3 tasks | 10 files |
+| Phase 8 P05 | 15 | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -146,6 +159,15 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-08: The deferred scope is recorded in docs/05-followups/phase-03-deferrals.md (UI + result-contract checksum -> Phase 5; counting tail incl. hapax_search -> later; legacy phase-02-rag tail -> follow-ups; transliteration/L8; graph -> Phase 4; editions/multi-RAG), and the 03-VALIDATION.md per-task map is deferred to /gsd-validate-phase with the PLAN <verify> blocks as the authoritative Phase-3 map (T-03-33).
 - [Phase 02]: [Phase 02]: D-15 answer-path ledger rebuilt on the emission frame (every path whose response contains quoted canonical text), not the direct-read frame that omitted index-backed search paths; all refs are drift-proof path#symbol, and crates/application/tests/answer_path_ledger.rs guards both drift and a new marker-emitting handler
 - [Phase 02]: [Phase 02]: Each exempt emitting path carries its emission mechanism (AyahView.canonical, SearchHit.quotation, or the hand-built token surface); tokens_handler needs its own label because it is exempt by construction but does not emit via AyahView.canonical. The guard is a guard, not a proof: a novel hand-built json! text shape is enumerated but not literally detectable (G-02-3)
+- [Phase 06-02]: tafsir IDs are manual uuid newtypes (hadith-core precedent) — domain::typed_id! is unusable cross-crate (crate::primitives resolves to caller); L5-normalize-both-sides for tafsir FTS; standalone tafsir_fts (no content= backing); tafsir parity deferred to 06-04 (5 uncovered tools asserted)
+- [Phase 06-02]: get_records_for_verse is structural chapter navigation (surah-level); computational verse links arrive in 06-03; no query-time normalization-profile selector (unsound vs single L5 index)
+- [Phase 04]: 04-06: ReadOptions.projection is the single graph read selector, resolved in exactly one place by FileGraphBackend::service via GraphApiService::open_for_projection (default quran-structural-v1) — no per-surface resolution to drift.
+- [Phase 04]: 04-06: The projection selector is exposed only on graph neighbors and graph export (CLI --projection, HTTP body projection, quran.graph_neighbors v1.1.0); graph path/subgraph/pattern/inspect stay structural-only this cycle, recorded as an explicit deferral.
+- [Phase 06]: Cross-surface hadith/tafsir route handles use application service layer and ToolResult envelopes
+- [Phase 06-03]: Computational verse links start Uncertain (confidence labeled, never certainty); owner confirmation requires reviewer + decided_at (DB CHECK); read path returns confirmed-only by default
+- [Phase 06-03]: DisagreementService assembles all per-scholar gradings side-by-side sorted by scholar — no merging or resolution
+- [Phase 06-05]: SC3 verse-link read surface wired end-to-end (HTTP `state.verse_links` + CLI `qai links verse`); hadith-ingestion 10 tests + arch-check green
+- [Phase 8]: 08-02: TOML config + project lifecycle implemented and verified
 
 ### Pending Todos
 
@@ -153,8 +175,15 @@ None yet.
 
 ### Blockers/Concerns
 
-- ADR-0101 initial Quran dataset + license needs human sign-off before Phase 2 import work
+- ⚠️ [Phase 2] OD-01/OD-02/OD-03 unanswered (dataset identity + license, named editorial reviewer, independent reference corpus) — real canonical activation stays blocked; Phase 2 ships synthetic fixtures only (closing actions: docs/05-followups/phase-02-owner-gates.md)
+- ⚠️ [Phase 2] D-15 read-path exemption (verify_quotation enforced on the emission frame; canonical-assembled direct reads structurally exempt) is owner-ratifiable, not ratified — guarded by crates/application/tests/answer_path_ledger.rs
+- ⚠️ [Phase 2] citations crate coverage 79.27% vs the published 85% floor (gate row held at 79%) — add verdict-mapping/resolver-error coverage, then raise the threshold
+- ⚠️ [Phase 2] 5 open code-review info findings (IN-01…IN-05) recorded, not triaged — .planning/phases/02-canonical-quran-core/02-REVIEW-DISPOSITION.md
 - ADR-0201/0202/0701/0301 (retrieval/graph/vector/RAG) undecided — Phase 4/8 plans must include decision points
+- ⚠️ [Phase 4] Six owner gates stay BLOCKED (OD-11 dataset/license, OD-12 linguist, P4-X01/X02/X03/X05 ratifications); no check can close them — docs/05-followups/phase-04-owner-gates.md
+- ⚠️ [Phase 4] Projection selector is on `neighbors`/`export` only; `path`/`subgraph`/`pattern`/`inspect` remain structural-only by design — deferral §7, docs/05-followups/phase-04-deferrals.md
+- ⚠️ [Phase 6] Hadith/tafsir ingestion pipeline is in-memory; SQLite persistence deferred per 06-04 contract
+- ⚠️ [Phase 6] Cross-surface parity three-leg rows for hadith.get/search/gradings + tafsir.get/search remain unexercised (owner-accepted test-coverage gap; 19/20 verified)
 - ADR-0702 foundational subset (outbox/revisions/jobs/tombstones) required from Phases 0–3
 
 ## Deferred Items
@@ -167,6 +196,20 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-06T14:43:18.262Z
-Stopped at: Phase 05 context gathered
-Resume file: .planning/phases/05-rich-quran-experience/05-CONTEXT.md
+Last session: 2026-10-17T19:01:41.142Z
+Stopped at: Phase 8 complete, ready to plan Phase 9
+Resume file: None
+
+## Deferred Verification
+
+| Phase | State | Resume |
+|-------|-------|--------|
+| 3 | verification_deferred_human | /gsd-verify-work 3 |
+| 3.5 | ~~soak confirmed green 2026-10-13 (630s)~~ | ~~/gsd-verify-work 3.5~~ |
+| 5 | verification_deferred_infrastructure | /gsd-verify-work 5 |
+
+## Quick Tasks Completed
+
+| Slug | Date | Result |
+|------|------|--------|
+| 20261013-memvid-rag-backend | 2026-10-13 | Retrieval port + opt-in memvid backend in `crates/retrieval`; 11 tests pass with `--features memvid`, default build untouched |

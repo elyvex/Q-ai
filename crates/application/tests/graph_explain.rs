@@ -362,9 +362,16 @@ async fn graph_parity_neighbors_across_cli_http_and_tools() {
     ));
 
     // CLI leg: the db verb with the fixed inputs.
-    let cli =
-        quran_cli::cmd_graph_neighbors(&path_str, None, true, "ayah:1:1", HOPS, &cli_budgets())
-            .await;
+    let cli = quran_cli::cmd_graph_neighbors(
+        &path_str,
+        None,
+        true,
+        "ayah:1:1",
+        HOPS,
+        &cli_budgets(),
+        None,
+    )
+    .await;
     assert_eq!(cli.exit, 0, "CLI neighbors succeeds: {}", cli.human);
     let cli_projection = serde_json::json!({
         "nodes": cli.json["nodes"],
@@ -387,6 +394,7 @@ async fn graph_parity_neighbors_across_cli_http_and_tools() {
     let tool = registry
         .graph_neighbors(tool_registry::GraphNeighborsParams {
             node: "ayah:1:1".to_string(),
+            projection: None,
             edge_types: None,
             direction: None,
             budgets: tool_budgets(),
@@ -696,7 +704,8 @@ async fn graph_parity_truncated_reports_unanimously() {
         read_options(tight_patch, HOPS, None, None).expect("tight options validate");
 
     let cli =
-        quran_cli::cmd_graph_neighbors(&path_str, None, true, "ayah:1:1", HOPS, &tight_cli).await;
+        quran_cli::cmd_graph_neighbors(&path_str, None, true, "ayah:1:1", HOPS, &tight_cli, None)
+            .await;
     assert_eq!(cli.exit, 0, "truncation is success with a flag: {}", cli.human);
     let cli_projection = serde_json::json!({
         "nodes": cli.json["nodes"],
@@ -715,6 +724,7 @@ async fn graph_parity_truncated_reports_unanimously() {
     let tool = registry
         .graph_neighbors(tool_registry::GraphNeighborsParams {
             node: "ayah:1:1".to_string(),
+            projection: None,
             edge_types: None,
             direction: None,
             budgets: tight_tools,

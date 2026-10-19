@@ -572,6 +572,8 @@ fn test_state() -> AppState {
         search: Arc::new(FakeSearch),
         lexicon: Arc::new(FakeLexicon),
         graph: Arc::new(DisabledGraph),
+        verse_links: None,
+        allow_isnad_mutations: false,
     }
 }
 
@@ -1005,6 +1007,50 @@ async fn tool_route_serves_registered_tools_with_matching_checksum() {
     let (status, _) =
         post_json(&addr, "/api/v1/quran/tool/quran.nope", &serde_json::json!({})).await;
     assert!(status.is_client_error(), "unknown tool must be 4xx, got {status}");
+    handle.abort();
+}
+
+/// WR-08: the unauthenticated generic tool route refuses mutating isnad
+/// identity tools by default, leaves read-only isnad tools ungated, and
+/// lifts the gate only when opted in.
+#[tokio::test]
+async fn isnad_identity_mutations_are_forbidden_on_http_by_default() {
+    // Default state: mutating isnad tool is refused with a typed 403.
+    let (addr, handle) = serve_once().await;
+    let (status, body) = post_json(
+        &addr,
+        "/api/v1/quran/tool/isnad.identity_accept",
+        &serde_json::json!({ "id": "narrator:x", "reviewer": "rev" }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "mutating isnad tool must be forbidden by default");
+    assert_eq!(body_json(&body)["error"]["code"], "QAI-ISNAD-0326");
+    handle.abort();
+
+    // Read-only isnad tool is not gated (it fails for an unrelated reason:
+    // no isnad backend is wired into this test's registry).
+    let (addr, handle) = serve_once().await;
+    let (status, _) = post_json(
+        &addr,
+        "/api/v1/quran/tool/isnad.narrator",
+        &serde_json::json!({ "id": "narrator:x" }),
+    )
+    .await;
+    assert_ne!(status, StatusCode::FORBIDDEN, "read-only isnad tool must not be gated");
+    handle.abort();
+
+    // Opt-in lifts the gate: dispatch proceeds past it (and then fails for
+    // the absent backend — never a 403).
+    let mut state = test_state();
+    state.allow_isnad_mutations = true;
+    let (addr, handle) = serve_router(router(state)).await;
+    let (status, _) = post_json(
+        &addr,
+        "/api/v1/quran/tool/isnad.identity_accept",
+        &serde_json::json!({ "id": "narrator:x", "reviewer": "rev" }),
+    )
+    .await;
+    assert_ne!(status, StatusCode::FORBIDDEN, "policy opt-in must lift the gate");
     handle.abort();
 }
 

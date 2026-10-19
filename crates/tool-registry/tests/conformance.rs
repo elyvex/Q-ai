@@ -430,14 +430,20 @@ impl QuranBackend for TruncatedBackend {
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 
-/// All twelve registered tools resolve stable names.
+/// All registered tools resolve stable names.
 #[test]
 fn all_twelve_tools_resolve_stable_names() {
     let registry = ToolRegistry::new(Arc::new(ConformableBackend));
     let names = registry.tool_names();
-    assert_eq!(names.len(), 12);
+    assert_eq!(names.len(), 22);
     for name in &names {
-        assert!(name.starts_with("quran."), "tool name must be quran.*: {name}");
+        assert!(
+            name.starts_with("quran.")
+                || name.starts_with("hadith.")
+                || name.starts_with("tafsir.")
+                || name.starts_with("scripture."),
+            "tool name must be quran.*, hadith.*, or tafsir.*: {name}"
+        );
     }
 }
 
@@ -502,6 +508,7 @@ async fn all_twelve_tools_return_tool_result_envelope() {
     let result = registry
         .graph_neighbors(tool_registry::GraphNeighborsParams {
             node: "ayah:1:1".into(),
+            projection: None,
             edge_types: None,
             direction: None,
             budgets: Default::default(),
@@ -717,7 +724,7 @@ async fn registered_but_unimplemented_tool_returns_typed_unsupported() {
     // All 12 tools must return the typed-unsupported error, distinguishable
     // from a real empty result.
     let names = registry.tool_names();
-    assert_eq!(names.len(), 12);
+    assert_eq!(names.len(), 22);
     for name in &names {
         let err = match *name {
             "quran.get_ayah" => registry
@@ -760,6 +767,7 @@ async fn registered_but_unimplemented_tool_returns_typed_unsupported() {
             "quran.graph_neighbors" => registry
                 .graph_neighbors(tool_registry::GraphNeighborsParams {
                     node: "ayah:1:1".into(),
+                    projection: None,
                     edge_types: None,
                     direction: None,
                     budgets: Default::default(),
@@ -805,11 +813,71 @@ async fn registered_but_unimplemented_tool_returns_typed_unsupported() {
                 })
                 .await
                 .unwrap_err(),
+            "hadith.get" => registry
+                .get_hadith(tool_registry::GetHadithParams {
+                    reference: "bukhari-arabic:bukhari:1".into(),
+                })
+                .await
+                .unwrap_err(),
+            "hadith.search" => registry
+                .search_hadith(tool_registry::HadithSearchToolParams {
+                    query: "test".into(),
+                    collection_slug: None,
+                    limit: None,
+                })
+                .await
+                .unwrap_err(),
+            "hadith.gradings" => {
+                registry.get_gradings("00000000-0000-4000-8000-000000000000").await.unwrap_err()
+            }
+            "scripture.get" => registry
+                .get_scripture(tool_registry::GetScriptureParams { reference: "tanakh:genesis:1:1".into() })
+                .await
+                .unwrap_err(),
+            "scripture.search" => registry
+                .search_scripture(tool_registry::ScriptureSearchToolParams { query: "test".into(), edition: None, limit: None })
+                .await
+                .unwrap_err(),
+            "scripture.translations" => registry
+                .get_scripture_translations("tanakh:genesis:1:1".into(), None)
+                .await
+                .unwrap_err(),
+            "scripture.editions" => registry
+                .list_scripture_editions()
+                .await
+                .unwrap_err(),
+            "scripture.parallel_passages" => registry
+                .parallel_passages_scripture("tanakh:genesis:1:1".into())
+                .await
+                .unwrap_err(),
+            "tafsir.get" => registry
+                .get_tafsir(tool_registry::GetTafsirParams { reference: "tafsir-tabari:2".into() })
+                .await
+                .unwrap_err(),
+            "tafsir.search" => registry
+                .search_tafsir(tool_registry::TafsirSearchToolParams {
+                    query: "test".into(),
+                    work_slug: None,
+                    limit: None,
+                })
+                .await
+                .unwrap_err(),
             _ => panic!("unknown tool {name}"),
+        };
+        // Hadith tools carry their own typed-unsupported code (QAI-HAD-*);
+        // tafsir tools carry QAI-TAF-*; Quran tools use QAI-QUR-0310.
+        let expected = if name.starts_with("hadith.") {
+            "QAI-HAD-0310"
+        } else if name.starts_with("tafsir.") {
+            "QAI-TAF-0310"
+        } else if name.starts_with("scripture.") {
+            "QAI-SCR-0310"
+        } else {
+            "QAI-QUR-0310"
         };
         match err {
             ToolError::Backend { code, .. } => {
-                assert_eq!(code, "QAI-QUR-0310", "{name} must return typed-unsupported");
+                assert_eq!(code, expected, "{name} must return typed-unsupported");
             }
             other => panic!("{name}: expected typed backend error, got {other:?}"),
         }

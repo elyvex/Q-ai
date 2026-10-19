@@ -247,6 +247,7 @@ pub fn parse_assertion_kind(raw: &str) -> Result<AssertionKind, GraphError> {
         "entity_link" => Ok(AssertionKind::EntityLink),
         "family_link" => Ok(AssertionKind::FamilyLink),
         "import" => Ok(AssertionKind::Import),
+        "narrator_identity" => Ok(AssertionKind::NarratorIdentity),
         other => Err(rejected(format!("unknown assertion kind '{other}'"))),
     }
 }
@@ -279,6 +280,7 @@ fn kind_str(kind: AssertionKind) -> &'static str {
         AssertionKind::EntityLink => "entity_link",
         AssertionKind::FamilyLink => "family_link",
         AssertionKind::Import => "import",
+        AssertionKind::NarratorIdentity => "narrator_identity",
     }
 }
 

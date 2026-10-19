@@ -21,7 +21,8 @@ use application::quran_graph_annotations::{ProposeInput, accept, get_assertion, 
 use application::quran_graph_build::{
     ANNOTATED_PROJECTION_ID, WORDROOT_CAPABILITY, WORDROOT_PROJECTION_ID,
     clear_projection_adjacency, collect_structural_input, collect_wordroot_input,
-    publish_annotated_build, publish_structural_build, publish_wordroot_build,
+    parse_annotated_seed, publish_annotated_build, publish_structural_build,
+    publish_wordroot_build,
 };
 use application::quran_graph_store::SqliteGraphStore;
 use quran_graph::{AuthzScope, EdgeFilter, GraphStore, QueryBudgets};
@@ -544,4 +545,26 @@ async fn structural_build_unchanged_beside_new_builders() {
     let report = publish_structural_build(&path_str, &collected).await.expect("publishes");
     assert_eq!(report.node_count, report.built.nodes.len());
     assert_eq!(report.edge_count, report.built.edges.len());
+}
+
+#[test]
+fn annotated_seed_typo_src_fails_at_parse_not_as_dangling_edge() {
+    // WR-10: a typo'd `concept:`/`entity:` link src must fail at parse with
+    // the same `links[{index}]` shape as the dst check, not much later as a
+    // "dangling edge source" stage error misattributed to the pipeline.
+    let mut seed: serde_json::Value = serde_json::from_str(CONCEPT_SEED).expect("fixture parses");
+    seed["links"][0]["src"] = serde_json::json!("concept:typo");
+    let err = parse_annotated_seed(&seed.to_string()).expect_err("typo src is rejected");
+    match &err {
+        quran_graph::GraphError::BuildFailed { stage, detail } => {
+            assert_eq!(stage, "collect");
+            assert!(
+                detail.contains("links[0]") && detail.contains("concept:typo"),
+                "seed typo named at its link: {detail}"
+            );
+        }
+        other => panic!("expected collect BuildFailed, got {other}"),
+    }
+    // Ayah srcs are not seed nodes and stay exempt from the membership check.
+    parse_annotated_seed(CONCEPT_SEED).expect("ayah srcs still parse");
 }

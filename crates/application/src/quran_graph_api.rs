@@ -156,6 +156,12 @@ pub struct ReadOptions {
     /// Cancellation flag checked per batch (shared: callers may flag
     /// mid-flight through a clone).
     pub cancel: Arc<AtomicBool>,
+    /// Requested projection family to read; resolved by a per-request
+    /// backend through [`GraphApiService::open_for_projection`]. `None` means
+    /// the structural family ([`quran_graph::STRUCTURAL_PROJECTION_ID`]),
+    /// which is the default read scope. A [`GraphApiService`] is pinned at
+    /// open time and never consults this field.
+    pub projection: Option<String>,
 }
 
 impl Default for ReadOptions {
@@ -165,6 +171,7 @@ impl Default for ReadOptions {
             filter: EdgeFilter::any(),
             authz: AuthzScope::all_visible(),
             cancel: Arc::new(AtomicBool::new(false)),
+            projection: None,
         }
     }
 }
@@ -296,6 +303,7 @@ pub fn read_options(
         filter: EdgeFilter { edge_types, direction },
         authz: AuthzScope::all_visible(),
         cancel: Arc::new(AtomicBool::new(false)),
+        projection: None,
     })
 }
 
@@ -1175,23 +1183,30 @@ impl GraphBackend for GraphApiService {
 }
 
 /// Long-lived read backend over a database file (HTTP serve wiring): opens
-/// the active structural projection per request, so rebuilds between
-/// requests are picked up and a missing build is a per-request typed error
-/// (never a serve-time failure). `root_family` is lexicon-gated and needs
-/// no projection build.
+/// the requested projection family (default structural) per request, so
+/// rebuilds between requests are picked up and a missing build is a
+/// per-request typed error (never a serve-time failure). `root_family` is
+/// lexicon-gated and needs no projection build, and `snapshot_meta` reads
+/// active snapshot metadata, so neither consults a selector.
 pub struct FileGraphBackend {
     db_path: String,
 }
 
 impl FileGraphBackend {
     /// Read through the active structural projection (the default read scope
-    /// every CLI verb resolves).
+    /// every CLI verb resolves); a request-scoped [`ReadOptions::projection`]
+    /// may still select another family.
     pub fn structural(db_path: &str) -> Self {
         Self { db_path: db_path.to_string() }
     }
 
-    async fn service(&self) -> Result<GraphApiService, GraphApiError> {
-        GraphApiService::open(&self.db_path).await.map_err(GraphApiError::Graph)
+    async fn service(&self, projection: Option<&str>) -> Result<GraphApiService, GraphApiError> {
+        GraphApiService::open_for_projection(
+            &self.db_path,
+            projection.unwrap_or(quran_graph::STRUCTURAL_PROJECTION_ID),
+        )
+        .await
+        .map_err(GraphApiError::Graph)
     }
 
     async fn database(&self) -> Result<SqliteDatabase, GraphApiError> {
@@ -1207,27 +1222,27 @@ impl FileGraphBackend {
 #[async_trait]
 impl GraphBackend for FileGraphBackend {
     async fn neighbors(&self, args: NeighborsArgs) -> Result<NeighborsOutput, GraphApiError> {
-        self.service().await?.neighbors(args).await
+        self.service(args.options.projection.as_deref()).await?.neighbors(args).await
     }
 
     async fn reachability(&self, args: PathArgs) -> Result<ReachabilityOutput, GraphApiError> {
-        self.service().await?.reachability(args).await
+        self.service(args.options.projection.as_deref()).await?.reachability(args).await
     }
 
     async fn shortest_path(&self, args: PathArgs) -> Result<ShortestOutput, GraphApiError> {
-        self.service().await?.shortest_path(args).await
+        self.service(args.options.projection.as_deref()).await?.shortest_path(args).await
     }
 
     async fn paths(&self, args: PathsArgs) -> Result<PathsOutput, GraphApiError> {
-        self.service().await?.paths(args).await
+        self.service(args.options.projection.as_deref()).await?.paths(args).await
     }
 
     async fn subgraph(&self, args: SubgraphArgs) -> Result<SubgraphOutput, GraphApiError> {
-        self.service().await?.subgraph(args).await
+        self.service(args.options.projection.as_deref()).await?.subgraph(args).await
     }
 
     async fn pattern(&self, args: PatternArgs) -> Result<PatternOutput, GraphApiError> {
-        self.service().await?.pattern(args).await
+        self.service(args.options.projection.as_deref()).await?.pattern(args).await
     }
 
     async fn root_family(&self, args: RootFamilyArgs) -> Result<RootFamilyOutput, GraphApiError> {

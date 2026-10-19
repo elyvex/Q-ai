@@ -421,9 +421,10 @@ fn morph_params(document_text: String) -> MorphologyImportParams {
 async fn search_tool_returns_attributed_envelope() {
     let (_dir, db, reader, data_dir) = searchable_reader().await;
     let registry = ReaderToolBackend::registry_with_index_root(reader, data_dir);
-    // The registry ships all twelve `quran.*` tools (two reads + five D-13
-    // lexicon/search + five graph); the backend only serves the ones it wires.
-    assert_eq!(registry.tool_names().len(), 12);
+    // The registry ships twelve `quran.*` tools (two reads + five D-13
+    // lexicon/search + five graph) plus three `hadith.*` and two `tafsir.*`
+    // read tools (Phase 6); the backend only serves the ones it wires.
+    assert_eq!(registry.tool_names().len(), 22);
     assert!(registry.tool_names().contains(&"quran.search"));
 
     let surface = first_token_surface(&db).await;
@@ -446,6 +447,92 @@ async fn search_tool_returns_attributed_envelope() {
     assert!(!result.analysis_sources.is_empty(), "search attributes its canonical sources");
     assert!(!result.normalization_rules.is_empty(), "L3 search always names the rules it applied");
     assert!(result.reproducibility.deterministic);
+}
+
+/// WR-03: on a stale index (v2 activated while the serving index still points
+/// at v1) the tool envelope names the *served* edition and carries the
+/// stale-index advisory — never an active-named envelope with no warning.
+#[tokio::test]
+async fn search_tool_names_served_edition_and_warns_on_stale_index() {
+    use application::quran::activate_edition;
+
+    let (dir, db, reader, data_dir) = searchable_reader().await;
+    // Seed the v2 approval so the new edition can be activated.
+    let path = dir.path().join("qai.db");
+    let pool = sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(sqlx::sqlite::SqliteConnectOptions::new().filename(&path).foreign_keys(true))
+        .await
+        .unwrap();
+    sqlx::query(&format!(
+        "INSERT INTO approvals
+            (id, subject_urn, kind, requested_by, decided_by, decision,
+             request_payload, requested_at, decided_at)
+          VALUES ('appr-v2', 'quran-edition:{}@0.2.0', 'CanonicalChange', '{}', '{}',
+                  'approved', '{{}}', '{}', '{}')",
+        common::SLUG,
+        common::PRINCIPAL,
+        common::PRINCIPAL,
+        common::CREATED_AT,
+        common::CREATED_AT,
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
+    pool.close().await;
+    // Import + activate v2 with unchanged text, so the v1-built index still
+    // serves hits while the active pointer moves on.
+    let mut v2_doc: serde_json::Value = serde_json::from_str(common::BASE_MANIFEST).unwrap();
+    v2_doc["edition"]["version"] = serde_json::json!("0.2.0");
+    run_import(
+        &*db,
+        &ImportInput {
+            run_id: "33333333-4444-4555-8666-777777777777".into(),
+            job_id: None,
+            source_version_id: common::SOURCE_VERSION_ID.into(),
+            adapter: "json".into(),
+            manifest_text: serde_json::to_string(&v2_doc).unwrap(),
+            declared_manifest_hash: None,
+            invoked_by: common::PRINCIPAL.into(),
+            license_status: "PublicDomain".into(),
+            license_json: common::LICENSE_JSON.into(),
+            created_at: common::CREATED_AT.into(),
+            reference_manifest_text: None,
+        },
+        &ImportOptions::default(),
+        &AtomicBool::new(false),
+        ImportProgress::new(),
+    )
+    .await
+    .expect("v2 imports");
+    activate_edition(
+        &*db,
+        common::SLUG,
+        "0.2.0",
+        &common::principal(),
+        "appr-v2",
+        &common::timestamp(),
+    )
+    .await
+    .expect("v2 activates");
+
+    let registry = ReaderToolBackend::registry_with_index_root(reader, data_dir);
+    let surface = first_token_surface(&db).await;
+    let result = registry
+        .search(SearchToolParams { text: surface, edition: None, limit: None })
+        .await
+        .unwrap();
+    assert!(!result.canonical_references.is_empty(), "the drifted index still serves hits");
+    assert_eq!(
+        result.edition_version.as_deref(),
+        Some("0.1.0"),
+        "envelope names the served edition, not the active pointer"
+    );
+    assert!(
+        result.warnings.iter().any(|warning| warning.contains("QAI-IDX-0101")),
+        "stale index must be disclosed: {:?}",
+        result.warnings
+    );
 }
 
 /// G-11 / SC3: with no active dataset every lexicon tool returns the typed

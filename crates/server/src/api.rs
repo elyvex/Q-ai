@@ -166,9 +166,15 @@ pub struct AppState {
     /// Read-only graph backend (D-12): neighbors, path, subgraph, pattern,
     /// and root-family over the active structural projection.
     pub graph: Arc<dyn application::quran_graph_api::GraphBackend>,
+    /// Optional verse-link service (Phase 6 SC3).
+    pub verse_links: Option<std::sync::Arc<application::verse_link::VerseLinkService>>,
+    /// WR-08: whether mutating isnad identity tools are permitted on the
+    /// generic (unauthenticated) tool route. Deny-by-default; the serve arm
+    /// sets this from `policy.tool_execution_default == "allow"`.
+    pub allow_isnad_mutations: bool,
 }
 
-fn empty_meta() -> Meta {
+pub fn empty_meta() -> Meta {
     Meta {
         edition: EditionMeta {
             slug: String::new(),
@@ -235,6 +241,8 @@ fn tool_status(error: &ToolError) -> StatusCode {
             "QAI-QUR-0306" | "QAI-QUR-0307" | "QAI-QUR-0308" | "QAI-QUR-0309" | "QAI-QUR-0322"
             | "QAI-QUR-0324" | "QAI-QUR-0325" => StatusCode::NOT_FOUND,
             "QAI-QUR-0326" => StatusCode::FORBIDDEN,
+            // WR-08: mutating isnad identity tool refused on the HTTP route.
+            "QAI-ISNAD-0326" => StatusCode::FORBIDDEN,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         },
     }
@@ -259,7 +267,7 @@ fn error_body(error: &ToolError) -> ErrorBody {
     }
 }
 
-fn json_response<T: Serialize>(
+pub fn json_response<T: Serialize>(
     status: StatusCode,
     body: &T,
     etag: Option<HeaderValue>,
@@ -287,7 +295,7 @@ fn ok_envelope<T: Serialize>(data: T, meta: Meta, headers: &HeaderMap) -> Respon
     json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, etag, true)
 }
 
-fn tool_error_response(error: ToolError) -> Response {
+pub fn tool_error_response(error: ToolError) -> Response {
     json_response(tool_status(&error), &error_body(&error), None, false)
 }
 
@@ -518,11 +526,39 @@ async fn tool_handler(
     Path(name): Path<String>,
     Json(params): Json<serde_json::Value>,
 ) -> Response {
+    // WR-08: mutating isnad identity tools write durable state, but this
+    // generic route is unauthenticated and framed read-only. Deny them by
+    // default; `policy.tool_execution_default = "allow"` opts in. The local
+    // CLI (`qai isnad …`) is the trusted operator surface and is unaffected.
+    if tool_registry::is_mutating_isnad_tool(&name) && !state.allow_isnad_mutations {
+        return tool_error_response(tools::ToolError::Backend {
+            code: "QAI-ISNAD-0326".to_string(),
+            detail: format!(
+                "tool `{name}` mutates narrator-identity state and is disabled on the HTTP route; set policy.tool_execution_default = \"allow\" to enable"
+            ),
+        });
+    }
+
+    // Phase 8: mutating RAG tools write durable state; deny by default on HTTP route.
+    if tool_registry::is_mutating_rag_tool(&name) && !state.allow_isnad_mutations {
+        return tool_error_response(tools::ToolError::Backend {
+            code: "QAI-RAG-0326".to_string(),
+            detail: format!(
+                "tool `{name}` mutates RAG state and is disabled on the HTTP route; set policy.tool_execution_default = \"allow\" to enable"
+            ),
+        });
+    }
+
     // The graph registry opens on the already-open handle — no backend or
     // database handle is re-opened (`GraphBackend` is the same trait the
     // application graph tools read through).
     let graph_registry =
         application::quran_graph_tools::GraphToolBackend::registry(state.graph.clone());
+
+    // Phase 7 (WR-07): `isnad.*` is dispatched through the SAME shared
+    // name→tool table as every other tool — the serve arm wires the isnad
+    // backend onto `state.tools` (the reader registry), so identity and
+    // `research_checksum` cannot drift between CLI and HTTP.
     match application::quran_tools::dispatch_registered_tool(
         &state.tools,
         &graph_registry,
@@ -1660,6 +1696,10 @@ fn graph_patch(budgets: Option<GraphBudgetsBody>) -> application::quran_graph_ap
 struct GraphNeighborsBody {
     /// Stable node id to open around.
     node: String,
+    /// Projection family to read (default `quran-structural-v1`); an unknown
+    /// or unbuilt family is a typed 404, never an empty success.
+    #[serde(default)]
+    projection: Option<String>,
     /// Allowed edge predicates (`None` admits every allowlisted predicate).
     edge_types: Option<Vec<String>>,
     /// Expansion direction (`both` default; `outgoing`|`incoming`).
@@ -1826,7 +1866,7 @@ async fn graph_neighbors_handler(
     use application::quran_graph_api as api;
     let started = Instant::now();
     // CLI parity: neighbors opens one hop by default (`--hops 1`).
-    let options = match api::read_options(
+    let mut options = match api::read_options(
         graph_patch(body.budgets),
         1,
         body.edge_types,
@@ -1835,6 +1875,9 @@ async fn graph_neighbors_handler(
         Ok(options) => options,
         Err(error) => return graph_error_response(error),
     };
+    // The request body's selector rides the shared read-options field, so one
+    // resolution point (`FileGraphBackend::service`) serves HTTP and tools.
+    options.projection = body.projection;
     let output = match state.graph.neighbors(api::NeighborsArgs { node: body.node, options }).await
     {
         Ok(output) => output,
@@ -2197,6 +2240,12 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/quran/ayahs/{reference}", get(ayahs_handler))
         .route("/api/v1/quran/context/{reference}", get(context_handler))
         .route("/api/v1/quran/tool/{name}", post(tool_handler))
+        .route("/api/v1/hadith/{collection}/{source_number}", get(hadith_get_handler))
+        .route("/api/v1/hadith/search", post(hadith_search_handler))
+        .route("/api/v1/hadith/{collection}/{source_number}/gradings", get(hadith_gradings_handler))
+        .route("/api/v1/tafsir/{work_slug}", get(tafsir_get_handler))
+        .route("/api/v1/tafsir/search", post(tafsir_search_handler))
+        .route("/api/v1/verse/{surah}/{ayah}/links", get(verse_links_handler))
         .route("/api/v1/quran/divisions/{kind}/{number}", get(divisions_handler))
         .route("/api/v1/quran/tokens/{reference}", get(tokens_handler))
         .route("/api/v1/quran/resolve", get(resolve_handler))
@@ -2227,6 +2276,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/quran/graph/subgraph", post(graph_subgraph_handler))
         .route("/api/v1/quran/graph/pattern", post(graph_pattern_handler))
         .route("/api/v1/quran/graph/root-family", post(graph_root_family_handler))
+        .merge(crate::routes::scripture::router())
         .route("/debug/read/{edition}/{surah}", get(debug_reader_handler))
         .fallback(crate::webassets::spa_fallback)
         .layer(tower_http::trace::TraceLayer::new_for_http())
@@ -2237,6 +2287,178 @@ pub fn router(state: AppState) -> Router {
         ))
         .layer(tower::limit::ConcurrencyLimitLayer::new(128))
         .with_state(state)
+}
+
+#[derive(serde::Deserialize)]
+struct HadithSearchBody {
+    query: String,
+    #[serde(default)]
+    collection_slug: Option<String>,
+    #[serde(default)]
+    limit: Option<u32>,
+}
+
+#[derive(serde::Deserialize)]
+struct TafsirSearchBody {
+    query: String,
+    #[serde(default)]
+    work_slug: Option<String>,
+    #[serde(default)]
+    limit: Option<u32>,
+}
+
+async fn hadith_get_handler(
+    State(state): State<AppState>,
+    Path((collection, source_number)): Path<(String, String)>,
+) -> Response {
+    let reference = format!("{collection}:{source_number}");
+    let params = tool_registry::GetHadithParams { reference };
+    match state.tools.get_hadith(params).await {
+        Ok((result, _meta)) => {
+            let checksum = result.research_checksum.hex.clone();
+            let mut meta = empty_meta();
+            meta.research_checksum = format!("sha256:{checksum}");
+            let data = serde_json::to_value(&result).unwrap_or(serde_json::Value::Null);
+            json_response(
+                StatusCode::OK,
+                &Envelope { api_version: API_VERSION, data, meta },
+                None,
+                false,
+            )
+        }
+        Err(error) => tool_error_response(error),
+    }
+}
+
+async fn hadith_search_handler(
+    State(state): State<AppState>,
+    Json(body): Json<HadithSearchBody>,
+) -> Response {
+    let params = tool_registry::HadithSearchToolParams {
+        query: body.query,
+        collection_slug: body.collection_slug,
+        limit: body.limit,
+    };
+    match state.tools.search_hadith(params).await {
+        Ok(result) => {
+            let checksum = result.research_checksum.hex.clone();
+            let mut meta = empty_meta();
+            meta.research_checksum = format!("sha256:{checksum}");
+            let data = serde_json::to_value(&result).unwrap_or(serde_json::Value::Null);
+            json_response(
+                StatusCode::OK,
+                &Envelope { api_version: API_VERSION, data, meta },
+                None,
+                false,
+            )
+        }
+        Err(error) => tool_error_response(error),
+    }
+}
+
+async fn hadith_gradings_handler(
+    State(state): State<AppState>,
+    Path((collection, source_number)): Path<(String, String)>,
+) -> Response {
+    let reference = format!("{collection}:{source_number}");
+    let params = tool_registry::GetHadithParams { reference };
+    let result = match state.tools.get_hadith(params).await {
+        Ok((r, _)) => r,
+        Err(error) => return tool_error_response(error),
+    };
+    let hadith_id = result.results.id.clone();
+    match state.tools.get_gradings(&hadith_id).await {
+        Ok(result) => {
+            let checksum = result.research_checksum.hex.clone();
+            let mut meta = empty_meta();
+            meta.research_checksum = format!("sha256:{checksum}");
+            let data = serde_json::to_value(&result).unwrap_or(serde_json::Value::Null);
+            json_response(
+                StatusCode::OK,
+                &Envelope { api_version: API_VERSION, data, meta },
+                None,
+                false,
+            )
+        }
+        Err(error) => tool_error_response(error),
+    }
+}
+
+async fn tafsir_get_handler(
+    State(state): State<AppState>,
+    Path(work_slug): Path<String>,
+) -> Response {
+    let params = tool_registry::GetTafsirParams { reference: work_slug };
+    match state.tools.get_tafsir(params).await {
+        Ok((result, _meta)) => {
+            let checksum = result.research_checksum.hex.clone();
+            let mut meta = empty_meta();
+            meta.research_checksum = format!("sha256:{checksum}");
+            let data = serde_json::to_value(&result).unwrap_or(serde_json::Value::Null);
+            json_response(
+                StatusCode::OK,
+                &Envelope { api_version: API_VERSION, data, meta },
+                None,
+                false,
+            )
+        }
+        Err(error) => tool_error_response(error),
+    }
+}
+
+async fn tafsir_search_handler(
+    State(state): State<AppState>,
+    Json(body): Json<TafsirSearchBody>,
+) -> Response {
+    let params = tool_registry::TafsirSearchToolParams {
+        query: body.query,
+        work_slug: body.work_slug,
+        limit: body.limit,
+    };
+    match state.tools.search_tafsir(params).await {
+        Ok(result) => {
+            let checksum = result.research_checksum.hex.clone();
+            let mut meta = empty_meta();
+            meta.research_checksum = format!("sha256:{checksum}");
+            let data = serde_json::to_value(&result).unwrap_or(serde_json::Value::Null);
+            json_response(
+                StatusCode::OK,
+                &Envelope { api_version: API_VERSION, data, meta },
+                None,
+                false,
+            )
+        }
+        Err(error) => tool_error_response(error),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct LinksQuery {
+    #[serde(default)]
+    include_uncertain: bool,
+}
+
+async fn verse_links_handler(
+    State(state): State<AppState>,
+    Path((surah, ayah)): Path<(u16, u32)>,
+    Query(q): Query<LinksQuery>,
+) -> Response {
+    let meta = empty_meta();
+    let data = match state.verse_links.as_ref() {
+        Some(service) => match application::verse_link::VerseLinker::get_links_for_verse(
+            service.as_ref(),
+            surah,
+            ayah,
+            q.include_uncertain,
+        )
+        .await
+        {
+            Ok(links) => serde_json::to_value(&links).unwrap_or_else(|_| serde_json::json!([])),
+            Err(_) => serde_json::json!([]),
+        },
+        None => serde_json::json!([]),
+    };
+    json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, None, false)
 }
 
 /// Serve until the process is killed.

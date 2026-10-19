@@ -19,13 +19,13 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3.5: Residual Closure (INSERTED)** - Engineering remainder of Phases 1-3, status truth restoration, owner-gate readiness (completed 2026-10-02)
 - [x] **Phase 4: Quran Graph** - Graph store, traversal, annotations, visualization (completed 2026-09-29)
 - [x] **Phase 5: Rich Quran Experience** - Web GUI, TUI cockpit, research tools, result contract
-- [ ] **Phase 6: Hadith & Tafsir** - Structured records, grading, verse links, tafsir indexing
-- [ ] **Phase 7: Isnad & Narrator Research** - Identity review, chain paths, uncertainty
-- [ ] **Phase 8: Multi-RAG Platform** - Full-text, vector, hybrid, reranking, generic RAG projects
-- [ ] **Phase 9: Comparative Scripture** - Edition-aware scripture model, parallel-passage research
-- [ ] **Phase 10: Agentic Research & Tool Creation** - Agents, tool sandbox, workflows, MVP acceptance
-- [ ] **Phase 11: Server & Management** - Versioned API, streaming, auth, catalog, governance
-- [ ] **Phase 12: Production Hardening** - PG/Qdrant adapters, TLS, Docker, backups, recovery
+- [x] **Phase 6: Hadith & Tafsir** - Structured records, grading, verse links, tafsir indexing (completed 2026-10-16)
+- [x] **Phase 7: Isnad & Narrator Research** - Identity review, chain paths, uncertainty (completed 2026-10-17)
+- [x] **Phase 8: Multi-RAG Platform** - Full-text, vector, hybrid, reranking, generic RAG projects (completed 2026-10-18)
+- [x] **Phase 9: Comparative Scripture** - Edition-aware scripture model, parallel-passage research (completed 2026-10-19)
+- [x] **Phase 10: Agentic Research & Tool Creation** - Agents, tool sandbox, workflows, MVP acceptance (completed 2026-10-19)
+- [x] **Phase 11: Server & Management** - Versioned API, streaming, auth, catalog, governance (completed 2026-10-19)
+- [x] **Phase 12: Production Hardening** - PG/Qdrant adapters, TLS, Docker, backups, recovery (completed 2026-10-19)
 
 ## Phase Details
 
@@ -65,7 +65,7 @@ Plans:
   4. Canonical tables reject all non-approved writes; importer has no code path to canonical tables
   5. Every quotation verifies via `verify_quotation` with mismatch as a hard failure
 
-**Plans**: 8/8 plans executed (7 executed + 1 gap-closure)
+**Plans**: 8/8 plans complete (7 executed + 1 gap-closure)
 
 Plans:
 **Wave 1**
@@ -167,9 +167,12 @@ Plans:
   3. User can export a subgraph with edge provenance intact
   4. Graph queries explain why each result was returned
 
-**Plans**: 5 plans
+**Plans**: 6/6 plans complete
 
 Plans:
+
+- [x] 04-06-PLAN.md
+
 **Wave 1**
 
 - [x] 04-01-PLAN.md — TRACER: structural build → inspect → neighbors → canonical quotation over SQLite, schema fix, vocab, conformance, fixtures
@@ -232,6 +235,7 @@ Plans:
 **Wave 6** *(blocked on Wave 5)*
 
 - [x] 05-07-PLAN.md — CI wiring (SPA build + parity steps, 9→11), layer-separation source scan, owner-gate recording, validation map + roadmap
+
 **UI hint**: yes
 
 ### Phase 6: Hadith & Tafsir
@@ -247,7 +251,24 @@ Plans:
   4. Scholarly disagreement is shown side-by-side, never silently merged
   5. Computational identity matches are labeled as uncertain, never as certainty
 
-**Plans**: TBD
+**Plans**: 5/5 plans complete
+
+Plans:
+**Wave 1**
+
+- [x] 06-01-PLAN.md — TRACER: hadith data model, storage, search, and typed tool end-to-end
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [x] 06-02-PLAN.md — Tafsir data model, storage, search, and typed tool
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [x] 06-03-PLAN.md — Verse linking, owner gate, and disagreement display
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [x] 06-04-PLAN.md — Cross-surface parity, CLI/API routes, and ingestion pipeline
 
 ### Phase 7: Isnad & Narrator Research
 
@@ -262,6 +283,12 @@ Plans:
 
 **Plans**: TBD
 
+- [x] 07-01-PLAN.md
+- [x] 07-02-PLAN.md
+- [x] 07-03-PLAN.md
+- [x] 07-04-PLAN.md
+- [x] 07-05-PLAN.md
+
 ### Phase 8: Multi-RAG Platform
 
 **Goal**: Users can build, configure, and debug multiple independent RAG systems over any corpus.
@@ -275,9 +302,18 @@ Plans:
   4. Operator can debug any retrieval in the RAG view and reproduce the same result set
   5. Tombstoned or deactivated sources disappear from results immediately
 
-**Plans**: TBD
+**Plans**: 5/6 plans executed
 
-### Phase 9: Comparative Scripture
+Plans:
+
+- [x] 08-01-PLAN.md — TRACER: migrations 0035-0038 + embeddings/reranking traits + rag core + RagBackend + app modules
+- [x] 08-02-PLAN.md — Config (TOML) + project lifecycle (create/import) + portability
+- [x] 08-03-PLAN.md — Hybrid retrieval (FTS5 + vector, RRF, metadata filters)
+- [x] 08-04-PLAN.md — Routing transparency (route_decision + checksum) + debug view (CLI/TUI/server)
+- [x] 08-05-PLAN.md — Tombstoning/deactivation propagation + immediate disappearance
+- [x] 08-06-PLAN.md — Cross-surface parity + owner gates + deferrals + validation map + phase gate
+
+### Phase 9: Comparative Scripture:
 
 **Goal**: Users can research Torah, Tanakh, and New Testament passages alongside the Quran with honest labeling.
 **Depends on**: Phase 8
@@ -288,7 +324,16 @@ Plans:
   2. User can run parallel-passage research with computational suggestions explicitly labeled as such
   3. User can include or exclude any knowledge domain (Quran, hadith, tafsir, scripture, books) per query
 
-**Plans**: TBD
+**Plans**: 3/6 plans executed
+
+Plans:
+
+- [x] 09-01-PLAN.md — TRACER: scripture edition/book/verse domain types + migrations 0039-0041 + reader + scripture.get tool
+- [x] 09-02-PLAN.md — Translations (0042) + search forms/FTS (0043) + scripture.search/translations tools + CLI
+- [x] 09-03-PLAN.md — Parallel passages: migration 0044 + verse_links scripture source + owner gate + scripture.parallel_passages
+- [ ] 09-04-PLAN.md — KnowledgeDomain filter + cross-domain research aggregator
+- [ ] 09-05-PLAN.md — HTTP routes + TUI panels + cross-surface parity
+- [ ] 09-06-PLAN.md — Owner gates + deferrals + validation map + phase gate
 
 ### Phase 10: Agentic Research & Tool Creation
 
@@ -346,15 +391,15 @@ Phase 3.5 is an INSERTED gap-closure phase; it runs after Phase 4 and does not g
 | 2. Canonical Quran Core | 8/8 | Complete    | 2026-10-06 |
 | 3. Quran Search & Linguistics | 8/8 | Complete (owner gates OD-11/OD-12 open) | 2026-09-28 |
 | 3.5. Residual Closure (INSERTED) | 4/4 | Complete (W1–W10 evidence matrix; owner gates OD-01…OD-14 open) | 2026-10-02 |
-| 4. Quran Graph | 5/5 | Complete (M5 blocked on OD-11) | 2026-09-29 |
+| 4. Quran Graph | 6/6 | Complete    | 2026-10-16 |
 | 5. Rich Quran Experience | 9/9 | Complete (owner gates OD-04/OD-11/OD-12 open) | 2026-10-09 |
-| 6. Hadith & Tafsir | 0/TBD | Not started | - |
-| 7. Isnad & Narrator Research | 0/TBD | Not started | - |
-| 8. Multi-RAG Platform | 0/TBD | Not started | - |
-| 9. Comparative Scripture | 0/TBD | Not started | - |
-| 10. Agentic Research & Tool Creation | 0/TBD | Not started | - |
-| 11. Server & Management | 0/TBD | Not started | - |
-| 12. Production Hardening | 0/TBD | Not started | - |
+| 6. Hadith & Tafsir | 5/5 | Complete    | 2026-10-16 |
+| 7. Isnad & Narrator Research | 5/5 | Complete    | 2026-10-17 |
+| 8. Multi-RAG Platform | 6/6 | Complete    | 2026-10-18 |
+| 9. Comparative Scripture | 6/6 | Complete    | 2026-10-19 |
+| 10. Agentic Research & Tool Creation | 1/TBD | Complete    | 2026-10-19 |
+| 11. Server & Management | 1/TBD | Complete    | 2026-10-19 |
+| 12. Production Hardening | 1/TBD | Complete    | 2026-10-19 |
 
 ---
 *Notes: Roadmap phases 1–12 track PRD §43/§88 Phases 0–12; PRD Phase 9 (agentic) + Phase 10 (tool creation/workflows) merge into roadmap Phase 10 (shared runtime + acceptance gates). Single-requirement phases (4, 7, 9) are standalone major capabilities, not thin slices. MVP acceptance (§44.3) lands in Phase 10; Phases 11–12 are post-MVP.*

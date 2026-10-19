@@ -7,7 +7,16 @@
 
 pub mod audit_bridge;
 pub mod db;
+pub mod disagreement;
+pub mod hadith_reader;
+pub mod hadith_search;
+pub mod hadith_tools;
+pub mod isnad_graph_store;
+pub mod isnad_reader;
+pub mod isnad_tools;
 pub mod job_queue;
+pub mod knowledge_domain;
+pub mod cross_domain;
 pub mod quran;
 pub mod quran_cli;
 pub mod quran_counting;
@@ -30,9 +39,19 @@ pub mod quran_search;
 pub mod quran_search_api;
 pub mod quran_search_cache;
 pub mod quran_tools;
-
+pub mod rag_reader;
+pub mod scripture_reader;
+pub mod scripture_search;
+pub mod scripture_tools;
+pub mod rag_search;
+pub mod rag_tools;
+pub mod tafsir_reader;
+pub mod tafsir_search;
+pub mod tafsir_tools;
+pub mod verse_link;
 pub use config::Config;
 pub use domain::redaction;
+pub use rag::RouteDecision;
 
 use observability::{Format, InitOptions, init_with_options};
 use storage::Database as _;

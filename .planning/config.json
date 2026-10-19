@@ -5,5 +5,8 @@
   },
   "git": {
     "allow_default_branch_commits": true
+  },
+  "graphify": {
+    "enabled": true
   }
 }

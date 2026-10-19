@@ -3,3 +3,12 @@ name = "embeddings"
 version = "0.0.0"
 edition = "2024"
 publish = false
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+sha2 = { workspace = true }
+
+[lints]
+workspace = true

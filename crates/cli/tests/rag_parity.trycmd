@@ -1,0 +1,2 @@
+# Phase 8 cross-surface parity (rag). Cross-surface assertions live in
+# crates/cli/tests/rag_parity.rs (service leg) and parity_cross_surface.rs.

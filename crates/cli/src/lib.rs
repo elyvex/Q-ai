@@ -6,7 +6,13 @@
 
 pub mod doctor;
 pub mod exit_code;
+pub mod hadith;
+pub mod isnad;
+pub mod links;
 pub mod quran;
+pub mod rag;
+pub mod scripture;
+pub mod tafsir;
 
 use clap::{Parser, Subcommand};
 use config::{Config, OriginMap, ValueOrigin};
@@ -120,6 +126,36 @@ pub enum Commands {
     Quran {
         #[command(subcommand)]
         action: quran::QuranAction,
+    },
+    /// Hadith corpus commands.
+    Hadith {
+        #[command(subcommand)]
+        action: hadith::HadithAction,
+    },
+    /// Tafsir commands.
+    Tafsir {
+        #[command(subcommand)]
+        action: tafsir::TafsirAction,
+    },
+    /// Scripture commands.
+    Scripture {
+        #[command(subcommand)]
+        action: scripture::ScriptureAction,
+    },
+    /// Verse link commands.
+    Links {
+        #[command(subcommand)]
+        action: links::LinksAction,
+    },
+    /// Isnad & narrator research commands (Phase 7).
+    Isnad {
+        #[command(subcommand)]
+        action: isnad::IsnadAction,
+    },
+    /// Multi-RAG platform commands (Phase 8).
+    Rag {
+        #[command(subcommand)]
+        action: rag::RagAction,
     },
     /// Shell completions (Phase 1).
     Completions {
@@ -339,12 +375,33 @@ pub fn dispatch(cli: Cli) -> i32 {
                         // Full D-13 tool surface: the two direct-read tools plus
                         // the attributed search/lexicon tools, wired to the
                         // serving-index root the API search backend uses.
-                        let tools = std::sync::Arc::new(
-                            application::quran_tools::ReaderToolBackend::registry_with_index_root(
-                                reader.clone(),
-                                application::quran_index::index_root_for_db(&db_path),
-                            ),
+                        let mut tools = application::quran_tools::ReaderToolBackend::registry_with_index_root(
+                            reader.clone(),
+                            application::quran_index::index_root_for_db(&db_path),
                         );
+                        // Phase 7 (WR-07): wire the isnad backend onto the same
+                        // registry the generic tool route dispatches through, so
+                        // the server shares one name→tool table with the CLI
+                        // instead of hand-copying a second isnad table.
+                        if let Ok(db) = storage_sqlite::SqliteDatabase::new(&db_path, 4, true).await {
+                            let service = std::sync::Arc::new(
+                                application::isnad_reader::IsnadReaderService::new(std::sync::Arc::new(db)),
+                            );
+                            let isnad_reader: std::sync::Arc<dyn application::isnad_reader::IsnadReader> =
+                                service;
+                            tools.set_isnad_backend(std::sync::Arc::new(
+                                application::isnad_tools::IsnadToolBackend::new(isnad_reader),
+                            ));
+                        }
+                        if let Ok(db) = storage_sqlite::SqliteDatabase::new(&db_path, 4, true).await {
+                            let reader = std::sync::Arc::new(
+                                application::scripture_reader::ScriptureReaderService::new(std::sync::Arc::new(db)),
+                            );
+                            tools.set_scripture_backend(std::sync::Arc::new(
+                                application::scripture_tools::ScriptureToolBackend::new(reader),
+                            ));
+                        }
+                        let tools = std::sync::Arc::new(tools);
                         let api = std::sync::Arc::new(server::api::ReaderBackend::new(reader));
                         let search = match application::quran_search_api::SearchApiService::open(
                             &db_path,
@@ -377,6 +434,14 @@ pub fn dispatch(cli: Cli) -> i32 {
                         let graph = std::sync::Arc::new(
                             application::quran_graph_api::FileGraphBackend::structural(&db_path),
                         );
+                        // Phase 6 SC3: verse-link service over the same SQLite database,
+                        // so the verse-links read route surfaces confirmed links.
+                        let verse_links = match storage_sqlite::SqliteDatabase::new(&db_path, 4, true).await {
+                            Ok(db) => Some(std::sync::Arc::new(
+                                application::verse_link::VerseLinkService::new(std::sync::Arc::new(db)),
+                            )),
+                            Err(_) => None,
+                        };
                         // Long-lived worker host (D-13): the serve process
                         // owns durable execution; one-shot commands only
                         // enqueue. The host task is always awaited below —
@@ -402,7 +467,17 @@ pub fn dispatch(cli: Cli) -> i32 {
                         tokio::select! {
                             served = server::api::serve(
                                 &bind,
-                                server::api::AppState { tools, api, search, lexicon, graph },
+                                server::api::AppState {
+                                    tools,
+                                    api,
+                                    search,
+                                    lexicon,
+                                    graph,
+                                    verse_links,
+                                    // WR-08: HTTP mutations are deny-by-default.
+                                    allow_isnad_mutations: cfg.policy.tool_execution_default
+                                        == "allow",
+                                },
                             ) => {
                                 let _ = shutdown_tx.send(true);
                                 let joined = match host.await {
@@ -531,6 +606,29 @@ pub fn dispatch(cli: Cli) -> i32 {
         Commands::Quran { action } => {
             let db_path = cfg.storage.sqlite.path.clone();
             quran::handle_quran(action, &db_path, cli.json, cli.yes)
+        }
+        Commands::Hadith { action } => {
+            let db_path = cfg.storage.sqlite.path.clone();
+            hadith::handle_hadith(action, &db_path, cli.json)
+        }
+        Commands::Tafsir { action } => {
+            let db_path = cfg.storage.sqlite.path.clone();
+            tafsir::handle_tafsir(action, &db_path, cli.json)
+        }
+        Commands::Scripture { action } => {
+            let db_path = cfg.storage.sqlite.path.clone();
+            scripture::handle_scripture(action, &db_path, cli.json)
+        }
+        Commands::Links { action } => {
+            let db_path = cfg.storage.sqlite.path.clone();
+            links::handle_links(action, &db_path, cli.json)
+        }
+        Commands::Isnad { action } => {
+            let db_path = cfg.storage.sqlite.path.clone();
+            isnad::handle_isnad(action, &db_path, cli.json)
+        }
+        Commands::Rag { action } => {
+            rag::handle_rag(action, cli.json)
         }
     }
 }

@@ -40,8 +40,10 @@ async fn live_registry() -> (tempfile::TempDir, GraphApiService, ToolRegistry) {
     (dir, service, registry)
 }
 
-/// Twelve registered names with their own SemVer 1.0.0 version consts, and
-/// no mutation tool in the set (D-11 fence).
+/// Seventeen registered names with their own SemVer 1.0.0 version consts, and
+/// no mutation tool in the set (D-11 fence). The three `hadith.*` and two
+/// `tafsir.*` read tools were added in Phase 6; they are read-only, so the
+/// fence still holds.
 #[tokio::test]
 async fn graph_tools_register_twelve_names_with_version_consts() {
     let (_dir, _service, registry) = live_registry().await;
@@ -60,10 +62,22 @@ async fn graph_tools_register_twelve_names_with_version_consts() {
             "quran.graph_subgraph",
             "quran.graph_pattern",
             "quran.graph_root_family",
+            "hadith.get",
+            "hadith.search",
+            "hadith.gradings",
+            "tafsir.get",
+            "tafsir.search",
+            "scripture.get",
+            "scripture.search",
+            "scripture.translations",
+            "scripture.editions",
+            "scripture.parallel_passages",
         ]
     );
+    // The neighbors tool gained an optional `projection` input (additive), so
+    // it moves to 1.1.0; the other four verbs stay structural-only at 1.0.0.
+    assert_eq!(GRAPH_NEIGHBORS_TOOL_VERSION, SemVer::new(1, 1, 0));
     for version in [
-        GRAPH_NEIGHBORS_TOOL_VERSION,
         GRAPH_PATH_TOOL_VERSION,
         GRAPH_SUBGRAPH_TOOL_VERSION,
         GRAPH_PATTERN_TOOL_VERSION,
@@ -89,13 +103,14 @@ async fn graph_neighbors_envelope_is_attributed_and_service_identical() {
     let (_dir, service, registry) = live_registry().await;
     let params = tool_registry::GraphNeighborsParams {
         node: "ayah:1:1".to_string(),
+        projection: None,
         edge_types: None,
         direction: None,
         budgets: tool_registry::GraphBudgetsParams::default(),
     };
     let tool = registry.graph_neighbors(params).await.expect("neighbors tool answers");
     assert_eq!(tool.tool_name, "quran.graph_neighbors");
-    assert_eq!(tool.tool_version, SemVer::new(1, 0, 0));
+    assert_eq!(tool.tool_version, SemVer::new(1, 1, 0));
     assert!(!tool.canonical_references.is_empty(), "every result names its sources");
     assert!(
         tool.canonical_references.iter().all(|reference| !reference.trim().is_empty()),
@@ -164,6 +179,7 @@ async fn graph_neighbors_envelope_is_attributed_and_service_identical() {
     let again = registry
         .graph_neighbors(tool_registry::GraphNeighborsParams {
             node: "ayah:1:1".to_string(),
+            projection: None,
             edge_types: None,
             direction: None,
             budgets: tool_registry::GraphBudgetsParams::default(),
@@ -300,6 +316,7 @@ async fn graph_tool_errors_preserve_namespaced_codes() {
     let err = registry
         .graph_neighbors(tool_registry::GraphNeighborsParams {
             node: "ayah:9:9".to_string(),
+            projection: None,
             edge_types: None,
             direction: None,
             budgets: tool_registry::GraphBudgetsParams::default(),
@@ -314,6 +331,7 @@ async fn graph_tool_errors_preserve_namespaced_codes() {
     let err = registry
         .graph_neighbors(tool_registry::GraphNeighborsParams {
             node: "ayah:1:1".to_string(),
+            projection: None,
             edge_types: None,
             direction: None,
             budgets: tool_registry::GraphBudgetsParams {
@@ -348,6 +366,7 @@ async fn graph_tool_errors_preserve_namespaced_codes() {
     let err = registry
         .graph_neighbors(tool_registry::GraphNeighborsParams {
             node: "   ".to_string(),
+            projection: None,
             edge_types: None,
             direction: None,
             budgets: tool_registry::GraphBudgetsParams::default(),
@@ -446,6 +465,7 @@ async fn graph_suggestion_results_are_labeled_pending_in_warnings() {
     let tool = registry
         .graph_neighbors(tool_registry::GraphNeighborsParams {
             node: "ayah:1:1".to_string(),
+            projection: None,
             edge_types: None,
             direction: None,
             budgets: tool_registry::GraphBudgetsParams::default(),
@@ -491,6 +511,7 @@ async fn graph_tools_carry_nonempty_payload_sensitive_research_checksum() {
     let (_dir, _service, registry) = live_registry().await;
     let params = || tool_registry::GraphNeighborsParams {
         node: "ayah:1:1".to_string(),
+        projection: None,
         edge_types: None,
         direction: None,
         budgets: tool_registry::GraphBudgetsParams::default(),
@@ -506,6 +527,7 @@ async fn graph_tools_carry_nonempty_payload_sensitive_research_checksum() {
     let other = registry
         .graph_neighbors(tool_registry::GraphNeighborsParams {
             node: "ayah:1:2".to_string(),
+            projection: None,
             ..params()
         })
         .await

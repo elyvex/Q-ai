@@ -38,6 +38,9 @@ impl Palette {
                 Command::new("doctor", "Corpus, index, and cross-store health"),
                 Command::new("jobs", "Background job queue status"),
                 Command::new("index", "Index generations and drift status"),
+                Command::new("isnad-narrator", "Open a narrator record"),
+                Command::new("isnad-trace", "Trace an isnad chain"),
+                Command::new("isnad-identity", "Review narrator identity proposals"),
             ],
         }
     }

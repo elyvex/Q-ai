@@ -20,10 +20,11 @@ use quran_core::{
 use storage::Database as _;
 use tool_registry::{
     BackendMeta, FAMILY_TOOL_VERSION, FamilyToolParams, GetAyahParams, GetContextParams,
-    GraphNeighborsParams, GraphPathParams, GraphPatternParams, GraphRootFamilyParams,
-    GraphSubgraphParams, LEMMA_TOOL_VERSION, LemmaToolParams, MORPHOLOGY_TOOL_VERSION,
-    MorphologyToolParams, QuranBackend, ROOT_TOOL_VERSION, RootToolParams, SEARCH_TOOL_VERSION,
-    SearchToolParams, ToolRegistry,
+    GetHadithParams, GetTafsirParams, GraphNeighborsParams, GraphPathParams, GraphPatternParams,
+    GraphRootFamilyParams, GraphSubgraphParams, HadithSearchToolParams, LEMMA_TOOL_VERSION,
+    LemmaToolParams, MORPHOLOGY_TOOL_VERSION, MorphologyToolParams, QuranBackend,
+    ROOT_TOOL_VERSION, RootToolParams, SEARCH_TOOL_VERSION, SearchToolParams,
+    TafsirSearchToolParams, GetScriptureParams, ScriptureSearchToolParams, ToolRegistry,
 };
 use tools::{AnalysisSource, ToolError, ToolResult, reproducibility, research_checksum};
 
@@ -141,6 +142,17 @@ async fn search_meta(
     }
 }
 
+/// Split a pinned `quran:slug@version:surah:ayah` hit reference into its
+/// served-edition parts (WR-03; mirrors the HTTP surface's `edition_of` in
+/// `meta_from_search`). Hit references are built from the serving edition, so
+/// the first hit identifies what the index actually served.
+fn served_edition_of(reference: &str) -> Option<(String, String)> {
+    let body = reference.strip_prefix("quran:")?;
+    let (edition, _) = body.split_once(':')?;
+    let (slug, version) = edition.split_once('@')?;
+    (!slug.is_empty() && !version.is_empty()).then(|| (slug.to_string(), version.to_string()))
+}
+
 /// A pinned `quran:<slug>@<version>:<surah>:<ayah>` reference.
 fn pinned_ref(meta: &BackendMeta, surah: i64, ayah: i64) -> String {
     format!("quran:{}@{}:{surah}:{ayah}", meta.edition_slug, meta.edition_version)
@@ -226,7 +238,7 @@ impl QuranBackend for ReaderToolBackend {
     ) -> Result<ToolResult<serde_json::Value>, ToolError> {
         let started = Instant::now();
         // WR-02: attribute the envelope to the edition the search will serve.
-        let meta = search_meta(&self.reader, params.edition.as_deref()).await?;
+        let requested_meta = search_meta(&self.reader, params.edition.as_deref()).await?;
         let search_params = crate::quran_search::SearchParams {
             text: params.text.clone(),
             edition: params.edition.clone(),
@@ -248,6 +260,34 @@ impl QuranBackend for ReaderToolBackend {
         )
         .await
         .map_err(search_tool_error)?;
+        // WR-03: the serving index answers from the *indexed* edition, but a
+        // request without a pinned version (absent `edition`, or a bare slug)
+        // resolves its meta from the active pointer, which may have moved on.
+        // Attribute the envelope to the served edition instead — the HTTP
+        // surface does the same (`meta_from_search` derives it from the first
+        // hit's pinned reference). With zero hits there is nothing to
+        // misattribute, so the requested meta stands; either way the serving
+        // advisories (including the stale-index warning) are propagated below.
+        let meta = match params.edition.as_deref() {
+            Some(spec) if spec.contains('@') => requested_meta,
+            _ => match output.hits.first().and_then(|hit| served_edition_of(hit.reference())) {
+                Some((slug, version)) => {
+                    let version = version.parse().map_err(|_| ToolError::Backend {
+                        code: "QAI-IDX-0003".into(),
+                        detail: format!(
+                            "served hit reference names an unparseable edition version `{version}`"
+                        ),
+                    })?;
+                    let edition = self
+                        .reader
+                        .get_edition(&EditionSelector::Pinned { slug, version })
+                        .await
+                        .map_err(tool_error)?;
+                    meta_from_edition(&self.reader, &edition).await?
+                }
+                None => requested_meta,
+            },
+        };
         let normalization_rules: Vec<String> = output
             .hits
             .first()
@@ -277,7 +317,14 @@ impl QuranBackend for ReaderToolBackend {
             analysis_sources,
             results: results.clone(),
             confidence: None,
-            warnings: Vec::new(),
+            // WR-03: propagate the serving advisories (mirroring the HTTP
+            // `meta_from_search` mapping). The stale-index warning is what
+            // discloses an active/indexed divergence on this path.
+            warnings: output
+                .warnings
+                .iter()
+                .map(|warning| format!("{}: {}", warning.code, warning.message))
+                .collect(),
             execution_time_ms: started.elapsed().as_secs_f64() * 1000.0,
             reproducibility: reproducibility(
                 "quran.search",
@@ -792,6 +839,148 @@ pub async fn dispatch_registered_tool(
             let params: GraphRootFamilyParams = serde_json::from_value(params)
                 .map_err(|err| bad_params("quran.graph_root_family", err))?;
             Ok(serialized(&graph.graph_root_family(params).await?))
+        }
+        // Phase 6 hadith read tools. `hadith.get` returns a view + BackendMeta,
+        // so it is unwrapped to the bare envelope here for parity with the
+        // other tools; `hadith.search` already returns the envelope directly.
+        "hadith.get" => {
+            let params: GetHadithParams =
+                serde_json::from_value(params).map_err(|err| bad_params("hadith.get", err))?;
+            let (result, _) = reader.get_hadith(params).await?;
+            Ok(serialized(&result))
+        }
+        "hadith.search" => {
+            let params: HadithSearchToolParams =
+                serde_json::from_value(params).map_err(|err| bad_params("hadith.search", err))?;
+            Ok(serialized(&reader.search_hadith(params).await?))
+        }
+        "hadith.gradings" => {
+            let params: serde_json::Value = params;
+            let hadith_id = params.get("hadith_id").and_then(|v| v.as_str()).ok_or_else(|| {
+                bad_params("hadith.gradings", serde::de::Error::custom("missing `hadith_id`"))
+            })?;
+            Ok(serialized(&reader.get_gradings(hadith_id).await?))
+        }
+        // Phase 6 tafsir read tools. `tafsir.get` returns a view + BackendMeta,
+        // so it is unwrapped to the bare envelope here for parity with the
+        // other tools; `tafsir.search` already returns the envelope directly.
+        "tafsir.get" => {
+            let params: GetTafsirParams =
+                serde_json::from_value(params).map_err(|err| bad_params("tafsir.get", err))?;
+            let (result, _) = reader.get_tafsir(params).await?;
+            Ok(serialized(&result))
+        }
+        "tafsir.search" => {
+            let params: TafsirSearchToolParams =
+                serde_json::from_value(params).map_err(|err| bad_params("tafsir.search", err))?;
+            Ok(serialized(&reader.search_tafsir(params).await?))
+        }
+        "isnad.narrator" => {
+            let params: tool_registry::GetNarratorParams =
+                serde_json::from_value(params).map_err(|err| bad_params("isnad.narrator", err))?;
+            Ok(serialized(&reader.get_narrator(&params.id).await?))
+        }
+        "isnad.rijal" => {
+            let params: tool_registry::GetNarratorParams =
+                serde_json::from_value(params).map_err(|err| bad_params("isnad.rijal", err))?;
+            Ok(serialized(&reader.get_rijal(&params.id).await?))
+        }
+        "isnad.trace" => {
+            let params: tool_registry::TraceParams =
+                serde_json::from_value(params).map_err(|err| bad_params("isnad.trace", err))?;
+            Ok(serialized(&reader.trace(params).await?))
+        }
+        "isnad.identity_propose" => {
+            let params: tool_registry::IdentityProposalParams = serde_json::from_value(params)
+                .map_err(|err| bad_params("isnad.identity_propose", err))?;
+            Ok(serialized(&reader.propose_identity(params).await?))
+        }
+        "isnad.identity_accept" => {
+            let params: tool_registry::IdentityDecisionParams = serde_json::from_value(params)
+                .map_err(|err| bad_params("isnad.identity_accept", err))?;
+            Ok(serialized(&reader.accept_identity(params).await?))
+        }
+        "isnad.identity_reject" => {
+            let params: tool_registry::IdentityDecisionParams = serde_json::from_value(params)
+                .map_err(|err| bad_params("isnad.identity_reject", err))?;
+            Ok(serialized(&reader.reject_identity(params).await?))
+        }
+        "isnad.identity_dispute" => {
+            let params: tool_registry::IdentityDecisionParams = serde_json::from_value(params)
+                .map_err(|err| bad_params("isnad.identity_dispute", err))?;
+            Ok(serialized(&reader.dispute_identity(params).await?))
+        }
+        "isnad.identity_supersede" => {
+            // params: { id, new_proposal, reviewer }
+            let id = params.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let reviewer =
+                params.get("reviewer").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let new_proposal: tool_registry::IdentityProposalParams = serde_json::from_value(
+                params.get("new_proposal").cloned().unwrap_or(serde_json::Value::Null),
+            )
+            .map_err(|err| bad_params("isnad.identity_supersede", err))?;
+            Ok(serialized(&reader.supersede_identity(&id, new_proposal, &reviewer).await?))
+        }
+        "rag.create_project" | "rag.create" => {
+            let name = params.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let config_toml = params
+                .get("config_toml")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            Ok(serialized(&reader.rag_create_project(&name, &config_toml).await?))
+        }
+        "rag.import" => {
+            let project = params.get("project").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let docs = params.get("docs").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+            Ok(serialized(&reader.rag_import(&project, &docs).await?))
+        }
+        "rag.query" => {
+            let project = params.get("project").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let query = params.get("query").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            Ok(serialized(&reader.rag_query(&project, &query).await?))
+        }
+        "rag.debug" => {
+            let project = params.get("project").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let query = params.get("query").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            Ok(serialized(&reader.rag_debug(&project, &query).await?))
+        }
+        "rag.source_status" | "rag.source_activate" | "rag.source_deactivate" | "rag.source_tombstone" => {
+            let project = params.get("project").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let source = params.get("source").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let status = if name == "rag.source_activate" {
+                "active"
+            } else if name == "rag.source_deactivate" {
+                "deactivated"
+            } else if name == "rag.source_tombstone" {
+                "tombstoned"
+            } else {
+                params.get("status").and_then(|v| v.as_str()).unwrap_or("active")
+            };
+            Ok(serialized(&reader.rag_source_status(&project, &source, status).await?))
+        }
+        "scripture.get" => {
+            let params: GetScriptureParams =
+                serde_json::from_value(params).map_err(|err| bad_params("scripture.get", err))?;
+            let (result, _) = reader.get_scripture(params).await?;
+            Ok(serialized(&result))
+        }
+        "scripture.search" => {
+            let params: ScriptureSearchToolParams =
+                serde_json::from_value(params).map_err(|err| bad_params("scripture.search", err))?;
+            Ok(serialized(&reader.search_scripture(params).await?))
+        }
+        "scripture.translations" => {
+            let verse_id = params.get("verse_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let language = params.get("language").and_then(|v| v.as_str()).map(|s| s.to_string());
+            Ok(serialized(&reader.get_scripture_translations(verse_id, language).await?))
+        }
+        "scripture.editions" => {
+            Ok(serialized(&reader.list_scripture_editions().await?))
+        }
+        "scripture.parallel_passages" => {
+            let reference = params.get("reference").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            Ok(serialized(&reader.parallel_passages_scripture(reference).await?))
         }
         _ => Err(ToolError::InvalidInput {
             tool: "quran.tool",

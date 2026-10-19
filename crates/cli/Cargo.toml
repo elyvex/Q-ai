@@ -6,6 +6,10 @@ publish = false
 
 [dependencies]
 application = { path = "../application" }
+storage = { path = "../storage" }
+tools = { path = "../tools" }
+storage-sqlite = { path = "../storage-sqlite" }
+tool-registry = { path = "../tool-registry" }
 config = { path = "../config" }
 observability = { path = "../observability" }
 server = { path = "../server" }
@@ -14,6 +18,7 @@ clap = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+sqlx = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]

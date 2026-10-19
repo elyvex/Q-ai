@@ -18,7 +18,7 @@
 workspace = { allow = [] }
 
 [application]
-workspace = { allow = ["domain", "storage", "storage-sqlite", "provenance", "audit", "jobs", "sources", "config", "observability", "quran-core", "quran-corpus", "quran-normalization", "quran-search", "quran-morphology", "quran-graph", "citations", "tools", "tool-registry"] }
+workspace = { allow = ["domain", "storage", "storage-sqlite", "provenance", "audit", "jobs", "sources", "config", "observability", "quran-core", "quran-corpus", "quran-normalization", "quran-search", "quran-morphology", "quran-graph", "citations", "tools", "tool-registry", "hadith-core", "tafsir", "isnad-graph", "rag", "embeddings", "reranking", "scripture"] }
 
 [storage]
 workspace = { allow = ["domain"] }
@@ -94,7 +94,7 @@ workspace = { allow = ["quran-core", "domain"] }
 
 # tool-registry: minimal local registry wiring the first two read-only tools.
 [tool-registry]
-workspace = { allow = ["tools", "quran-core", "domain"] }
+workspace = { allow = ["tools", "quran-core", "domain", "scripture"] }
 
 # --- Phase 2 (Quran Search, Normalization & Linguistics) ---
 # quran-normalization is pure logic: rules, SpanMap, pipeline, profiles, traces.
@@ -121,6 +121,41 @@ workspace = { allow = ["domain", "quran-core"] }
 # direction application -> quran-graph.
 [quran-graph]
 workspace = { allow = ["domain", "quran-core", "application", "storage-sqlite"] }
+
+# hadith-core: hadith collection/record/grading domain types (Phase 6, D6.1–D6.3).
+# Pure types + parsing + hashing; no storage/sqlx, no llm/embeddings/retrieval.
+# Depends on `domain` for ContentHash/SourceVersionId/Timestamp/SemVer.
+# application -> hadith-core is the port direction (services consume the types).
+[hadith-core]
+workspace = { allow = ["domain"] }
+
+# tafsir: tafsir work/record/dimension domain types (Phase 6, plan 06-02).
+# Pure types + parsing + hashing; no storage/sqlx, no llm/embeddings/retrieval.
+# Depends on `domain` for ContentHash/SourceVersionId/Timestamp/SemVer.
+# application -> tafsir is the port direction (services consume the types).
+[tafsir]
+workspace = { allow = ["domain"] }
+
+
+# isnad-graph: narrator/isnad research domain types (Phase 7).
+# Composes over quran-graph + domain; no storage/sqlx.
+[isnad-graph]
+workspace = { allow = ["domain", "quran-graph"] }
+
+# hadith-ingestion: source-format parsers + validator + discover → stage →
+# validate → activate pipeline (Phase 6, plan 06-04). Pure library; no sqlx/
+# storage-sqlite edge in the default build — staged records live in-memory
+# and are activated through the application layer. workspace dep on `domain`
+# (ContentHash/SourceVersionId/Timestamp) and `sources` (source catalog trait).
+[hadith-ingestion]
+workspace = { allow = ["domain", "sources"] }
+
+# retrieval: the backend-agnostic retrieval port (Phase 8 groundwork).
+# Depends on `domain` types via `storage` for typed error diagnostics. The
+# memvid-core edge is optional and gated behind the `memvid` feature, so the
+# default build does not pull its dependency tree.
+[retrieval]
+workspace = { allow = ["domain", "storage"] }
 
 # --- Phase 1 (FND-07) external dependency policy ---
 # Registry/git edges are explicit per crate and fail closed (D-02, D-03).
@@ -256,6 +291,49 @@ allow = ["serde", "serde_json", "thiserror", "sqlx", "tempfile", "tokio"]
 [quran-graph.external.git]
 allow = []
 
+# hadith-core externals: serde for the record types, serde_json for grading
+# evidence/metadata payloads, uuid for typed-id construction. No new package
+# was added or upgraded to produce this list.
+[hadith-core.external.registry]
+allow = ["serde", "serde_json", "thiserror", "uuid"]
+[hadith-core.external.git]
+allow = []
+
+# tafsir externals: serde for the work/record types, serde_json for the
+# dimensions-schema payload, uuid for typed-id construction. No new package
+# was added or upgraded to produce this list.
+[tafsir.external.registry]
+allow = ["serde", "serde_json", "thiserror", "uuid"]
+[tafsir.external.git]
+allow = []
+
+# scripture: comparative scripture domain types (Phase 9). Pure types + parsing +
+# hashing; no storage/sqlx. Depends on `domain` for ContentHash/SourceVersionId.
+[scripture]
+workspace = { allow = ["domain"] }
+
+[scripture.external.registry]
+allow = ["serde", "serde_json", "thiserror", "uuid"]
+[scripture.external.git]
+allow = []
+
+# hadith-ingestion externals: serde/serde_json for parsed records, thiserror
+# for typed parse/validation errors. No other external edges; matches the
+# crate's current direct dependency set (see Cargo.toml).
+[hadith-ingestion.external.registry]
+allow = ["serde", "serde_json", "thiserror"]
+[hadith-ingestion.external.git]
+allow = []
+
+# retrieval externals: serde types for the port, thiserror for typed errors,
+# tempfile for tests. memvid-core is listed because the gate reads
+# `cargo metadata --all-features`, which resolves the optional edge too; the
+# crate is NOT in the default build (opt-in `memvid` feature).
+[retrieval.external.registry]
+allow = ["serde", "serde_json", "tempfile", "thiserror", "memvid-core"]
+[retrieval.external.git]
+allow = []
+
 # --- Phase 3.5 (Evaluation harness) ---
 # evaluation: versioned dataset loading, metric computation, and report
 # rendering. The library is pure (serde/serde_json/thiserror only); the
@@ -267,4 +345,32 @@ workspace = { allow = ["domain", "storage", "storage-sqlite", "quran-core", "qur
 [evaluation.external.registry]
 allow = ["serde", "serde_json", "thiserror", "tokio", "tempfile"]
 [evaluation.external.git]
+allow = []
+
+[isnad-graph.external.registry]
+allow = ["serde", "serde_json", "uuid"]
+[isnad-graph.external.git]
+allow = []
+
+
+# Phase 8 (Multi-RAG platform)
+[rag]
+workspace = { allow = ["embeddings", "reranking"] }
+[rag.external.registry]
+allow = ["serde", "serde_json", "thiserror", "toml", "sha2", "uuid", "async-trait"]
+[rag.external.git]
+allow = []
+
+[embeddings]
+workspace = { allow = [] }
+[embeddings.external.registry]
+allow = ["serde", "serde_json", "thiserror", "sha2"]
+[embeddings.external.git]
+allow = []
+
+[reranking]
+workspace = { allow = [] }
+[reranking.external.registry]
+allow = ["serde", "serde_json", "thiserror"]
+[reranking.external.git]
 allow = []

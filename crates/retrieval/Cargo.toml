@@ -3,3 +3,22 @@ name = "retrieval"
 version = "0.0.0"
 edition = "2024"
 publish = false
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+storage = { path = "../storage" }
+
+# memvid-core is opt-in. Its default features pull tantivy (BM25) + pdf-extract
+# + SIMD, and its `vec` feature adds the ONNX runtime and hnsw — a large tree
+# for a build that does not use it. Off by default so the default build, the
+# dependency allowlist, and CI stay unchanged; build with `--features memvid`
+# to include the backend. Same precedent as `observability`'s `otlp`.
+memvid-core = { version = "2.0.140", optional = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[features]
+memvid = ["dep:memvid-core"]

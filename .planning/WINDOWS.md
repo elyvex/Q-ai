@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 9
+open_count: 10
 waived_count: 0
 fixed_count: 0
-total_count: 9
-last_updated: 2026-10-02T11:10:12.429Z
+total_count: 10
+last_updated: 2026-10-16T11:44:50.973Z
 ---
 
 # Broken Windows Ledger
@@ -24,6 +24,7 @@ last_updated: 2026-10-02T11:10:12.429Z
 | 7 | 03 | deviation | crates/application/tests/doctor_indexes.rs |  | 03-07 Task 1: 'all 19 checks green' realized as 19 stable ids with no failure; quran.fts.token_index remains skipped by design (no token-index backend) and QAI-IDX-0101 is asserted on the SearchHit stale-index warning (the only emitter of that code) after activating a v2 edition. | open |  | 2026-09-28T06:13:42.846Z |  |
 | 8 | 03 | deviation | fixtures/quran/performance/budgets.json |  | 03-07 Task 2: the full-corpus p50/p99 rows are recorded but not executable — OD-11 (no licensed corpus); only fixture_bound_ms=2000 gates the fixture harness. | open |  | 2026-09-28T06:13:43.203Z |  |
 | 9 | 03.5 | unrun-verify | crates/application/tests/soak_full.rs |  | 50k soak not re-run after semantics-preserving close-out edits (81a10e0); pass recorded from pre-edit binary | open |  | 2026-10-02T11:10:12.429Z |  |
+| 10 | 04 | unrun-verify | crates/domain/src/ids.rs | 58 | Plan 04-06 <verification> line 'cargo clippy -p application -p server -p tool-registry -p cli -- -D warnings' cannot run: clippy fails in crates/domain (pre-existing clippy::crate_in_macro_def) before reaching the plan's crates. Out of scope for 04-06; all other verification lines green. | open |  | 2026-10-16T11:44:50.973Z |  |
 
 ````json
 [
@@ -141,6 +142,19 @@ last_updated: 2026-10-02T11:10:12.429Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-10-02T11:10:12.429Z",
+    "resolved_at": null,
+    "milestone": null
+  },
+  {
+    "id": 10,
+    "kind": "unrun-verify",
+    "phase": "04",
+    "file": "crates/domain/src/ids.rs",
+    "line": 58,
+    "description": "Plan 04-06 <verification> line 'cargo clippy -p application -p server -p tool-registry -p cli -- -D warnings' cannot run: clippy fails in crates/domain (pre-existing clippy::crate_in_macro_def) before reaching the plan's crates. Out of scope for 04-06; all other verification lines green.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-16T11:44:50.973Z",
     "resolved_at": null,
     "milestone": null
   }

@@ -44,6 +44,8 @@ pub enum NodeKind {
     Concept,
     Entity,
     Annotation,
+    Narrator,
+    Hadith,
 }
 
 impl fmt::Display for NodeKind {
@@ -59,6 +61,8 @@ impl fmt::Display for NodeKind {
             Self::Concept => "concept",
             Self::Entity => "entity",
             Self::Annotation => "annotation",
+            Self::Narrator => "narrator",
+            Self::Hadith => "hadith",
         };
         write!(f, "{s}")
     }
@@ -90,6 +94,8 @@ pub const EDGE_VOCABULARY: &[&str] = &[
     "DERIVED_FROM",
     "SAME_ROOT_AS",
     "SAME_LEMMA_AS",
+    "TRANSMITS",
+    "NARRATES",
 ];
 
 /// Check whether an edge name is in [`EDGE_VOCABULARY`].
@@ -177,6 +183,7 @@ pub enum AssertionKind {
     EntityLink,
     FamilyLink,
     Import,
+    NarratorIdentity,
 }
 
 /// Review decisions. Mirrors the `graph_assertions.decision` list.
@@ -484,7 +491,9 @@ mod tests {
         assert!(is_allowed_edge("RELATED_TO"));
         assert!(is_allowed_edge("SUPPORTED_BY"));
         assert!(is_allowed_edge("DISPUTED_BY"));
-        assert_eq!(EDGE_VOCABULARY.len(), 19);
+        assert!(is_allowed_edge("TRANSMITS"));
+        assert!(is_allowed_edge("NARRATES"));
+        assert_eq!(EDGE_VOCABULARY.len(), 21);
     }
 
     #[test]
