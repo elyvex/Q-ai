@@ -393,6 +393,14 @@ pub fn dispatch(cli: Cli) -> i32 {
                                 application::isnad_tools::IsnadToolBackend::new(isnad_reader),
                             ));
                         }
+                        if let Ok(db) = storage_sqlite::SqliteDatabase::new(&db_path, 4, true).await {
+                            let reader = std::sync::Arc::new(
+                                application::scripture_reader::ScriptureReaderService::new(std::sync::Arc::new(db)),
+                            );
+                            tools.set_scripture_backend(std::sync::Arc::new(
+                                application::scripture_tools::ScriptureToolBackend::new(reader),
+                            ));
+                        }
                         let tools = std::sync::Arc::new(tools);
                         let api = std::sync::Arc::new(server::api::ReaderBackend::new(reader));
                         let search = match application::quran_search_api::SearchApiService::open(

@@ -174,7 +174,7 @@ pub struct AppState {
     pub allow_isnad_mutations: bool,
 }
 
-fn empty_meta() -> Meta {
+pub fn empty_meta() -> Meta {
     Meta {
         edition: EditionMeta {
             slug: String::new(),
@@ -267,7 +267,7 @@ fn error_body(error: &ToolError) -> ErrorBody {
     }
 }
 
-fn json_response<T: Serialize>(
+pub fn json_response<T: Serialize>(
     status: StatusCode,
     body: &T,
     etag: Option<HeaderValue>,
@@ -295,7 +295,7 @@ fn ok_envelope<T: Serialize>(data: T, meta: Meta, headers: &HeaderMap) -> Respon
     json_response(StatusCode::OK, &Envelope { api_version: API_VERSION, data, meta }, etag, true)
 }
 
-fn tool_error_response(error: ToolError) -> Response {
+pub fn tool_error_response(error: ToolError) -> Response {
     json_response(tool_status(&error), &error_body(&error), None, false)
 }
 
@@ -2276,6 +2276,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/quran/graph/subgraph", post(graph_subgraph_handler))
         .route("/api/v1/quran/graph/pattern", post(graph_pattern_handler))
         .route("/api/v1/quran/graph/root-family", post(graph_root_family_handler))
+        .merge(crate::routes::scripture::router())
         .route("/debug/read/{edition}/{surah}", get(debug_reader_handler))
         .fallback(crate::webassets::spa_fallback)
         .layer(tower_http::trace::TraceLayer::new_for_http())

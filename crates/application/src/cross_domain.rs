@@ -49,7 +49,7 @@ impl CrossDomainResearchService {
     }
 
     pub fn empty() -> Self {
-        Self::default()
+        Self { quran: None, hadith: None, tafsir: None, scripture: None, books: None }
     }
 
     pub fn with_services(

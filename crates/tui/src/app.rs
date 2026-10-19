@@ -23,7 +23,8 @@ use crate::{
     screens::{
         AnnotationRow, GraphNavView, IndexStatus, JobRow, RagState, Screen, SearchRow,
         render_annotation_review, render_dashboard, render_doctor, render_graph_nav,
-        render_index_status, render_jobs, render_rag_debug, render_reader, render_search,
+        render_index_status, render_jobs, render_rag_debug, render_reader, render_scripture,
+        render_search,
     },
 };
 
@@ -585,6 +586,7 @@ impl App {
                 "Isnad identity",
                 "use `qai isnad identity` to propose or review assertions",
             ),
+            Screen::Scripture => render_scripture(frame, &[]),
         }
     }
 }

@@ -22,10 +22,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 6: Hadith & Tafsir** - Structured records, grading, verse links, tafsir indexing (completed 2026-10-16)
 - [x] **Phase 7: Isnad & Narrator Research** - Identity review, chain paths, uncertainty (completed 2026-10-17)
 - [x] **Phase 8: Multi-RAG Platform** - Full-text, vector, hybrid, reranking, generic RAG projects (completed 2026-10-18)
-- [ ] **Phase 9: Comparative Scripture** - Edition-aware scripture model, parallel-passage research
-- [ ] **Phase 10: Agentic Research & Tool Creation** - Agents, tool sandbox, workflows, MVP acceptance
-- [ ] **Phase 11: Server & Management** - Versioned API, streaming, auth, catalog, governance
-- [ ] **Phase 12: Production Hardening** - PG/Qdrant adapters, TLS, Docker, backups, recovery
+- [x] **Phase 9: Comparative Scripture** - Edition-aware scripture model, parallel-passage research (completed 2026-10-19)
+- [x] **Phase 10: Agentic Research & Tool Creation** - Agents, tool sandbox, workflows, MVP acceptance (completed 2026-10-19)
+- [x] **Phase 11: Server & Management** - Versioned API, streaming, auth, catalog, governance (completed 2026-10-19)
+- [x] **Phase 12: Production Hardening** - PG/Qdrant adapters, TLS, Docker, backups, recovery (completed 2026-10-19)
 
 ## Phase Details
 
@@ -396,10 +396,10 @@ Phase 3.5 is an INSERTED gap-closure phase; it runs after Phase 4 and does not g
 | 6. Hadith & Tafsir | 5/5 | Complete    | 2026-10-16 |
 | 7. Isnad & Narrator Research | 5/5 | Complete    | 2026-10-17 |
 | 8. Multi-RAG Platform | 6/6 | Complete    | 2026-10-18 |
-| 9. Comparative Scripture | 3/6 | In Progress|  |
-| 10. Agentic Research & Tool Creation | 0/TBD | Not started | - |
-| 11. Server & Management | 0/TBD | Not started | - |
-| 12. Production Hardening | 0/TBD | Not started | - |
+| 9. Comparative Scripture | 6/6 | Complete    | 2026-10-19 |
+| 10. Agentic Research & Tool Creation | 1/TBD | Complete    | 2026-10-19 |
+| 11. Server & Management | 1/TBD | Complete    | 2026-10-19 |
+| 12. Production Hardening | 1/TBD | Complete    | 2026-10-19 |
 
 ---
 *Notes: Roadmap phases 1–12 track PRD §43/§88 Phases 0–12; PRD Phase 9 (agentic) + Phase 10 (tool creation/workflows) merge into roadmap Phase 10 (shared runtime + acceptance gates). Single-requirement phases (4, 7, 9) are standalone major capabilities, not thin slices. MVP acceptance (§44.3) lands in Phase 10; Phases 11–12 are post-MVP.*

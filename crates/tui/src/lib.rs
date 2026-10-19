@@ -8,6 +8,7 @@
 pub mod app;
 pub mod palette;
 pub mod screens;
+pub mod scripture;
 
 pub use app::{App, TuiServices, run};
 pub use palette::{Command, Palette};

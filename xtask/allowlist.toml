@@ -18,7 +18,7 @@
 workspace = { allow = [] }
 
 [application]
-workspace = { allow = ["domain", "storage", "storage-sqlite", "provenance", "audit", "jobs", "sources", "config", "observability", "quran-core", "quran-corpus", "quran-normalization", "quran-search", "quran-morphology", "quran-graph", "citations", "tools", "tool-registry", "hadith-core", "tafsir", "isnad-graph", "rag", "embeddings", "reranking"] }
+workspace = { allow = ["domain", "storage", "storage-sqlite", "provenance", "audit", "jobs", "sources", "config", "observability", "quran-core", "quran-corpus", "quran-normalization", "quran-search", "quran-morphology", "quran-graph", "citations", "tools", "tool-registry", "hadith-core", "tafsir", "isnad-graph", "rag", "embeddings", "reranking", "scripture"] }
 
 [storage]
 workspace = { allow = ["domain"] }
@@ -94,7 +94,7 @@ workspace = { allow = ["quran-core", "domain"] }
 
 # tool-registry: minimal local registry wiring the first two read-only tools.
 [tool-registry]
-workspace = { allow = ["tools", "quran-core", "domain"] }
+workspace = { allow = ["tools", "quran-core", "domain", "scripture"] }
 
 # --- Phase 2 (Quran Search, Normalization & Linguistics) ---
 # quran-normalization is pure logic: rules, SpanMap, pipeline, profiles, traces.
@@ -305,6 +305,16 @@ allow = []
 [tafsir.external.registry]
 allow = ["serde", "serde_json", "thiserror", "uuid"]
 [tafsir.external.git]
+allow = []
+
+# scripture: comparative scripture domain types (Phase 9). Pure types + parsing +
+# hashing; no storage/sqlx. Depends on `domain` for ContentHash/SourceVersionId.
+[scripture]
+workspace = { allow = ["domain"] }
+
+[scripture.external.registry]
+allow = ["serde", "serde_json", "thiserror", "uuid"]
+[scripture.external.git]
 allow = []
 
 # hadith-ingestion externals: serde/serde_json for parsed records, thiserror

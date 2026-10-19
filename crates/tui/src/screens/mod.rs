@@ -7,6 +7,7 @@ pub mod graph;
 pub mod ops;
 pub mod rag_debug;
 pub mod reader;
+pub mod scripture;
 pub mod search;
 
 pub use annotation_review::{AnnotationRow, render_annotation_review};
@@ -16,6 +17,10 @@ pub use ops::{IndexStatus, JobRow, render_doctor, render_index_status, render_jo
 pub use rag_debug::{RagState, render_rag_debug};
 pub use reader::render_reader;
 pub use search::{SearchRow, render_search};
+pub use scripture::{
+    CrossDomainRow, ParallelPassageRow, ScriptureBrowseRow, render_cross_domain,
+    render_parallel_passages, render_scripture, render_scripture_browse,
+};
 
 /// Cockpit destination selector. Mirrors the palette inventory one-to-one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -34,6 +39,7 @@ pub enum Screen {
     IsnadNarrator,
     IsnadTrace,
     IsnadIdentity,
+    Scripture,
 }
 
 impl Screen {
@@ -52,6 +58,7 @@ impl Screen {
             Screen::IsnadNarrator,
             Screen::IsnadTrace,
             Screen::IsnadIdentity,
+            Screen::Scripture,
         ]
     }
 
@@ -70,6 +77,7 @@ impl Screen {
             Screen::IsnadNarrator => "Isnad narrator",
             Screen::IsnadTrace => "Isnad trace",
             Screen::IsnadIdentity => "Isnad identity",
+            Screen::Scripture => "Scripture",
         }
     }
 
@@ -88,6 +96,7 @@ impl Screen {
             "isnad-narrator" => Some(Screen::IsnadNarrator),
             "isnad-trace" => Some(Screen::IsnadTrace),
             "isnad-identity" => Some(Screen::IsnadIdentity),
+            "scripture" => Some(Screen::Scripture),
             _ => None,
         }
     }

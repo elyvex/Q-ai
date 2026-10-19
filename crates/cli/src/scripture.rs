@@ -34,6 +34,12 @@ pub enum ScriptureAction {
         #[command(subcommand)]
         action: LinkAction,
     },
+    /// Cross-domain research.
+    Research {
+        query: String,
+        #[arg(long, value_delimiter = ',')]
+        domains: Option<Vec<String>>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -129,6 +135,55 @@ async fn handle_scripture_async(action: ScriptureAction, db_path: &str, json: bo
                 Ok(v) => application::quran_cli::CommandOutput::ok("translations".to_string(), v),
                 Err(e) => application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string()),
             }
+        }
+        ScriptureAction::Research { query, domains } => {
+            use application::cross_domain::CrossDomainResearchService;
+            use application::knowledge_domain::KnowledgeDomain as KD;
+            use application::knowledge_domain::CrossDomainQuery;
+            // build domain set
+            let mut dset = std::collections::BTreeSet::new();
+            if let Some(ds) = domains {
+                for d in ds {
+                    match d.trim().to_lowercase().as_str() {
+                        "quran" => { dset.insert(KD::Quran); }
+                        "hadith" => { dset.insert(KD::Hadith); }
+                        "tafsir" => { dset.insert(KD::Tafsir); }
+                        "scripture" => { dset.insert(KD::Scripture); }
+                        "books" => { dset.insert(KD::Books); }
+                        _ => {}
+                    }
+                }
+            }
+            let q = if dset.is_empty() {
+                CrossDomainQuery::new(query.clone())
+            } else {
+                CrossDomainQuery::with_domains(query.clone(), dset)
+            };
+
+            // Build service with available searchers
+            let db = match SqliteDatabase::new(db_path, 4, true).await {
+                Ok(db) => std::sync::Arc::new(db),
+                Err(e) => {
+                    let o = application::quran_cli::CommandOutput::err(exit_code::GENERIC, e.to_string());
+                    if json { println!("{}", serde_json::to_string_pretty(&o.json).unwrap_or_default()); } else { println!("{}", o.human); }
+                    return o.exit;
+                }
+            };
+            let reader = std::sync::Arc::new(application::scripture_reader::ScriptureReaderService::new(db.clone()));
+            let scripture_search = std::sync::Arc::new(application::scripture_search::ScriptureSearchService::new(db.clone(), reader.clone() as std::sync::Arc<dyn application::scripture_reader::ScriptureReader>));
+            let tafsir_reader = std::sync::Arc::new(application::tafsir_reader::TafsirReaderService::new(db.clone()));
+            let tafsir_search = std::sync::Arc::new(application::tafsir_search::TafsirSearchService::new(db.clone(), tafsir_reader as std::sync::Arc<dyn application::tafsir_reader::TafsirReader>));
+            let mut svc = CrossDomainResearchService::empty()
+                .with_scripture(Some(scripture_search as std::sync::Arc<dyn application::cross_domain::DomainSearcher>))
+                .with_tafsir(Some(tafsir_search as std::sync::Arc<dyn application::cross_domain::DomainSearcher>));
+            // hadith search
+            let hadith_reader = std::sync::Arc::new(application::hadith_reader::HadithReaderService::new(db.clone()));
+            let hadith_search = std::sync::Arc::new(application::hadith_search::HadithSearchService::new(db.clone(), hadith_reader as std::sync::Arc<dyn application::hadith_reader::HadithReader>));
+            svc = svc.with_hadith(Some(hadith_search as std::sync::Arc<dyn application::cross_domain::DomainSearcher>));
+            let hits = svc.research(q).await;
+            let human = format!("cross-domain: {} hits", hits.len());
+            let jsonv = serde_json::to_value(&hits).unwrap_or(serde_json::Value::Null);
+            application::quran_cli::CommandOutput::ok(human, jsonv)
         }
         ScriptureAction::Link { action } => {
             let service = backend.links();
