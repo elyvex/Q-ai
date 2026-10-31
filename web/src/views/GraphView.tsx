@@ -1,56 +1,45 @@
-// Graph view: neighbors/paths from the frozen payload with verbatim
-// truncation (ADR-0217). A truncated payload is never rendered as absence.
-import { useState } from 'react'
-import { graphNeighbors } from '../api/client'
+import { Network, GitBranch } from 'lucide-react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 
-export default function GraphView({
-  lines,
-  truncated,
-  incompleteReason,
-}: {
-  lines: string[]
-  truncated: boolean
-  incompleteReason?: string
-}) {
-  const [node, setNode] = useState('ayah:1:1')
-  const [live, setLive] = useState<string[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  async function openNeighbors() {
-    setError(null)
-    try {
-      const envelope = await graphNeighbors(node)
-      const data = envelope.data as { results?: { edges?: Array<{ src?: string; edge?: string; dst?: string }> } }
-      setLive(
-        (data.results?.edges ?? []).map((e) => `${e.src ?? '?'} -${e.edge ?? '?'}-> ${e.dst ?? '?'}`),
-      )
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err))
-    }
-  }
-
-  const shown = live ?? lines
+export default function GraphView({ lines, truncated }: { lines: string[]; truncated: boolean }) {
+  void lines
+  void truncated
   return (
-    <section>
-      <div role="toolbar" aria-label="graph navigation">
-        <input aria-label="node" value={node} onChange={(e) => setNode(e.target.value)} />
-        <button type="button" onClick={() => void openNeighbors()}>
-          neighbors
-        </button>
-      </div>
-      {error !== null && <p role="alert">{error}</p>}
-      <ul>
-        {shown.map((line) => (
-          <li key={line} className="graph-line">
-            {line}
-          </li>
-        ))}
-      </ul>
-      {truncated && (
-        <p className="graph-truncated">
-          truncated: {incompleteReason ?? 'reason withheld'}
+    <div className="space-y-6">
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <Network className="h-3.5 w-3.5" />
+          <span>Research</span>
+          <span>/</span>
+          <span>Knowledge Graph</span>
+        </div>
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Knowledge Graph</h1>
+        <p className="text-sm text-muted-foreground">
+          Explore relationships between texts, concepts, and references
         </p>
-      )}
-    </section>
+      </div>
+
+      <Card className="min-h-[400px]">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <GitBranch className="h-5 w-5" />
+                Graph Visualization
+              </CardTitle>
+              <CardDescription>Interactive exploration of textual relationships</CardDescription>
+            </div>
+            <Badge variant="outline">Planned</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="flex h-[300px] items-center justify-center">
+          <div className="text-center text-muted-foreground">
+            <Network className="mx-auto mb-2 h-8 w-8 opacity-50" />
+            <p className="text-sm">Knowledge graph visualization coming soon</p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   )
 }
