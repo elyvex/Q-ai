@@ -16,8 +16,14 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen flex-col">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:border focus:bg-card focus:px-3 focus:py-2 focus:text-sm"
+      >
+        Skip to content
+      </a>
       <SiteHeader currentPath={currentPath} onSearchClick={() => setOpen(true)} />
-      <main className="flex-1">
+      <main id="main" className="flex-1">
         <div className="mx-auto w-full max-w-[86rem] px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
           {children}
         </div>

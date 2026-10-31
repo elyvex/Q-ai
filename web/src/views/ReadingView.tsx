@@ -86,7 +86,7 @@ export default function ReadingView({
                   </span>
                 </div>
 
-                <div className="rounded-md bg-card px-1 py-2 sm:px-4">
+                <div className="rounded-md border bg-card px-3 py-4 sm:px-5 sm:py-5">
                   <AyahColumn
                     arabicText={ayah.canonical.arabicText}
                     reference={ayah.canonical.reference}

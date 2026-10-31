@@ -1,103 +1,128 @@
-# UI Redesign Implementation Report — pass 2 ("Illuminated Codex")
+# UI Redesign — Implementation Report (pass 3, “Concordance”)
 
-Rebuilt after the first pass was rejected as template-cloned: pass 1 leaned on
-stock shadcn surface patterns and flattened real view functionality into
-placeholders. Pass 2 is a bespoke design language with every original
-capability restored.
+## 1. What was redesigned
 
-## Design language: Illuminated Codex
+The frontend in `web/` was reworked from the shell down, not recoloured.
 
-- Warm parchment light theme (`oklch` warm-hue surfaces), warm-charcoal dark
-  theme; **ink-dark sidebar in both modes** (the bound spine).
-- Gold canonical accents: verse-number **medallions**, `.kicker` eyebrows with
-  gold tick, gold-inset active segments.
-- Hairline borders, vellum `.plate` panels, editorial one/two-column layouts —
-  no stock gray-canvas white-card grid.
-- Typography: Inter (UI), **Amiri** for canonical Arabic, Noto Naskh Arabic
-  fallback, JetBrains Mono for references/edges.
-- Provenance tokens are structural: canon (teal-green) = canonical layer,
-  trans (indigo) = translations, annot (amber) = annotations/alerts,
-  comp (violet) = computed data.
+**New application frame.** The left sidebar is gone. Navigation is a single
+56 px top rail — monogram, Newsreader wordmark, five horizontal destinations
+with an inset indigo active rule, command trigger, theme toggle, mobile panel —
+followed by one 86 rem content measure and a pinned colophon footer. The
+navigation information architecture is unchanged (Reader, Research, Graph,
+RAG Debug, Explorer); only its shape changed.
 
-## Bespoke primitives (`src/index.css`)
+**New visual language (“Concordance”).** Cool porcelain ground, iron-ink text,
+one deep indigo accent, 5–8 px radii, hairline structure, and a true margin
+column instead of a card grid. Serif (Newsreader) for page titles, Inter for
+interface, JetBrains Mono for references/counts, Amiri for canonical Arabic.
+No parchment, no gold, no forest green, no glass, no gradients.
 
-`.kicker`, `.medallion`, `.plate`, `.toolbar`/`.seg`, `.ibtn` (+ primary),
-`.chip`, `.prodot`, `.rule-line` — token-driven, light/dark aware. `legacy.css`
-was **deleted** (conflicting global styles, largely unused); its import in
-`App.tsx` removed. Fonts and layer tokens now load through `index.css`.
+**Every existing route was rebuilt around that language:**
 
-## Functionality restored (was flattened in pass 1)
+| Route | Redesign |
+|---|---|
+| `/` (Reader landing) | Header + explanation + a working deep-link form (validates `/read/<edition>/<s>:<a>` and navigates through the existing route). No invented data. |
+| `/read/...` | Two-column scholarly page: ruled verse sections (no cards), mono index + reference, canonical label, translation marked by a violet rule, margin column with display modes, layer legend and typographic note. Citation verification banner retained. |
+| `/research` | Instrument index as a numbered vertical rail; query band; ruled result list preserving service order; typed empty state; count chip. |
+| `/graph` | Ruled query bench, verbatim edge ledger, truncation banner, “reading the ledger” margin notes. |
+| `/rag-debug` | Intentional sealed state, restated typographically with an explanation column. No retrieval path added. |
+| `/explorer` | Preset index + request bench + carbon-copy transcript. All 7 presets, method toggle, editable path/body preserved. |
 
-- **ResearchView** — all 9 instruments wired to the typed client: `search`,
-  `quran.root`, `quran.lemma`, `family`, root/lemma `frequency`,
-  `distribution`, `cooccurrence`. Hits render in service-returned order; an
-  explicit empty state replaces blank panels.
-- **GraphView** — live *neighbors* and *path* queries against
-  `graphNeighbors`/`graphPath`; frozen-payload lines and ADR-0217 truncation
-  banner (`truncated: <reason>`) preserved verbatim.
-- **RagDebugView** — typed unavailability (D-11) kept as a deliberate "sealed
-  vault" panel; text matches `/not configured|unavailable/i` with zero
-  `.rag-result` elements.
-- **ExplorerView** — all 7 request presets, method toggling, editable path +
-  JSON body, raw status transcript, verbatim failures.
-- **CitationView** — server-side verification banner reading
-  "verified at the exact source location", URN/deep-link echoed verbatim
-  (`[data-urn]`, `[data-deep-link]`), copy control.
-- **ReadingView** — byte-exact canonical column (`.ayah-unit` /
-  `.ayah-canonical`, `[dir="rtl"][lang="ar"]`), three translation modes ×
-  three inspector modes via `[data-translation-mode]` /
-  `[data-inspector-mode]`, gold medallions, empty-translation notice.
-- **Router** — routes, `parseReadPath`, `parseCitationId`, engine-failed-
-  closed alert, citation deep-link wiring unchanged.
+**Shared components added:** `PageHeader`, `EmptyState`, `ErrorNote`,
+`LoadingLine`, plus `SiteHeader` rewritten and `AppShell` reduced to frame +
+footer. Tokens moved to a single semantic set in `index.css`.
 
-Contrast fix found during screenshot QA: the `.dark` layer-token overrides
-(`--layer-canonical-*`, `--layer-translation-*`, `--layer-annotation-*`) were
-inside `@layer components` and lost to the unlayered `:root` defaults in
-`tokens/layers.css`, leaving dark-mode canonical strips white. They now live
-unlayered in `index.css` (cascade: unlayered beats layered regardless of
-order).
+**Two latent defects found and fixed while testing in a browser:**
 
-## Shell
+- The command palette crashed on open: `CommandDialog` rendered its children
+  without the `cmdk` `<Command>` context, so `subscribe` was undefined. Fixed in
+  `components/ui/command.tsx`; the ⌘K palette now opens and navigates.
+- Dark-mode translations rendered as full-width violet bars because
+  `--layer-translation-bg` was set to a solid dark tint. Layer backgrounds are
+  now `transparent`; separation comes from the accent rule and label.
 
-shadcn `ui/sidebar` is kept only for collapse/rail/mobile mechanics, restyled
-through sidebar tokens; nav is folio-numbered (1.1, 2.1 …) with a "Local-first"
-footer note. Header: breadcrumb (`section ⁄ page` + reference chip), ⌘K
-command dialog, light/dark toggle (next-themes, class dark, localStorage
-`theme`).
+## 2. Which reference templates influenced the result
 
-## Build & test results
+None is a base. Influences are ideas, re-expressed:
 
-- `npm run build` — success (chunk-size warning only, pre-existing).
-- `npx vitest run` — **6 files / 19 tests passing**, covering byte-exact
-  canonical rendering + RTL, all translation/inspector modes, service-order
-  hits, explicit empty states, truncation banner, URN/deep-link verbatim echo,
-  citation id parsing, and RAG unavailability contract.
-- Zero `.rag-result` at rest; sticky test contracts unchanged.
+- **`complete-phase-13-roadmap (2)/(3)`** — provenance as a structural
+  vocabulary (four layers, dots, labels, mono references). Adopted as semantics,
+  not as tinted cards; their cool-grey canvas is the nearest palette cousin,
+  which is why the final accent was moved to indigo and the ground to porcelain.
+- **`complete-phase-13-roadmap (0)`** — the margin legend beside the primary
+  text and the calm density of a reading page.
+- **`complete-phase-13-roadmap (1)`** — one confident display size per page,
+  command surface, and mobile drawer behaviour.
+- **Rejected:** the shared left sidebar, forest-green/cream/parchment palette,
+  gold ornament, card-per-item lists, ambient orbs, and landing-page hero
+  compositions that imply features the API does not have.
 
-## Screenshots (`docs/ui-redesign/screenshots/`)
+Details and runtime findings (two references crash on mount) are in
+`REFERENCE-ANALYSIS.md`.
 
-- Index / research / graph / rag-debug / explorer / reader-deep-link — light
-  **and** dark (12).
-- Mobile (390×844): index / research / explorer (3).
-- `reader-live-{light,dark}.png` — reader rendered from a **mocked API**
-  (Playwright `page.route` on `/api/v1/quran/ayahs/**` and
-  `/api/v1/quran/citations/**`): shows real verse typography (Amiri, RTL),
-  medallions, inline translations, canonical-layer labels, and the verified
-  citation banner end-to-end.
+## 3. Skills and tools actually used
 
-Captured with Python Playwright + system Chrome against `vite preview`
-(port 4199).
+- **shadcn/ui skill** — informed primitive usage and the fix to the command
+  dialog; the project keeps its existing Base UI + Tailwind v4 setup.
+- **design-md / stitch skills** — reviewed for a design-system contract, but
+  **Stitch MCP is not configured in this environment** (no Stitch tools were
+  available), so no screenshots or design systems were generated in Stitch. The
+  contract was written directly from the implemented tokens.
+- **GSD UI workflows** — not installed as invocable commands here; the review
+  was done manually with Playwright screenshots.
+- **Playwright (system Chrome)** — reference capture, live app capture, mobile
+  viewport, dark mode, command palette and mobile navigation checks.
 
-## Dependencies
+## 4. New or modified components
 
-- Added in pass 1 and kept: `@fontsource` inter / jetbrains-mono / amiri /
-  noto-naskh-arabic; `framer-motion` installed and unused — safe to remove.
-- Dropped in pass 2: `legacy.css`.
+New: `components/layout/page-header.tsx`, `components/states.tsx`.
 
-## Known limitations
+Rewritten: `components/layout/app-shell.tsx`,
+`components/layout/site-header.tsx`, `components/command/command-menu.tsx`
+(copy + wrapper fix), `components/TranslationPanel.tsx`,
+`components/CitationCopy.tsx`, `display/DisplayModeControl.tsx`,
+`views/ReadingView.tsx`, `views/ResearchView.tsx`, `views/GraphView.tsx`,
+`views/RagDebugView.tsx`, `views/ExplorerView.tsx`, `views/CitationView.tsx`,
+`router.tsx`.
 
-- Command dialog supports navigation + one sample deep link (search-a-index
-  wiring awaits an index endpoint).
-- Graph/RAG panels render frozen/absent states without a running backend —
-  by design; live queries fire when an engine is reachable.
-- framer-motion remains an unused dependency.
+Removed: `components/navigation/app-sidebar.tsx` (its only consumer was the old
+shell). `components/ui/sidebar.tsx` is untouched and currently unused; other
+stock shadcn primitives were already unused before this pass.
+
+Tokens/styles: `index.css` rewritten; `tokens/layers.css` backgrounds set to
+transparent, colour semantics preserved.
+
+## 5. Dependencies
+
+- **Added:** `@fontsource-variable/newsreader` (self-hosted serif; one package,
+  no network font calls).
+- **Removed:** none.
+- No backend, API contract, schema, Rust toolchain, or reference-template files
+  were touched.
+
+## 6. Validation
+
+| Check | Result |
+|---|---|
+| `npm run build` (`tsc -b && vite build`) | passes; pre-existing chunk-size warning only |
+| `npx vitest run` | **6 files / 19 tests passing** — canonical byte-exactness and RTL, translation/inspector modes, service-order hits, explicit empty states, truncation banner, URN/deep-link verbatim, citation parsing, RAG unavailability |
+| Browser (Playwright, 1440×1000 + 390×844) | all five routes, reader deep link, citation banner, light + dark |
+| Interactions | horizontal nav, active states, mobile nav panel, ⌘K palette, instrument switching, research run with mocked API, method toggle, preset selection, deep-link form validation |
+| Accessibility spot checks | skip link, one `h1`, `aria-current`, `aria-expanded/controls`, `aria-pressed`, labelled inputs, focus ring, live regions |
+
+Screenshots: `docs/ui-redesign/screenshots/` — 12 desktop (6 routes × light/dark)
++ 4 mobile (index, research, explorer, reader) + mobile nav + command palette.
+Reader screenshots use Playwright route mocks for `/api/v1/quran/ayahs/**` and
+`/api/v1/quran/citations/**` because the Rust engine is not running; search
+results are mocked for the same reason. Nothing was mocked in production code.
+
+## 7. Known limitations
+
+- The reader landing depends on a valid edition slug; the prefilled
+  `/read/test@0.1.0/2:1` only resolves when that fixture edition is loaded.
+- Command palette lists navigation plus one sample deep link; there is no
+  content index endpoint to search yet.
+- Graph and RAG screens show their deliberate empty/sealed states without a
+  running engine — by design, not a regression.
+- `components/ui/sidebar.tsx` remains in the tree unused; it can be deleted
+  when no future feature needs the primitive.

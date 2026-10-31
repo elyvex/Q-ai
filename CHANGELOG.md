@@ -4,6 +4,22 @@ All notable changes to Q-ai are documented here.
 
 ## [Unreleased]
 
+### Changed — Web GUI redesign, pass 3 “Concordance” (2026-10-31)
+
+- Replaced the sidebar shell with a horizontal top rail (monogram, serif
+  wordmark, five destinations, command trigger, theme toggle, mobile panel) and
+  a single 86 rem content measure with a pinned colophon.
+- New visual language: porcelain ground, ink type, one indigo accent, hairline
+  structure, Newsreader titles, Amiri canonical Arabic, mono references.
+  Journey through light/dark is designed separately.
+- Rebuilt every route (Reader landing + deep link, reading page with margin
+  controls, Research, Graph, RAG Debug, Explorer) with shared `PageHeader`,
+  `EmptyState`, `ErrorNote`, `LoadingLine`; no backend or API contract changed.
+- Fixed the ⌘K palette crashing on open (`CommandDialog` was missing its
+  `cmdk` context) and dark-mode translation strips inheriting a solid tint.
+- Evidence: `npm run build`, 19/19 vitest, browser screenshots in
+  `docs/ui-redesign/screenshots/`; contract in `docs/ui-redesign/UI-SPEC.md`.
+
 ### Added — Phase 1 foundation gap closure (TASK-001, GSD plans 01-01…01-05, 2026-09-28)
 
 - Closed the cross-phase brownfield foundation record: plans 01-01, 01-02,

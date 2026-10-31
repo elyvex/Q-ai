@@ -1,251 +1,244 @@
-# UI Design Specification - Q-ai Research Workspace Redesign
+# UI Design Specification — Q-ai “Concordance”
 
-## 1. Design Philosophy
+Status: **implemented** (`web/src`). This is the contract every current and
+future Q-ai screen follows.
 
-**"Calm Authority"** - A scholarly research environment that conveys trustworthiness, precision, and intellectual depth. The interface should feel like a premium research tool (inspired by Linear, Raycast, Notion) while remaining distinctly appropriate for Quranic and Islamic scholarship.
+## 1. Visual direction
 
-Core principles:
-- **Provenance-first**: Every layer of content (canonical, translation, annotation, computed) is clearly distinguished
-- **Exactness**: Canonical text is never altered - UI must respect and highlight this
-- **Clarity over decoration**: Information density appropriate for research without clutter
-- **Arabic-native**: First-class support for Arabic script, RTL layouts, proper diacritics
-- **Local-first**: Subtle indicators of local workspace nature
-- **Keyboard-first**: Command palette and shortcuts where sensible
+**Concordance** is a working instrument, not a dashboard and not a book.
+The page is a sheet of porcelain; type does the work; one saturated accent marks
+the active instrument. A serif carries the written word (page titles, verse
+headings), Inter carries the interface, JetBrains Mono carries references,
+counts and raw output. Structure is drawn with hairlines and a margin column,
+not with floating cards.
 
-## 2. Visual Direction
+Three rules that decide most questions:
 
-Blend Template (1)'s polish + Template (2)'s domain appropriateness + Template (0)'s scholarly warmth.
+1. **The text is the interface.** No chrome competes with canonical Arabic.
+2. **One accent.** Deep indigo marks interactivity; provenance colours are the
+   only other chromatic information and they are always semantic.
+3. **Rules, not boxes.** Prefer a hairline and space to a bordered card. A card
+   is a surface for a control cluster, never for a list item.
 
-### Aesthetic Keywords
-- Scholarly, refined, authoritative
-- Clean surfaces with subtle depth
-- Warm neutrals with purposeful color accents
-- Restrained motion
-- High information density without feeling cramped
+## 2. References
 
-## 3. Color System — "Illuminated Codex"
+No template is the base. From `temp-inspire/` this pass keeps only ideas —
+provenance as layout vocabulary, a margin legend, one display size per page, a
+command surface — and rejects their shared left-sidebar/forest-green/parchment
+silhouette. Full analysis: `REFERENCE-ANALYSIS.md`.
 
-### Light Mode (warm parchment)
-```css
-/* Foundation — iron-gall ink on parchment */
---background: oklch(0.982 0.01 88);
---foreground: oklch(0.245 0.018 76);
---card: oklch(0.995 0.004 90);              /* vellum panel */
---card-foreground: oklch(0.245 0.018 76);
+## 3. Palette
 
-/* Interactive — ink buttons, teal focus */
---primary: oklch(0.265 0.02 76);
---primary-foreground: oklch(0.98 0.008 88);
---secondary: oklch(0.952 0.014 86);
---accent: oklch(0.945 0.02 86);
---muted: oklch(0.952 0.014 86);
---muted-foreground: oklch(0.52 0.02 80);
+Light — porcelain and ink:
 
-/* Borders & Inputs — hairlines */
---border: oklch(0.905 0.016 84);
---input: oklch(0.9 0.016 84);
---ring: oklch(0.5 0.07 168);
+| Token | Value | Role |
+|---|---|---|
+| `--background` | `oklch(0.985 0.0025 265)` | page ground |
+| `--foreground` | `oklch(0.205 0.012 265)` | primary text |
+| `--card` | `oklch(1 0 0)` | control surfaces, reading slab |
+| `--muted` | `oklch(0.966 0.0035 265)` | quiet fills, code chips |
+| `--muted-foreground` | `oklch(0.505 0.012 265)` | secondary text, metadata |
+| `--border` | `oklch(0.905 0.005 265)` | every hairline |
+| `--input` | `oklch(0.885 0.006 265)` | field stroke |
+| `--primary` | `oklch(0.478 0.199 266)` | the instrument accent (indigo) |
+| `--primary-foreground` | `oklch(0.99 0.002 265)` | text on accent |
+| `--accent` | `oklch(0.955 0.018 266)` | selected row / hover wash |
+| `--ring` | `oklch(0.55 0.17 266)` | focus ring |
+| `--destructive` | `oklch(0.545 0.2 27)` | failure only |
 
-/* Status */
---destructive: oklch(0.52 0.19 27);
+Dark — ink and chalk (not an inversion):
 
-/* The bound spine — the sidebar stays ink in both modes */
---sidebar: oklch(0.243 0.018 76);
---sidebar-foreground: oklch(0.925 0.012 84);
---sidebar-primary: oklch(0.78 0.12 85);     /* gold mark */
-```
+| Token | Value |
+|---|---|
+| `--background` | `oklch(0.158 0.008 265)` |
+| `--foreground` | `oklch(0.928 0.005 265)` |
+| `--card` | `oklch(0.192 0.009 265)` |
+| `--border` | `oklch(1 0 0 / 10%)` |
+| `--primary` | `oklch(0.705 0.152 266)` (lifted for contrast on dark) |
+| `--accent` | `oklch(0.262 0.035 266)` |
+| `--code-bg` | `oklch(0.135 0.008 265)` |
 
-### Provenance Colors (Critical — structural, not decorative)
-```css
-/* Canonical layer — teal-green */
---canon: oklch(0.5 0.103 168);
---canon-soft: oklch(0.955 0.028 168);
+### Provenance (semantic, never decorative)
 
-/* Translation layer — indigo */
---trans: oklch(0.45 0.112 262);
---trans-soft: oklch(0.953 0.02 262);
+| Layer | Light token | Meaning |
+|---|---|---|
+| Canonical | `--canon` `oklch(0.49 0.083 192)` verdigris | served verbatim |
+| Translation | `--trans` `oklch(0.51 0.108 312)` violet-ink | attributed, separate |
+| Annotation | `--annot` `oklch(0.575 0.108 68)` ochre | lexical / editorial notes |
+| Computed | `--comp` `oklch(0.525 0.13 355)` madder | derived or AI-generated |
 
-/* Annotation layer — amber */
---annot: oklch(0.55 0.117 60);
---annot-soft: oklch(0.968 0.033 78);
-
-/* Computed/Derived (AI) — violet */
---comp: oklch(0.5 0.14 300);
---comp-soft: oklch(0.956 0.023 300);
-
-/* Canonical ornament — gold (medallions, ticks, active segments) */
---gold: oklch(0.62 0.11 82);
---gold-soft: oklch(0.955 0.03 88);
-```
-
-### Dark Mode (warm charcoal)
-```css
---background: oklch(0.172 0.012 78);
---foreground: oklch(0.925 0.014 84);
---card: oklch(0.208 0.012 78);
---primary: oklch(0.92 0.012 85);
---border: oklch(1 0 0 / 9%);
---ring: oklch(0.68 0.08 168);
-/* Provenance values lifted one hue step: e.g. --canon: oklch(0.72 0.11 168),
-   --gold: oklch(0.8 0.12 85), --gold-soft: oklch(0.3 0.035 85). */
-```
-
-**Layer tokens (D-08/D-09):** `tokens/layers.css` defines the `:root`
-light defaults consumed by `.ayah-canonical` / `.ayah-translation` /
-`.ayah-annotation`. The `.dark` overrides for `--layer-*-fg/bg/accent` live
-**unlayered** in `index.css`: in the cascade, unlayered declarations outrank
-`@layer` rules regardless of source order, so the previous layered overrides
-never applied (canonical strips stayed white in dark mode).
+Each has a `*-soft` companion for the rare filled state. The layer contract in
+`tokens/layers.css` is unchanged: canonical text may only carry the canonical
+token; the layer backgrounds default to `transparent` so a translation is marked
+by an accent rule and label, not a tinted block.
 
 ## 4. Typography
 
-### Font Stack
 ```css
---font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
---font-heading: 'Inter', var(--font-sans);
---font-arabic: 'Amiri Quran', 'Amiri', 'Noto Naskh Arabic', 'Traditional Arabic', serif;
---font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+--font-serif:  "Newsreader Variable", Newsreader, "Iowan Old Style", Georgia, serif;
+--font-sans:   Inter, ui-sans-serif, system-ui, …;
+--font-arabic: Amiri, "Scheherazade New", "Noto Naskh Arabic", "Geeza Pro", serif;
+--font-mono:   "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 ```
 
-### Scale
-| Style | Size | Weight | Line Height | Letter Spacing |
-|-------|------|--------|-------------|----------------|
-| Display | 2.25rem - 2.5rem (36-40px) | 600-700 | 1.1-1.2 | -0.02em |
-| H1 | 1.875rem (30px) | 600 | 1.2 | -0.02em |
-| H2 | 1.5rem (24px) | 600 | 1.25 | -0.01em |
-| H3 | 1.25rem (20px) | 600 | 1.3 | -0.01em |
-| H4 | 1.125rem (18px) | 600 | 1.4 | -0.01em |
-| Body Large | 1rem (16px) | 400 | 1.7 | 0 |
-| Body | 0.875rem-0.9375rem (14-15px) | 400 | 1.6-1.7 | 0 |
-| Small | 0.8125rem (13px) | 400-500 | 1.5 | 0 |
-| Caption | 0.75rem (12px) | 500 | 1.5 | 0 |
-| Label/Micro | 0.6875rem (11px) | 600 | 1.4 | 0.08em (uppercase) |
+| Role | Class / size | Notes |
+|---|---|---|
+| Page title | `.display` 1.9 → 2.3 rem, weight 500, `-0.015em` | serif; one per page |
+| Section label | `.kicker` 0.625 rem mono, `0.14em`, uppercase | no ornament |
+| Lede | 0.875 rem / 1.6 | max 2xl measure |
+| Body | 0.875 rem | |
+| Data / reference | 0.6875–0.75 rem mono | tabular numerals |
+| Canonical Arabic | 1.75 rem mobile → 2.25 rem desktop, line-height 2.15–2.2 | Amiri, RTL, `lang="ar"` |
+| Translation | 0.9375 rem / 1.6 | left rule in `--trans` |
+| Numeral chip | `.chip` / `.medallion` 0.625–0.6875 rem mono | |
 
-### Arabic Typography
-- **Verse Text**: 1.75rem - 2.25rem, weight 400, line-height 2.0-2.3, RTL direction
-- **Word Tokens**: Interactive with generous padding, proper diacritics support
-- **Translations**: LTR, consistent with body text
+Newsreader carries titles and the wordmark only — never UI controls. No font
+size below 0.6 rem, and nothing is letter-spaced except mono caps.
 
-## 5. Spacing & Layout
+## 5. Spacing scale
 
-### Spacing Scale (4px base)
-0, 0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24 (in rem units)
+Tailwind 4 px base; the interface uses `2, 4, 6, 8, 10, 12, 16, 20, 24, 32, 40,
+48 px`. Section spacing is `mt-8` (32 px) after a page header; block spacing
+inside a section is `12–24 px`; page padding is `16 px` mobile, `24 px` tablet,
+`32 px` desktop.
 
-### Border Radius
-```css
---radius-sm: 0.375rem;   /* 6px */
---radius: 0.5rem;        /* 8px */
---radius-md: 0.625rem;   /* 10px */
---radius-lg: 0.75rem;    /* 12px */
---radius-xl: 1rem;       /* 16px */
---radius-2xl: 1.25rem;   /* 20px */
---radius-3xl: 1.5rem;    /* 24px */
-```
+## 6. Layout
 
-### Shadows
-```css
---shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.02);
---shadow: 0 1px 3px 0 rgb(0 0 0 / 0.03), 0 1px 2px -1px rgb(0 0 0 / 0.03);
---shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.04), 0 2px 4px -2px rgb(0 0 0 / 0.04);
---shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
-```
+- Shell: full-width 56 px top rail, content measured at `max-width: 86rem`
+  (`1376 px`), footer colophon pinned by a flex column.
+- Content lead measure: `max-w-2xl` for headers, `max-w-[86rem]` for workspaces.
+- Two-column workspaces: `lg:grid-cols-[13rem_minmax(0,1fr)]` (instrument index)
+  and `lg:grid-cols-[minmax(0,1fr)_16rem]` (margin column).
+- The margin column is the only place a `border-l` is used at desktop; on mobile
+  it follows the content in document order.
+- Reading page: text column + 16 rem margin (display controls, layer legend,
+  colophon note). Canonical slabs are full-column width so long verses breathe.
 
-### Layout
-- **Sidebar Width**: 256px (expanded), 48px icon rail (collapsed)
-- **Header Height**: 48px, sticky with translucent backdrop blur
-- **Content Max Width**: 1152px (max-w-6xl), generous 8/10-side padding
-- **Mobile Breakpoint**: 640px (sm visually densifies chrome), no separate nav page — sidebar folds to a sheet
+## 7. Navigation
 
-## 6. Application Shell
+Horizontal, because there are five destinations:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ [Sidebar] │ [Header: Breadcrumbs | Search (⌘K) | Actions]   │
-│           ├─────────────────────────────────────────────────┤
-│           │                                                   │
-│           │                 Main Content                     │
-│           │                                                   │
-└─────────────────────────────────────────────────────────────┘
-```
+- Left: 28 px indigo monogram (ق), `Q-ai` in Newsreader, “CONCORDANCE” in mono
+  caps from `lg`.
+- Links: 13 px, muted → ink on hover; the active route carries a 2 px indigo
+  rule inset from the link, `aria-current="page"`.
+- Right: command trigger (`Search ⌘K` from `sm`), theme toggle, and on `<md` a
+  menu button that expands an in-flow navigation panel (`aria-expanded`,
+  `aria-controls`).
+- Reader is active on `/` and on every `/read/*` deep link.
+- A skip link precedes the header.
 
-### Sidebar Structure
-**Groups:**
-1. **Qurʾān** (1.x) - Reader, Research, Knowledge Graph
-2. **Instruments** (2.x) - RAG Debug, API Explorer
+## 8. Components
 
-Items carry folio numbers (1.1, 2.1 …); "Reader" highlights only on a real
-`/read/` deep link.
+Bespoke atoms in `index.css`, composed in views:
 
-**Footer:** Local-first indicator with provenance note
+| Class | Use |
+|---|---|
+| `.kicker` | mono section eyebrow |
+| `.display` | serif page title |
+| `.sheet` | bordered control surface (rare) |
+| `.band` | ruled block that belongs to the page |
+| `.margin-note` | 12 px explanatory text in the margin column |
+| `.btn` `.btn-primary` `.btn-quiet` `.btn-sm` | actions, 32/26 px tall |
+| `.field` | every input / textarea |
+| `.seg` | segmented display-mode control |
+| `.chip` | mono reference / status chip |
+| `.prodot` | provenance dot |
+| `.medallion` | ruled verse index |
+| `.carbon` | raw transcript surface |
 
-### Header
-- Breadcrumbs
-- Command menu trigger (Search... ⌘K)
-- Theme toggle
-- Notifications (optional)
-- User/workspace context
+Shared React components: `PageHeader`, `EmptyState`, `ErrorNote`, `LoadingLine`,
+`AppShell` + `SiteHeader`, `CommandMenu`, `DisplayModeControl`, `AyahColumn`,
+`TranslationPanel`, `WordInspector`, `CitationCopy`.
 
-## 7. Component Standards — bespoke primitives
+## 9. Buttons and interaction states
 
-The pass-2 chrome is built on custom primitives in `index.css` (no generic
-card/badge shell):
+- Default: card surface, hairline, ink label. Hover raises to `--muted` and
+  `--input`; disabled drops to 50 %.
+- Primary: solid indigo with white label; hover mixes 12 % black. Exactly one
+  primary action per region (run, dispatch, open).
+- Quiet: transparent, muted label; used for icon-only header controls.
+- Focus: 2 px `--ring` outline at 2 px offset, always visible, never removed.
+- Pressed segments use the accent wash plus a 25 % accent border — no shadows.
 
-| Primitive | Role |
-|-----------|------|
-| `.kicker` | Eyebrow label — mono caps, gold tick before |
-| `.medallion` | Verse-number ring — gold border + inset halo, mono numeral |
-| `.plate` | Raised vellum panel for toolbars/consoles (shadow sparingly) |
-| `.toolbar` / `.seg` | Segmented selector band; active segments get a gold inset underline |
-| `.ibtn` (`.ibtn-primary`) | Compact ink/outlined action buttons |
-| `.chip` | Mono pill for references/versions (gold-soft) |
-| `.prodot` | 6px provenance dot, colored by layer |
+## 10. Forms
 
-Empty states: icon + mono hint + hint text — never a blank panel. Loading:
-gold pulse dot + "unrolling the page…" / "awaiting dispatch" copy.
+`.field` is 32 px tall, 5 px radius, 13 px text, card background, visible focus
+ring. Labels are `.kicker`; hints are 12 px muted. Validation errors are
+`role="alert"` in `--destructive` directly beneath the field (`aria-invalid`).
+JSON bodies and references use mono. Enter submits single-field forms; nothing
+submits implicitly on blur.
 
-## 8. Navigation & Routing
+## 11. Tables, lists, information
 
-Keep existing routes exactly:
-- `/` and `/read/{slug}@{version}/{s}:{a}` (+ `?citation=` deep links) - Reader
-- `/research` - Research workspace (9 lexical instruments)
-- `/graph` - Knowledge Graph (neighbors / path)
-- `/rag-debug` - RAG Debugging
-- `/explorer` - API Explorer
+- Search hits, graph edges and presets are ruled lists: 1 px dividers on a card
+  surface, 14–16 px padding, mono index or reference, content in service order.
+- No client-side sorting of API results; order is stated (“service order”).
+- Empty states are typed and named (`.kicker` label + one sentence); they never
+  render a blank panel. Absence is never disguised as data.
+- Counts are mono, tabular, zero-padded where they act as an index.
 
-May add routes if justified by existing functionality, but prefer enhancing existing views.
+## 12. Dialogs and overlays
 
-## 9. RTL/LTR Support
+Command palette: centred at one third, 8 px radius, 1 px border, dimmed backdrop
+(no glass). Items are 32 px rows with icon + label; groups use mono caps
+headings. The palette is the only overlay in the product; navigation and content
+stay in the page.
 
-- **Arabic content**: `dir="rtl" lang="ar"` on Arabic containers
-- **UI chrome**: `dir="ltr"` always
-- **Mixed content**: Handle at component level
-- **Fonts**: Ensure Arabic fonts load properly
-- **Text alignment**: `text-right` for Arabic, appropriate for translations
+## 13. Themes
 
-## 10. Accessibility
+`next-themes` with `class` strategy (`defaultTheme: system`, persisted in
+`localStorage`). Dark is designed separately: deeper card surfaces, lifted
+indigo, 10 % white borders, no shadow tricks. Provenance hues are lifted one
+step for legibility. The theme toggle lives in the top rail and announces its
+action.
 
-- Semantic HTML
-- ARIA labels where needed
-- Keyboard navigation
-- Focus visible states
-- Color contrast meets WCAG AA
-- Screen reader friendly
-- Respect `prefers-reduced-motion`
+## 14. Breakpoints
 
-## 11. Animation Principles
+| Width | Behaviour |
+|---|---|
+| `< 640` | single column; horizontal nav collapses to the menu panel; page padding 16 px; margin column follows content |
+| `640–767` | search pill appears, secondary metadata visible |
+| `768–1023` | horizontal nav appears; two-column only where content allows |
+| `≥ 1024` | margin columns and instrument indices become side rails; page padding 32 px |
+| `≥ 1280` | same grid at 86 rem measure |
 
-- **Subtle**: 150-300ms for most transitions
-- **Easing**: ease-out for entrances, ease-in for exits
-- **Purposeful**: Only animate to provide feedback or guide attention
-- **Respect preferences**: `prefers-reduced-motion` disables/reduces animations
-- **No gratuitous scroll animations**
+## 15. RTL / LTR and Arabic
 
-## 12. Implementation Priorities
+- Arabic is never mirrored by a global `dir`; the canonical element itself is
+  `dir="rtl" lang="ar"`, translations and metadata stay LTR.
+- Arabic keeps Amiri metrics: 2.15–2.2 line height, no letter-spacing, no
+  synthetic weights, Uthmani marks untouched.
+- Layout uses logical spacing (`gap`, `ps/pe` where directional) so a future
+  RTL locale does not need mirrored CSS.
+- Mixed content (reference + Arabic) is separated into distinct elements, never
+  bidi-reordered as one string.
 
-1. **Phase 1**: Design tokens, CSS variables, theme system
-2. **Phase 2**: Shell layout (sidebar, header, app structure)
-3. **Phase 3**: Core components (Button, Card, etc.)
-4. **Phase 4**: Navigation and routing updates
-5. **Phase 5**: Redesign existing views (Reader, Research, Graph, etc.)
-6. **Phase 6**: Polish, animations, responsive, dark mode
-7. **Phase 7**: Testing and refinement
+## 16. Accessibility
+
+- Landmarks: header/nav/main/footer; one `h1` per page; skip link first.
+- Active navigation uses `aria-current="page"`; toggles use `aria-expanded` /
+  `aria-controls`; mode buttons use `aria-pressed`.
+- Focus is always visible (2 px ring, 2 px offset); overlays rely on the dialog
+  primitive's focus trap and Escape handling.
+- Live regions: transcript output (`aria-live="polite"`), loading states
+  (`role="status"`), errors (`role="alert"`).
+- Contrast: body text ≥ 4.5:1 in both themes; provenance dots are always paired
+  with text labels, never colour alone.
+- Reduced motion removes transitions and animations globally.
+
+## 17. Motion
+
+120 ms colour/border transitions; no entrance animation, no parallax, no
+gradient drift. One pulse is permitted for an unresolved status dot. The
+interface should feel instant.
+
+## 18. Reuse strategy
+
+- Tokens live only in `index.css` (`@theme` + `:root` + `.dark`).
+- Repeated visual grammar becomes a CSS atom (`.kicker`, `.field`, `.btn`, …),
+  not a React wrapper.
+- Repeated page structure becomes a component (`PageHeader`, `EmptyState`).
+- A view never hard-codes a colour; it uses a token-backed utility or atom.
+- New pages start from `PageHeader` + one of the two workspace grids; new data
+  surfaces start from the ruled list, not from cards.

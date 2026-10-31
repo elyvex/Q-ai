@@ -1,51 +1,78 @@
-# UI Redesign Reference Analysis
+# Reference Analysis — `temp-inspire/`
 
-## Overview
+## Method
 
-This document compares the four AI-generated website templates in `temp-inspire/` against Q-ai's current web frontend and identifies the strongest patterns to adopt.
+The four generated sites were copied to a scratch directory (the originals are
+read-only) and each was installed and started with Vite on its own port. Where a
+site rendered, desktop screenshots were captured with Playwright; where it did
+not, the source was read instead. Q-ai was inspected at `web/` (Vite + React 19
++ Tailwind v4 + shadcn primitives).
 
-## Templates Inspected
-
-| Template | Approach | Notes |
+| Folder | Runtime | Evidence used |
 |---|---|---|
-| `complete-phase-13-roadmap/` | Emerald/forest greens, soft ambient gradients, card-based "command center", warm scholarly aesthetic. Custom icon set, lots of bespoke CSS. | Very strong atmosphere - feels like a research platform. Clean sidebar with grouped nav, brand identity, good use of color without being gaudy. |
-| `complete-phase-13-roadmap (1)/` | Slate/black professional, Framer Motion animations, polished shadcn-like component library, command palette, workspace switcher, mobile drawer. | Most "enterprise-grade" of the bunch. Strong component system (Button/IconButton/Modal/Toast/EmptyState/PageHeading etc.), good motion discipline, excellent UX patterns. Feels closest to Linear/Stripe quality. |
-| `complete-phase-13-roadmap (2)/` | Clean slate/gray with provenance color tokens (canonical green/translation blue/annotation amber/computed violet), hash-based routing, visited workflow tracking, glassy background orbs. | Most aligned with Q-ai's actual product needs - has provenance/layer system baked in, Arabic/Quran-specific concepts (Reader, Words, Isnad, Hadith/Tafsir), research workflow focus. Very relevant. |
-| `complete-phase-13-roadmap (3) 2/` | Near-identical structure to (2) with some variation. | Similar to (2), good for cross-checking patterns. |
+| `complete-phase-13-roadmap/` | renders | Desktop screenshot (Reader), `index.css` (6.6k lines), `App.tsx` |
+| `complete-phase-13-roadmap (1)/` | renders | Desktop screenshot (Overview), `index.css` (5.2k lines), 4 views |
+| `complete-phase-13-roadmap (2)/` | **crashes on mount** (`useEffect` returns a promise → React error) | `index.css` tokens, 16 views, 4 components (`Shell`, `Layers`, `Background`, `ui`) |
+| `complete-phase-13-roadmap (3) 2/` | **crashes on mount** (same bug) | near-identical to (2) |
 
-## Comparative Analysis
+The two crashes are developmental bugs in the references, not a blocker: their
+design language is fully legible from the CSS token block and the shell source.
 
-| Category | Winner | Rationale |
+## What each template actually is
+
+**`complete-phase-13-roadmap/` — “warm scholarly console”.**
+Forest-green rail (`#506747`), off-white `#fcfcfa`, DM Sans, a 230 px sidebar
+with a workspace switcher, and a reader that puts canonical Arabic, translation
+and notes in separate labelled blocks. Dense but calm. The canvas has generous
+margins and the reading column is deliberately narrow.
+
+**`complete-phase-13-roadmap (1)/` — “editorial overview”.**
+Same green family, but built around a landing-style Overview: large serif-feeling
+headline (“A space for deeper understanding.”), a “continue reading” hero plate,
+two-column path lists, and a search/prompt card. The most product-marketing of
+the four; the least instrument-like.
+
+**`complete-phase-13-roadmap (2)` / `(3) 2` — “provenance dashboard”.**
+Cool grey `#f5f6f8` canvas, white cards, Inter, and a well-defined provenance
+palette: canon `#047857`, translation `#2563eb`, annotation `#b45309`,
+computed `#7c3aed`. 16 views, hash routing, ambient background orbs, and
+shell-level mobile drawer. The most domain-aware information architecture.
+
+## Comparative read
+
+| Dimension | Strongest | Why |
 |---|---|---|
-| **Overall Visual Direction** | Template (1) + Template (0) blend | (1) has the most refined/premium feel; (0) has better "scholarly/research" warmth. (2) is most thematically appropriate for Quran research. |
-| **Application Shell** | Template (1) | Best-in-class shell - collapsible sidebar, mobile drawer with focus trap, command palette (⌘K), notifications, workspace switcher, help modal, toast system. Very polished. |
-| **Navigation** | Template (2) | Clean grouped navigation with clear sections (Quran/Research/Tools/Management), hash routing, logical organization for a research platform. More aligned with Q-ai's domain. |
-| **Typography** | Current Q-ai + Template (2) | Current uses Inter + Amiri Quran which is good for Arabic. Template (2) has proper font tokens including Arabic. Need to ensure strong Arabic rendering. |
-| **Information Hierarchy** | Template (1) | Excellent use of PageHeading, eyebrow labels, clear section structure, good content density control. |
-| **Component System** | Template (1) | Most complete and reusable component library - Button variants, IconButton, Badge, Tabs, Select, Modal, Toast, EmptyState, etc. Well-structured. |
-| **Data Presentation** | Template (2) | Has provenance/layer system (canon/trans/annot/comp) which matches Q-ai's "provenance-first" design philosophy perfectly. Tables, badges, color-coding for different content types. |
-| **Interaction Patterns** | Template (1) | Smooth animations (Framer Motion used tastefully), keyboard navigation, command palette, focus management, mobile gestures/responsive behavior. |
-| **Responsive Design** | Template (1) | Proper mobile breakpoint handling, drawer nav, responsive tables, good touch targets. |
-| **Color/Theming** | Template (0) | Sophisticated use of greens/earth tones feels scholarly and distinctive. Template (2)'s provenance colors are essential for Q-ai's domain. |
+| Atmosphere | (0) | The green + warm paper pairing reads as scholarship, not SaaS |
+| Shell discipline | (1) | Clear rail → header → workspace hierarchy and a real mobile drawer |
+| Domain vocabulary | (2)/(3) | Provenance layers are part of the layout grammar, not a legend afterthought |
+| Data density | (2)/(3) | Rows, chips and ruled sections handle text-heavy results well |
+| Typographic scale | (0)/(1) | Confident display sizes and quiet small caps |
+| Weaknesses | all | Every one is a **left-sidebar dashboard**; three share the same forest-green/cream mood; two do not run |
 
-## Selected Design Strategy
+## Why this pass does not use one as the base
 
-**Primary inspiration:** Blend of Template (1) [shell/UX/components/animations] + Template (2) [domain structure/provenance system/navigation for Quran research] + Template (0) [warm scholarly aesthetic/colors].
+The previous Q-ai pass had already drifted into that shared silhouette — ink
+sidebar, parchment canvas, gold rules, sidebar-grouped navigation. Blending more
+of the same would reproduce a look that the references already own. This pass
+therefore treats them as **evidence about the problem**, not as a template:
 
-**Key adoptions:**
-1. **Shell Architecture** (from 1): Collapsible sidebar with icon mode, mobile drawer with focus trap, command palette, site header with breadcrumbs/search/notifications/theme toggle
-2. **Navigation Structure** (from 2): Domain-appropriate grouping - Quran (Reader/Search/Words/Graph), Research (Hadith&Tafsir/Comparative Scripture/Projects/Agents), Tools & Data (RAG/Studio/Cite/Sources), System (Manage/Settings)
-3. **Provenance System** (from 2): Canonical/Translation/Annotation/Computed color tokens - critical for Q-ai's "exact text before interpretation" philosophy
-4. **Component Library** (from 1): Build out proper primitives (Button, Card, Badge, Tabs, Input, Select, Dialog/Modal, Tooltip, EmptyState, PageHeader)
-5. **Aesthetic** (from 0): Warmer, more scholarly feel with refined surfaces, subtle shadows, good spacing - less stark than pure black/white
-6. **Motion** (from 1): Tasteful Framer Motion animations, respect reduced motion preferences
+**Adopted (idea, re-expressed):**
 
-**What NOT to copy:** Template (0)'s overly custom icon system and verbose CSS - prefer lucide-react icons and cleaner approach. Avoid template (2)'s "orb" animated background which might be distracting for text-heavy reading.
+- Layered provenance as a structural vocabulary — but as hairline rules,
+  dots and mono labels instead of tinted cards (2/3).
+- Margin/legend column beside the primary text, so layer meaning is visible
+  while reading (0 + 2).
+- A real display scale with one hero size per page and mono metadata (0/1).
+- A command surface (⌘K) and a mobile drawer with proper focus behaviour (1).
 
-## Q-ai Specific Requirements
-- Must preserve Arabic text rendering (Amiri Quran/Noto Naskh Arabic)
-- Must support RTL/LTR properly
-- Must maintain provenance visibility
-- Must keep all existing routes functional
-- Must not break backend API integration
-- Dark mode support
+**Deliberately rejected:**
+
+- Left sidebar navigation for five destinations; it steals reading width and is
+  the references' most repeated trait.
+- Forest green, parchment, gold ornament, ambient gradient orbs.
+- Card-per-item layouts for verses and search hits.
+- Decorative KPI/landing hero compositions that imply features the API lacks.
+
+**Resulting direction:** a horizontal top rail, cool porcelain ground, one deep
+indigo instrument accent, serif for the written word, mono for references, and
+hairline structure. Documented in `UI-SPEC.md`.
