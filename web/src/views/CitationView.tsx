@@ -41,18 +41,26 @@ export default function CitationView({ citationId }: { citationId: string }) {
     }
   }, [citationId])
 
-  if (state.status === 'loading') return <p>verifying citation…</p>
+  if (state.status === 'loading')
+    return <p className="text-sm text-muted-foreground">verifying citation…</p>
   if (state.status === 'mismatch') {
     return (
-      <p role="alert">
+      <p
+        role="alert"
+        className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+      >
         citation mismatch — the stored quote does not match the canonical text: {state.detail}
       </p>
     )
   }
   return (
-    <section>
-      <p>verified at the exact source location</p>
-      <CitationCopy urn={state.urn} deepLink={state.deepLink} />
+    <section className="mt-4 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm dark:border-emerald-800 dark:bg-emerald-950/40">
+      <p className="font-medium text-emerald-700 dark:text-emerald-300">
+        verified at the exact source location
+      </p>
+      <div className="mt-2">
+        <CitationCopy urn={state.urn} deepLink={state.deepLink} />
+      </div>
     </section>
   )
 }
