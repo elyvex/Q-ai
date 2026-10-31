@@ -116,7 +116,7 @@ Reader screenshots use Playwright route mocks for `/api/v1/quran/ayahs/**` and
 `/api/v1/quran/citations/**` because the Rust engine is not running; search
 results are mocked for the same reason. Nothing was mocked in production code.
 
-## 8. Enrichment pass (2026-11-01, uncommitted at time of writing)
+## 8. Enrichment passes (2026-11-01)
 
 Recheck of the shipped pass found five small defects, fixed without changing
 any route, contract, or test:
@@ -139,6 +139,19 @@ Validation repeated: `npm run build` passes, 19/19 vitest, Playwright
 re-capture (reader light/dark/mobile, index, research) plus mode-switch and
 no-page-error checks.
 
+Follow-up cleanup, same constraints:
+
+- Dead-code sweep of `components/ui/`: 15 stock primitives with no importer
+  deleted (`sidebar`, `sheet`, `tooltip`, `sonner`, `avatar`, `badge`,
+  `breadcrumb`, `card`, `dropdown-menu`, `navigation-menu`, `select`, `table`,
+  `tabs`, `separator`, `skeleton`). Six remain, all in the command-dialog
+  chain (`button`, `command`, `dialog`, `input`, `input-group`, `textarea`).
+- `TooltipProvider` removed from `App.tsx` — it wrapped zero tooltips.
+- `@fontsource-variable/geist` removed from dependencies (no longer imported
+  by `index.css`).
+- Verified: build passes, 19/19 vitest, command palette + theme toggle
+  smoke-tested in Chrome with zero page errors.
+
 ## 7. Known limitations
 
 - The reader landing depends on a valid edition slug; the prefilled
@@ -147,5 +160,3 @@ no-page-error checks.
   content index endpoint to search yet.
 - Graph and RAG screens show their deliberate empty/sealed states without a
   running engine — by design, not a regression.
-- `components/ui/sidebar.tsx` remains in the tree unused; it can be deleted
-  when no future feature needs the primitive.
