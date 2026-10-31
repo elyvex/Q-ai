@@ -3,8 +3,6 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from 'sonner'
 import { ThemeProvider } from 'next-themes'
 import Router from './router'
-import './tokens/layers.css'
-import './tokens/themes.css'
 import './index.css'
 
 // Q-ai Research Workspace
