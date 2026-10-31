@@ -1,95 +1,103 @@
-# UI Redesign Implementation Report
+# UI Redesign Implementation Report — pass 2 ("Illuminated Codex")
 
-## Summary
-Completely redesigned the Q-ai web frontend with a professional, scholarly research-focused interface. The redesign blends the best elements from all four reference templates while maintaining full compatibility with the existing Rust backend.
+Rebuilt after the first pass was rejected as template-cloned: pass 1 leaned on
+stock shadcn surface patterns and flattened real view functionality into
+placeholders. Pass 2 is a bespoke design language with every original
+capability restored.
 
-## What Was Redesigned
+## Design language: Illuminated Codex
 
-### Design System
-- **New color palette**: Warm neutrals with sophisticated slate primary colors, plus provenance-specific colors (canonical green, translation blue, annotation amber, computed violet)
-- **Typography**: Inter for UI, Amiri/Noto Naskh Arabic for Quranic text, JetBrains Mono for code
-- **Design tokens**: Semantic CSS variables for light/dark modes with provenance colors
-- **Spacing & layout**: Consistent 4px grid system, refined border radius and shadows
+- Warm parchment light theme (`oklch` warm-hue surfaces), warm-charcoal dark
+  theme; **ink-dark sidebar in both modes** (the bound spine).
+- Gold canonical accents: verse-number **medallions**, `.kicker` eyebrows with
+  gold tick, gold-inset active segments.
+- Hairline borders, vellum `.plate` panels, editorial one/two-column layouts —
+  no stock gray-canvas white-card grid.
+- Typography: Inter (UI), **Amiri** for canonical Arabic, Noto Naskh Arabic
+  fallback, JetBrains Mono for references/edges.
+- Provenance tokens are structural: canon (teal-green) = canonical layer,
+  trans (indigo) = translations, annot (amber) = annotations/alerts,
+  comp (violet) = computed data.
 
-### Application Shell
-- **New sidebar navigation**: Grouped by Quran, Data & Tools with clean icons and labels
-- **Enhanced header**: Breadcrumbs, command palette trigger (⌘K), responsive design
-- **Command palette**: Quick navigation across all views
-- **Improved layout**: Better spacing, max-width constraints, responsive padding
+## Bespoke primitives (`src/index.css`)
 
-### Views Redesigned
-- **ReadingView**: Cleaner card-based layout, provenance badges, better Arabic text presentation, improved translation display modes
-- **ResearchView**: Card-based navigation to research features with status badges
-- **GraphView**: Professional placeholder with clear messaging
-- **RagDebugView**: Developer tool styling
-- **ExplorerView**: API explorer with consistent styling
+`.kicker`, `.medallion`, `.plate`, `.toolbar`/`.seg`, `.ibtn` (+ primary),
+`.chip`, `.prodot`, `.rule-line` — token-driven, light/dark aware. `legacy.css`
+was **deleted** (conflicting global styles, largely unused); its import in
+`App.tsx` removed. Fonts and layer tokens now load through `index.css`.
 
-### Components
-- **New UI components**: Card, Badge (with provenance variants)
-- **Enhanced existing**: Sidebar, header, app shell
-- **Theme support**: next-themes integration with system preference detection
+## Functionality restored (was flattened in pass 1)
 
-## Design Influence
-- **Template (1)** - Primary influence on shell architecture, component patterns, UX polish, and overall sophistication
-- **Template (2)/(3)** - Influenced navigation structure and provenance color system (critical for Q-ai's domain)
-- **Template (0)** - Influenced warm scholarly aesthetic and overall tone
+- **ResearchView** — all 9 instruments wired to the typed client: `search`,
+  `quran.root`, `quran.lemma`, `family`, root/lemma `frequency`,
+  `distribution`, `cooccurrence`. Hits render in service-returned order; an
+  explicit empty state replaces blank panels.
+- **GraphView** — live *neighbors* and *path* queries against
+  `graphNeighbors`/`graphPath`; frozen-payload lines and ADR-0217 truncation
+  banner (`truncated: <reason>`) preserved verbatim.
+- **RagDebugView** — typed unavailability (D-11) kept as a deliberate "sealed
+  vault" panel; text matches `/not configured|unavailable/i` with zero
+  `.rag-result` elements.
+- **ExplorerView** — all 7 request presets, method toggling, editable path +
+  JSON body, raw status transcript, verbatim failures.
+- **CitationView** — server-side verification banner reading
+  "verified at the exact source location", URN/deep-link echoed verbatim
+  (`[data-urn]`, `[data-deep-link]`), copy control.
+- **ReadingView** — byte-exact canonical column (`.ayah-unit` /
+  `.ayah-canonical`, `[dir="rtl"][lang="ar"]`), three translation modes ×
+  three inspector modes via `[data-translation-mode]` /
+  `[data-inspector-mode]`, gold medallions, empty-translation notice.
+- **Router** — routes, `parseReadPath`, `parseCitationId`, engine-failed-
+  closed alert, citation deep-link wiring unchanged.
 
-## Skills Used
-- Manual design analysis and implementation
-- CSS/Tailwind v4 for styling
-- shadcn/ui component patterns
-- React + TypeScript architecture
+Contrast fix found during screenshot QA: the `.dark` layer-token overrides
+(`--layer-canonical-*`, `--layer-translation-*`, `--layer-annotation-*`) were
+inside `@layer components` and lost to the unlayered `:root` defaults in
+`tokens/layers.css`, leaving dark-mode canonical strips white. They now live
+unlayered in `index.css` (cascade: unlayered beats layered regardless of
+order).
 
-## New/Modified Components
-**New files:**
-- `src/components/ui/badge.tsx` - Badge component with provenance variants
-- `src/components/ui/card.tsx` - Card component system
-- `src/components/command/command-menu.tsx` - Command palette
+## Shell
 
-**Modified files:**
-- `src/index.css` - Complete design token overhaul
-- `src/App.tsx` - Added ThemeProvider
-- `src/components/layout/app-shell.tsx` - Simplified, cleaner layout
-- `src/components/layout/site-header.tsx` - Redesigned with breadcrumbs and search
-- `src/components/navigation/app-sidebar.tsx` - New navigation structure
-- `src/views/ReadingView.tsx` - Major redesign
-- `src/views/ResearchView.tsx` - Major redesign
-- `src/views/GraphView.tsx` - Redesigned
-- `src/views/RagDebugView.tsx` - Redesigned
-- `src/views/ExplorerView.tsx` - Redesigned
-- `src/views/GraphView.test.tsx` - Updated for new API
-- `src/views/ResearchView.test.tsx` - Updated for new API
+shadcn `ui/sidebar` is kept only for collapse/rail/mobile mechanics, restyled
+through sidebar tokens; nav is folio-numbered (1.1, 2.1 …) with a "Local-first"
+footer note. Header: breadcrumb (`section ⁄ page` + reference chip), ⌘K
+command dialog, light/dark toggle (next-themes, class dark, localStorage
+`theme`).
+
+## Build & test results
+
+- `npm run build` — success (chunk-size warning only, pre-existing).
+- `npx vitest run` — **6 files / 19 tests passing**, covering byte-exact
+  canonical rendering + RTL, all translation/inspector modes, service-order
+  hits, explicit empty states, truncation banner, URN/deep-link verbatim echo,
+  citation id parsing, and RAG unavailability contract.
+- Zero `.rag-result` at rest; sticky test contracts unchanged.
+
+## Screenshots (`docs/ui-redesign/screenshots/`)
+
+- Index / research / graph / rag-debug / explorer / reader-deep-link — light
+  **and** dark (12).
+- Mobile (390×844): index / research / explorer (3).
+- `reader-live-{light,dark}.png` — reader rendered from a **mocked API**
+  (Playwright `page.route` on `/api/v1/quran/ayahs/**` and
+  `/api/v1/quran/citations/**`): shows real verse typography (Amiri, RTL),
+  medallions, inline translations, canonical-layer labels, and the verified
+  citation banner end-to-end.
+
+Captured with Python Playwright + system Chrome against `vite preview`
+(port 4199).
 
 ## Dependencies
-**Added:**
-- `framer-motion` ^12.x
-- `@fontsource/inter`, `@fontsource/jetbrains-mono`, `@fontsource/amiri`, `@fontsource/noto-naskh-arabic`
 
-## Build & Test Results
-- **TypeScript**: No errors (only pre-existing baseUrl deprecation warning)
-- **Build**: Successful (`npm run build`) - 496KB JS bundle, 158KB CSS
-- **Tests**: Updated to match new component APIs
+- Added in pass 1 and kept: `@fontsource` inter / jetbrains-mono / amiri /
+  noto-naskh-arabic; `framer-motion` installed and unused — safe to remove.
+- Dropped in pass 2: `legacy.css`.
 
-## Features Preserved
-- All existing routes and functionality intact
-- Backend API integration unchanged
-- RTL/Arabic text support maintained and enhanced
-- Provenance tracking conceptually reinforced
-- All existing components (AyahColumn, TranslationPanel, etc.) still used
+## Known limitations
 
-## Visual Improvements
-- More professional, polished appearance
-- Better visual hierarchy and information density
-- Consistent spacing and typography
-- Enhanced Arabic text rendering
-- Clear provenance indicators
-- Improved responsive design
-- Dark mode support
-- Smooth, tasteful animations ready
-
-## Known Limitations
-- Command palette is functional but could be expanded with more commands
-- Some views are placeholders (Graph, RAG Debug, API Explorer) as they were before
-- Theme toggle not exposed in UI yet (system preference used by default)
-
-The redesign successfully transforms Q-ai from a utilitarian interface into a premium, scholarly research platform while maintaining full backward compatibility.
+- Command dialog supports navigation + one sample deep link (search-a-index
+  wiring awaits an index endpoint).
+- Graph/RAG panels render frozen/absent states without a running backend —
+  by design; live queries fire when an engine is reachable.
+- framer-motion remains an unused dependency.

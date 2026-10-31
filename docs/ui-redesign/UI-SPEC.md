@@ -23,75 +23,79 @@ Blend Template (1)'s polish + Template (2)'s domain appropriateness + Template (
 - Restrained motion
 - High information density without feeling cramped
 
-## 3. Color System
+## 3. Color System — "Illuminated Codex"
 
-### Light Mode
+### Light Mode (warm parchment)
 ```css
-/* Foundation */
---background: oklch(0.985 0.002 90);      /* Warm off-white */
---foreground: oklch(0.18 0.01 250);       /* Near-black */
---card: oklch(1 0 0);                     /* Pure white */
---card-foreground: oklch(0.18 0.01 250);
---popover: oklch(1 0 0);
---popover-foreground: oklch(0.18 0.01 250);
+/* Foundation — iron-gall ink on parchment */
+--background: oklch(0.982 0.01 88);
+--foreground: oklch(0.245 0.018 76);
+--card: oklch(0.995 0.004 90);              /* vellum panel */
+--card-foreground: oklch(0.245 0.018 76);
 
-/* Interactive */
---primary: oklch(0.25 0.02 250);         /* Deep slate */
---primary-foreground: oklch(0.98 0 0);
---secondary: oklch(0.96 0.005 90);
---secondary-foreground: oklch(0.25 0.02 250);
---accent: oklch(0.96 0.008 90);
---accent-foreground: oklch(0.25 0.02 250);
+/* Interactive — ink buttons, teal focus */
+--primary: oklch(0.265 0.02 76);
+--primary-foreground: oklch(0.98 0.008 88);
+--secondary: oklch(0.952 0.014 86);
+--accent: oklch(0.945 0.02 86);
+--muted: oklch(0.952 0.014 86);
+--muted-foreground: oklch(0.52 0.02 80);
 
-/* Muted */
---muted: oklch(0.96 0.005 90);
---muted-foreground: oklch(0.5 0.01 250);
-
-/* Borders & Inputs */
---border: oklch(0.9 0.005 90);
---input: oklch(0.9 0.005 90);
---ring: oklch(0.4 0.02 250);
+/* Borders & Inputs — hairlines */
+--border: oklch(0.905 0.016 84);
+--input: oklch(0.9 0.016 84);
+--ring: oklch(0.5 0.07 168);
 
 /* Status */
---destructive: oklch(0.55 0.22 25);
+--destructive: oklch(0.52 0.19 27);
+
+/* The bound spine — the sidebar stays ink in both modes */
+--sidebar: oklch(0.243 0.018 76);
+--sidebar-foreground: oklch(0.925 0.012 84);
+--sidebar-primary: oklch(0.78 0.12 85);     /* gold mark */
 ```
 
-### Provenance Colors (Critical)
+### Provenance Colors (Critical — structural, not decorative)
 ```css
-/* Canonical - authenticated Arabic text */
---provenance-canon: oklch(0.45 0.12 160);
---provenance-canon-bg: oklch(0.98 0.02 160);
---provenance-canon-border: oklch(0.9 0.05 160);
+/* Canonical layer — teal-green */
+--canon: oklch(0.5 0.103 168);
+--canon-soft: oklch(0.955 0.028 168);
 
-/* Translation */
---provenance-trans: oklch(0.5 0.15 250);
---provenance-trans-bg: oklch(0.98 0.015 250);
---provenance-trans-border: oklch(0.9 0.04 250);
+/* Translation layer — indigo */
+--trans: oklch(0.45 0.112 262);
+--trans-soft: oklch(0.953 0.02 262);
 
-/* Annotation */
---provenance-annot: oklch(0.55 0.15 60);
---provenance-annot-bg: oklch(0.99 0.02 60);
---provenance-annot-border: oklch(0.92 0.05 60);
+/* Annotation layer — amber */
+--annot: oklch(0.55 0.117 60);
+--annot-soft: oklch(0.968 0.033 78);
 
-/* Computed/Derived (AI) */
---provenance-comp: oklch(0.5 0.18 290);
---provenance-comp-bg: oklch(0.98 0.015 290);
---provenance-comp-border: oklch(0.9 0.04 290);
+/* Computed/Derived (AI) — violet */
+--comp: oklch(0.5 0.14 300);
+--comp-soft: oklch(0.956 0.023 300);
+
+/* Canonical ornament — gold (medallions, ticks, active segments) */
+--gold: oklch(0.62 0.11 82);
+--gold-soft: oklch(0.955 0.03 88);
 ```
 
-### Dark Mode
+### Dark Mode (warm charcoal)
 ```css
---background: oklch(0.12 0.01 250);
---foreground: oklch(0.95 0.005 90);
---card: oklch(0.16 0.01 250);
---card-foreground: oklch(0.95 0.005 90);
---primary: oklch(0.9 0.005 90);
---primary-foreground: oklch(0.18 0.01 250);
---border: oklch(1 0 0 / 10%);
---muted: oklch(0.22 0.01 250);
---muted-foreground: oklch(0.65 0.01 250);
-/* Provenance colors adjusted for dark mode with appropriate opacity */
+--background: oklch(0.172 0.012 78);
+--foreground: oklch(0.925 0.014 84);
+--card: oklch(0.208 0.012 78);
+--primary: oklch(0.92 0.012 85);
+--border: oklch(1 0 0 / 9%);
+--ring: oklch(0.68 0.08 168);
+/* Provenance values lifted one hue step: e.g. --canon: oklch(0.72 0.11 168),
+   --gold: oklch(0.8 0.12 85), --gold-soft: oklch(0.3 0.035 85). */
 ```
+
+**Layer tokens (D-08/D-09):** `tokens/layers.css` defines the `:root`
+light defaults consumed by `.ayah-canonical` / `.ayah-translation` /
+`.ayah-annotation`. The `.dark` overrides for `--layer-*-fg/bg/accent` live
+**unlayered** in `index.css`: in the cascade, unlayered declarations outrank
+`@layer` rules regardless of source order, so the previous layered overrides
+never applied (canonical strips stayed white in dark mode).
 
 ## 4. Typography
 
@@ -147,10 +151,10 @@ Blend Template (1)'s polish + Template (2)'s domain appropriateness + Template (
 ```
 
 ### Layout
-- **Sidebar Width**: 256px (expanded), 64px (collapsed icon mode)
-- **Header Height**: 64px
-- **Content Max Width**: 1200px (default), 1400px (for data-heavy views), full width for reader
-- **Mobile Breakpoint**: 768px (md), 1024px (lg)
+- **Sidebar Width**: 256px (expanded), 48px icon rail (collapsed)
+- **Header Height**: 48px, sticky with translucent backdrop blur
+- **Content Max Width**: 1152px (max-w-6xl), generous 8/10-side padding
+- **Mobile Breakpoint**: 640px (sm visually densifies chrome), no separate nav page — sidebar folds to a sheet
 
 ## 6. Application Shell
 
@@ -166,10 +170,11 @@ Blend Template (1)'s polish + Template (2)'s domain appropriateness + Template (
 
 ### Sidebar Structure
 **Groups:**
-1. **Quran** - Reader, Search, Words/Lexicon, Graph
-2. **Research** - Hadith & Tafsir, Comparative Scripture, RAG Projects, Research Agents
-3. **Data & Tools** - Sources & Library, Tools & Workflows, API Explorer
-4. **System** - Administration, Settings
+1. **Qurʾān** (1.x) - Reader, Research, Knowledge Graph
+2. **Instruments** (2.x) - RAG Debug, API Explorer
+
+Items carry folio numbers (1.1, 2.1 …); "Reader" highlights only on a real
+`/read/` deep link.
 
 **Footer:** Local-first indicator with provenance note
 
@@ -180,41 +185,30 @@ Blend Template (1)'s polish + Template (2)'s domain appropriateness + Template (
 - Notifications (optional)
 - User/workspace context
 
-## 7. Component Standards
+## 7. Component Standards — bespoke primitives
 
-### Button Variants
-- **default/primary**: Solid background, high emphasis
-- **secondary**: Outlined or subtle background
-- **ghost**: Transparent, hover background
-- **outline**: Border only
-- **destructive**: For dangerous actions
+The pass-2 chrome is built on custom primitives in `index.css` (no generic
+card/badge shell):
 
-### Cards
-- Default: `border bg-card rounded-xl shadow-sm p-6`
-- Interactive: hover states with subtle shadow increase
-- With header: CardHeader, CardTitle, CardDescription, CardContent, CardFooter
+| Primitive | Role |
+|-----------|------|
+| `.kicker` | Eyebrow label — mono caps, gold tick before |
+| `.medallion` | Verse-number ring — gold border + inset halo, mono numeral |
+| `.plate` | Raised vellum panel for toolbars/consoles (shadow sparingly) |
+| `.toolbar` / `.seg` | Segmented selector band; active segments get a gold inset underline |
+| `.ibtn` (`.ibtn-primary`) | Compact ink/outlined action buttons |
+| `.chip` | Mono pill for references/versions (gold-soft) |
+| `.prodot` | 6px provenance dot, colored by layer |
 
-### Badges (Provenance)
-```tsx
-<Badge variant="canon">Canonical</Badge>      // green
-<Badge variant="trans">Translation</Badge>   // blue  
-<Badge variant="annot">Annotation</Badge>    // amber
-<Badge variant="comp">Computed</Badge>       // violet
-```
-
-### Empty States
-Consistent empty state component with icon, title, description, action button
-
-### Loading States
-Skeleton loaders, spinners where appropriate
+Empty states: icon + mono hint + hint text — never a blank panel. Loading:
+gold pulse dot + "unrolling the page…" / "awaiting dispatch" copy.
 
 ## 8. Navigation & Routing
 
-Keep existing routes but enhance navigation:
-- `/` or `/read/...` - Reader (Quran reading)
-- `/search` - Search & Discovery
-- `/research` - Research workspace
-- `/graph` - Knowledge Graph
+Keep existing routes exactly:
+- `/` and `/read/{slug}@{version}/{s}:{a}` (+ `?citation=` deep links) - Reader
+- `/research` - Research workspace (9 lexical instruments)
+- `/graph` - Knowledge Graph (neighbors / path)
 - `/rag-debug` - RAG Debugging
 - `/explorer` - API Explorer
 
