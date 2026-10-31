@@ -113,6 +113,8 @@ inside a section is `12–24 px`; page padding is `16 px` mobile, `24 px` tablet
   it follows the content in document order.
 - Reading page: text column + 16 rem margin (display controls, layer legend,
   colophon note). Canonical slabs are full-column width so long verses breathe.
+- Reader landing: deep-link form + workspace directory listing the four real
+  sibling routes — no invented destinations.
 
 ## 7. Navigation
 
@@ -148,8 +150,11 @@ Bespoke atoms in `index.css`, composed in views:
 | `.carbon` | raw transcript surface |
 
 Shared React components: `PageHeader`, `EmptyState`, `ErrorNote`, `LoadingLine`,
-`AppShell` + `SiteHeader`, `CommandMenu`, `DisplayModeControl`, `AyahColumn`,
-`TranslationPanel`, `WordInspector`, `CitationCopy`.
+`AppShell` + `SiteHeader`, `CommandMenu`, `DisplayModeControl` (owns the
+`TranslationMode` / `InspectorMode` types), `AyahColumn`, `TranslationPanel`,
+`CitationCopy`. There is no word-token component: the ayah endpoint ships no
+word payload, so the reader shows an honest inspector standby instead of a
+placeholder token.
 
 ## 9. Buttons and interaction states
 

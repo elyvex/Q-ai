@@ -6,8 +6,10 @@ import { useState } from 'react'
 import AyahColumn from '../components/AyahColumn'
 import { PageHeader } from '../components/layout/page-header'
 import TranslationPanel from '../components/TranslationPanel'
-import WordInspector, { type InspectorMode } from '../components/WordInspector'
-import DisplayModeControl, { type TranslationMode } from '../display/DisplayModeControl'
+import DisplayModeControl, {
+  type InspectorMode,
+  type TranslationMode,
+} from '../display/DisplayModeControl'
 import type { AyahView } from '../api/client'
 
 function refTail(reference: string): string {
@@ -131,11 +133,29 @@ export default function ReadingView({
                   </details>
                 )}
 
-                <div className="ayah-annotation-row mt-4 flex items-center gap-2.5" dir="ltr">
+                {/* Lexical inspector standby: no word payload ships with the
+                    ayah endpoint, so nothing here pretends to inspect a token.
+                    The three modes still frame the standby differently, as the
+                    contract requires — per-token notes render once the engine
+                    returns word data. */}
+                <div
+                  className="ayah-annotation-row mt-4"
+                  dir="ltr"
+                  data-inspector-mode={inspectorMode}
+                >
                   <span className="font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground/60">
                     note
                   </span>
-                  <WordInspector word={{ surface: '•' }} mode={inspectorMode} />
+                  {inspectorMode === 'panel' ? (
+                    <p className="mt-1.5 rounded-md border px-3 py-2 text-[0.75rem] leading-relaxed text-muted-foreground">
+                      lexical notes will dock here, per token, when the engine returns word data
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-[0.75rem] leading-relaxed text-muted-foreground">
+                      lexical notes attach per token when the engine returns word data
+                      {inspectorMode === 'pin' && ' — pin to keep'}
+                    </p>
+                  )}
                 </div>
               </article>
             ))}

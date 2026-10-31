@@ -131,6 +131,30 @@ export default function Router({ path }: { path: string }) {
             </p>
           </div>
         </div>
+        <nav aria-label="Workspace directory" className="mt-10">
+          <p className="kicker mb-2">Directory</p>
+          <ul className="divide-y overflow-hidden rounded-lg border bg-card">
+            {[
+              { path: '/research', label: 'Research', note: 'nine lexical instruments over the typed engine' },
+              { path: '/graph', label: 'Graph', note: 'neighbors and paths from the frozen payload' },
+              { path: '/rag-debug', label: 'RAG Debug', note: 'sealed vault — retrieval lands in Phase 8' },
+              { path: '/explorer', label: 'Explorer', note: 'dispatch any request against the local engine' },
+            ].map((item) => (
+              <li key={item.path}>
+                <a
+                  href={item.path}
+                  className="flex items-baseline gap-4 px-4 py-3 transition-colors hover:bg-muted/40"
+                >
+                  <span className="text-[0.8125rem] font-medium">{item.label}</span>
+                  <span className="truncate text-[0.75rem] text-muted-foreground">{item.note}</span>
+                  <span className="ml-auto font-mono text-[0.65rem] text-muted-foreground/60" aria-hidden="true">
+                    →
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
       </section>
     )
   } else if (error !== null) {

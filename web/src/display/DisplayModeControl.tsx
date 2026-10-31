@@ -1,6 +1,6 @@
 // Display-mode control: three translation modes × three inspector modes.
 // Every mode renders a distinct layout in ReadingView (D-05/D-06/D-07).
-import type { InspectorMode } from '../components/WordInspector'
+export type InspectorMode = 'popover' | 'panel' | 'pin'
 
 export type TranslationMode = 'inline' | 'side-by-side' | 'side-panel'
 
@@ -25,14 +25,15 @@ function ModeRow({
       <span className="px-0.5 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground/70">
         {label}
       </span>
-      <div className="flex flex-wrap gap-0.5">
+      <div className="grid grid-cols-3 gap-0.5">
         {modes.map((mode) => (
           <button
             key={mode}
             type="button"
-            className="seg flex-1"
+            className="seg min-w-0 truncate px-1 text-[0.7rem]"
             aria-pressed={active === mode}
             aria-label={`${namePrefix}${mode}`}
+            title={mode}
             onClick={() => onSelect(mode)}
           >
             {mode}

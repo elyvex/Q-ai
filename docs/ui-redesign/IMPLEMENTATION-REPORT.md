@@ -116,6 +116,29 @@ Reader screenshots use Playwright route mocks for `/api/v1/quran/ayahs/**` and
 `/api/v1/quran/citations/**` because the Rust engine is not running; search
 results are mocked for the same reason. Nothing was mocked in production code.
 
+## 8. Enrichment pass (2026-11-01, uncommitted at time of writing)
+
+Recheck of the shipped pass found five small defects, fixed without changing
+any route, contract, or test:
+
+- Display-mode segments wrapped mid-word in the 16 rem margin (`side- /
+  by-side`). The mode rows are now 3-column grids with truncated labels;
+  visible labels and `aria-label`s are unchanged.
+- The reader rendered a fake `•` token through `WordInspector` with no word
+  data behind it. Replaced by an honest inspector standby (inline in
+  popover/pin, boxed in panel); `components/WordInspector.tsx` deleted and the
+  `InspectorMode` type moved into `DisplayModeControl`, its owner.
+- The citation banner's filled mint header fought the palette; it is now a
+  plain ruled card with the canon accent kept on the label only.
+- The research margin note tripled the query hint (placeholder + standby +
+  margin); it now states the keyboard contract instead.
+- The reader landing is no longer half-empty: a directory lists the four real
+  sibling routes with one-line descriptions.
+
+Validation repeated: `npm run build` passes, 19/19 vitest, Playwright
+re-capture (reader light/dark/mobile, index, research) plus mode-switch and
+no-page-error checks.
+
 ## 7. Known limitations
 
 - The reader landing depends on a valid edition slug; the prefilled

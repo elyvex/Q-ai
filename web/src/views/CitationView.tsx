@@ -70,14 +70,14 @@ export default function CitationView({ citationId }: { citationId: string }) {
   }
 
   return (
-    <aside className="mt-6 overflow-hidden rounded-lg border border-canon/35">
-      <div className="flex items-center gap-2 border-b border-canon/20 bg-canon-soft px-4 py-2.5">
+    <aside className="mt-6 overflow-hidden rounded-lg border">
+      <div className="flex items-center gap-2 border-b px-4 py-2.5">
         <ShieldCheck className="size-3.5 text-canon" aria-hidden="true" />
         <p className="font-mono text-[0.625rem] uppercase tracking-[0.14em] text-canon">
           verified at the exact source location
         </p>
       </div>
-      <div className="px-4 py-3">
+      <div className="bg-card px-4 py-3">
         <CitationCopy urn={state.urn} deepLink={state.deepLink} />
       </div>
     </aside>

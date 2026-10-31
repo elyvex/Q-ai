@@ -181,7 +181,9 @@ export default function ResearchView({
               </button>
             ))}
           </div>
-          <p className="margin-note mt-4 hidden border-t pt-3 lg:block">{current.hint}.</p>
+          <p className="margin-note mt-4 hidden border-t pt-3 lg:block">
+            Enter runs the instrument · findings keep service order.
+          </p>
         </nav>
 
         <div className="min-w-0">
