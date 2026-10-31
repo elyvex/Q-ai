@@ -2,16 +2,20 @@
  * keeps canonical text, translations, and annotations structurally
  * distinct. Components never hard-code colours — they use these tokens.
  * Canonical text lives ONLY inside `--layer-canonical-*`; a translation
- * never receives a canonical token. */
+ * never receives a canonical token.
+ *
+ * Backgrounds resolve to `transparent` by default: the Concordance layout
+ * separates layers with rules, labels and accent bars rather than tinted
+ * cards. Consumers that need a wash can use the *-bg tokens explicitly. */
 
 :root {
-  --layer-canonical-fg: #1b1b1f;
-  --layer-canonical-bg: #ffffff;
-  --layer-canonical-accent: #0f766e;
-  --layer-translation-fg: #334155;
-  --layer-translation-bg: #f1f5f9;
-  --layer-annotation-fg: #7c2d12;
-  --layer-annotation-bg: #fff7ed;
+  --layer-canonical-fg: oklch(0.19 0.012 265);
+  --layer-canonical-bg: transparent;
+  --layer-canonical-accent: oklch(0.49 0.083 192);
+  --layer-translation-fg: oklch(0.38 0.012 265);
+  --layer-translation-bg: transparent;
+  --layer-annotation-fg: oklch(0.5 0.1 68);
+  --layer-annotation-bg: oklch(0.973 0.028 78);
   --layer-font-arabic: 'Amiri', 'Scheherazade New', 'Noto Naskh Arabic', 'Geeza Pro', serif;
 }
 

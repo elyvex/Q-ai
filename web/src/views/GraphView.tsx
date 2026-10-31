@@ -2,7 +2,7 @@
 // truncation (ADR-0217). A truncated payload is never rendered as absence.
 import { useState } from 'react'
 import { Loader2, Network } from 'lucide-react'
-import PageHeader from '../components/layout/page-header'
+import { PageHeader } from '../components/layout/page-header'
 import { EmptyState, ErrorNote } from '../components/states'
 import { graphNeighbors, graphPath } from '../api/client'
 

@@ -7,6 +7,42 @@ export type TranslationMode = 'inline' | 'side-by-side' | 'side-panel'
 const TRANSLATION_MODES: TranslationMode[] = ['inline', 'side-by-side', 'side-panel']
 const INSPECTOR_MODES: InspectorMode[] = ['popover', 'panel', 'pin']
 
+function ModeRow({
+  label,
+  modes,
+  active,
+  onSelect,
+  namePrefix = '',
+}: {
+  label: string
+  modes: readonly string[]
+  active: string
+  onSelect: (mode: string) => void
+  namePrefix?: string
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="px-0.5 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground/70">
+        {label}
+      </span>
+      <div className="flex flex-wrap gap-0.5">
+        {modes.map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            className="seg flex-1"
+            aria-pressed={active === mode}
+            aria-label={`${namePrefix}${mode}`}
+            onClick={() => onSelect(mode)}
+          >
+            {mode}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function DisplayModeControl({
   translationMode,
   inspectorMode,
@@ -19,41 +55,20 @@ export default function DisplayModeControl({
   onInspectorMode: (mode: InspectorMode) => void
 }) {
   return (
-    <div role="toolbar" aria-label="display modes" className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-1">
-        <span className="basis-full px-0.5 pb-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
-          translation
-        </span>
-        {TRANSLATION_MODES.map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            className="seg"
-            aria-pressed={translationMode === mode}
-            aria-label={mode}
-            onClick={() => onTranslationMode(mode)}
-          >
-            {mode}
-          </button>
-        ))}
-      </div>
-      <div className="flex items-center gap-1">
-        <span className="basis-full px-0.5 pb-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
-          inspector
-        </span>
-        {INSPECTOR_MODES.map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            className="seg"
-            aria-pressed={inspectorMode === mode}
-            aria-label={`inspector ${mode}`}
-            onClick={() => onInspectorMode(mode)}
-          >
-            {mode}
-          </button>
-        ))}
-      </div>
+    <div role="toolbar" aria-label="display modes" className="flex flex-col gap-3">
+      <ModeRow
+        label="translation"
+        modes={TRANSLATION_MODES}
+        active={translationMode}
+        onSelect={(mode) => onTranslationMode(mode as TranslationMode)}
+      />
+      <ModeRow
+        label="inspector"
+        modes={INSPECTOR_MODES}
+        active={inspectorMode}
+        onSelect={(mode) => onInspectorMode(mode as InspectorMode)}
+        namePrefix="inspector "
+      />
     </div>
   )
 }

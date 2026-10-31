@@ -4,7 +4,7 @@
 // text (no innerHTML). Display controls live in the margin column.
 import { useState } from 'react'
 import AyahColumn from '../components/AyahColumn'
-import PageHeader from '../components/layout/page-header'
+import { PageHeader } from '../components/layout/page-header'
 import TranslationPanel from '../components/TranslationPanel'
 import WordInspector, { type InspectorMode } from '../components/WordInspector'
 import DisplayModeControl, { type TranslationMode } from '../display/DisplayModeControl'

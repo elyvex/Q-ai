@@ -1,9 +1,8 @@
-// Client-side routes. `/read/{slug}@{version}/{surah}:{ayah}` parses to a
-// reference string fetched through the typed client; unknown paths fall
-// back to the reading hint (the server fallback serves index.html).
 import { useEffect, useState } from 'react'
 import { AppShell } from '@/components/layout/app-shell'
-import { BookLock, Compass } from 'lucide-react'
+import { PageHeader } from '@/components/layout/page-header'
+import { EmptyState, LoadingLine } from '@/components/states'
+import { BookLock, CornerDownRight } from 'lucide-react'
 import ReadingView from './views/ReadingView'
 import ResearchView from './views/ResearchView'
 import GraphView from './views/GraphView'
@@ -67,43 +66,60 @@ export default function Router({ path }: { path: string }) {
     content = <ExplorerView />
   } else if (reference === null) {
     content = (
-      <section className="mx-auto max-w-xl text-center" aria-label="reading hint">
-        <p className="kicker mb-3 justify-center">Codex · Index</p>
-        <h1 className="flex items-center justify-center gap-3 text-2xl font-semibold tracking-tight sm:text-3xl">
-          <Compass className="size-5 text-gold" aria-hidden="true" />
-          The reading room awaits a reference
-        </h1>
-        <p className="mx-auto mt-2 max-w-md text-[0.8125rem] leading-relaxed text-muted-foreground">
-          Open a canonical deep link to unroll a page of the codex.
-        </p>
-        <code className="chip mt-5 font-mono">/read/test@0.1.0/2:1</code>
+      <section>
+        <PageHeader
+          eyebrow="Qurʾān · Canonical edition"
+          title="Reader"
+          lede="The reading room opens on a canonical reference. Copy a deep link from a citation or the command menu to unroll a page."
+        />
+        <div className="mt-8 grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,18rem)]">
+          <EmptyState title="No reference is open">
+            <span className="inline-flex items-center gap-1.5">
+              Open a canonical deep link
+              <CornerDownRight className="size-3.5" aria-hidden="true" />
+              and the reader will verify it against the corpus.
+            </span>
+          </EmptyState>
+          <div className="rounded-lg border bg-card p-4">
+            <p className="kicker mb-2">Deep link</p>
+            <code className="block break-all rounded border bg-muted px-2.5 py-2 font-mono text-[0.7rem]">
+              /read/test@0.1.0/2:1
+            </code>
+            <p className="margin-note mt-3">
+              The reference is parsed by the engine; this page never constructs a verse locally.
+            </p>
+          </div>
+        </div>
       </section>
     )
   } else if (error !== null) {
     content = (
-      <div role="alert" className="rounded-xl border border-annot/40 bg-annot-soft p-6 sm:p-8">
-        <div className="flex items-start gap-3">
-          <BookLock className="mt-0.5 size-5 shrink-0 text-annot" aria-hidden="true" />
-          <div>
-            <h2 className="font-semibold text-annot">
-              No edition is loaded for this reference
-            </h2>
-            <p className="mt-1 max-w-2xl text-[0.8125rem] leading-relaxed text-annot/85">
-              The engine failed closed — canonical text is never fabricated to fill an empty
-              reader. Register and activate a Quran edition, then reopen this deep link.
-            </p>
+      <section>
+        <PageHeader eyebrow="Qurʾān · Canonical edition" title="No edition is loaded" />
+        <div role="alert" className="mt-8 rounded-lg border border-annot/40 bg-annot-soft p-6 sm:p-8">
+          <div className="flex items-start gap-3">
+            <BookLock className="mt-0.5 size-5 shrink-0 text-annot" aria-hidden="true" />
+            <div>
+              <h2 className="text-[0.9375rem] font-medium text-foreground">
+                The engine failed closed for this reference
+              </h2>
+              <p className="mt-1 max-w-2xl text-[0.8125rem] leading-relaxed text-muted-foreground">
+                Canonical text is never fabricated to fill an empty reader. Register and activate a
+                Quran edition, then reopen this deep link.
+              </p>
+            </div>
           </div>
+          <code className="mt-4 block rounded border bg-background px-3.5 py-2.5 font-mono text-[0.7rem] text-foreground/80 sm:w-fit">
+            qai db migrate &amp;&amp; qai quran catalog &lt;editions.json&gt; &amp;&amp; qai quran import
+            &lt;manifest&gt;
+          </code>
         </div>
-        <code className="mt-4 block rounded-lg border border-annot/30 bg-background px-3.5 py-2.5 font-mono text-xs text-annot sm:w-fit">
-          qai db migrate &amp;&amp; qai quran catalog &lt;editions.json&gt; &amp;&amp; qai quran import &lt;manifest&gt;
-        </code>
-      </div>
+      </section>
     )
   } else if (ayahs === null) {
     content = (
-      <div className="py-16 text-center" role="status">
-        <span className="prodot mx-auto animate-pulse bg-gold" />
-        <p className="mt-3 text-[0.8125rem] text-muted-foreground">unrolling the page…</p>
+      <div className="py-24">
+        <LoadingLine label="unrolling the page…" />
       </div>
     )
   } else {

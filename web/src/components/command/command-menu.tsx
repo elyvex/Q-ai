@@ -43,13 +43,13 @@ export function CommandMenu({
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
-      <CommandInput placeholder="Turn to a leaf…" />
+      <CommandInput placeholder="Go to a page or reference…" />
       <CommandList>
-        <CommandEmpty>Nothing bound under that name.</CommandEmpty>
-        <CommandGroup heading="Vellum">
+        <CommandEmpty>Nothing matches that name.</CommandEmpty>
+        <CommandGroup heading="Pages">
           {navigation.map((item) => (
             <CommandItem key={item.href} onSelect={() => runCommand(item.href)}>
-              <item.icon className="mr-2 size-3.5 text-gold" />
+              <item.icon className="mr-2 size-3.5 text-muted-foreground" />
               <span>{item.name}</span>
             </CommandItem>
           ))}

@@ -13,16 +13,16 @@ export default function CitationCopy({ urn, deepLink }: { urn: string; deepLink:
   }
   return (
     <div className="space-y-1.5">
-      <p data-urn className="break-all rounded-md border border-canon/25 bg-background px-2.5 py-1.5 font-mono text-xs text-foreground/90">
+      <p data-urn className="break-all rounded border border-canon/25 bg-background px-2.5 py-1.5 font-mono text-xs text-foreground/90">
         {urn}
       </p>
-      <p data-deep-link className="break-all rounded-md bg-background/60 px-2.5 py-1.5 font-mono text-xs text-muted-foreground">
+      <p data-deep-link className="break-all rounded bg-muted px-2.5 py-1.5 font-mono text-xs text-muted-foreground">
         {deepLink}
       </p>
       <button
         type="button"
         onClick={() => void copy()}
-        className="ibtn mt-1 h-7 gap-1.5 px-3 py-0 text-xs"
+        className="btn btn-sm mt-1"
       >
         <Copy className="size-3" aria-hidden="true" />
         copy citation

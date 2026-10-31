@@ -4,7 +4,7 @@
 // state, never a blank panel. Dataset text renders as text.
 import { useState } from 'react'
 import { Loader2, SearchX } from 'lucide-react'
-import PageHeader from '../components/layout/page-header'
+import { PageHeader } from '../components/layout/page-header'
 import { EmptyState, ErrorNote } from '../components/states'
 import {
   cooccurrence,

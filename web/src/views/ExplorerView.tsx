@@ -3,7 +3,8 @@
 // come back verbatim. Nothing is faked — failures print exactly as
 // received.
 import { useState } from 'react'
-import { Loader2, PlugZap, Send } from 'lucide-react'
+import { Loader2, Send } from 'lucide-react'
+import { PageHeader } from '../components/layout/page-header'
 
 const PRESETS: { label: string; method: 'GET' | 'POST'; path: string; body: string }[] = [
   { label: 'Quran ayahs 2:1', method: 'GET', path: '/api/v1/quran/ayahs/2:1', body: '' },
@@ -49,27 +50,21 @@ export default function ExplorerView() {
   }
 
   const statusLine = result.split('\n', 1)[0]
-  const bodyLine = result.length > 0 && result.includes('\n') ? result.slice(result.indexOf('\n') + 1) : ''
+  const ok = statusLine.startsWith('2')
 
   return (
     <section>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-4 border-b pb-6">
-        <div>
-          <p className="kicker mb-2">Instruments · Loopback console</p>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">API Explorer</h1>
-          <p className="mt-1 max-w-xl text-[0.8125rem] leading-relaxed text-muted-foreground">
-            A quill for the wire: dispatch any request against the local engine and read the raw
-            transcript. Requests leave verbatim; transcripts return verbatim.
-          </p>
-        </div>
-        <PlugZap className="size-5 text-gold/60" aria-hidden="true" />
-      </div>
+      <PageHeader
+        eyebrow="Instruments · Loopback console"
+        title="API Explorer"
+        lede="Dispatch any request against the local engine and read the raw transcript. Requests leave verbatim; responses return verbatim."
+        actions={<span className="chip">loopback</span>}
+      />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,17rem)_minmax(0,1fr)]">
-        {/* presets ledger */}
-        <aside className="plate overflow-hidden p-1.5" aria-label="request presets">
-          <p className="kicker px-2.5 py-2.5 !justify-start">Bound forms</p>
-          <div className="space-y-0.5">
+      <div className="mt-8 grid gap-x-10 gap-y-6 lg:grid-cols-[14rem_minmax(0,1fr)]">
+        <aside aria-label="request presets">
+          <p className="kicker mb-2.5">Presets</p>
+          <div className="space-y-px">
             {PRESETS.map((p, i) => (
               <button
                 key={i}
@@ -78,12 +73,17 @@ export default function ExplorerView() {
                 onClick={() => applyPreset(i)}
                 className={`w-full rounded-md px-2.5 py-2 text-left transition-colors ${
                   preset === i
-                    ? 'bg-secondary text-foreground shadow-[inset_2px_0_0_0_var(--gold)]'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                    ? 'bg-accent text-accent-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
               >
-                <span className="block text-xs font-medium">{p.label}</span>
-                <span className="mt-0.5 block truncate font-mono text-[0.65rem] opacity-60">
+                <span className="flex items-baseline gap-2 text-[0.8125rem] font-medium">
+                  <span className="font-mono text-[0.6rem] opacity-50" aria-hidden="true">
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                  {p.label}
+                </span>
+                <span className="mt-0.5 block truncate pl-5 font-mono text-[0.625rem] opacity-60">
                   {p.method} {p.path}
                 </span>
               </button>
@@ -91,11 +91,18 @@ export default function ExplorerView() {
           </div>
         </aside>
 
-        {/* request bench */}
-        <div className="min-w-0 space-y-3">
-          <div className="plate p-3 sm:p-4">
-            <div role="toolbar" aria-label="request method and path" className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="flex shrink-0 overflow-hidden rounded-md border border-input" role="radiogroup" aria-label="method">
+        <div className="min-w-0 space-y-4">
+          <div className="rounded-lg border bg-card">
+            <div
+              role="toolbar"
+              aria-label="request method and path"
+              className="flex flex-col gap-2 border-b p-3 sm:flex-row sm:items-center"
+            >
+              <div
+                className="flex shrink-0 overflow-hidden rounded-md border"
+                role="radiogroup"
+                aria-label="method"
+              >
                 {(['GET', 'POST'] as const).map((m) => (
                   <button
                     key={m}
@@ -106,7 +113,7 @@ export default function ExplorerView() {
                     className={`px-3 py-1.5 font-mono text-[0.7rem] font-medium transition-colors ${
                       method === m
                         ? 'bg-primary text-primary-foreground'
-                        : 'bg-card text-muted-foreground hover:bg-accent hover:text-foreground'
+                        : 'bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
                     }`}
                   >
                     {m}
@@ -117,45 +124,54 @@ export default function ExplorerView() {
                 aria-label="request path"
                 value={path}
                 onChange={(e) => setPath(e.target.value)}
-                className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-1.5 font-mono text-xs outline-none focus:border-ring/60 focus:ring-2 focus:ring-ring/25"
+                className="field h-8 flex-1 font-mono text-xs"
               />
               <button
                 type="button"
-                className="ibtn ibtn-primary shrink-0 justify-center px-4"
+                className="btn btn-primary shrink-0 justify-center px-4"
                 onClick={() => void run()}
                 disabled={loading}
-                aria-live="polite"
               >
-                {loading ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+                {loading ? (
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Send className="size-3.5" aria-hidden="true" />
+                )}
                 Dispatch
               </button>
             </div>
 
             {method === 'POST' && (
-              <label className="mt-3 block">
-                <span className="kicker mb-1.5 !justify-start">Request body · JSON</span>
+              <label className="block p-3">
+                <span className="kicker mb-2 block">Request body · JSON</span>
                 <textarea
                   aria-label="request body"
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
-                  rows={6}
+                  rows={5}
                   spellCheck={false}
-                  className="w-full resize-y rounded-md border border-input bg-background px-3 py-2.5 font-mono text-xs leading-relaxed outline-none focus:border-ring/60 focus:ring-2 focus:ring-ring/25"
+                  className="field resize-y font-mono text-xs"
                 />
               </label>
             )}
           </div>
 
-          {/* transcript */}
-          <div className="rounded-xl border overflow-hidden">
-            <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
-              <span className="kicker !justify-start">Transcript</span>
-              <span className={`font-mono text-[0.68rem] ${statusLine.startsWith('2') ? 'text-canon' : 'text-destructive'}`}>
-                {result === '' ? '— no transmission yet —' : statusLine.slice(0, 9) + '…'}
+          <div className="overflow-hidden rounded-lg border">
+            <div className="flex items-center justify-between gap-3 border-b bg-muted/50 px-3.5 py-2">
+              <span className="kicker">Transcript</span>
+              <span
+                className={`font-mono text-[0.65rem] ${
+                  result === '' ? 'text-muted-foreground' : ok ? 'text-canon' : 'text-destructive'
+                }`}
+              >
+                {result === '' ? 'no transmission' : statusLine.slice(0, 24)}
               </span>
             </div>
-            <pre className="explorer-out max-h-[26rem] overflow-auto px-4 py-3 font-mono text-[0.72rem] leading-relaxed text-foreground/85" aria-live="polite">
-              {result === '' && bodyLine === '' ? '⏳ awaiting dispatch' : (result !== '' ? result : '')}
+            <pre
+              className="explorer-out carbon max-h-[26rem] overflow-auto px-4 py-3 font-mono text-[0.72rem] leading-relaxed"
+              aria-live="polite"
+            >
+              {result !== '' ? result : 'awaiting dispatch'}
             </pre>
           </div>
         </div>
