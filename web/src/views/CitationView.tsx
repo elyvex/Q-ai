@@ -4,6 +4,7 @@
 // client-side; `/api/v1/quran/resolve` only parses references (always 200)
 // and must not be the verdict path.
 import { useEffect, useState } from 'react'
+import { ArrowLeftRight, XCircle } from 'lucide-react'
 import { fetchCitation } from '../api/client'
 import CitationCopy from '../components/CitationCopy'
 
@@ -42,25 +43,39 @@ export default function CitationView({ citationId }: { citationId: string }) {
   }, [citationId])
 
   if (state.status === 'loading')
-    return <p className="text-sm text-muted-foreground">verifying citation…</p>
+    return (
+      <div className="mt-4 flex items-center gap-2 rounded-lg border border-dashed bg-card/60 px-4 py-3" role="status">
+        <span className="prodot animate-pulse bg-gold" />
+        <p className="text-[0.8125rem] text-muted-foreground">verifying citation — against the server, never locally…</p>
+      </div>
+    )
   if (state.status === 'mismatch') {
     return (
-      <p
+      <div
         role="alert"
-        className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        className="mt-4 flex items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3.5 text-sm"
       >
-        citation mismatch — the stored quote does not match the canonical text: {state.detail}
-      </p>
+        <XCircle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
+        <div>
+          <p className="font-medium text-destructive">citation mismatch</p>
+          <p className="mt-0.5 text-[0.8125rem] text-destructive/80">
+            the stored quote does not match the canonical text — {state.detail}
+          </p>
+        </div>
+      </div>
     )
   }
   return (
-    <section className="mt-4 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm dark:border-emerald-800 dark:bg-emerald-950/40">
-      <p className="font-medium text-emerald-700 dark:text-emerald-300">
-        verified at the exact source location
-      </p>
-      <div className="mt-2">
+    <aside className="mt-4 overflow-hidden rounded-xl border border-canon/35 bg-canon-soft">
+      <div className="flex items-center gap-2 border-b border-canon/20 bg-canon/10 px-4 py-2">
+        <ArrowLeftRight className="size-3.5 text-canon" aria-hidden="true" />
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-canon">
+          verified at the exact source location
+        </p>
+      </div>
+      <div className="px-4 py-3">
         <CitationCopy urn={state.urn} deepLink={state.deepLink} />
       </div>
-    </section>
+    </aside>
   )
 }

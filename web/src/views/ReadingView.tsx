@@ -1,14 +1,31 @@
-// RTL reading view with provenance-first design
-// Canonical text renders byte-exact in document order
+// RTL reading view (D-05…D-09): a scholarly page, not a card stack.
+// Canonical text renders byte-exact in document order — the client never
+// re-sorts, normalizes, or merges adjacent units. Dataset text renders as
+// text (no innerHTML). Display controls live in the margin column.
 import { useState } from 'react'
-import { BookOpen, Layers } from 'lucide-react'
 import AyahColumn from '../components/AyahColumn'
+import PageHeader from '../components/layout/page-header'
 import TranslationPanel from '../components/TranslationPanel'
 import WordInspector, { type InspectorMode } from '../components/WordInspector'
 import DisplayModeControl, { type TranslationMode } from '../display/DisplayModeControl'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
 import type { AyahView } from '../api/client'
+
+function refTail(reference: string): string {
+  // `quran:<slug>@<ver>:<s>:<a>` → verse ordinal for the ruled index.
+  const parts = reference.split(':')
+  return parts.length >= 4 ? parts[3] : '?'
+}
+
+function refShort(reference: string): string {
+  const parts = reference.split(':')
+  return parts.length >= 4 ? `${parts[2]}:${parts[3]}` : reference
+}
+
+const LAYERS = [
+  { label: 'Canonical', note: 'served verbatim', color: 'bg-canon' },
+  { label: 'Translation', note: 'attributed, separate', color: 'bg-trans' },
+  { label: 'Annotation', note: 'lexical notes', color: 'bg-annot' },
+]
 
 export default function ReadingView({
   ayahs,
@@ -21,104 +38,144 @@ export default function ReadingView({
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>('popover')
   void onResolve
 
+  // "quran:<slug@ver>:<s>:<a>" → "s:a" for a readable page title.
   const parts = ayahs[0]?.canonical.reference.split(':') ?? []
-  const label = parts.length >= 4 ? `Āyah ${parts[2]}:${parts[3]}` : undefined
-  const surahRef = parts.length >= 3 ? `Surah ${parts[2]}` : undefined
+  const surah = parts.length >= 4 ? parts[2] : undefined
+  const verse = parts.length >= 4 ? `${parts[2]}:${parts[3]}` : undefined
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            <BookOpen className="h-3.5 w-3.5" />
-            <span>Quran</span>
-            <span>/</span>
-            <span>Reader</span>
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            {surahRef ? `${surahRef}, ${label?.replace('Āyah ', '')}` : label ?? 'Read'}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Canonical Arabic text rendered byte-exact • Translations and annotations as separate layers
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="gap-1.5 text-xs">
-            <Layers className="h-3 w-3" />
-            Provenance Tracked
-          </Badge>
-          <Card className="p-1">
-            <DisplayModeControl
-              translationMode={translationMode}
-              inspectorMode={inspectorMode}
-              onTranslationMode={setTranslationMode}
-              onInspectorMode={setInspectorMode}
-            />
-          </Card>
-        </div>
-      </div>
+    <div data-translation-mode={translationMode} data-inspector-mode={inspectorMode}>
+      <PageHeader
+        eyebrow="Qurʾān · Canonical edition"
+        title={
+          surah !== undefined ? (
+            <span className="flex flex-wrap items-baseline gap-x-3">
+              <span>Sūrah {surah}</span>
+              <span className="font-mono text-[0.9rem] font-normal tracking-normal text-muted-foreground">
+                {verse}
+              </span>
+            </span>
+          ) : (
+            'Reader'
+          )
+        }
+        lede="Every line is served from the verified corpus. The canonical layer is untouched; translations and lexical notes travel alongside it as labelled layers."
+      />
 
-      <div className="space-y-4" dir="rtl" lang="ar">
-        {ayahs.map((ayah) => (
-          <Card key={ayah.canonical.reference} className="overflow-hidden shadow-sm">
-            <CardContent className="p-6 sm:p-8">
-              <div
-                className="mb-4 flex items-center justify-between gap-3 border-b pb-3"
-                dir="ltr"
+      <div className="mt-8 grid gap-x-12 gap-y-8 lg:grid-cols-[minmax(0,1fr)_16rem]">
+        <div className="order-2 min-w-0 lg:order-none">
+          <div className="reading-column">
+            {ayahs.map((ayah, index) => (
+              <article
+                key={ayah.canonical.reference}
+                className="ayah-unit border-t py-8 first:border-t-0 first:pt-0"
               >
-                <Badge variant="secondary" className="font-mono text-xs">
-                  {ayah.canonical.reference}
-                </Badge>
-                <Badge variant="outline" className="text-xs text-provenance-canon">
-                  Canonical
-                </Badge>
-              </div>
-              <AyahColumn arabicText={ayah.canonical.arabicText} reference={ayah.canonical.reference} />
-              {ayah.translations.length === 0 ? (
-                <div
-                  className="mt-4 rounded-lg border border-dashed p-3 text-sm text-muted-foreground italic"
-                  data-empty-translation="true"
-                  dir="ltr"
-                >
-                  No translation available for this edition
+                <div className="mb-5 flex items-center gap-2.5" dir="ltr">
+                  <span className="medallion" aria-hidden="true">
+                    {refTail(ayah.canonical.reference)}
+                  </span>
+                  <span className="font-mono text-[0.7rem] text-muted-foreground">
+                    {refShort(ayah.canonical.reference)}
+                  </span>
+                  <span className="ml-auto inline-flex items-center gap-1.5 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-canon">
+                    <span className="prodot bg-canon" aria-hidden="true" />
+                    canonical
+                  </span>
+                  <span className="hidden font-mono text-[0.6rem] text-muted-foreground/50 sm:inline">
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
                 </div>
-              ) : translationMode === 'inline' ? (
-                <div className="mt-6 space-y-3" dir="ltr">
-                  {ayah.translations.map((t) => (
-                    <TranslationPanel key={t.translator} translator={t.translator} text={t.text} />
-                  ))}
+
+                <div className="rounded-md bg-card px-1 py-2 sm:px-4">
+                  <AyahColumn
+                    arabicText={ayah.canonical.arabicText}
+                    reference={ayah.canonical.reference}
+                  />
                 </div>
-              ) : translationMode === 'side-by-side' ? (
-                <div className="mt-6 grid gap-4 md:grid-cols-2" dir="ltr">
-                  {ayah.translations.map((t) => (
-                    <Card key={t.translator} className="bg-muted/30">
-                      <CardContent className="p-4">
-                        <TranslationPanel translator={t.translator} text={t.text} />
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <details
-                  className="mt-6 rounded-lg border bg-muted/30"
-                  dir="ltr"
-                >
-                  <summary className="cursor-pointer px-4 py-2.5 text-sm font-medium hover:bg-muted/50">
-                    Translations ({ayah.translations.length})
-                  </summary>
-                  <div className="space-y-2 border-t p-4">
+
+                {ayah.translations.length === 0 ? (
+                  <p
+                    className="ayah-translation mt-4 rounded-md border border-dashed px-3 py-2 text-[0.8125rem] italic"
+                    data-empty-translation="true"
+                    dir="ltr"
+                  >
+                    no translation available for this reference
+                  </p>
+                ) : translationMode === 'inline' ? (
+                  <div className="mt-3 space-y-2" dir="ltr">
                     {ayah.translations.map((t) => (
                       <TranslationPanel key={t.translator} translator={t.translator} text={t.text} />
                     ))}
                   </div>
-                </details>
-              )}
-              <div className="mt-4 text-right" dir="rtl">
-                <WordInspector word={{ surface: '•' }} mode={inspectorMode} />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                ) : translationMode === 'side-by-side' ? (
+                  <div className="mt-5 grid gap-x-6 gap-y-3 md:grid-cols-2" dir="ltr">
+                    {ayah.translations.map((t) => (
+                      <div key={t.translator} className="border-t border-dashed pt-3">
+                        <TranslationPanel translator={t.translator} text={t.text} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <details
+                    className="side-panel mt-4 border-t pt-3 text-[0.8125rem]"
+                    dir="ltr"
+                  >
+                    <summary className="cursor-pointer select-none font-medium text-muted-foreground transition-colors hover:text-foreground">
+                      translations ({ayah.translations.length})
+                    </summary>
+                    <div className="mt-2.5 space-y-2">
+                      {ayah.translations.map((t) => (
+                        <TranslationPanel key={t.translator} translator={t.translator} text={t.text} />
+                      ))}
+                    </div>
+                  </details>
+                )}
+
+                <div className="ayah-annotation-row mt-3 text-left" dir="rtl">
+                  <WordInspector word={{ surface: '•' }} mode={inspectorMode} />
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <p className="mt-10 flex items-center gap-2 border-t pt-4 font-mono text-[0.625rem] uppercase tracking-[0.14em] text-muted-foreground/70">
+            ٱلْمَطْبَعَةُ الْقُرْآنِيَّة
+            <span className="h-px flex-1 bg-border" aria-hidden="true" />
+            hash-verified corpus
+          </p>
+        </div>
+
+        <aside className="order-1 space-y-6 lg:order-none lg:sticky lg:top-20 lg:h-fit" aria-label="Reading controls">
+          <div>
+            <p className="kicker mb-2">Display</p>
+            <div className="rounded-lg border bg-card p-2.5">
+              <DisplayModeControl
+                translationMode={translationMode}
+                inspectorMode={inspectorMode}
+                onTranslationMode={setTranslationMode}
+                onInspectorMode={setInspectorMode}
+              />
+            </div>
+          </div>
+
+          <div>
+            <p className="kicker mb-2.5">Layers</p>
+            <ul className="space-y-2">
+              {LAYERS.map((layer) => (
+                <li key={layer.label} className="flex items-center gap-2 text-[0.75rem]">
+                  <span className={`prodot ${layer.color}`} aria-hidden="true" />
+                  <span className="font-medium text-foreground">{layer.label}</span>
+                  <span className="ml-auto text-muted-foreground">{layer.note}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <p className="margin-note border-t pt-4">
+            Arabic is set in Amiri with Uthmani marks intact. The interface never edits, re-orders
+            or re-metrics the canonical text.
+          </p>
+        </aside>
       </div>
     </div>
   )

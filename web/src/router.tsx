@@ -3,6 +3,7 @@
 // back to the reading hint (the server fallback serves index.html).
 import { useEffect, useState } from 'react'
 import { AppShell } from '@/components/layout/app-shell'
+import { BookLock, Compass } from 'lucide-react'
 import ReadingView from './views/ReadingView'
 import ResearchView from './views/ResearchView'
 import GraphView from './views/GraphView'
@@ -66,26 +67,45 @@ export default function Router({ path }: { path: string }) {
     content = <ExplorerView />
   } else if (reference === null) {
     content = (
-      <div className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
-        Reading view — open a{' '}
-        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">/read/…</code> deep link
-      </div>
+      <section className="mx-auto max-w-xl text-center" aria-label="reading hint">
+        <p className="kicker mb-3 justify-center">Codex · Index</p>
+        <h1 className="flex items-center justify-center gap-3 text-2xl font-semibold tracking-tight sm:text-3xl">
+          <Compass className="size-5 text-gold" aria-hidden="true" />
+          The reading room awaits a reference
+        </h1>
+        <p className="mx-auto mt-2 max-w-md text-[0.8125rem] leading-relaxed text-muted-foreground">
+          Open a canonical deep link to unroll a page of the codex.
+        </p>
+        <code className="chip mt-5 font-mono">/read/test@0.1.0/2:1</code>
+      </section>
     )
   } else if (error !== null) {
     content = (
-      <div role="alert" className="rounded-2xl border border-amber-300 bg-amber-50 p-6 dark:border-amber-800 dark:bg-amber-950/30">
-        <h2 className="font-medium text-amber-800 dark:text-amber-200">No edition is loaded for this reference</h2>
-        <p className="mt-1 max-w-2xl text-sm text-amber-800/80 dark:text-amber-200/80">
-          The engine failed closed — canonical text is never fabricated to fill an empty reader.
-          Register and activate a Quran edition, then reopen this deep link.
-        </p>
-        <code className="mt-3 block rounded-lg bg-amber-100/60 px-3 py-2 font-mono text-xs text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
-          qai db migrate && qai quran catalog &lt;editions.json&gt; && qai quran import &lt;manifest&gt;
+      <div role="alert" className="rounded-xl border border-annot/40 bg-annot-soft p-6 sm:p-8">
+        <div className="flex items-start gap-3">
+          <BookLock className="mt-0.5 size-5 shrink-0 text-annot" aria-hidden="true" />
+          <div>
+            <h2 className="font-semibold text-annot">
+              No edition is loaded for this reference
+            </h2>
+            <p className="mt-1 max-w-2xl text-[0.8125rem] leading-relaxed text-annot/85">
+              The engine failed closed — canonical text is never fabricated to fill an empty
+              reader. Register and activate a Quran edition, then reopen this deep link.
+            </p>
+          </div>
+        </div>
+        <code className="mt-4 block rounded-lg border border-annot/30 bg-background px-3.5 py-2.5 font-mono text-xs text-annot sm:w-fit">
+          qai db migrate &amp;&amp; qai quran catalog &lt;editions.json&gt; &amp;&amp; qai quran import &lt;manifest&gt;
         </code>
       </div>
     )
   } else if (ayahs === null) {
-    content = <p className="text-muted-foreground">loading…</p>
+    content = (
+      <div className="py-16 text-center" role="status">
+        <span className="prodot mx-auto animate-pulse bg-gold" />
+        <p className="mt-3 text-[0.8125rem] text-muted-foreground">unrolling the page…</p>
+      </div>
+    )
   } else {
     const citationId = parseCitationId(path)
     content = (
