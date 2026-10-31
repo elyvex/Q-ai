@@ -18,32 +18,42 @@ export default function DisplayModeControl({
   onTranslationMode: (mode: TranslationMode) => void
   onInspectorMode: (mode: InspectorMode) => void
 }) {
-  const btn =
-    'rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors aria-pressed:bg-primary aria-pressed:text-primary-foreground hover:bg-muted aria-pressed:hover:bg-primary'
   return (
-    <div role="toolbar" aria-label="display modes" className="flex flex-wrap gap-1">
-      <span className="px-1 pt-1.5 text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground">
-        translation
-      </span>
-      {TRANSLATION_MODES.map((mode) => (
-        <button key={mode} type="button" className={btn} aria-pressed={translationMode === mode} onClick={() => onTranslationMode(mode)}>
-          {mode}
-        </button>
-      ))}
-      <span className="px-1 pt-1.5 text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground">
-        inspector
-      </span>
-      {INSPECTOR_MODES.map((mode) => (
-        <button
-          key={mode}
-          type="button"
-          className={btn}
-          aria-pressed={inspectorMode === mode}
-          onClick={() => onInspectorMode(mode)}
-        >
-          {`inspector ${mode}`}
-        </button>
-      ))}
+    <div role="toolbar" aria-label="display modes" className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-1">
+        <span className="basis-full px-0.5 pb-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
+          translation
+        </span>
+        {TRANSLATION_MODES.map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            className="seg"
+            aria-pressed={translationMode === mode}
+            aria-label={mode}
+            onClick={() => onTranslationMode(mode)}
+          >
+            {mode}
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-1">
+        <span className="basis-full px-0.5 pb-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
+          inspector
+        </span>
+        {INSPECTOR_MODES.map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            className="seg"
+            aria-pressed={inspectorMode === mode}
+            aria-label={`inspector ${mode}`}
+            onClick={() => onInspectorMode(mode)}
+          >
+            {mode}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

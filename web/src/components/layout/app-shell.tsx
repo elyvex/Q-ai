@@ -1,6 +1,7 @@
+// Full-width application frame: a single top rail, one content measure,
+// a quiet colophon. Navigation is horizontal because the product has five
+// destinations — a sidebar would spend a third of a laptop screen on them.
 import { useState } from 'react'
-import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
-import { AppSidebar } from '@/components/navigation/app-sidebar'
 import { SiteHeader } from '@/components/layout/site-header'
 import { CommandMenu } from '@/components/command/command-menu'
 
@@ -14,17 +15,23 @@ export function AppShell({
   const [open, setOpen] = useState(false)
 
   return (
-    <SidebarProvider defaultOpen={true}>
-      <AppSidebar currentPath={currentPath} />
-      <SidebarInset>
-        <SiteHeader currentPath={currentPath} onSearchClick={() => setOpen(true)} />
-        <main className="flex flex-1 flex-col">
-          <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
-            {children}
-          </div>
-        </main>
-      </SidebarInset>
+    <div className="flex min-h-screen flex-col">
+      <SiteHeader currentPath={currentPath} onSearchClick={() => setOpen(true)} />
+      <main className="flex-1">
+        <div className="mx-auto w-full max-w-[86rem] px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
+          {children}
+        </div>
+      </main>
+      <footer className="border-t">
+        <div className="mx-auto flex w-full max-w-[86rem] flex-wrap items-center gap-x-4 gap-y-1 px-4 py-4 font-mono text-[0.625rem] uppercase tracking-[0.14em] text-muted-foreground sm:px-6 lg:px-8">
+          <span>Q-ai · Research workspace</span>
+          <span className="ml-auto inline-flex items-center gap-1.5">
+            <span className="prodot bg-canon" aria-hidden="true" />
+            Local-first — canonical text is never altered
+          </span>
+        </div>
+      </footer>
       <CommandMenu open={open} onOpenChange={setOpen} />
-    </SidebarProvider>
+    </div>
   )
 }

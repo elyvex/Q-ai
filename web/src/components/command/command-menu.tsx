@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BookOpen, Database, GitBranch, Network, Search, Terminal } from 'lucide-react'
+import { BookOpen, Database, GitBranch, Search, Terminal } from 'lucide-react'
 import {
   CommandDialog,
   CommandEmpty,
@@ -11,9 +11,9 @@ import {
 } from '@/components/ui/command'
 
 const navigation = [
-  { name: 'Reader', href: '/', icon: BookOpen },
-  { name: 'Research', href: '/research', icon: Search },
-  { name: 'Knowledge Graph', href: '/graph', icon: Network },
+  { name: 'Reader — open the codex', href: '/', icon: BookOpen },
+  { name: 'Research — lexical instruments', href: '/research', icon: Search },
+  { name: 'Knowledge Graph — follow the tesserae', href: '/graph', icon: GitBranch },
   { name: 'RAG Debug', href: '/rag-debug', icon: Database },
   { name: 'API Explorer', href: '/explorer', icon: Terminal },
 ]
@@ -36,32 +36,28 @@ export function CommandMenu({
     return () => document.removeEventListener('keydown', down)
   }, [open, onOpenChange])
 
-  const runCommand = (command: () => unknown) => {
+  const runCommand = (href: string) => {
     onOpenChange(false)
-    command()
+    window.location.href = href
   }
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
-      <CommandInput placeholder="Type a command or search..." />
+      <CommandInput placeholder="Turn to a leaf…" />
       <CommandList>
-        <CommandEmpty>No results found.</CommandEmpty>
-        <CommandGroup heading="Navigation">
+        <CommandEmpty>Nothing bound under that name.</CommandEmpty>
+        <CommandGroup heading="Vellum">
           {navigation.map((item) => (
-            <CommandItem
-              key={item.href}
-              onSelect={() => runCommand(() => (window.location.href = item.href))}
-            >
-              <item.icon className="mr-2 h-4 w-4" />
+            <CommandItem key={item.href} onSelect={() => runCommand(item.href)}>
+              <item.icon className="mr-2 size-3.5 text-gold" />
               <span>{item.name}</span>
             </CommandItem>
           ))}
         </CommandGroup>
         <CommandSeparator />
-        <CommandGroup heading="Quick Actions">
-          <CommandItem onSelect={() => runCommand(() => window.location.reload())}>
-            <GitBranch className="mr-2 h-4 w-4" />
-            <span>Reload Application</span>
+        <CommandGroup heading="Reading deep links">
+          <CommandItem onSelect={() => runCommand('/read/test@0.1.0/1:1')}>
+            <span className="font-mono text-xs">/read/test@0.1.0/1:1</span>
           </CommandItem>
         </CommandGroup>
       </CommandList>

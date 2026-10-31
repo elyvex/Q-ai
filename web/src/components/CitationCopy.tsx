@@ -1,6 +1,8 @@
 // Citation copy control (D-17/ADR-0111): emits the API-provided stable
 // URN + deep link verbatim. The format is frozen in the `citations`
 // helper — the SPA never reconstructs it.
+import { Copy } from 'lucide-react'
+
 export default function CitationCopy({ urn, deepLink }: { urn: string; deepLink: string }) {
   async function copy() {
     try {
@@ -10,18 +12,19 @@ export default function CitationCopy({ urn, deepLink }: { urn: string; deepLink:
     }
   }
   return (
-    <div>
-      <p data-urn className="break-all font-mono text-xs">
+    <div className="space-y-1.5">
+      <p data-urn className="break-all rounded-md border border-canon/25 bg-background px-2.5 py-1.5 font-mono text-xs text-foreground/90">
         {urn}
       </p>
-      <p data-deep-link className="break-all font-mono text-xs text-muted-foreground">
+      <p data-deep-link className="break-all rounded-md bg-background/60 px-2.5 py-1.5 font-mono text-xs text-muted-foreground">
         {deepLink}
       </p>
       <button
         type="button"
         onClick={() => void copy()}
-        className="mt-2 rounded-lg bg-emerald-700 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-emerald-700/80"
+        className="ibtn mt-1 h-7 gap-1.5 px-3 py-0 text-xs"
       >
+        <Copy className="size-3" aria-hidden="true" />
         copy citation
       </button>
     </div>

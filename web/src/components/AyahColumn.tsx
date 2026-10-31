@@ -9,7 +9,7 @@ export interface CanonicalProps {
 export default function AyahColumn({ arabicText, reference }: CanonicalProps) {
   return (
     <p
-      className="ayah-canonical text-4xl leading-[2.2] md:text-[2.5rem]"
+      className="ayah-canonical my-2 text-[1.75rem] leading-[2.15] sm:text-[2.25rem] sm:leading-[2.2]"
       dir="rtl"
       lang="ar"
       data-reference={reference}
