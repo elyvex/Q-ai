@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { AppShell } from '@/components/layout/app-shell'
 import { PageHeader } from '@/components/layout/page-header'
 import { EmptyState, LoadingLine } from '@/components/states'
-import { BookLock, CornerDownRight } from 'lucide-react'
+import { BookLock } from 'lucide-react'
 import ReadingView from './views/ReadingView'
 import ResearchView from './views/ResearchView'
 import GraphView from './views/GraphView'
@@ -24,6 +24,53 @@ export function parseCitationId(path: string): string | null {
   if (!query) return null
   const id = new URLSearchParams(query).get('citation')
   return id && id.length > 0 ? id : null
+}
+
+// Rendered when the reader has no reference. It navigates with the same
+// deep link the server already understands — no new API surface.
+const DEEP_LINK = /^\/read\/[^/]+\/\d+:\d+(\?.*)?$/
+
+function ReferenceForm() {
+  const [value, setValue] = useState('/read/test@0.1.0/2:1')
+  const [invalid, setInvalid] = useState(false)
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (!DEEP_LINK.test(value)) {
+          setInvalid(true)
+          return
+        }
+        window.location.assign(value)
+      }}
+    >
+      <label htmlFor="deep-link" className="kicker mb-2 block">
+        Deep link
+      </label>
+      <div className="flex gap-2">
+        <input
+          id="deep-link"
+          value={value}
+          onChange={(event) => {
+            setValue(event.target.value)
+            setInvalid(false)
+          }}
+          aria-invalid={invalid}
+          spellCheck={false}
+          className="field flex-1 font-mono text-xs"
+        />
+        <button type="submit" className="btn btn-primary shrink-0">
+          Open
+        </button>
+      </div>
+      {invalid && (
+        <p role="alert" className="mt-1.5 text-[0.7rem] text-destructive">
+          Use /read/&lt;edition&gt;/&lt;surah&gt;:&lt;ayah&gt;
+        </p>
+      )}
+    </form>
+  )
 }
 
 export const ROUTES = [
@@ -70,21 +117,15 @@ export default function Router({ path }: { path: string }) {
         <PageHeader
           eyebrow="Qurʾān · Canonical edition"
           title="Reader"
-          lede="The reading room opens on a canonical reference. Copy a deep link from a citation or the command menu to unroll a page."
+          lede="The reading room opens on a canonical reference. Paste a deep link to unroll a page — the engine verifies every reference before it renders."
         />
-        <div className="mt-8 grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,18rem)]">
+        <div className="mt-8 grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]">
           <EmptyState title="No reference is open">
-            <span className="inline-flex items-center gap-1.5">
-              Open a canonical deep link
-              <CornerDownRight className="size-3.5" aria-hidden="true" />
-              and the reader will verify it against the corpus.
-            </span>
+            A reader never invents a verse. Open a reference from a citation, the command menu, or
+            the link field beside this note.
           </EmptyState>
           <div className="rounded-lg border bg-card p-4">
-            <p className="kicker mb-2">Deep link</p>
-            <code className="block break-all rounded border bg-muted px-2.5 py-2 font-mono text-[0.7rem]">
-              /read/test@0.1.0/2:1
-            </code>
+            <ReferenceForm />
             <p className="margin-note mt-3">
               The reference is parsed by the engine; this page never constructs a verse locally.
             </p>

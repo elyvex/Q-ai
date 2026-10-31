@@ -164,7 +164,7 @@ export default function GraphView({
           </div>
         </div>
 
-        <aside className="lg:sticky lg:top-20 lg:h-fit">
+        <aside className="lg:sticky lg:top-20 lg:h-fit lg:border-l lg:pl-6">
           <p className="kicker mb-2.5">Reading the ledger</p>
           <ul className="margin-note space-y-2.5 border-t pt-4">
             <li>Edges are printed exactly as the engine emitted them — no client-side sort.</li>

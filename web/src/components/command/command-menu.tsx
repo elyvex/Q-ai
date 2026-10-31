@@ -11,9 +11,9 @@ import {
 } from '@/components/ui/command'
 
 const navigation = [
-  { name: 'Reader — open the codex', href: '/', icon: BookOpen },
-  { name: 'Research — lexical instruments', href: '/research', icon: Search },
-  { name: 'Knowledge Graph — follow the tesserae', href: '/graph', icon: GitBranch },
+  { name: 'Reader', href: '/', icon: BookOpen },
+  { name: 'Research', href: '/research', icon: Search },
+  { name: 'Knowledge Graph', href: '/graph', icon: GitBranch },
   { name: 'RAG Debug', href: '/rag-debug', icon: Database },
   { name: 'API Explorer', href: '/explorer', icon: Terminal },
 ]

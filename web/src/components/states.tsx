@@ -15,12 +15,14 @@ export function EmptyState({
 }) {
   return (
     <div
-      className={`flex flex-col items-center justify-center rounded-lg border border-dashed px-6 py-12 text-center ${className}`}
+      className={`flex flex-col items-center justify-center rounded-lg border bg-muted/30 px-6 py-12 text-center ${className}`}
     >
       {Icon !== undefined && <Icon className="mb-3 size-5 text-muted-foreground/60" aria-hidden="true" />}
-      <p className="text-sm font-medium text-foreground">{title}</p>
+      <p className="font-mono text-[0.625rem] uppercase tracking-[0.14em] text-muted-foreground">
+        {title}
+      </p>
       {children !== undefined && (
-        <p className="mt-1.5 max-w-sm text-[0.8125rem] leading-relaxed text-muted-foreground">{children}</p>
+        <p className="mt-2 max-w-sm text-[0.8125rem] leading-relaxed text-foreground/80">{children}</p>
       )}
     </div>
   )

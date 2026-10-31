@@ -63,7 +63,7 @@ export default function ReadingView({
       />
 
       <div className="mt-8 grid gap-x-12 gap-y-8 lg:grid-cols-[minmax(0,1fr)_16rem]">
-        <div className="order-2 min-w-0 lg:order-none">
+        <div className="min-w-0">
           <div className="reading-column">
             {ayahs.map((ayah, index) => (
               <article
@@ -131,7 +131,10 @@ export default function ReadingView({
                   </details>
                 )}
 
-                <div className="ayah-annotation-row mt-3 text-left" dir="rtl">
+                <div className="ayah-annotation-row mt-4 flex items-center gap-2.5" dir="ltr">
+                  <span className="font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground/60">
+                    note
+                  </span>
                   <WordInspector word={{ surface: '•' }} mode={inspectorMode} />
                 </div>
               </article>
@@ -145,7 +148,7 @@ export default function ReadingView({
           </p>
         </div>
 
-        <aside className="order-1 space-y-6 lg:order-none lg:sticky lg:top-20 lg:h-fit" aria-label="Reading controls">
+        <aside className="space-y-6 lg:sticky lg:top-20 lg:h-fit lg:border-l lg:pl-6" aria-label="Reading controls">
           <div>
             <p className="kicker mb-2">Display</p>
             <div className="rounded-lg border bg-card p-2.5">

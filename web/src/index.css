@@ -431,10 +431,10 @@
    cascade regardless of source order. Layered overrides never won. */
 .dark {
   --layer-canonical-fg: oklch(0.94 0.004 265);
-  --layer-canonical-bg: var(--card);
+  --layer-canonical-bg: transparent;
   --layer-canonical-accent: var(--canon);
   --layer-translation-fg: oklch(0.84 0.006 265);
-  --layer-translation-bg: var(--trans-soft);
+  --layer-translation-bg: transparent;
   --layer-annotation-fg: oklch(0.86 0.05 75);
   --layer-annotation-bg: var(--annot-soft);
 }
