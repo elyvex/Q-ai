@@ -53,3 +53,9 @@ graphify-out/
 # Phase 5 SPA (05-04): build artifacts, only source tracked
 web/node_modules/
 web/dist/
+
+# Understand tool output (regenerable)
+.ua/
+
+# Inspiration templates (reference only)
+temp-inspire/
