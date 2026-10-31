@@ -20,17 +20,28 @@ export default function WordInspector({
 }) {
   const [pinned, setPinned] = useState(false)
   const open = mode === 'panel' || pinned
+  const note =
+    [word.lemma && `lemma ${word.lemma}`, word.root && `root ${word.root}`, word.gloss]
+      .filter(Boolean)
+      .join(' · ') + (mode === 'pin' && !pinned ? ' (pin to keep)' : '')
   return (
-    <span className="ayah-annotation" data-inspector-mode={mode}>
-      <button type="button" onClick={() => setPinned((p) => !p)}>
-        {word.surface}
+    <span className="ayah-annotation inline-flex items-center gap-2 text-sm" data-inspector-mode={mode}>
+      <button
+        type="button"
+        aria-pressed={mode !== 'popover' || pinned}
+        className={
+          pinned
+            ? 'rounded-full px-2 py-0.5 text-xs'
+            : 'rounded-full border px-2 py-0.5 text-xs hover:opacity-80'
+        }
+        style={pinned ? { background: 'var(--layer-annotation-bg)' } : undefined}
+        onClick={() => setPinned((p) => !p)}
+      >
+        <span className="layer-annotation font-semibold">{word.surface}</span>
       </button>
-      {(open || mode === 'popover') && (
-        <span role="note">
-          {[word.lemma && `lemma ${word.lemma}`, word.root && `root ${word.root}`, word.gloss]
-            .filter(Boolean)
-            .join(' · ')}
-          {mode === 'pin' && !pinned && ' (pin to keep)'}
+      {mode !== 'panel' && (open || mode === 'popover') && (
+        <span role="note" className="layer-annotation text-xs opacity-80">
+          {note}
         </span>
       )}
     </span>

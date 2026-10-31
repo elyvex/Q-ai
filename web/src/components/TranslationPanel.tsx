@@ -7,7 +7,10 @@ export interface Translation {
 
 export default function TranslationPanel({ translator, text }: Translation) {
   return (
-    <aside className="ayah-translation" data-translator={translator}>
+    <aside className="ayah-translation mt-3 rounded-lg px-3 py-2 text-sm/relaxed" data-translator={translator}>
+      <span className="mb-0.5 block text-[0.65rem] font-semibold uppercase tracking-wider opacity-70">
+        {translator}
+      </span>
       {text}
     </aside>
   )

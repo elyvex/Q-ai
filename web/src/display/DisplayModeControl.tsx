@@ -18,22 +18,26 @@ export default function DisplayModeControl({
   onTranslationMode: (mode: TranslationMode) => void
   onInspectorMode: (mode: InspectorMode) => void
 }) {
+  const btn =
+    'rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors aria-pressed:bg-primary aria-pressed:text-primary-foreground hover:bg-muted aria-pressed:hover:bg-primary'
   return (
-    <div role="toolbar" aria-label="display modes">
+    <div role="toolbar" aria-label="display modes" className="flex flex-wrap gap-1">
+      <span className="px-1 pt-1.5 text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground">
+        translation
+      </span>
       {TRANSLATION_MODES.map((mode) => (
-        <button
-          key={mode}
-          type="button"
-          aria-pressed={translationMode === mode}
-          onClick={() => onTranslationMode(mode)}
-        >
+        <button key={mode} type="button" className={btn} aria-pressed={translationMode === mode} onClick={() => onTranslationMode(mode)}>
           {mode}
         </button>
       ))}
+      <span className="px-1 pt-1.5 text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground">
+        inspector
+      </span>
       {INSPECTOR_MODES.map((mode) => (
         <button
           key={mode}
           type="button"
+          className={btn}
           aria-pressed={inspectorMode === mode}
           onClick={() => onInspectorMode(mode)}
         >

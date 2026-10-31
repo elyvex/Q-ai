@@ -11,9 +11,17 @@ export default function CitationCopy({ urn, deepLink }: { urn: string; deepLink:
   }
   return (
     <div>
-      <p data-urn>{urn}</p>
-      <p data-deep-link>{deepLink}</p>
-      <button type="button" onClick={() => void copy()}>
+      <p data-urn className="break-all font-mono text-xs">
+        {urn}
+      </p>
+      <p data-deep-link className="break-all font-mono text-xs text-muted-foreground">
+        {deepLink}
+      </p>
+      <button
+        type="button"
+        onClick={() => void copy()}
+        className="mt-2 rounded-lg bg-emerald-700 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-emerald-700/80"
+      >
         copy citation
       </button>
     </div>
