@@ -16,6 +16,37 @@ function requireAyah(): ToolSpec {
   return GET_AYAH
 }
 
+/** The 27-name callable set: every name the tool dispatcher accepts. */
+const CALLABLE_TOOLS = [
+  'quran.get_ayah',
+  'quran.get_context',
+  'quran.search',
+  'quran.root',
+  'quran.lemma',
+  'quran.morphology',
+  'quran.family',
+  'quran.graph_neighbors',
+  'quran.graph_path',
+  'quran.graph_pattern',
+  'quran.graph_subgraph',
+  'quran.graph_root_family',
+  'hadith.get',
+  'hadith.search',
+  'hadith.gradings',
+  'tafsir.get',
+  'tafsir.search',
+  'scripture.get',
+  'scripture.search',
+  'scripture.translations',
+  'scripture.editions',
+  'scripture.parallel_passages',
+  'isnad.trace',
+  'isnad.narrator',
+  'isnad.rijal',
+  'rag.query',
+  'rag.debug',
+]
+
 describe('tools catalogue', () => {
   it('seeds quran.get_ayah with its four registry fields', () => {
     const spec = requireAyah()
@@ -43,6 +74,20 @@ describe('tools catalogue', () => {
   it('derives every http path from the tool name', () => {
     for (const tool of TOOLS) {
       expect(httpRequest(tool.name, {}).path).toBe(`/api/v1/quran/tool/${tool.name}`)
+    }
+  })
+
+  it('names the callable set exactly: 27 names, no duplicates', () => {
+    const names = TOOLS.map((tool) => tool.name)
+    expect(names).toHaveLength(27)
+    expect(new Set(names).size).toBe(27)
+    expect([...names].sort()).toEqual([...CALLABLE_TOOLS].sort())
+  })
+
+  it('keeps every denied name out of the callable catalogue', () => {
+    const names = new Set(TOOLS.map((tool) => tool.name))
+    for (const denied of DENIED) {
+      expect(names.has(denied.name)).toBe(false)
     }
   })
 })
@@ -76,6 +121,26 @@ describe('paramsJson', () => {
       expect(error).toBeInstanceOf(ToolParamError)
       expect((error as ToolParamError).field).toBe('reference')
     }
+  })
+
+  it('coerces a numeric field on a real spec and drops empty optionals', () => {
+    const morphology = TOOLS.find((tool) => tool.name === 'quran.morphology')
+    if (morphology === undefined) throw new Error('quran.morphology missing from TOOLS')
+    expect(paramsJson(morphology, { surah: '2', ayah: '1', position: '3' })).toEqual({
+      surah: 2,
+      ayah: 1,
+      position: 3,
+    })
+    const context = TOOLS.find((tool) => tool.name === 'quran.get_context')
+    if (context === undefined) throw new Error('quran.get_context missing from TOOLS')
+    expect(paramsJson(context, { reference: '2:1', before: '', boundary: '' })).toEqual({
+      reference: '2:1',
+    })
+    expect(paramsJson(context, { reference: '2:1', before: '2', max_ayahs: '11' })).toEqual({
+      reference: '2:1',
+      before: 2,
+      max_ayahs: 11,
+    })
   })
 
   it('coerces numbers and maps bools on a synthetic spec', () => {
