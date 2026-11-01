@@ -128,6 +128,44 @@ Phase 13 shipped a 13-route Concordance UI (forest-green on warm white, `13-UI-S
 - [ ] Axe zero + Lighthouse ≥ 90 gate CI; keyboard-only core flows pass; 390px screenshots current (R13)
 - [ ] Re-audit overall ≥ 22/24 with every control working or disabled-with-reason (R14)
 
+## Implementation Acceptance Criteria (locked 2026-11-01)
+
+Mandatory for every implementation plan in this phase (frontend and backend). A plan is not done when it builds — it is done when it verifies. These criteria supplement (never replace) the checklist above.
+
+**Application completeness**
+- [ ] Every route has a stated purpose and complete information architecture (no heading-only, placeholder-only, or permanently empty content areas where the backend provides data)
+- [ ] Every backend capability in agreed scope has a UI entry point; anything still lacking one names the missing endpoint explicitly — zero silent gaps
+- [ ] Every data view consumes real API responses — no fabricated data, no mock results for unavailable backends
+- [ ] Every form has validation and meaningful submission feedback (success, failure with remedy, disabled-with-reason)
+- [ ] Every interactive component has a working behavior or is disabled with a stated reason
+- [ ] Every page handles loading, empty, error, and success states with typed, named states (never blank panels)
+- [ ] Every data structure renders in an appropriate format — structured views, tables, ledgers — never indiscriminate raw-JSON dumps
+- [ ] Complex data supports exploration: detail views, expandable sections, filters, sorting, pagination, and navigation where the payload warrants it
+- [ ] Deep links and browser navigation (back/forward, cold-load URLs, query strings) keep working on every route
+- [ ] Responsive layouts hold at 390px and 1440px; dark mode stays functional on every route
+- [ ] Arabic RTL, bidi isolation, and Unicode correctness hold on every route (Amiri metrics, no mirrored Latin identifiers)
+
+**Testing requirements**
+- [ ] New/updated Vitest tests ship with every non-trivial frontend change
+- [ ] Every route is covered by at least one test
+- [ ] Every major user interaction is tested (run/submit/toggle/navigate/copy/re-verify flows)
+- [ ] Real API integration is tested against a running backend (SPEC R12 E2E suite, not jsdom stubs alone)
+- [ ] Browser screenshots are captured for all routes (light + dark + mobile) with zero page errors
+- [ ] Browser console errors and failed network requests are checked on every tested route — zero unexplained entries
+- [ ] Empty and error responses are tested (typed states render; failures print code + remedy)
+- [ ] No-fake-data verification: tests/captures confirm rendered values come from typed API responses
+- [ ] Production build (`npm run build`) passes
+- [ ] All relevant existing frontend tests still pass (no regressions)
+
+**Scope protection**
+- [ ] No modification to Rust crates, domain architecture, database schema, pinned Rust toolchain, or the canonical Quran engine outside the explicitly scoped R1–R5 backend plans
+- [ ] Any frontend plan that needs a not-yet-built R1–R5 route documents it as an explicit dependency, renders a named empty state until it lands, and never invents an endpoint, response field, or capability
+- [ ] No silent backend edits: every backend change ships in its own atomic commit with tests
+
+**Definition of Done (phase-level)**
+- [ ] The application is usable as a real web-based interface for exploring, testing, and operating the existing Q-ai functionality
+- [ ] Completion = functional verification + real data presentation + route coverage + visual consistency with the amended design contract — a green build alone is not completion
+
 ## Edge Coverage
 
 **Coverage:** probes skipped by author choice — author selected "Done talking — write it" at the spec gate. Planner must treat edge analysis as an assumption and surface edge cases during planning.

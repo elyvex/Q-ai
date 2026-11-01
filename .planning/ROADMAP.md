@@ -398,7 +398,7 @@ Plans:
   6. Responsive + accessible: axe reports zero serious/critical violations on every route; core flows completable by keyboard alone; every route verified at 390px mobile and 1440px desktop with current screenshots
   7. Gates green: `npm run build`, full vitest suite, and `cargo test -p application --test layer_separation` (one-line defect fix: drop the deleted `WordInspector.tsx` path) all pass; new backend routes ship with tests, no unrelated behavior change
 
-**Owner decision OD-16 (DECIDED 2026-11-01, spec-phase interview):** backend-inclusive. Phase 14 adds the missing HTTP routes for ask/agents, tool lifecycle, source catalog, and operations, pulling in REQ-answer-contract, REQ-source-catalog-trust, REQ-retrieval-governance, REQ-agents-tools-runtime. UI-only deferral rejected. Locked in `14-SPEC.md` (14 requirements, ambiguity 0.20).
+**Owner decision OD-16 (DECIDED 2026-11-01, spec-phase interview; reaffirmed 2026-11-01 for implementation criteria):** backend-inclusive. Phase 14 adds the missing HTTP routes for ask/agents, tool lifecycle, source catalog, and operations, pulling in REQ-answer-contract, REQ-source-catalog-trust, REQ-retrieval-governance, REQ-agents-tools-runtime. UI-only deferral rejected. Locked in `14-SPEC.md` (14 requirements + locked implementation acceptance criteria, ambiguity 0.20).
 
 **Out of scope**: unrelated backend behavior changes outside R1–R5; TUI cockpit work (REQ-tui-cli stays separate); native mobile shells; new third-party registries.
 
