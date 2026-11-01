@@ -27,6 +27,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 11: Server & Management** - Versioned API, streaming, auth, catalog, governance (completed 2026-10-19)
 - [x] **Phase 12: Production Hardening** - PG/Qdrant adapters, TLS, Docker, backups, recovery (completed 2026-10-19)
 - [ ] **Phase 13: Web UI Redesign** - Light white/gray redesign, animated background, polished controls, full feature reachability
+- [ ] **Phase 14: Complete Functional Web Application** - Every reachable backend capability surfaced in the UI with complete data, E2E browser coverage, responsive + accessible
 
 ## Phase Details
 
@@ -380,10 +381,33 @@ Plans:
 
 **Plans**: TBD
 
+### Phase 14: Complete Functional Web Application
+
+**Goal**: The web UI becomes a complete working environment for the real Q-ai backend: every reachable capability is visible, testable, and manageable from the browser with complete data presentation, and every flow is proven by end-to-end browser tests against a live engine. Responsive and accessible on desktop and mobile.
+**Depends on**: Phase 13 (verify-work closed)
+
+**Requirements**: REQ-ux-web, REQ-quran-display, REQ-quran-result-contract
+
+**Success Criteria** (what must be TRUE):
+
+  1. Capability coverage: every `GET /api/v1/*` route and every callable `POST /api/v1/quran/tool/{name}` tool has a UI surface, or an explicit deferral row naming the missing backend endpoint — zero silent gaps
+  2. Complete data presentation: the unsurfaced instruments (count `occurrences`, `hapax`, `collocation`, `numeric-report`, `missing-form`, `near-duplicates`, `interval`, `unusual-usage`; quran `editions`, `surahs`, `context`, `divisions`, `tokens`, `normalization/preview` + `profiles`, `verse/links`, `meta`; graph `subgraph`, `pattern`, `root-family` dedicated views) render with checksums/rules/provenance intact
+  3. Interactions complete: no dead controls; reference-template-driven component gaps closed (remaining 13-UI-REVIEW minors: sidebar widths, CTA wording, spacing scale, dead `tokens/themes.css` removed or exception-recorded)
+  4. CLI exposure where appropriate: every runnable UI surface shows its copyable `qai …` + HTTP equivalents for the exact params run (never executed from the browser — the browser cannot spawn processes)
+  5. E2E proven: a Playwright suite drives core flows (read → search → words → graph → citations → tools → hadith/tafsir/scripture/isnad/RAG-debug) against a live engine and passes in CI
+  6. Responsive + accessible: axe reports zero serious/critical violations on every route; core flows completable by keyboard alone; every route verified at 390px mobile and 1440px desktop with current screenshots
+  7. Gates green: `npm run build`, full vitest suite, and `cargo test -p application --test layer_separation` (one-line defect fix: drop the deleted `WordInspector.tsx` path) all pass; no backend behavior change
+
+**Owner decision required (OD-16):** five reference views (Ask/agents run + trace, Tool lifecycle, Source catalog, Operations jobs/audit/budgets/sessions/doctor, System deploy/backups) have no HTTP routes and cannot be built honestly UI-only. Either (a) Phase 14 stays UI-only and defers them with named missing endpoints, or (b) it takes backend scope to add those routes (which pulls in REQ-answer-contract, REQ-source-catalog-trust, REQ-retrieval-governance, REQ-agents-tools-runtime). Default proposal: (a) defer.
+
+**Out of scope**: backend behavior changes (unless OD-16 approves (b)); TUI cockpit work (REQ-tui-cli stays separate); native mobile shells; new third-party registries.
+
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 3.5 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12.
+Phases execute in numeric order: 1 → 2 → 3 → 3.5 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14.
 Phase 3.5 is an INSERTED gap-closure phase; it runs after Phase 4 and does not gate it.
 
 | Phase | Plans Complete | Status | Completed |
@@ -401,6 +425,8 @@ Phase 3.5 is an INSERTED gap-closure phase; it runs after Phase 4 and does not g
 | 10. Agentic Research & Tool Creation | 1/TBD | Complete    | 2026-10-19 |
 | 11. Server & Management | 1/TBD | Complete    | 2026-10-19 |
 | 12. Production Hardening | 1/TBD | Complete    | 2026-10-19 |
+| 13. Web UI Redesign | 14 plans executed | Executed (verify-work pending, UI-REVIEW 22/24) | - |
+| 14. Complete Functional Web Application | 0/TBD | Planned (OD-16 open: UI-only vs backend scope) | - |
 
 ### Phase 13: Web UI Redesign
 
