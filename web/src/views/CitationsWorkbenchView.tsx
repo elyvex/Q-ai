@@ -69,6 +69,14 @@ function slugOf(deepLink: string): string | null {
   return match?.[1] ?? null
 }
 
+/** Up to eight code points either side of `index` — the context the
+ * mismatch readout prints beside the index and the two labels. */
+function contextOf(value: string, index: number): string {
+  return Array.from(value)
+    .slice(Math.max(0, index - 8), index + 8)
+    .join('')
+}
+
 function failureOf(error: unknown): { code?: string; summary: string; remedy?: string } {
   if (error instanceof Error) {
     const code = (error as { code?: unknown }).code
@@ -264,21 +272,58 @@ export default function CitationsWorkbenchView({ initialId }: { initialId: strin
 
       {text.status === 'ready' && (
         <div className="mt-6 overflow-hidden rounded-lg border">
-          <div className="border-b bg-card px-4 py-2.5">
-            <p className="font-mono text-[0.7rem]">
+          <div className="flex flex-wrap items-center gap-2 border-b bg-card px-4 py-2.5">
+            <p className="font-mono text-[0.7rem] font-semibold">Tamper simulation</p>
+            <p className="font-mono text-[0.7rem] text-muted-foreground">
               text · {text.editionSlug}@{text.editionVersion}
             </p>
+            <button
+              type="button"
+              className="btn btn-quiet ml-auto h-7 px-2 text-[0.75rem]"
+              onClick={() => setLocalCopy(text.canonical)}
+            >
+              Restore
+            </button>
           </div>
-          <div className="px-4 py-3">
+          <div className="space-y-3 px-4 py-3">
             {text.linkSlug !== null && text.linkSlug !== text.editionSlug && (
-              <p className="margin-note mb-3">
+              <p className="margin-note">
                 This citation points at edition {text.linkSlug}, which differs from the active
                 edition {text.editionSlug} — the comparison below is against the active
                 edition&apos;s text.
               </p>
             )}
-            <p dir="ltr" className="font-mono text-[0.72rem] text-muted-foreground">
-              {baseline !== null ? describeDiff(baseline) : 'comparing…'}
+            <div>
+              <label htmlFor="tamper-copy" className="kicker mb-2 block">
+                Local copy — edit to see what changes
+              </label>
+              <textarea
+                id="tamper-copy"
+                value={localCopy ?? ''}
+                onChange={(event) => setLocalCopy(event.target.value)}
+                dir="rtl"
+                lang="ar"
+                rows={3}
+                spellCheck={false}
+                className="field font-arabic text-base leading-loose"
+              />
+            </div>
+            <div dir="ltr">
+              <p className="font-mono text-[0.72rem] text-muted-foreground">
+                {baseline !== null ? describeDiff(baseline) : 'comparing…'}
+              </p>
+              {baseline !== null && baseline.firstMismatch !== null && (
+                <div className="mt-1.5 space-y-0.5 font-mono text-[0.72rem] text-muted-foreground">
+                  <p>expected: {contextOf(text.canonical, baseline.firstMismatch.index)}</p>
+                  <p>found: {contextOf(localCopy ?? '', baseline.firstMismatch.index)}</p>
+                </div>
+              )}
+            </div>
+            <p className="margin-note border-t pt-2.5">
+              This edits a copy held in the browser. It does not write to the corpus, it does
+              not change the stored verdict, and it does not recompute text_hash — the hash is
+              a corpus fingerprint over the edition slug, its version and the ordered texts,
+              not a plain digest of one verse.
             </p>
           </div>
         </div>
