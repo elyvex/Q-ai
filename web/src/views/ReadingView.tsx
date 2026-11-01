@@ -14,8 +14,9 @@ import DisplayModeControl, {
   type TranslationMode,
 } from '../display/DisplayModeControl'
 import { EmptyState } from '../components/states'
-import type { AyahView } from '../api/client'
-import { deepLinkFor } from '../lib/tool-result'
+import { ApiRequestError, runTool, type AyahView } from '../api/client'
+import { deepLinkFor, rowsOf, type ToolResultData } from '../lib/tool-result'
+import { RELATED_NOTE, seedQuery } from '../lib/related'
 import {
   addBookmark,
   isBookmarked,
@@ -47,6 +48,114 @@ const LAYERS = [
 
 const SIZE_LABELS: Record<ReaderSize, string> = { sm: 'small', md: 'medium', lg: 'large' }
 const SIZES: readonly ReaderSize[] = ['sm', 'md', 'lg']
+
+/** Rows when `results` is an object array, the `hits` array's length when it
+    carries one, otherwise `unknown` — never a fabricated `0`. */
+function countHits(data: ToolResultData): string {
+  if (Array.isArray(data.results)) return String(rowsOf(data.results).length)
+  if (
+    typeof data.results === 'object' &&
+    data.results !== null &&
+    Array.isArray((data.results as Record<string, unknown>).hits)
+  ) {
+    return String(((data.results as Record<string, unknown>).hits as unknown[]).length)
+  }
+  return 'unknown'
+}
+
+function errorText(error: unknown): string {
+  if (error instanceof ApiRequestError) {
+    return `${error.code ?? 'error'} — ${error.message}`
+  }
+  return error instanceof Error ? error.message : 'unknown error'
+}
+
+type RelatedState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | {
+      status: 'done'
+      seed: string
+      tafsir: string
+      hadith: string
+      tafsirError: string | null
+      hadithError: string | null
+    }
+
+/** Per-verse, on-demand trace into the tafsir and hadith corpora. Nothing is
+    fetched until pressed; the seed and the disclaimer render beside every
+    count so a hit is never read as commentary on the verse (T-13-14). */
+function RelatedBlock({ arabicText }: { arabicText: string }) {
+  const [state, setState] = useState<RelatedState>({ status: 'idle' })
+
+  async function lookup() {
+    const seed = seedQuery(arabicText)
+    setState({ status: 'loading' })
+    const [tafsirSettled, hadithSettled] = await Promise.allSettled([
+      runTool('tafsir.search', { query: seed, limit: 5 }),
+      runTool('hadith.search', { query: seed, limit: 5 }),
+    ])
+    setState({
+      status: 'done',
+      seed,
+      tafsir:
+        tafsirSettled.status === 'fulfilled' ? countHits(tafsirSettled.value.data) : '—',
+      hadith:
+        hadithSettled.status === 'fulfilled' ? countHits(hadithSettled.value.data) : '—',
+      tafsirError: tafsirSettled.status === 'rejected' ? errorText(tafsirSettled.reason) : null,
+      hadithError: hadithSettled.status === 'rejected' ? errorText(hadithSettled.reason) : null,
+    })
+  }
+
+  if (state.status === 'idle') {
+    return (
+      <button type="button" className="seg px-1.5 text-[0.7rem]" onClick={lookup}>
+        related
+      </button>
+    )
+  }
+  if (state.status === 'loading') {
+    return (
+      <button
+        type="button"
+        className="seg px-1.5 text-[0.7rem]"
+        disabled
+        aria-label="related loading"
+      >
+        related…
+      </button>
+    )
+  }
+  return (
+    <div>
+      <button
+        type="button"
+        className="seg px-1.5 text-[0.7rem]"
+        onClick={lookup}
+        aria-label="related — run again"
+      >
+        related
+      </button>
+      <div className="mt-2 rounded-md border px-3 py-2" dir="ltr">
+        <p className="font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground">
+          seeded query
+        </p>
+        <p className="mt-1 font-mono text-[0.75rem] text-foreground">{state.seed}</p>
+        {state.tafsirError === null ? (
+          <p className="mt-1.5 text-[0.75rem]">tafsir hits: {state.tafsir}</p>
+        ) : (
+          <p className="mt-1.5 text-[0.75rem] text-destructive">tafsir error: {state.tafsirError}</p>
+        )}
+        {state.hadithError === null ? (
+          <p className="mt-1 text-[0.75rem]">hadith hits: {state.hadith}</p>
+        ) : (
+          <p className="mt-1 text-[0.75rem] text-destructive">hadith error: {state.hadithError}</p>
+        )}
+        <p className="margin-note mt-2 border-t pt-2">{RELATED_NOTE}</p>
+      </div>
+    </div>
+  )
+}
 
 function guardedLoadPrefs() {
   if (typeof localStorage === 'undefined') {
@@ -170,6 +279,10 @@ export default function ReadingView({
                   <span className="hidden font-mono text-[0.6rem] text-muted-foreground/50 sm:inline">
                     {String(index + 1).padStart(2, '0')}
                   </span>
+                </div>
+
+                <div className="mb-4">
+                  <RelatedBlock arabicText={ayah.canonical.arabicText} />
                 </div>
 
                 {ayah.translations.length === 0 ? (

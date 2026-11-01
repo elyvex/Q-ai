@@ -1,10 +1,14 @@
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import ReadingView from './ReadingView'
-import { BOOKMARKS_KEY, PREFS_KEY } from '../lib/reader-storage'
+import { BOOKMARKS_KEY } from '../lib/reader-storage'
 import type { AyahView } from '../api/client'
+import type { ToolResultData } from '../lib/tool-result'
 
-afterEach(() => cleanup())
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 beforeEach(() => window.localStorage.clear())
 
 function ayah(surah: number, ayah: number, arabicText: string, translations = ['hello']): AyahView {
@@ -140,5 +144,114 @@ describe('ReadingView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'remove bookmark 2:1' }))
     expect(screen.queryByRole('link', { name: '2:1' })).toBeNull()
     expect(screen.getByRole('link', { name: '2:2' })).toBeDefined()
+  })
+})
+
+function toolData(toolName: string, results: unknown): ToolResultData {
+  return {
+    tool_name: toolName,
+    tool_version: '1.0.0',
+    query: {},
+    normalization_rules: [],
+    edition_id: null,
+    edition_version: null,
+    results,
+    canonical_references: [],
+    analysis_sources: [],
+    confidence: null,
+    warnings: [],
+    execution_time_ms: 1,
+    reproducibility: {
+      checksum: { algorithm: 'Sha256', hex: 'aa' },
+      query_hash: { algorithm: 'Sha256', hex: 'bb' },
+      tool_plan: [`${toolName}@1.0.0`],
+      source_versions: {},
+      edition_versions: {},
+    },
+    research_checksum: { algorithm: 'Sha256', hex: 'cc' },
+  }
+}
+
+describe('ReadingView related lookup', () => {
+  it('issues no request before the related button is pressed', () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({}) }))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<ReadingView ayahs={[ayah(2, 1, 'نَبلهُم')]} onResolve={vi.fn()} />)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('pressing related renders the seed, both counts and the note', async () => {
+    const calls: Array<{ url: string; body: unknown }> = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        calls.push({
+          url,
+          body: init?.body !== undefined ? JSON.parse(init.body as string) : undefined,
+        })
+        return {
+          ok: true,
+          json: async () => ({
+            api_version: 'v1',
+            data: url.includes('tafsir.search')
+              ? toolData('tafsir.search', [{ text: 'a' }, { text: 'b' }, { text: 'c' }])
+              : toolData('hadith.search', { hits: [{ text: 'x' }, { text: 'y' }] }),
+          }),
+        }
+      }),
+    )
+    render(<ReadingView ayahs={[ayah(2, 1, 'نَبلهُم')]} onResolve={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'related' }))
+    await screen.findByText('seeded query')
+    // The seed prints beside the canonical text — both carry the wording.
+    expect(screen.getAllByText('نَبلهُم')).toHaveLength(2)
+    expect(screen.getByText('tafsir hits: 3')).toBeDefined()
+    expect(screen.getByText('hadith hits: 2')).toBeDefined()
+    expect(screen.getByText(/text-search hits seeded by this verse/i)).toBeDefined()
+    expect(calls).toHaveLength(2)
+    for (const call of calls) {
+      expect((call.body as Record<string, unknown>).query).toBe('نَبلهُم')
+      expect((call.body as Record<string, unknown>).limit).toBe(5)
+    }
+  })
+
+  it('a stubbed tafsir error renders its code while the hadith count still appears', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).includes('tafsir.search')) {
+          return {
+            ok: false,
+            status: 403,
+            json: async () => ({
+              error: { code: 'QAI-TAFSIR-0001', summary: 'denied here' },
+            }),
+          }
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            api_version: 'v1',
+            data: toolData('hadith.search', [{ text: 'x' }]),
+          }),
+        }
+      }),
+    )
+    render(<ReadingView ayahs={[ayah(2, 1, 'ا')]} onResolve={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'related' }))
+    await screen.findByText(/QAI-TAFSIR-0001/)
+    expect(screen.getByText('hadith hits: 1')).toBeDefined()
+    expect(screen.getByText(/text-search hits seeded/i)).toBeDefined()
+  })
+
+  it('the related button disables with a loading state while in flight', () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise(() => {})),
+    )
+    render(<ReadingView ayahs={[ayah(2, 1, 'ا')]} onResolve={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'related' }))
+    const loading = screen.getByRole('button', { name: 'related loading' })
+    expect(loading.getAttribute('disabled')).not.toBeNull()
   })
 })
