@@ -186,6 +186,14 @@ export default function CitationsWorkbenchView({ initialId }: { initialId: strin
         {openDisabled && <p className="w-full text-[0.75rem] text-muted-foreground">enter a citation id</p>}
       </form>
 
+      {verdict.status === 'idle' && (
+        <div className="mt-6">
+          <EmptyState title="no citation is open">
+            enter a stored citation id above — the verdict prints here verbatim.
+          </EmptyState>
+        </div>
+      )}
+
       {verdict.status === 'loading' && (
         <div className="mt-6">
           <LoadingLine label="verifying citation — against the server, never locally…" />
@@ -305,7 +313,7 @@ export default function CitationsWorkbenchView({ initialId }: { initialId: strin
                 lang="ar"
                 rows={3}
                 spellCheck={false}
-                className="field font-arabic text-base leading-loose"
+                className="field font-arabic leading-loose"
               />
             </div>
             <div dir="ltr">

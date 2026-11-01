@@ -85,7 +85,7 @@ export function SiteHeader({
           >
             <Command className="size-3" aria-hidden="true" />
             <span>Search</span>
-            <kbd className="ml-1 rounded border bg-muted px-1 font-mono text-[0.6rem] leading-4 text-muted-foreground">
+            <kbd className="ml-1 rounded border bg-muted px-1 font-mono text-[0.625rem] leading-4 text-muted-foreground">
               ⌘K
             </kbd>
           </button>

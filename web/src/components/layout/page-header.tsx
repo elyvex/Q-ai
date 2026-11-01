@@ -18,7 +18,7 @@ export function PageHeader({
       <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
         <div className="min-w-0 max-w-2xl">
           <p className="kicker mb-3">{eyebrow}</p>
-          <h1 className="display text-[1.9rem] text-foreground sm:text-[2.3rem]">{title}</h1>
+          <h1 className="display text-[1.9rem] text-foreground sm:text-[2.25rem]">{title}</h1>
           {lede !== undefined && (
             <p className="mt-2.5 text-[0.875rem] leading-relaxed text-muted-foreground">{lede}</p>
           )}

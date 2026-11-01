@@ -312,7 +312,7 @@ function FrequencyOutput({ label, data }: { label: string; data: unknown }) {
           No tokens matched under these rules — a proven zero, not an absence.
         </EmptyState>
       ) : (
-        <p className="font-mono text-2xl tabular-nums">{data.count}</p>
+        <p className="font-mono text-[0.9375rem] tabular-nums">{data.count}</p>
       )}
       <RulesBlock rules={data.rules} />
       <BySurahTable bySurah={data.by_surah} />
@@ -341,7 +341,7 @@ function DistributionOutput({ data }: { data: unknown }) {
           No tokens matched under these rules — a proven zero, not an absence.
         </EmptyState>
       ) : (
-        <p className="font-mono text-2xl tabular-nums">{frequencyReport.count}</p>
+        <p className="font-mono text-[0.9375rem] tabular-nums">{frequencyReport.count}</p>
       )}
       <RulesBlock rules={frequencyReport.rules} />
       {typeof report.partition_provenance === 'string' && (

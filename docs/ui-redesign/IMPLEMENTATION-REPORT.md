@@ -194,3 +194,33 @@ spa_non_canonical_components_wear_no_canonical_class` fails because it
 `expect("component exists")` on `web/src/components/WordInspector.tsx`,
 deleted in `f86be81` before these waves. One-line fix (drop the deleted
 path from the array) left undone — `crates/` is off-limits for UI plans.
+
+## 10. Audit-fix pass (2026-11-01, after 13-UI-REVIEW.md 15/24)
+
+All three priority fixes applied; the approved forest-green palette was kept,
+the contract was amended to match it:
+
+- **Color contract (BLOCKER).** `13-UI-SPEC.md` §§1–3, 7, 9, 13 now specify the
+  shipped values: `--primary oklch(0.42 0.09 145)`, `--accent
+  oklch(0.95 0.018 145)`, `--ring oklch(0.5 0.1 145)`, warm-white ground
+  `oklch(0.99 0.004 90)`, warm-charcoal dark theme — and reword the §2
+  reference rejection so it no longer lists forest green. No shipped token
+  changed; the stale `index.css` header comment ("ultramarine") now reads
+  forest green.
+- **Typography tiers.** `page-header.tsx` display cap `2.3rem` → `2.25rem`;
+  `WordsView` count numerals `text-2xl` → tier-exact `text-[0.9375rem]` mono
+  tabular (2 sites); `CitationsWorkbenchView` tamper textarea drops the
+  `text-base` override back to the 13 px `.field`; `site-header` kbd
+  `text-[0.6rem]` → floor `text-[0.625rem]`. Search/research Arabic snippets
+  stay `text-lg` under a new §4 list-density exception, alongside documented
+  exceptions for the size-stepper preview glyphs and the vendored input
+  iOS-zoom guard. New §19 string: "no citation is open".
+- **Citations pre-run.** The idle branch renders `<EmptyState title="no
+  citation is open">` with the verbatim-print sentence, mirroring
+  Tools/RAGDebug; new unit test pins it.
+- **Evidence.** All 13 routes re-captured light + dark (26 shots) plus 4
+  mobile route shots, mobile nav, and command palette — 34 current
+  screenshots, zero page errors across all captures. Darklegitimacy
+  spot-checked by luminance sampling.
+- Validation: `npm run build` passes; `npx vitest run` **20 files / 151
+  tests pass** (was 150; +1 idle-state test).

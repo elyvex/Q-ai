@@ -106,6 +106,14 @@ describe('CitationsWorkbenchView verdict panel', () => {
   })
 })
 
+describe('CitationsWorkbenchView idle state', () => {
+  it('renders a named empty state before any citation is opened', () => {
+    render(<CitationsWorkbenchView initialId="" />)
+    expect(screen.getByText('no citation is open')).toBeDefined()
+    expect(screen.getByText(/the verdict prints here verbatim/)).toBeDefined()
+  })
+})
+
 describe('CitationsWorkbenchView tamper simulator', () => {
   it('editing one character flips the readout while the verdict is unchanged and issues no request', async () => {
     const calls = stubSuccess()
