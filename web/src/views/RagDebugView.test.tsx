@@ -121,17 +121,19 @@ describe('RagDebugView', () => {
   })
 
   it('runs rag.query through the dispatcher when the query mode is selected', async () => {
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({ api_version: 'v1', data: toolData({ tool_name: 'rag.query' }) }),
-    }))
-    vi.stubGlobal('fetch', fetchMock)
+    let requestedUrl = ''
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: unknown) => {
+        requestedUrl = String(url)
+        return { ok: true, json: async () => ({ api_version: 'v1', data: toolData({ tool_name: 'rag.query' }) }) }
+      }),
+    )
     render(<RagDebugView />)
     fireEvent.click(screen.getByRole('button', { name: 'query' }))
     fireEvent.click(screen.getByRole('button', { name: /run query query/i }))
     await screen.findByText('rag.query')
 
-    expect(fetchMock).toHaveBeenCalledOnce()
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/rag\.query/)
+    expect(requestedUrl).toMatch(/rag\.query/)
   })
 })

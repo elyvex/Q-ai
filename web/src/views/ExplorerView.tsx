@@ -6,14 +6,14 @@ import { useState } from 'react'
 import { Loader2, Send } from 'lucide-react'
 import { PageHeader } from '../components/layout/page-header'
 
-const PRESETS: { label: string; method: 'GET' | 'POST'; path: string; body: string }[] = [
+export const PRESETS: { label: string; method: 'GET' | 'POST'; path: string; body: string }[] = [
   { label: 'Quran ayahs 2:1', method: 'GET', path: '/api/v1/quran/ayahs/2:1', body: '' },
   { label: 'Search normalized', method: 'POST', path: '/api/v1/quran/search/normalized', body: '{"text":"الله"}' },
   { label: 'Graph neighbors', method: 'POST', path: '/api/v1/quran/graph/neighbors', body: '{"node":"quran:2:1"}' },
-  { label: 'Scripture editions', method: 'GET', path: '/api/v1/scripture/editions', body: '' },
-  { label: 'Scripture search', method: 'POST', path: '/api/v1/scripture/search', body: '{"query":"genesis","limit":5}' },
-  { label: 'Cross-domain research', method: 'POST', path: '/api/v1/cross-domain/research', body: '{"query":"mercy","domains":"quran,scripture"}' },
-  { label: 'RAG debug', method: 'GET', path: '/api/v1/rag/debug', body: '' },
+  { label: 'Scripture editions', method: 'POST', path: '/api/v1/quran/tool/scripture.editions', body: '{}' },
+  { label: 'Scripture search', method: 'POST', path: '/api/v1/quran/tool/scripture.search', body: '{"query":"genesis","limit":5}' },
+  { label: 'Hadith search', method: 'POST', path: '/api/v1/quran/tool/hadith.search', body: '{"query":"mercy","limit":5}' },
+  { label: 'RAG debug', method: 'POST', path: '/api/v1/quran/tool/rag.debug', body: '{"project":"default","query":"mercy"}' },
 ]
 
 export default function ExplorerView() {
