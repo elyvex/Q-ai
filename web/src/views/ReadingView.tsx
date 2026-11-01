@@ -2,15 +2,23 @@
 // Canonical text renders byte-exact in document order — the client never
 // re-sorts, normalizes, or merges adjacent units. Dataset text renders as
 // text (no innerHTML). Display controls live in the margin column.
-import { useState } from 'react'
+// Size + layout prefs and bookmarks persist in localStorage (13-13);
+// related lookups are per-verse and on demand, labelled as seeded hits.
+import { useEffect, useState } from 'react'
 import AyahColumn from '../components/AyahColumn'
 import { PageHeader } from '../components/layout/page-header'
 import TranslationPanel from '../components/TranslationPanel'
 import DisplayModeControl, {
   type InspectorMode,
+  type ReaderLayout,
   type TranslationMode,
 } from '../display/DisplayModeControl'
 import type { AyahView } from '../api/client'
+import {
+  loadPrefs,
+  savePrefs,
+  type ReaderSize,
+} from '../lib/reader-storage'
 
 function refTail(reference: string): string {
   // `quran:<slug>@<ver>:<s>:<a>` → verse ordinal for the ruled index.
@@ -29,6 +37,16 @@ const LAYERS = [
   { label: 'Annotation', note: 'lexical notes', color: 'bg-annot' },
 ]
 
+const SIZE_LABELS: Record<ReaderSize, string> = { sm: 'small', md: 'medium', lg: 'large' }
+const SIZES: readonly ReaderSize[] = ['sm', 'md', 'lg']
+
+function guardedLoadPrefs() {
+  if (typeof localStorage === 'undefined') {
+    return { size: 'md' as ReaderSize, layout: 'stacked' as ReaderLayout, translationMode: 'inline' as TranslationMode, inspectorMode: 'popover' as InspectorMode }
+  }
+  return loadPrefs(localStorage)
+}
+
 export default function ReadingView({
   ayahs,
   onResolve,
@@ -36,9 +54,21 @@ export default function ReadingView({
   ayahs: AyahView[]
   onResolve: (reference: string) => void
 }) {
-  const [translationMode, setTranslationMode] = useState<TranslationMode>('inline')
-  const [inspectorMode, setInspectorMode] = useState<InspectorMode>('popover')
+  const [initial] = useState(guardedLoadPrefs)
+  const [size, setSize] = useState<ReaderSize>(initial.size)
+  const [layout, setLayout] = useState<ReaderLayout>(initial.layout)
+  const [translationMode, setTranslationMode] = useState<TranslationMode>(initial.translationMode)
+  const [inspectorMode, setInspectorMode] = useState<InspectorMode>(initial.inspectorMode)
   void onResolve
+
+  useEffect(() => {
+    if (typeof localStorage === 'undefined') return
+    try {
+      savePrefs(localStorage, { size, layout, translationMode, inspectorMode })
+    } catch {
+      // Private-mode storage throws — the reader still works for the session.
+    }
+  }, [size, layout, translationMode, inspectorMode])
 
   // "quran:<slug@ver>:<s>:<a>" → "s:a" for a readable page title.
   const parts = ayahs[0]?.canonical.reference.split(':') ?? []
@@ -46,7 +76,12 @@ export default function ReadingView({
   const verse = parts.length >= 4 ? `${parts[2]}:${parts[3]}` : undefined
 
   return (
-    <div data-translation-mode={translationMode} data-inspector-mode={inspectorMode}>
+    <div
+      data-translation-mode={translationMode}
+      data-inspector-mode={inspectorMode}
+      data-ayah-size={size}
+      data-ayah-layout={layout}
+    >
       <PageHeader
         eyebrow="Qurʾān · Canonical edition"
         title={
@@ -88,49 +123,96 @@ export default function ReadingView({
                   </span>
                 </div>
 
-                <div className="rounded-md border bg-card px-3 py-4 sm:px-5 sm:py-5">
-                  <AyahColumn
-                    arabicText={ayah.canonical.arabicText}
-                    reference={ayah.canonical.reference}
-                  />
-                </div>
-
                 {ayah.translations.length === 0 ? (
-                  <p
-                    className="ayah-translation mt-4 rounded-md border border-dashed px-3 py-2 text-[0.8125rem] italic"
-                    data-empty-translation="true"
-                    dir="ltr"
-                  >
-                    no translation available for this reference
-                  </p>
-                ) : translationMode === 'inline' ? (
-                  <div className="mt-3 space-y-2" dir="ltr">
-                    {ayah.translations.map((t) => (
-                      <TranslationPanel key={t.translator} translator={t.translator} text={t.text} />
-                    ))}
-                  </div>
-                ) : translationMode === 'side-by-side' ? (
-                  <div className="mt-5 grid gap-x-6 gap-y-3 md:grid-cols-2" dir="ltr">
-                    {ayah.translations.map((t) => (
-                      <div key={t.translator} className="border-t border-dashed pt-3">
-                        <TranslationPanel translator={t.translator} text={t.text} />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <details
-                    className="side-panel mt-4 border-t pt-3 text-[0.8125rem]"
-                    dir="ltr"
-                  >
-                    <summary className="cursor-pointer select-none font-medium text-muted-foreground transition-colors hover:text-foreground">
-                      translations ({ayah.translations.length})
-                    </summary>
-                    <div className="mt-2.5 space-y-2">
+                  <>
+                    <div className="rounded-md border bg-card px-3 py-4 sm:px-5 sm:py-5">
+                      <AyahColumn
+                        arabicText={ayah.canonical.arabicText}
+                        reference={ayah.canonical.reference}
+                        size={size}
+                      />
+                    </div>
+                    <p
+                      className="ayah-translation mt-4 rounded-md border border-dashed px-3 py-2 text-[0.8125rem] italic"
+                      data-empty-translation="true"
+                      dir="ltr"
+                    >
+                      no translation available for this reference
+                    </p>
+                  </>
+                ) : layout === 'side-by-side' ? (
+                  <div className="mt-5 grid gap-x-6 gap-y-3 md:grid-cols-2">
+                    <div className="rounded-md border bg-card px-3 py-4 sm:px-5 sm:py-5">
+                      <AyahColumn
+                        arabicText={ayah.canonical.arabicText}
+                        reference={ayah.canonical.reference}
+                        size={size}
+                      />
+                    </div>
+                    <div dir="ltr" className="min-w-0 space-y-2">
                       {ayah.translations.map((t) => (
                         <TranslationPanel key={t.translator} translator={t.translator} text={t.text} />
                       ))}
                     </div>
-                  </details>
+                  </div>
+                ) : layout === 'interlinear' ? (
+                  <div>
+                    <div className="rounded-md border bg-card px-3 py-2 sm:px-5 sm:py-3">
+                      <AyahColumn
+                        arabicText={ayah.canonical.arabicText}
+                        reference={ayah.canonical.reference}
+                        size={size}
+                      />
+                    </div>
+                    {ayah.translations.map((t) => (
+                      <div key={t.translator} data-interlinear dir="ltr" className="mt-2 border-t pt-2">
+                        <span className="font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground">
+                          {t.translator}
+                        </span>
+                        <p className="mt-1 text-[0.8125rem] leading-relaxed">{t.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    <div className="rounded-md border bg-card px-3 py-4 sm:px-5 sm:py-5">
+                      <AyahColumn
+                        arabicText={ayah.canonical.arabicText}
+                        reference={ayah.canonical.reference}
+                        size={size}
+                      />
+                    </div>
+
+                    {translationMode === 'inline' ? (
+                      <div className="mt-3 space-y-2" dir="ltr">
+                        {ayah.translations.map((t) => (
+                          <TranslationPanel key={t.translator} translator={t.translator} text={t.text} />
+                        ))}
+                      </div>
+                    ) : translationMode === 'side-by-side' ? (
+                      <div className="mt-5 grid gap-x-6 gap-y-3 md:grid-cols-2" dir="ltr">
+                        {ayah.translations.map((t) => (
+                          <div key={t.translator} className="border-t border-dashed pt-3">
+                            <TranslationPanel translator={t.translator} text={t.text} />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <details
+                        className="side-panel mt-4 border-t pt-3 text-[0.8125rem]"
+                        dir="ltr"
+                      >
+                        <summary className="cursor-pointer select-none font-medium text-muted-foreground transition-colors hover:text-foreground">
+                          translations ({ayah.translations.length})
+                        </summary>
+                        <div className="mt-2.5 space-y-2">
+                          {ayah.translations.map((t) => (
+                            <TranslationPanel key={t.translator} translator={t.translator} text={t.text} />
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </>
                 )}
 
                 {/* Lexical inspector standby: no word payload ships with the
@@ -175,9 +257,30 @@ export default function ReadingView({
               <DisplayModeControl
                 translationMode={translationMode}
                 inspectorMode={inspectorMode}
+                layout={layout}
                 onTranslationMode={setTranslationMode}
                 onInspectorMode={setInspectorMode}
+                onLayout={setLayout}
               />
+            </div>
+          </div>
+
+          <div>
+            <p className="kicker mb-2">Text size</p>
+            <div className="grid grid-cols-3 gap-0.5 rounded-lg border bg-card p-2.5" role="group" aria-label="canonical text size">
+              {SIZES.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className={`seg ${s === 'sm' ? 'text-xs' : s === 'md' ? 'text-base' : 'text-xl'}`}
+                  aria-pressed={size === s}
+                  aria-label={SIZE_LABELS[s]}
+                  title={SIZE_LABELS[s]}
+                  onClick={() => setSize(s)}
+                >
+                  A
+                </button>
+              ))}
             </div>
           </div>
 

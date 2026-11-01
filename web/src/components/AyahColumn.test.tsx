@@ -26,6 +26,37 @@ describe('AyahColumn (canonical slot, ADR-0112)', () => {
       <AyahColumn arabicText="نَبلهُم" reference="2:1" translation={{ text: 'x', translator: 'y' }} />,
     )
   })
+
+  it('default size renders the md classes and data-ayah-size="md"', () => {
+    const { container } = render(<AyahColumn arabicText="ا" reference="2:1" />)
+    const el = container.querySelector('.ayah-canonical')
+    expect(el?.getAttribute('data-ayah-size')).toBe('md')
+    expect(el?.className).toContain('text-[2rem]')
+    expect(el?.className).toContain('leading-[2.15]')
+  })
+
+  it.each([
+    ['sm', 'text-[1.75rem]', 'leading-[2.15]'],
+    ['md', 'text-[2rem]', 'leading-[2.15]'],
+    ['lg', 'text-[2.25rem]', 'leading-[2.2]'],
+  ] as const)('size %s renders %s %s pinned literally', (size, textClass, leadingClass) => {
+    const { container } = render(<AyahColumn arabicText="ا" reference="2:1" size={size} />)
+    const el = container.querySelector('.ayah-canonical')
+    expect(el?.getAttribute('data-ayah-size')).toBe(size)
+    expect(el?.className).toContain(textClass)
+    expect(el?.className).toContain(leadingClass)
+  })
+
+  it.each(['sm', 'md', 'lg'] as const)(
+    'dir="rtl", lang="ar" and the canonical class hold at size %s',
+    (size) => {
+      const { container } = render(<AyahColumn arabicText="ا" reference="2:1" size={size} />)
+      const el = container.querySelector('.ayah-canonical')
+      expect(el).not.toBeNull()
+      expect(el?.getAttribute('dir')).toBe('rtl')
+      expect(el?.getAttribute('lang')).toBe('ar')
+    },
+  )
 })
 
 describe('LayerBadge', () => {
