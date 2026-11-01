@@ -44,6 +44,104 @@ function stubData(data: ToolResultData) {
   )
 }
 
+function stubReport(report: unknown) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({ ok: true, json: async () => ({ api_version: 'v1', data: report }) })),
+  )
+}
+
+function frequencyReport(count: number) {
+  return {
+    target: 'ktb',
+    rules: {
+      profile: 'L3.diacritics',
+      profile_version: 'v3',
+      datasets: ['stored-forms'],
+      multi_analysis_handling: 'SingleSource',
+      window: null,
+      exclusions: [],
+    },
+    count,
+    by_surah: { 11: 40, 13: 7 },
+    checksum: 'sha256:freq-1',
+  }
+}
+
+describe('WordsView counts', () => {
+  it('renders a frequency report with its count, rules block and checksum', async () => {
+    stubReport(frequencyReport(47))
+    render(<WordsView />)
+    typeReference('ktb')
+    fireEvent.click(screen.getByRole('button', { name: 'Run root frequency' }))
+
+    await screen.findByText('sha256:freq-1')
+    expect(screen.getByText('47')).toBeDefined()
+    expect(screen.getByText('L3.diacritics')).toBeDefined()
+    expect(screen.getByText('v3')).toBeDefined()
+    expect(screen.getByText('stored-forms')).toBeDefined()
+    expect(screen.getAllByText('none').length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByText('11')).toBeDefined()
+    expect(screen.getByText('13')).toBeDefined()
+  })
+
+  it('prints a distribution report with its provenance and warnings', async () => {
+    stubReport({
+      frequency: frequencyReport(5),
+      partition_provenance: 'partitions keyed by surah number (canonical structure)',
+      warnings: ['single-source counts over stored derived forms'],
+    })
+    render(<WordsView />)
+    typeReference('ktb')
+    fireEvent.click(screen.getByRole('button', { name: 'Run distribution' }))
+
+    await screen.findByText('partitions keyed by surah number (canonical structure)')
+    expect(screen.getByText('single-source counts over stored derived forms')).toBeDefined()
+  })
+
+  it('renders a zero count as an explicit empty state with the rules still on screen', async () => {
+    stubReport(frequencyReport(0))
+    render(<WordsView />)
+    typeReference('ktb')
+    fireEvent.click(screen.getByRole('button', { name: 'Run token frequency' }))
+
+    await screen.findByText('zero under these rules')
+    expect(screen.getByText('L3.diacritics')).toBeDefined()
+  })
+
+  it('renders co-occurrence hits with their boundary flag', async () => {
+    stubReport({
+      rules: {
+        profile: 'L3.diacritics',
+        profile_version: 'v3',
+        datasets: ['stored-forms'],
+        multi_analysis_handling: 'SingleSource',
+        window: 'token:5',
+        exclusions: [],
+      },
+      hits: [{ form: 'kataba', count: 3, spans_ayah_boundary: true }],
+    })
+    render(<WordsView />)
+    typeReference('ktb')
+    fireEvent.click(screen.getByRole('button', { name: 'Run cooccurrence' }))
+
+    await screen.findByText('spans_ayah_boundary')
+    expect(screen.getByText('kataba')).toBeDefined()
+    expect(screen.getByText('true')).toBeDefined()
+    expect(screen.getByText('token:5')).toBeDefined()
+  })
+
+  it('keeps the co-occurrence control disabled while the window is not positive', () => {
+    render(<WordsView />)
+    typeReference('ktb')
+    fireEvent.change(screen.getByLabelText(/^window$/i), { target: { value: '0' } })
+
+    const run = screen.getByRole('button', { name: 'Run cooccurrence' })
+    expect(run.hasAttribute('disabled')).toBe(true)
+    expect(screen.getByText('enter a positive window')).toBeDefined()
+  })
+})
+
 function stubFailure(code: string, summary: string) {
   vi.stubGlobal(
     'fetch',
