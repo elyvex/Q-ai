@@ -1,79 +1,99 @@
 ---
-last_mapped_commit: 68b7ea6c1aacd1476d154550b2a6e9574614b6af
-last_mapped_at: 2026-09-22
+last_mapped_commit: 6891d7bd17e0c412aad2495e9a749e46dbc2537d
+last_mapped_at: 2026-11-01
 ---
 # Coding Conventions
 
-**Analysis Date:** 2026-09-22
+**Analysis Date:** 2026-11-01
 
 ## Naming Patterns
 
 **Files:**
 
 - Use `snake_case` for all Rust files: `crates/domain/src/diagnostic.rs`, `crates/config/src/secret_store.rs`, `crates/quran-core/src/reference/parser.rs`
-- Unit tests live inline in the same file under `#[cfg(test)] mod tests`; integration tests live in `crates/<name>/tests/<topic>.rs` (e.g. `crates/storage-sqlite/tests/quran.rs`, `crates/server/tests/api.rs`, `crates/testkit/tests/secret_leak.rs`)
+- Unit tests live inline in the same file under `#[cfg(test)] mod tests`; integration tests live in `crates/<name>/tests/<topic>.rs` (e.g. `crates/storage-sqlite/tests/quran.rs`, `crates/server/tests/api.rs`, `crates/application/tests/quran_reader.rs`, `crates/testkit/tests/secret_leak.rs`)
 - CLI snapshot cases use `crates/cli/tests/quran/*.trycmd` (`read_flow.trycmd`, `normalize.trycmd`, `catalog.trycmd`)
 - Migrations are numbered append-only: `migrations/sqlite/NNNN_*.up.sql` with checksums in `migrations/sqlite/checksums.json` — never edit an applied migration
 - Crates use `kebab-case` directory names mapping to `snake_case` crate names: `crates/storage-sqlite/`, `crates/quran-corpus/`, `crates/testkit/`
+- Web files use `PascalCase` for components/views, `kebab-case` otherwise: `web/src/views/ReadingView.tsx`, `web/src/components/AyahColumn.tsx`, `web/src/components/layout/site-header.tsx`, `web/src/lib/reader-storage.ts`, `web/src/tokens/layers.css`
+- Web tests are co-located siblings: `ReadingView.test.tsx` next to `ReadingView.tsx`, `reader-storage.test.ts` next to `reader-storage.ts` (`web/vitest.config.ts` includes `src/**/*.test.{ts,tsx}`)
 
 **Functions:**
 
-- Use `snake_case` verbs or verb phrases: `parse()`, `serialize()`, `resolve_string()`, `activate_edition()`, `render_human()`, `redact_log_fields()`
-- Constructors are `new()`; fallible constructors return `Result`: `Timestamp::from_ymd_hms()`, `Confidence::new()`, `SqliteDatabase::new().await`
-- Test helpers are `sample_*`, `make_*`, `migrated_db()`, `stage_run()`: `sample_source_version()` in `crates/testkit/src/lib.rs`, `migrated_db()` in `crates/storage-sqlite/tests/quran.rs`, `test_view()` / `test_state()` in `crates/server/tests/api.rs`
-- Async functions carry no prefix; callers use `.await`: `async fn insert(&mut self, record: ProvenanceRecord)` in `crates/provenance/src/lib.rs`
+- Rust: use `snake_case` verbs or verb phrases: `parse()`, `serialize()`, `resolve_string()`, `activate_edition()`, `render_human()`, `redact_log_fields()`
+- Rust constructors are `new()`; fallible constructors return `Result`: `Timestamp::from_ymd_hms()`, `Confidence::new()`, `SqliteDatabase::new().await`
+- Rust test helpers are `sample_*`, `make_*`, `migrated_db()`, `stage_run()`: `sample_source_version()` in `crates/testkit/src/lib.rs`, `migrated_db()` in `crates/storage-sqlite/tests/quran.rs`, `test_view()` / `test_state()` in `crates/server/tests/api.rs`
+- Async Rust functions carry no prefix; callers use `.await`: `async fn insert(&mut self, record: ProvenanceRecord)` in `crates/provenance/src/lib.rs`
+- TypeScript: use `camelCase` verbs: `loadPrefs()`, `savePrefs()`, `byteDiff()`, `runTool()`, `isActive()` (`web/src/lib/reader-storage.ts`, `web/src/lib/byte-diff.ts`, `web/src/lib/tools.ts`, `web/src/components/layout/site-header.tsx`)
+- React components are `PascalCase` matching the file: `ReadingView`, `IsnadView`, `CitationsWorkbenchView`, `ToolLedger`, `LayerBadge`, `EmptyState` / `ErrorNote` / `LoadingLine` (`web/src/components/states.tsx`)
+- Type predicates and guards read as predicates: `isActive()`, `pick()` in `web/src/lib/reader-storage.ts`
 
 **Variables:**
 
-- Use `snake_case` throughout: `source_version_id`, `corpus_generation`, `chain_hash`, `approved_by`
-- Booleans read as predicates: `is_retryable()`, `is_empty()`, `cancel_requested`, `redact_secrets`
-- Times are `Timestamp` values named `*_at`: `created_at`, `approved_at`, `activated_at`, `occurred_at`
-- Hashes are `ContentHash` values named `*_hash`: `text_hash`, `manifest_hash`, `quoted_text_hash`
+- Rust: use `snake_case` throughout: `source_version_id`, `corpus_generation`, `chain_hash`, `approved_by`
+- Rust booleans read as predicates: `is_retryable()`, `is_empty()`, `cancel_requested`, `redact_secrets`
+- Rust times are `Timestamp` values named `*_at`: `created_at`, `approved_at`, `activated_at`, `occurred_at`
+- Rust hashes are `ContentHash` values named `*_hash`: `text_hash`, `manifest_hash`, `quoted_text_hash`
+- TypeScript: `camelCase` locals and props: `currentPath`, `onSearchClick`, `translationMode`, `inspectorMode` (`web/src/views/ReadingView.tsx`, `web/src/components/layout/site-header.tsx`)
+- localStorage keys are namespaced `qai.<area>.<name>.v1`: `qai.reader.prefs.v1` (`PREFS_KEY`), `BOOKMARKS_KEY` in `web/src/lib/reader-storage.ts`
+- CSS custom properties are `--kebab-case` tokens: `--background`, `--foreground`, `--primary`, `--canon`, `--trans`, `--annot`, `--comp` (`web/src/tokens/themes.css`, `web/src/tokens/layers.css`)
 
 **Types:**
 
-- Use `UpperCamelCase` for types, traits, enums: `ProvenanceRecord`, `CanonicalWriter`, `ApprovalToken`, `StorageError`, `DiagnosticCode`, `ValueOrigin`
-- Newtype IDs are singular nouns ending in `Id`: `SourceId`, `JobId`, `ApprovalId`, `ProvenanceId` — all generated by the `typed_id!` macro in `crates/domain/src/ids.rs`
-- Error enums are `<Domain>Error`: `StorageError` (`crates/storage/src/error.rs`), `ProvenanceError` (`crates/provenance/src/lib.rs`), `ConfigError` (`crates/config/src/lib.rs`), `QuranError` (`crates/quran-core/src/error.rs`)
-- Repository traits are `<Domain>Repository`: `ProvenanceRepository`, `AuditRepository`; writer traits are verbs: `CanonicalWriter`
-- Constants are `SCREAMING_SNAKE_CASE`: `MAX_REFERENCE_LEN`, `SPAN_COMPONENT`, `THRESHOLDS`, `SENTINEL` (test-only)
+- Rust: use `UpperCamelCase` for types, traits, enums: `ProvenanceRecord`, `CanonicalWriter`, `ApprovalToken`, `StorageError`, `DiagnosticCode`, `ValueOrigin`
+- Rust newtype IDs are singular nouns ending in `Id`: `SourceId`, `JobId`, `ApprovalId`, `ProvenanceId` — all generated by the `typed_id!` macro in `crates/domain/src/ids.rs`
+- Rust error enums are `<Domain>Error`: `StorageError` (`crates/storage/src/error.rs`), `ProvenanceError` (`crates/provenance/src/lib.rs`), `ConfigError` (`crates/config/src/lib.rs`), `QuranError` (`crates/quran-core/src/error.rs`)
+- Rust repository traits are `<Domain>Repository`: `ProvenanceRepository`, `AuditRepository`; writer traits are verbs: `CanonicalWriter`
+- Rust constants are `SCREAMING_SNAKE_CASE`: `MAX_REFERENCE_LEN`, `SPAN_COMPONENT`, `THRESHOLDS`, `SENTINEL` (test-only)
+- TypeScript: `PascalCase` interfaces/types, `camelCase` literal unions: `ToolSpec`, `ToolField`, `ToolFieldKind = 'text' | 'number' | 'json' | 'bool'`, `ToolDomain = 'quran' | 'graph' | … | 'rag'`, `ReaderSize = 'sm' | 'md' | 'lg'`, `ReaderLayout`, `TranslationMode`, `InspectorMode`, `Layer = 'canonical' | 'translation' | 'annotation'` (`web/src/lib/tools.ts`, `web/src/lib/reader-storage.ts`, `web/src/components/LayerBadge.tsx`)
+- TypeScript error classes carry the offending field, never a bare `Error`: `ToolParamError { field }` in `web/src/lib/tools.ts`
 
 ## Code Style
 
 **Formatting:**
 
-- Tool: `rustfmt` on stable toolchain `1.97.1` (`rust-toolchain.toml` pins `channel = "1.97.1"` with `rustfmt`, `clippy` components)
-- Settings in `rustfmt.toml`: `edition = "2024"`, `tab_spaces = 4`, `use_small_heuristics = "Max"`, `reorder_imports = true`, `newline_style = "Unix"`, `use_try_shorthand = true`
+- Rust tool: `rustfmt` on stable toolchain `1.97.1` (`rust-toolchain.toml` pins `channel = "1.97.1"` with `rustfmt`, `clippy` components)
+- Rust settings in `rustfmt.toml`: `edition = "2024"`, `tab_spaces = 4`, `use_small_heuristics = "Max"`, `reorder_imports = true`, `newline_style = "Unix"`, `use_try_shorthand = true`
 - Only stable rustfmt options are used so `cargo fmt --check` is clean on stable CI
 - Gate: `cargo fmt --all -- --check` is step 1/9 of `cargo xtask ci` (`xtask/src/ci.rs`); contributors run `cargo fmt --all` before every PR (`CONTRIBUTING.md`)
+- TypeScript: 2-space indent, single quotes, no semicolons omitted — follow the file in front of you; `tsc -b` must pass (`web/package.json` `build` script runs `tsc -b && vite build`). `noUnusedLocals` and `noUnusedParameters` are on (`web/tsconfig.app.json`) — remove dead imports instead of suppressing
+- TS path alias: `@/*` maps to `./src/*` (`web/tsconfig.app.json`); vitest mirrors it (`web/vitest.config.ts` `resolve.alias`)
 
 **Linting:**
 
-- Tool: `clippy` with `cargo clippy --workspace --all-targets -- -D warnings` (step 2/9 of `cargo xtask ci`)
-- Workspace lints in `Cargo.toml`: `[workspace.lints.rust] unsafe_code = "forbid"` — zero `unsafe` workspace-wide, no exceptions in Phase 0
+- Rust tool: `clippy` with `cargo clippy --workspace --all-targets -- -D warnings` (step 2/9 of `cargo xtask ci`)
+- Workspace lints in `Cargo.toml`: `[workspace.lints.rust] unsafe_code = "forbid"` — zero `unsafe` workspace-wide, no exceptions
 - `pedantic`/`nursery` are deliberately NOT enabled yet (would over-noise placeholder crates); enable selectively per crate after real bodies land
 - `clippy.toml` sets `doc-valid-idents = ["Quran", "Hadith", "Tafsir", "Uthmani", "Hafs", "Warsh", "Qiraat"]` so domain terms don't trigger doc warnings
 - Narrow `#[allow(...)]` is permitted only with justification: `#[allow(clippy::too_many_arguments)]` on wide handler fns (`crates/application/src/quran_search.rs`, `crates/tools/src/lib.rs`); `#[allow(unsafe_code)]` only around test `std::env::set_var` blocks (`crates/config/src/lib.rs`)
 - Supply chain lint: `cargo-deny check` per `deny.toml` (step 4/9; warn-and-skip locally if not installed, hard gate in CI)
+- Web tool: `oxlint` 1.81.0 (devDependency in `web/package.json`); no eslint config — run the oxlint binary from `node_modules` when linting TS/React
 
 ## Import Organization
 
-**Order:**
+**Order (Rust):**
 
 1. `std` / `core` imports (`use std::collections::BTreeMap;`, `use core::fmt;`)
 2. External crates alphabetized (`use serde::{Deserialize, Serialize};`, `use thiserror::Error;`, `use tokio::...;`)
 3. Workspace crates (`use domain::{...};`, `use storage::...;`, `use config::...;`)
 4. `crate::` then `super::` then `self` (`use crate::error::{DiagnosticCode, QuranError, codes};`)
 
+**Order (TypeScript/React):**
+
+1. External packages (`react`, `lucide-react`, `@testing-library/react`, `vitest`)
+2. `@/`-aliased or relative project imports (`../api/client`, `../components/states`, `../lib/tool-result`)
+3. Type-only imports use `import type` (`import type { AyahView } from '../api/client'` in `web/src/views/ReadingView.test.tsx`)
+
 **Path Aliases:**
 
-- No `[patch]`-style path aliases; the workspace uses real crate names (`domain`, `storage`, `config`, `testkit`)
-- `rustfmt` `reorder_imports = true` keeps `use` blocks sorted; keep one item per line for long lists (see the `domain::{...}` import block at the top of `crates/provenance/src/lib.rs`)
-- Prefer explicit imports over globs; `use super::*;` appears only inside `#[cfg(test)] mod tests`
+- Rust: no `[patch]`-style path aliases; the workspace uses real crate names (`domain`, `storage`, `config`, `testkit`)
+- Rust: `rustfmt` `reorder_imports = true` keeps `use` blocks sorted; keep one item per line for long lists (see the `domain::{...}` import block at the top of `crates/provenance/src/lib.rs`)
+- Rust: prefer explicit imports over globs; `use super::*;` appears only inside `#[cfg(test)] mod tests`
+- Web: `@/*` → `./src/*` is the only alias (`web/tsconfig.app.json`, `web/vitest.config.ts`); prefer relative `../` imports as existing files do
 
 ## Error Handling
 
-**Patterns:**
+**Patterns (Rust):**
 
 - Define one `thiserror::Error` enum per crate with a `code()` method returning the stable namespaced string. Example from `crates/storage/src/error.rs`:
   ```rust
@@ -104,6 +124,14 @@ last_mapped_at: 2026-09-22
 - Use `anyhow::Result` with `.context()` only at binary/tooling boundaries (`xtask/src/ci.rs`, `xtask/src/coverage.rs`); library code returns typed errors.
 - CLI exit codes are centralized in `crates/cli/src/exit_code.rs`: `OK=0`, `GENERIC=1`, `USAGE=2`, `VALIDATION=3`, `POLICY=4`, `NOT_FOUND=5`, `CONFLICT=6`, `CANCELLED=7`, `INTERNAL=70`, with `from_config_error()` / `from_io_error()` mappers. trycmd cases assert them with `? <code>` lines (e.g. `? 6` in `crates/cli/tests/quran/read_flow.trycmd`).
 
+**Patterns (Web):**
+
+- Typed parameter failures use `ToolParamError { field, message }` — never a bare `Error` (`web/src/lib/tools.ts`). Forms render from the `ToolSpec.fields` catalogue so an out-of-catalogue parameter can never be entered (`web/src/views/ToolsView.tsx`).
+- Tools the route refuses render as disabled rows with their policy code (`DeniedTool { name, code, reason }` in `web/src/lib/tools.ts`); nothing on the page can issue one of those calls.
+- HTTP failures surface through `ApiRequestError` from `web/src/api/client.ts`; views show them in the shared `ErrorNote` (`role="alert"`) component, never a blank panel or a disguised empty state.
+- Validation errors sit directly beneath the field with `aria-invalid`; JSON bodies and references render in mono (`docs/ui-redesign/UI-SPEC.md` §10).
+- Storage loads never throw: a missing key, invalid JSON, non-object, or out-of-range value falls back to the default for that single field while valid siblings survive — and browser-writable storage never reaches a class name unchecked (`pick()` allowlist in `web/src/lib/reader-storage.ts`).
+
 ## Logging
 
 **Framework:** `tracing` + `tracing-subscriber` (`crates/observability/src/lib.rs`), metrics via the `metrics` crate catalog (`crates/observability/src/metrics.rs`)
@@ -115,35 +143,38 @@ last_mapped_at: 2026-09-22
 - Secret scrubbing is on by default: `init()` delegates to `init_with_options(InitOptions { format, redact_secrets: true })`; every stderr write passes through `RedactingWriter` applying `redact_log_fields()` (Rule A `key=value` scrubbing for `api_key`, `password`, `secret`, `token`, `credential`)
 - Free-text and URL shapes are scrubbed at the diagnostic layer too: `domain::redaction::redact_text()` (Rule B key=value, Rule C URL userinfo) is applied inside `Diagnostic::render_human()` / `render_json()` (`crates/domain/src/diagnostic.rs:77-129`), and `redact_json_value()` / `audit::redact_audit_value()` scrub structured payloads. The escape hatch `InitOptions::default_off_for_debug()` (`redact_secrets: false`) exists for debugging only
 - `RUST_LOG` drives the `EnvFilter`; `Format::Json` selects JSON output. OTLP export lives behind the `otlp` feature (`crates/observability/src/otlp.rs`)
+- Web has no logging framework: honest UI states (`LoadingLine` with `role="status"`, `ErrorNote` with `role="alert"`, typed `EmptyState`) are the observability surface; transcript output uses `aria-live="polite"` (`web/src/components/states.tsx`, `docs/ui-redesign/UI-SPEC.md` §16)
 
 ## Comments
 
 **When to Comment:**
 
-- Every crate opens with a `//!` module doc naming the phase and deliverable: `//! Phase 0 — Provenance model (D0.11).` (`crates/provenance/src/lib.rs`), `//! Phase 2 — backend-independent full-text types (plan.md §4.1, P2-T29).` (`crates/quran-search/src/model.rs`)
+- Every Rust crate opens with a `//!` module doc naming the phase and deliverable: `//! Phase 0 — Provenance model (D0.11).` (`crates/provenance/src/lib.rs`), `//! Phase 2 — backend-independent full-text types (plan.md §4.1, P2-T29).` (`crates/quran-search/src/model.rs`)
 - Placeholder crates contain only a `//! Phase N` reservation doc pointing at the plan (e.g. `crates/tafsir/src/lib.rs`, `crates/policy/src/lib.rs`)
 - Every integration test file opens with a `//!` header citing acceptance criteria and task IDs: `//! Phase 1 — persistence acceptance: AC-P1-08/09 (P1-T12–T14, T24).` (`crates/storage-sqlite/tests/quran.rs`), `//! AC-P1-17 / P1-T52 — ...` (`crates/cli/tests/doctor_json.rs`)
 - Document invariants, not mechanics: `/// Maximum accepted reference length in bytes (input hygiene, not grammar).` (`crates/quran-core/src/reference/parser.rs`), `/// Construct from a UUID string, panicking on invalid input. Primarily for test/sample use; ...` (`crates/domain/src/ids.rs`)
 - trycmd files carry prose explaining ordering and volatility rules at the top (`crates/cli/tests/quran/read_flow.trycmd:1-9`)
+- Every web view/lib file opens with a `//` header stating the contract it upholds: catalogue derivations in `web/src/lib/tools.ts`, prefs persistence + never-throw loads in `web/src/lib/reader-storage.ts`, code-point comparison in `web/src/lib/byte-diff.ts`, no-out-of-catalogue-params in `web/src/views/ToolsView.tsx`, layer-token rule in `web/src/components/LayerBadge.tsx`
 
 **JSDoc/TSDoc:**
 
 - Rustdoc (`///` / `//!`) is the equivalent and is required on all public items; include a `# Example` block where construction is non-obvious (see `crates/observability/src/lib.rs:7-15`)
 - Section banners use `// ─── Name ───` dividers inside large `lib.rs` files (`// ─── CanonicalWriter ───`, `// ─── ProvenanceError ───` in `crates/provenance/src/lib.rs`)
+- Web uses plain `//` contract headers, not JSDoc blocks — keep the established per-file header style
 
 ## Function Design
 
-**Size:** Keep functions small and single-purpose; split parse helpers per grammar production (`surah_of`, `ayah_of`, `position_of`, `division`, `parse_range`, `parse_locator` in `crates/quran-core/src/reference/parser.rs`). Handler functions that exceed argument limits take an explicit `#[allow(clippy::too_many_arguments)]` rather than a parameter object, by current convention (`crates/application/src/quran_search.rs:356`, `crates/tools/src/lib.rs:129`).
+**Size:** Keep functions small and single-purpose; split parse helpers per grammar production (`surah_of`, `ayah_of`, `position_of`, `division`, `parse_range`, `parse_locator` in `crates/quran-core/src/reference/parser.rs`). Handler functions that exceed argument limits take an explicit `#[allow(clippy::too_many_arguments)]` rather than a parameter object, by current convention (`crates/application/src/quran_search.rs:356`, `crates/tools/src/lib.rs:129`). Web views follow the same rule: one view per route file (`ReadingView`, `WordsView`, `ToolsView`, `IsnadView`, `CitationsWorkbenchView`), shared page structure factored into `PageHeader` / `EmptyState` / `ErrorNote` / `LoadingLine` rather than duplicated.
 
-**Parameters:** Take borrowed slices/`&str` where possible (`pub fn parse(input: &str)`); pass IDs by reference (`&ProvenanceId`); pass small `Copy` newtypes by value (`Timestamp`, `SemVer`). Async repository methods take `&self`/`&mut self` per mutation (`ProvenanceRepository` in `crates/provenance/src/lib.rs:77-101`).
+**Parameters:** Rust: take borrowed slices/`&str` where possible (`pub fn parse(input: &str)`); pass IDs by reference (`&ProvenanceId`); pass small `Copy` newtypes by value (`Timestamp`, `SemVer`). Async repository methods take `&self`/`&mut self` per mutation (`ProvenanceRepository` in `crates/provenance/src/lib.rs:77-101`). React: props are small destructured objects (`{ currentPath, onSearchClick }` in `web/src/components/layout/site-header.tsx`); storage helpers take an injected `Pick<Storage, 'getItem' | 'setItem'>` so tests pin the contract without a DOM global (`loadPrefs` / `savePrefs` in `web/src/lib/reader-storage.ts`).
 
-**Return Values:** Return `Result<T, <Crate>Error>` with a crate-local `type Result<T, E = ...>` alias where ergonomic (`type Result<T, E = ProvenanceError>` in `crates/provenance/src/lib.rs:10`). Return `Option<T>` for lookups (`get_ayah`, `get_edition`). Never `panic!` on user input; reserve `expect()`/`unwrap()` for tests and for invariants already validated (parsers document "Never panics" as a contract).
+**Return Values:** Rust: return `Result<T, <Crate>Error>` with a crate-local `type Result<T, E = ...>` alias where ergonomic (`type Result<T, E = ProvenanceError>` in `crates/provenance/src/lib.rs:10`). Return `Option<T>` for lookups (`get_ayah`, `get_edition`). Never `panic!` on user input; reserve `expect()`/`unwrap()` for tests and for invariants already validated (parsers document "Never panics" as a contract). Web: pure functions return data, never throw on user input — `byteDiff()` returns a `ByteDiff` struct, `loadPrefs()` falls back per-field (`web/src/lib/byte-diff.ts`, `web/src/lib/reader-storage.ts`).
 
 ## Module Design
 
-**Exports:** Each crate root re-exports its public vocabulary: `crates/domain/src/lib.rs` (`pub use diagnostic::{...}`, `pub use ids::{...}`), `crates/config/src/lib.rs` (`pub use origin::{OriginMap, ValueOrigin}`, `pub use secret::Secret`). Sub-modules are `pub mod` per concern (`diagnostic`, `ids`, `primitives`, `provenance`, `redaction`, `security*` in `crates/domain/src/lib.rs:20-33`).
+**Exports:** Each Rust crate root re-exports its public vocabulary: `crates/domain/src/lib.rs` (`pub use diagnostic::{...}`, `pub use ids::{...}`), `crates/config/src/lib.rs` (`pub use origin::{OriginMap, ValueOrigin}`, `pub use secret::Secret`). Sub-modules are `pub mod` per concern (`diagnostic`, `ids`, `primitives`, `provenance`, `redaction`, `security*` in `crates/domain/src/lib.rs:20-33`). Web modules export the catalogue plus its derivations from one place: `web/src/lib/tools.ts` (`ToolSpec`, `ToolField`, `DeniedTool`, `ToolParamError`, `DOMAIN_ORDER`, `TOOLS`, `DENIED`), `web/src/lib/words.ts`, `web/src/lib/related.ts`, `web/src/lib/byte-diff.ts`.
 
-**Barrel Files:** `lib.rs` files act as barrels plus crate-level docs stating the dependency constraint enforced by `arch-check` (e.g. "`domain` may depend only on `(serde, thiserror, time, uuid)`" in `crates/domain/src/lib.rs:15-18`). Re-export through the narrowest path consumers need.
+**Barrel Files:** Rust `lib.rs` files act as barrels plus crate-level docs stating the dependency constraint enforced by `arch-check` (e.g. "`domain` may depend only on `(serde, thiserror, time, uuid)`" in `crates/domain/src/lib.rs:15-18`). Re-export through the narrowest path consumers need. Web has no barrels: import directly from the defining module (`../lib/tools`, `../api/client`, `../components/states`).
 
 **Core integrity patterns — follow these exactly:**
 
@@ -151,6 +182,38 @@ last_mapped_at: 2026-09-22
 - `CanonicalWriter` + `ApprovalToken` (`crates/provenance/src/lib.rs:137-216`): canonical writes require a token whose inner struct lives in a private `mod approval` so it cannot be constructed outside `ApprovalToken::new()`. `begin_canonical_change(&self, token, change)` is sync-gated on the token; `commit/abort` are async. Staging tables stay writable; canonical tables are trigger-guarded (`QAI-QUR-0001…0005`).
 - `ValueOrigin` + `OriginMap` (`crates/config/src/origin.rs`): every config value tracks `Default | File { path, line } | Env(var) | Cli(flag)` with `Display` forms `default`, `file <path>[:<line>]`, `env <VAR>`, `cli <flag>`. Precedence is Defaults < File < Env < CLI (`Config::load` in `crates/config/src/lib.rs:223-260`); record origins on every merge path and surface them via `OriginMap::explain()`.
 
+## Provenance and Layer Rules (product principles, non-negotiable)
+
+These come from the 19 product principles (PRD §2, `AGENTS.md` "Key Principles", `.planning/REQUIREMENTS.md` `REQ-product-principles`) and the trust-layer requirement (`REQ-data-separation-layers`, PRD §6). They apply to Rust and web code alike:
+
+- **Exact text before generated interpretation.** The canonical Arabic string is rendered byte-exact: the reader asserts `textContent` equality and never transforms canonical text (`web/src/views/ReadingView.test.tsx` "never transforms canonical text"); comparison is code-point-exact via `Array.from`, never UTF-16 index (`web/src/lib/byte-diff.ts`).
+- **Trust layers A–E stay separated.** Canonical (A) / publisher metadata (B) / scholarly (C) / computational (D) / user+AI notes (E). The UI marks them with semantic provenance tokens only: `LayerBadge` maps `canonical | translation | annotation` to `layer-canonical | layer-translation | layer-annotation` via a `Record<Layer, string>` so a translation can never wear the canonical token (`web/src/components/LayerBadge.tsx`, `web/src/tokens/layers.css`). Layer backgrounds default to `transparent` — a translation is marked by an accent rule and label, not a tinted block (`docs/ui-redesign/UI-SPEC.md` §3).
+- **No fabrication.** A reader never invents a verse ("A reader never invents a verse. Open a reference …" empty state, `docs/ui-redesign/UI-SPEC.md` §19); the word-token component was deliberately NOT built because the ayah endpoint ships no word payload — the reader shows an honest inspector standby instead of a placeholder token (`docs/ui-redesign/UI-SPEC.md` §8).
+- **Label what things are.** Computed/derived content is labelled as such: the tamper simulator is labelled local-only, checksums shown are the server's strings (the client never hashes), related-text lookups are labelled for what they are, denied tools show their policy code (`web/src/views/CitationsWorkbenchView.tsx`, `web/src/views/ToolsView.tsx`, `web/src/lib/related.ts`).
+- **Traceability.** Every Quran tool result carries the result contract fields including a research checksum (`REQ-quran-result-contract`); CLI/HTTP panels in `ToolsView` derive from the params object beside the last successful ledger so the checksum beside them is the checksum of the params shown.
+- **Local-first.** Reader prefs and bookmarks persist in `localStorage` under versioned keys (`qai.reader.prefs.v1`); loads never throw and fall back per-field (`web/src/lib/reader-storage.ts`).
+
+## UI Design Language ("Concordance", `docs/ui-redesign/UI-SPEC.md`)
+
+The UI-SPEC is the contract every current and future screen follows. Implement new screens against it, not against ad-hoc Tailwind:
+
+- **Direction.** A working instrument, not a dashboard: porcelain sheet, type does the work, one saturated indigo accent marks the active instrument. Three rules: the text is the interface; one accent; the page title (Newsreader display) anchors the eye, the margin column carries supporting controls (`docs/ui-redesign/UI-SPEC.md` §1).
+- **Palette.** Light porcelain/ink + single indigo `--primary`; dark is designed separately (ink/chalk, lifted indigo), not an inversion. Provenance hues (`--canon` verdigris, `--trans` violet-ink, `--annot` ochre, `--comp` madder, each with a `*-soft` companion) are semantic only and never decorative (§3).
+- **Typography.** Newsreader (titles/wordmark only) / Inter (UI, 13 px working size) / Amiri (Arabic, 1.75→2.25 rem, line-height 2.15–2.2, no letter-spacing, no synthetic weights) / JetBrains Mono (references, counts, raw output). Four size tiers; nothing below 0.625 rem; only mono caps are letter-spaced (§4).
+- **Layout.** Full-width 56 px top rail, content `max-width: 86rem`, footer colophon pinned by flex column; section spacing `mt-8`, page padding 16/24/32 px by breakpoint; breakpoints `<640 / 640–767 / 768–1023 / ≥1024 / ≥1280` (§6, §14).
+- **Components.** Bespoke atoms in `web/src/index.css` (`.kicker`, `.display`, `.sheet`, `.band`, `.margin-note`, `.btn`/`.btn-primary`/`.btn-quiet`/`.btn-sm`, `.field`, `.seg`, `.chip`, `.prodot`, `.medallion`, `.carbon`); 6 vendored primitives under `web/src/components/ui/` (`button`, `command`, `dialog`, `input`, `input-group`, `textarea`) — no third-party registries, no runtime installs, no remote CDNs (§8, §20). Shared React: `PageHeader`, `EmptyState`, `ErrorNote`, `LoadingLine`, `AppShell` + `SiteHeader`, `CommandMenu`, `DisplayModeControl`, `AyahColumn`, `TranslationPanel`, `CitationCopy`. New pages start from `PageHeader` + one of the two workspace grids; a view never hard-codes a colour (§18).
+- **Interaction.** Exactly one primary action per region; 2 px `--ring` focus at 2 px offset, always visible; pressed segments use accent wash, no shadows; 120 ms colour/border transitions only, no entrance animation; `prefers-reduced-motion` removes all motion (§9, §17).
+- **RTL/Arabic.** Only the canonical element carries `dir="rtl" lang="ar"`; translations/metadata stay LTR; logical spacing (`gap`, `ps/pe`) throughout (§15).
+- **Accessibility.** Landmarks + one `h1` + skip link; `aria-current="page"`, `aria-expanded`/`aria-controls`, `aria-pressed`; `role="alert"` errors, `role="status"` loading, `aria-live="polite"` transcripts; provenance dots always paired with text labels (§16).
+- **Copy.** Lowercase, terse, solution-oriented, no emoji. Reuse the §19 strings (empty states, errors, CTAs) verbatim; destructive actions require an explicit confirmation step (none ship in this phase).
+
+## Commit Style
+
+- Format: `<emoji> <area>(<phase>): <imperative summary>` — e.g. `feat(13-web-ui-redesign-14): read-only isnad view, trace, narrator, rijal, denied mutations`, `📝 docs(13): UI audit review — 15/24 with color-contract blocker` (recent `git log`)
+- Keep the phase scope in the parens so the roadmap tooling and `done.md` ledger stay greppable; docs/audit commits use `📝 docs(<phase>)`
+- One logical change per commit; web view + its `.test.tsx` + router wiring ship together (see `5f74d5e`, `10cc033`, `e998a47`)
+- Never commit secrets, `.env` contents, or generated `lcov.info`; screenshots under `docs/ui-redesign/screenshots/` are the only sanctioned binaries
+
 ---
 
-*Convention analysis: 2026-09-22*
+*Convention analysis: 2026-11-01*
