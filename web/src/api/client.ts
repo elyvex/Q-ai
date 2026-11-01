@@ -48,11 +48,13 @@ export interface ApiError {
 /** An HTTP failure that keeps the server's typed `error.code` beside the summary. */
 export class ApiRequestError extends Error {
   readonly code?: string
+  readonly remedy?: string
 
-  constructor(summary: string, code?: string) {
+  constructor(summary: string, code?: string, remedy?: string) {
     super(summary)
     this.name = 'ApiRequestError'
     this.code = code
+    this.remedy = remedy
   }
 }
 
@@ -63,6 +65,7 @@ async function get<T>(path: string): Promise<Envelope<T>> {
     throw new ApiRequestError(
       body?.error?.summary ?? `GET ${path}: ${response.status}`,
       body?.error?.code,
+      body?.error?.remedy,
     )
   }
   return (await response.json()) as Envelope<T>
@@ -79,6 +82,7 @@ async function post<T>(path: string, params: unknown): Promise<Envelope<T>> {
     throw new ApiRequestError(
       body?.error?.summary ?? `POST ${path}: ${response.status}`,
       body?.error?.code,
+      body?.error?.remedy,
     )
   }
   return (await response.json()) as Envelope<T>

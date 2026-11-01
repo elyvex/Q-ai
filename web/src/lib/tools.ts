@@ -520,6 +520,17 @@ const DURABLE_STATE_REASON =
 
 export const DENIED: DeniedTool[] = [
   { name: 'rag.create_project', code: 'QAI-RAG-0326', reason: DURABLE_STATE_REASON },
+  { name: 'rag.create', code: 'QAI-RAG-0326', reason: DURABLE_STATE_REASON },
+  { name: 'rag.import', code: 'QAI-RAG-0326', reason: DURABLE_STATE_REASON },
+  { name: 'rag.source_status', code: 'QAI-RAG-0326', reason: DURABLE_STATE_REASON },
+  { name: 'rag.source_activate', code: 'QAI-RAG-0326', reason: DURABLE_STATE_REASON },
+  { name: 'rag.source_deactivate', code: 'QAI-RAG-0326', reason: DURABLE_STATE_REASON },
+  { name: 'rag.source_tombstone', code: 'QAI-RAG-0326', reason: DURABLE_STATE_REASON },
+  { name: 'isnad.identity_propose', code: 'QAI-ISNAD-0326', reason: DURABLE_STATE_REASON },
+  { name: 'isnad.identity_accept', code: 'QAI-ISNAD-0326', reason: DURABLE_STATE_REASON },
+  { name: 'isnad.identity_reject', code: 'QAI-ISNAD-0326', reason: DURABLE_STATE_REASON },
+  { name: 'isnad.identity_dispute', code: 'QAI-ISNAD-0326', reason: DURABLE_STATE_REASON },
+  { name: 'isnad.identity_supersede', code: 'QAI-ISNAD-0326', reason: DURABLE_STATE_REASON },
 ]
 
 /**

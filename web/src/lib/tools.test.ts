@@ -90,6 +90,37 @@ describe('tools catalogue', () => {
       expect(names.has(denied.name)).toBe(false)
     }
   })
+
+  it('denies both policy families with twelve shaped entries', () => {
+    expect(DENIED).toHaveLength(12)
+    const codes = new Set(DENIED.map((denied) => denied.code))
+    expect(codes).toEqual(new Set(['QAI-RAG-0326', 'QAI-ISNAD-0326']))
+    const rag = DENIED.filter((denied) => denied.code === 'QAI-RAG-0326').map(
+      (denied) => denied.name,
+    )
+    expect(rag).toEqual([
+      'rag.create_project',
+      'rag.create',
+      'rag.import',
+      'rag.source_status',
+      'rag.source_activate',
+      'rag.source_deactivate',
+      'rag.source_tombstone',
+    ])
+    const isnad = DENIED.filter((denied) => denied.code === 'QAI-ISNAD-0326').map(
+      (denied) => denied.name,
+    )
+    expect(isnad).toEqual([
+      'isnad.identity_propose',
+      'isnad.identity_accept',
+      'isnad.identity_reject',
+      'isnad.identity_dispute',
+      'isnad.identity_supersede',
+    ])
+    for (const denied of DENIED) {
+      expect(denied.reason).toContain('policy.tool_execution_default = "allow"')
+    }
+  })
 })
 
 describe('paramsJson', () => {
