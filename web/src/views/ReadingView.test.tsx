@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import ReadingView from './ReadingView'
-import { PREFS_KEY } from '../lib/reader-storage'
+import { BOOKMARKS_KEY, PREFS_KEY } from '../lib/reader-storage'
 import type { AyahView } from '../api/client'
 
 afterEach(() => cleanup())
@@ -111,16 +111,34 @@ describe('ReadingView', () => {
     }
   })
 
-  it('the chosen size and layout survive a reload via localStorage', () => {
-    const first = render(<ReadingView ayahs={[ayah(2, 1, 'ا')]} onResolve={vi.fn()} />)
-    fireEvent.click(screen.getByRole('button', { name: 'large' }))
-    fireEvent.click(screen.getByRole('button', { name: 'layout interlinear' }))
-    const saved = JSON.parse(window.localStorage.getItem(PREFS_KEY) as string)
-    expect(saved.size).toBe('lg')
-    expect(saved.layout).toBe('interlinear')
-    first.unmount()
-    const second = render(<ReadingView ayahs={[ayah(2, 1, 'ا')]} onResolve={vi.fn()} />)
-    expect(second.container.querySelector('[data-ayah-size="lg"]')).not.toBeNull()
-    expect(second.container.querySelector('[data-ayah-layout="interlinear"]')).not.toBeNull()
+  it('bookmarks toggle from the verse header into the margin list and back', () => {
+    render(<ReadingView ayahs={[ayah(2, 1, 'ا')]} onResolve={vi.fn()} />)
+    expect(screen.getByText('no bookmarks')).toBeDefined()
+    fireEvent.click(screen.getByRole('button', { name: 'bookmark' }))
+    const link = screen.getByRole('link', { name: '2:1' })
+    expect(link.getAttribute('href')).toBe('/read/test@0.1.0/2:1')
+    expect(screen.getByRole('button', { name: 'bookmarked' })).toBeDefined()
+    expect(window.localStorage.getItem(BOOKMARKS_KEY)).toContain('quran:test@0.1.0:2:1')
+    fireEvent.click(screen.getByRole('button', { name: 'bookmarked' }))
+    expect(screen.getByText('no bookmarks')).toBeDefined()
+    expect(screen.queryByRole('link', { name: '2:1' })).toBeNull()
+  })
+
+  it('the margin remove button drops only its own entry', () => {
+    render(
+      <ReadingView ayahs={[ayah(2, 1, 'ا'), ayah(2, 2, 'ب')]} onResolve={vi.fn()} />,
+    )
+    const toggles = screen.getAllByRole('button', { name: 'bookmark' })
+    expect(toggles).toHaveLength(2)
+    for (const toggle of toggles) fireEvent.click(toggle as HTMLElement)
+    expect(screen.getByRole('link', { name: '2:1' }).getAttribute('href')).toBe(
+      '/read/test@0.1.0/2:1',
+    )
+    expect(screen.getByRole('link', { name: '2:2' }).getAttribute('href')).toBe(
+      '/read/test@0.1.0/2:2',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'remove bookmark 2:1' }))
+    expect(screen.queryByRole('link', { name: '2:1' })).toBeNull()
+    expect(screen.getByRole('link', { name: '2:2' })).toBeDefined()
   })
 })

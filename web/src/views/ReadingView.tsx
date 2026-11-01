@@ -13,10 +13,18 @@ import DisplayModeControl, {
   type ReaderLayout,
   type TranslationMode,
 } from '../display/DisplayModeControl'
+import { EmptyState } from '../components/states'
 import type { AyahView } from '../api/client'
+import { deepLinkFor } from '../lib/tool-result'
 import {
+  addBookmark,
+  isBookmarked,
+  loadBookmarks,
   loadPrefs,
+  removeBookmark,
+  saveBookmarks,
   savePrefs,
+  type Bookmark,
   type ReaderSize,
 } from '../lib/reader-storage'
 
@@ -59,6 +67,9 @@ export default function ReadingView({
   const [layout, setLayout] = useState<ReaderLayout>(initial.layout)
   const [translationMode, setTranslationMode] = useState<TranslationMode>(initial.translationMode)
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>(initial.inspectorMode)
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>(() =>
+    typeof localStorage === 'undefined' ? [] : loadBookmarks(localStorage),
+  )
   void onResolve
 
   useEffect(() => {
@@ -69,6 +80,24 @@ export default function ReadingView({
       // Private-mode storage throws — the reader still works for the session.
     }
   }, [size, layout, translationMode, inspectorMode])
+
+  function toggleBookmark(reference: string) {
+    setBookmarks((prev) => {
+      const next = isBookmarked(prev, reference)
+        ? removeBookmark(prev, reference)
+        : addBookmark(prev, {
+            reference,
+            label: refShort(reference),
+            addedAt: new Date().toISOString(),
+          })
+      try {
+        if (typeof localStorage !== 'undefined') saveBookmarks(localStorage, next)
+      } catch {
+        // Session-only fallback, same as prefs.
+      }
+      return next
+    })
+  }
 
   // "quran:<slug@ver>:<s>:<a>" → "s:a" for a readable page title.
   const parts = ayahs[0]?.canonical.reference.split(':') ?? []
@@ -114,6 +143,26 @@ export default function ReadingView({
                   <span className="font-mono text-[0.7rem] text-muted-foreground">
                     {refShort(ayah.canonical.reference)}
                   </span>
+                  <button
+                    type="button"
+                    className="seg px-1.5 text-[0.7rem]"
+                    aria-pressed={isBookmarked(bookmarks, ayah.canonical.reference)}
+                    aria-label={
+                      isBookmarked(bookmarks, ayah.canonical.reference)
+                        ? 'bookmarked'
+                        : 'bookmark'
+                    }
+                    title={
+                      isBookmarked(bookmarks, ayah.canonical.reference)
+                        ? 'bookmarked'
+                        : 'bookmark'
+                    }
+                    onClick={() => toggleBookmark(ayah.canonical.reference)}
+                  >
+                    {isBookmarked(bookmarks, ayah.canonical.reference)
+                      ? 'bookmarked'
+                      : 'bookmark'}
+                  </button>
                   <span className="ml-auto inline-flex items-center gap-1.5 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-canon">
                     <span className="prodot bg-canon" aria-hidden="true" />
                     canonical
@@ -285,6 +334,50 @@ export default function ReadingView({
           </div>
 
           <div>
+            <p className="kicker mb-2">Bookmarks</p>
+            {bookmarks.length === 0 ? (
+              <EmptyState title="no bookmarks">
+                saved verses stay in this browser only — they never enter the corpus, the audit
+                trail or an export.
+              </EmptyState>
+            ) : (
+              <div className="rounded-lg border bg-card p-2.5">
+                <p className="mb-2 font-mono text-[0.625rem] uppercase tracking-[0.14em] text-muted-foreground">
+                  {bookmarks.length} saved
+                </p>
+                <ul className="space-y-1.5">
+                  {bookmarks.map((entry) => {
+                    const href = deepLinkFor(entry.reference)
+                    return (
+                      <li key={entry.reference} className="flex items-center gap-2 text-[0.75rem]">
+                        {href === null ? (
+                          <span className="font-mono text-foreground">{entry.label}</span>
+                        ) : (
+                          <a
+                            href={href}
+                            className="font-mono text-foreground underline decoration-dotted underline-offset-2"
+                          >
+                            {entry.label}
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          className="seg ml-auto px-1.5 text-[0.7rem]"
+                          aria-label={`remove bookmark ${entry.label}`}
+                          title={`remove bookmark ${entry.label}`}
+                          onClick={() => toggleBookmark(entry.reference)}
+                        >
+                          remove
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          <div>
             <p className="kicker mb-2.5">Layers</p>
             <ul className="space-y-2">
               {LAYERS.map((layer) => (
@@ -299,7 +392,8 @@ export default function ReadingView({
 
           <p className="margin-note border-t pt-4">
             Arabic is set in Amiri with Uthmani marks intact. The interface never edits, re-orders
-            or re-metrics the canonical text.
+            or re-metrics the canonical text. Bookmarks live in this browser and are not part of
+            the corpus, the audit trail or any export.
           </p>
         </aside>
       </div>

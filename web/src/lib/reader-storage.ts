@@ -65,3 +65,67 @@ export function loadPrefs(storage: Pick<Storage, 'getItem'>): ReaderPrefs {
 export function savePrefs(storage: Pick<Storage, 'setItem'>, prefs: ReaderPrefs): void {
   storage.setItem(PREFS_KEY, JSON.stringify(prefs))
 }
+
+// ─── Bookmarks (browser-local only: no request, no backend field) ───
+
+export interface Bookmark {
+  reference: string
+  label: string
+  addedAt: string
+}
+
+export const BOOKMARKS_KEY = 'qai.reader.bookmarks.v1'
+
+function isBookmark(entry: unknown): entry is Bookmark {
+  if (typeof entry !== 'object' || entry === null) return false
+  const obj = entry as Record<string, unknown>
+  return (
+    typeof obj.reference === 'string' &&
+    typeof obj.label === 'string' &&
+    typeof obj.addedAt === 'string'
+  )
+}
+
+/** Tolerant like `loadPrefs`: malformed entries are dropped, never thrown. */
+export function loadBookmarks(storage: Pick<Storage, 'getItem'>): Bookmark[] {
+  let raw: string | null = null
+  try {
+    raw = storage.getItem(BOOKMARKS_KEY)
+  } catch {
+    return []
+  }
+  if (raw === null) return []
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return []
+  }
+  if (!Array.isArray(parsed)) return []
+  const seen = new Set<string>()
+  const kept: Bookmark[] = []
+  for (const entry of parsed) {
+    if (!isBookmark(entry) || seen.has(entry.reference)) continue
+    seen.add(entry.reference)
+    kept.push({ reference: entry.reference, label: entry.label, addedAt: entry.addedAt })
+  }
+  return kept
+}
+
+export function saveBookmarks(storage: Pick<Storage, 'setItem'>, list: Bookmark[]): void {
+  storage.setItem(BOOKMARKS_KEY, JSON.stringify(list))
+}
+
+/** Idempotent: a reference already present keeps its original entry. */
+export function addBookmark(list: Bookmark[], bookmark: Bookmark): Bookmark[] {
+  if (list.some((b) => b.reference === bookmark.reference)) return list
+  return [...list, bookmark]
+}
+
+export function removeBookmark(list: Bookmark[], reference: string): Bookmark[] {
+  return list.filter((b) => b.reference !== reference)
+}
+
+export function isBookmarked(list: Bookmark[], reference: string): boolean {
+  return list.some((b) => b.reference === reference)
+}

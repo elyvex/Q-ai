@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PREFS, PREFS_KEY, loadPrefs, savePrefs } from './reader-storage'
+import {
+  BOOKMARKS_KEY,
+  DEFAULT_PREFS,
+  PREFS_KEY,
+  addBookmark,
+  isBookmarked,
+  loadBookmarks,
+  loadPrefs,
+  removeBookmark,
+  saveBookmarks,
+  savePrefs,
+} from './reader-storage'
 
 function fakeStorage(initial: Record<string, string> = {}): Storage {
   const store = new Map(Object.entries(initial))
@@ -51,5 +62,37 @@ describe('reader-storage prefs', () => {
     }
     savePrefs(storage, prefs)
     expect(loadPrefs(storage)).toEqual(prefs)
+  })
+
+  it('bookmarks: add, duplicate-add, remove, isBookmarked', () => {
+    const a = { reference: 'quran:test@0.1.0:2:1', label: '2:1', addedAt: '2026-11-01T00:00:00Z' }
+    const b = { reference: 'quran:test@0.1.0:2:2', label: '2:2', addedAt: '2026-11-01T00:00:01Z' }
+    let list = addBookmark([], a)
+    list = addBookmark(list, b)
+    expect(list).toHaveLength(2)
+    // Duplicate add is idempotent — the original entry survives untouched.
+    const again = addBookmark(list, { ...a, addedAt: 'later' })
+    expect(again).toBe(list)
+    expect(isBookmarked(list, a.reference)).toBe(true)
+    expect(isBookmarked(list, 'quran:test@0.1.0:9:9')).toBe(false)
+    list = removeBookmark(list, a.reference)
+    expect(list).toEqual([b])
+    expect(isBookmarked(list, a.reference)).toBe(false)
+  })
+
+  it('bookmarks: a malformed list yields an empty list', () => {
+    for (const raw of ['{oops', '"x"', '42', 'null', '{"reference":"q"}']) {
+      expect(loadBookmarks(fakeStorage({ [BOOKMARKS_KEY]: raw }))).toEqual([])
+    }
+  })
+
+  it('bookmarks: one bad entry among good ones is dropped, dupes keep the first', () => {
+    const good = { reference: 'quran:test@0.1.0:2:1', label: '2:1', addedAt: 't' }
+    const dupe = { ...good, addedAt: 'later' }
+    const bad = { reference: 'quran:test@0.1.0:2:2' }
+    const storage = fakeStorage()
+    saveBookmarks(storage, [good, bad, dupe] as never)
+    expect(loadBookmarks(storage)).toEqual([good])
+    expect(storage.getItem(BOOKMARKS_KEY)).toContain('2:1')
   })
 })
