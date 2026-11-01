@@ -129,7 +129,7 @@ permitted for border alignment only and are not spacing.
 
 ## 7. Navigation
 
-Horizontal, because there are five destinations:
+Horizontal, because the product has nine destinations:
 
 - Left: 28 px indigo monogram (ق), `Q-ai` in Newsreader, “CONCORDANCE” in mono
   caps from `lg`.

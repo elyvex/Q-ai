@@ -5,6 +5,10 @@ import { EmptyState, LoadingLine } from '@/components/states'
 import { BookLock } from 'lucide-react'
 import ReadingView from './views/ReadingView'
 import ResearchView from './views/ResearchView'
+import SearchView from './views/SearchView'
+import HadithView from './views/HadithView'
+import TafsirView from './views/TafsirView'
+import ScriptureView from './views/ScriptureView'
 import GraphView from './views/GraphView'
 import RagDebugView from './views/RagDebugView'
 import CitationView from './views/CitationView'
@@ -75,7 +79,11 @@ function ReferenceForm() {
 
 export const ROUTES = [
   { path: '/', label: 'Reader', crumb: 'Reader' },
+  { path: '/search', label: 'Search', crumb: 'Search' },
   { path: '/research', label: 'Research', crumb: 'Research' },
+  { path: '/hadith', label: 'Hadith', crumb: 'Hadith' },
+  { path: '/tafsir', label: 'Tafsir', crumb: 'Tafsir' },
+  { path: '/scripture', label: 'Scripture', crumb: 'Scripture' },
   { path: '/graph', label: 'Graph', crumb: 'Graph' },
   { path: '/rag-debug', label: 'RAG Debug', crumb: 'RAG Debug' },
   { path: '/explorer', label: 'API Explorer', crumb: 'API Explorer' },
@@ -103,8 +111,16 @@ export default function Router({ path }: { path: string }) {
 
   let content: React.ReactNode
 
-  if (path === '/research') {
+  if (path === '/search') {
+    content = <SearchView />
+  } else if (path === '/research') {
     content = <ResearchView query="" />
+  } else if (path === '/hadith') {
+    content = <HadithView />
+  } else if (path === '/tafsir') {
+    content = <TafsirView />
+  } else if (path === '/scripture') {
+    content = <ScriptureView />
   } else if (path === '/graph') {
     content = <GraphView lines={[]} truncated={false} />
   } else if (path === '/rag-debug') {
@@ -135,7 +151,11 @@ export default function Router({ path }: { path: string }) {
           <p className="kicker mb-2">Directory</p>
           <ul className="divide-y overflow-hidden rounded-lg border bg-card">
             {[
+              { path: '/search', label: 'Search', note: 'five lexical search modes over the typed engine' },
               { path: '/research', label: 'Research', note: 'nine lexical instruments over the typed engine' },
+              { path: '/hadith', label: 'Hadith', note: 'fetch by collection and number, or search' },
+              { path: '/tafsir', label: 'Tafsir', note: 'fetch a work by slug, or search across works' },
+              { path: '/scripture', label: 'Scripture', note: 'editions, search, parallel, research' },
               { path: '/graph', label: 'Graph', note: 'neighbors and paths from the frozen payload' },
               { path: '/rag-debug', label: 'RAG Debug', note: 'sealed vault — retrieval lands in Phase 8' },
               { path: '/explorer', label: 'Explorer', note: 'dispatch any request against the local engine' },

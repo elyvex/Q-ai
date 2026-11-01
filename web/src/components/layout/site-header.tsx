@@ -4,9 +4,13 @@ import { useTheme } from 'next-themes'
 
 export const NAV = [
   { path: '/', label: 'Reader' },
+  { path: '/search', label: 'Search' },
   { path: '/research', label: 'Research' },
+  { path: '/hadith', label: 'Hadith' },
+  { path: '/tafsir', label: 'Tafsir' },
+  { path: '/scripture', label: 'Scripture' },
   { path: '/graph', label: 'Graph' },
-  { path: '/rag-debug', label: 'RAG Debug' },
+  { path: '/rag-debug', label: 'RAG' },
   { path: '/explorer', label: 'Explorer' },
 ] as const
 

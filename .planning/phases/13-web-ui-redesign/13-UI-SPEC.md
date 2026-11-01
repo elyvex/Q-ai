@@ -23,8 +23,10 @@ Three rules that decide most questions:
 1. **The text is the interface.** No chrome competes with canonical Arabic.
 2. **One accent.** Deep indigo marks interactivity; provenance colours are the
    only other chromatic information and they are always semantic.
-3. **Rules, not boxes.** Prefer a hairline and space to a bordered card. A card
-   is a surface for a control cluster, never for a list item.
+Focal point: the page title (Newsreader display) anchors the eye on every
+screen; the margin column carries supporting controls and never competes.
+Icon-only header controls carry an `aria-label` and never rely on the icon
+alone.
 
 ## 2. References
 
@@ -95,7 +97,7 @@ by an accent rule and label, not a tinted block.
 | Role | Class / size | Notes |
 |---|---|---|
 | Label / caption | `.kicker`, `.chip`, `.medallion` — 0.625 rem | mono, uppercase caps; 1 px steps within tier permitted |
-| Body / UI | `.btn`, `.field`, `.seg` — 0.875 rem | Inter; the working size |
+| Body / UI | `.btn`, `.field`, `.seg` — 0.875 rem | Inter; the working size (line-height 1.6) |
 | Translation | `.ayah-translation` — 0.9375 rem | 1 px above body for attribution |
 | Arabic / display | `.ayah-canonical`, `.display` — 1.75 → 2.25 rem | Amiri for Arabic, Newsreader for titles; one scale, RTL |
 
@@ -107,7 +109,7 @@ are one of four declared tiers; intermediate steps stay within a tier.
 
 Tailwind 4 px base; the interface uses `4, 8, 16, 24, 32, 48 px`
 (and 64 for page gutters on `≥ 1280`). Section spacing is `mt-8` (32 px)
-after a page header; block spacing inside a section is 12–24 px; page padding
+after a page header; block spacing inside a section is 16–24 px; page padding
 is 16 px mobile, 24 px tablet, 32 px desktop. Hairline offsets of 1–2 px are
 permitted for border alignment only and are not spacing.
 
@@ -127,7 +129,7 @@ permitted for border alignment only and are not spacing.
 
 ## 7. Navigation
 
-Horizontal, because there are five destinations:
+Horizontal, because the product has nine destinations:
 
 - Left: 28 px indigo monogram (ق), `Q-ai` in Newsreader, “CONCORDANCE” in mono
   caps from `lg`.

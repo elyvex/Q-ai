@@ -24,6 +24,10 @@ No parchment, no gold, no forest green, no glass, no gradients.
 | `/` (Reader landing) | Header + explanation + a working deep-link form (validates `/read/<edition>/<s>:<a>` and navigates through the existing route). No invented data. |
 | `/read/...` | Two-column scholarly page: ruled verse sections (no cards), mono index + reference, canonical label, translation marked by a violet rule, margin column with display modes, layer legend and typographic note. Citation verification banner retained. |
 | `/research` | Instrument index as a numbered vertical rail; query band; ruled result list preserving service order; typed empty state; count chip. |
+| `/search` | Five search modes (exact/normalized/phrase/concatenated/regex) over the typed engine; ruled result list. |
+| `/hadith` | Fetch by collection + number, or search a collection; verbatim transcript. |
+| `/tafsir` | Fetch a work by slug, or search across works; verbatim transcript. |
+| `/scripture` | Editions, search, parallel, research; verbatim transcript. |
 | `/graph` | Ruled query bench, verbatim edge ledger, truncation banner, “reading the ledger” margin notes. |
 | `/rag-debug` | Intentional sealed state, restated typographically with an explanation column. No retrieval path added. |
 | `/explorer` | Preset index + request bench + carbon-copy transcript. All 7 presets, method toggle, editable path/body preserved. |
