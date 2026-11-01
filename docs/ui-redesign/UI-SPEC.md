@@ -1,3 +1,9 @@
+---
+status: approved
+reviewed_at: 2026-11-01
+phase: 13
+---
+
 # UI Design Specification — Q-ai “Concordance”
 
 Status: **implemented** (`web/src`). This is the contract every current and
@@ -17,8 +23,10 @@ Three rules that decide most questions:
 1. **The text is the interface.** No chrome competes with canonical Arabic.
 2. **One accent.** Deep indigo marks interactivity; provenance colours are the
    only other chromatic information and they are always semantic.
-3. **Rules, not boxes.** Prefer a hairline and space to a bordered card. A card
-   is a surface for a control cluster, never for a list item.
+Focal point: the page title (Newsreader display) anchors the eye on every
+screen; the margin column carries supporting controls and never competes.
+Icon-only header controls carry an `aria-label` and never rely on the icon
+alone.
 
 ## 2. References
 
@@ -46,7 +54,12 @@ Light — porcelain and ink:
 | `--ring` | `oklch(0.55 0.17 266)` | focus ring |
 | `--destructive` | `oklch(0.545 0.2 27)` | failure only |
 
+Split: 60 % porcelain ground, 30 % ink text and rules, 10 % indigo accent
+reserved for interactive states and the active route. Provenance colours are
+semantic and never count toward the split.
+
 Dark — ink and chalk (not an inversion):
+
 
 | Token | Value |
 |---|---|
@@ -83,24 +96,22 @@ by an accent rule and label, not a tinted block.
 
 | Role | Class / size | Notes |
 |---|---|---|
-| Page title | `.display` 1.9 → 2.3 rem, weight 500, `-0.015em` | serif; one per page |
-| Section label | `.kicker` 0.625 rem mono, `0.14em`, uppercase | no ornament |
-| Lede | 0.875 rem / 1.6 | max 2xl measure |
-| Body | 0.875 rem | |
-| Data / reference | 0.6875–0.75 rem mono | tabular numerals |
-| Canonical Arabic | 1.75 rem mobile → 2.25 rem desktop, line-height 2.15–2.2 | Amiri, RTL, `lang="ar"` |
-| Translation | 0.9375 rem / 1.6 | left rule in `--trans` |
-| Numeral chip | `.chip` / `.medallion` 0.625–0.6875 rem mono | |
+| Label / caption | `.kicker`, `.chip`, `.medallion` — 0.625 rem | mono, uppercase caps; 1 px steps within tier permitted |
+| Body / UI | `.btn`, `.field`, `.seg` — 0.875 rem | Inter; the working size (line-height 1.6) |
+| Translation | `.ayah-translation` — 0.9375 rem | 1 px above body for attribution |
+| Arabic / display | `.ayah-canonical`, `.display` — 1.75 → 2.25 rem | Amiri for Arabic, Newsreader for titles; one scale, RTL |
 
 Newsreader carries titles and the wordmark only — never UI controls. No font
-size below 0.6 rem, and nothing is letter-spaced except mono caps.
+size below 0.625 rem, and nothing is letter-spaced except mono caps. All sizes
+are one of four declared tiers; intermediate steps stay within a tier.
 
 ## 5. Spacing scale
 
-Tailwind 4 px base; the interface uses `2, 4, 6, 8, 10, 12, 16, 20, 24, 32, 40,
-48 px`. Section spacing is `mt-8` (32 px) after a page header; block spacing
-inside a section is `12–24 px`; page padding is `16 px` mobile, `24 px` tablet,
-`32 px` desktop.
+Tailwind 4 px base; the interface uses `4, 8, 16, 24, 32, 48 px`
+(and 64 for page gutters on `≥ 1280`). Section spacing is `mt-8` (32 px)
+after a page header; block spacing inside a section is 16–24 px; page padding
+is 16 px mobile, 24 px tablet, 32 px desktop. Hairline offsets of 1–2 px are
+permitted for border alignment only and are not spacing.
 
 ## 6. Layout
 
@@ -133,6 +144,11 @@ Horizontal, because there are five destinations:
 ## 8. Components
 
 Bespoke atoms in `index.css`, composed in views:
+
+Enumerated by `rg -rn 'components/ui/' web/src` — 6 primitives
+(`button`, `command`, `dialog`, `input`, `input-group`, `textarea`) plus 14
+shared components — `web@0.0.0` — 2026-11-01. Bespoke manual design system;
+no third-party registries. Treat as a known-good set, not a closed allowlist.
 
 | Class | Use |
 |---|---|
@@ -246,4 +262,32 @@ interface should feel instant.
 - Repeated page structure becomes a component (`PageHeader`, `EmptyState`).
 - A view never hard-codes a colour; it uses a token-backed utility or atom.
 - New pages start from `PageHeader` + one of the two workspace grids; new data
-  surfaces start from the ruled list, not from cards.
+## 19. Copywriting Contract
+
+Concrete strings the implementation uses; new surfaces follow the same voice
+(lowercase, terse, solution-oriented, no emoji).
+
+- Empty states (`.kicker` label + one sentence):
+  - Reader, no reference: "No reference is open" / "A reader never invents a
+    verse. Open a reference from a citation, the command menu, or the link
+    field beside this note."
+  - Research, no results: "No matches" / "no results for “{query}” — try a
+    different spelling or normalization"
+  - Graph, no edges: "No graph lines" / "no graph lines selected — open
+    neighbors or trace a path above"
+  - RAG, sealed: "sealed" / "RAG not configured / unavailable"
+- Errors (role="alert", solution path): "citation mismatch — the stored quote
+  does not match the canonical text — {detail}"; "No edition is loaded for this
+  reference — register and activate a Quran edition, then reopen this deep
+  link"; deep-link validation "Use /read/<edition>/<surah>:<ayah>".
+- CTAs (verb + noun): "Run instrument", "Dispatch", "Open", "Open neighbors",
+  "Trace path", "copy citation", "Switch to light/dark theme".
+- Destructive actions: none ship in this phase; any future one requires an
+  explicit confirmation step stated in its spec.
+
+## 20. Registry Safety
+
+Bespoke manual design system (tokens + atoms in `index.css`); no third-party
+registries, no component installs at runtime, no remote CDNs. Every primitive
+is vendored source under `components/ui/` and reviewed in-tree. Provenance
+recorded in Section 8.

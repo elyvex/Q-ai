@@ -137,7 +137,7 @@ export default function ExplorerView() {
                 ) : (
                   <Send className="size-3.5" aria-hidden="true" />
                 )}
-                Dispatch
+                Dispatch request
               </button>
             </div>
 

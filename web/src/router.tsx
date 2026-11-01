@@ -61,7 +61,7 @@ function ReferenceForm() {
           className="field flex-1 font-mono text-xs"
         />
         <button type="submit" className="btn btn-primary shrink-0">
-          Open
+          Open reference
         </button>
       </div>
       {invalid && (
