@@ -10,10 +10,11 @@ import {
   CommandSeparator,
 } from '@/components/ui/command'
 
-const navigation = [
+export const NAVIGATION = [
   { name: 'Reader', href: '/', icon: BookOpen },
   { name: 'Search', href: '/search', icon: Search },
   { name: 'Research', href: '/research', icon: Search },
+  { name: 'Words & Roots', href: '/words', icon: Search },
   { name: 'Hadith', href: '/hadith', icon: BookMarked },
   { name: 'Tafsir', href: '/tafsir', icon: BookOpen },
   { name: 'Scripture', href: '/scripture', icon: BookOpen },
@@ -51,7 +52,7 @@ export function CommandMenu({
       <CommandList>
         <CommandEmpty>Nothing matches that name.</CommandEmpty>
         <CommandGroup heading="Pages">
-          {navigation.map((item) => (
+          {NAVIGATION.map((item) => (
             <CommandItem key={item.href} onSelect={() => runCommand(item.href)}>
               <item.icon className="mr-2 size-3.5 text-muted-foreground" />
               <span>{item.name}</span>

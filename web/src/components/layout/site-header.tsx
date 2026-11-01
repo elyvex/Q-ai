@@ -3,20 +3,23 @@ import { Command, Menu, Moon, Sun, X } from 'lucide-react'
 import { useTheme } from 'next-themes'
 
 export const NAV = [
-  { path: '/', label: 'Reader' },
-  { path: '/search', label: 'Search' },
-  { path: '/research', label: 'Research' },
-  { path: '/hadith', label: 'Hadith' },
-  { path: '/tafsir', label: 'Tafsir' },
-  { path: '/scripture', label: 'Scripture' },
-  { path: '/graph', label: 'Graph' },
-  { path: '/rag-debug', label: 'RAG' },
-  { path: '/explorer', label: 'Explorer' },
+  { path: '/', label: 'Reader', also: [] as readonly string[] },
+  { path: '/search', label: 'Search', also: [] as readonly string[] },
+  { path: '/research', label: 'Research', also: ['/words'] as readonly string[] },
+  { path: '/hadith', label: 'Hadith', also: [] as readonly string[] },
+  { path: '/tafsir', label: 'Tafsir', also: [] as readonly string[] },
+  { path: '/scripture', label: 'Scripture', also: [] as readonly string[] },
+  { path: '/graph', label: 'Graph', also: [] as readonly string[] },
+  { path: '/rag-debug', label: 'RAG', also: [] as readonly string[] },
+  { path: '/explorer', label: 'Explorer', also: [] as readonly string[] },
 ] as const
 
-export function isActive(path: string, currentPath: string): boolean {
-  if (path === '/') return currentPath === '/' || currentPath.startsWith('/read/')
-  return currentPath.split('?', 1)[0] === path
+export function isActive(path: string, currentPath: string, also: readonly string[] = []): boolean {
+  const stripped = currentPath.split('?', 1)[0]
+  if (also.includes(stripped)) return true
+  if (path === stripped) return true
+  if (path === '/') return stripped === '/' || stripped.startsWith('/read/')
+  return false
 }
 
 export function SiteHeader({
@@ -49,7 +52,7 @@ export function SiteHeader({
 
         <nav aria-label="Primary" className="ml-3 hidden h-14 items-stretch md:flex">
           {NAV.map((item) => {
-            const active = isActive(item.path, currentPath)
+            const active = isActive(item.path, currentPath, item.also)
             return (
               <a
                 key={item.path}
@@ -133,7 +136,7 @@ export function SiteHeader({
         >
           <div className="mx-auto w-full max-w-[86rem] px-2 py-2">
             {NAV.map((item) => {
-              const active = isActive(item.path, currentPath)
+              const active = isActive(item.path, currentPath, item.also)
               return (
                 <a
                   key={item.path}

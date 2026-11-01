@@ -13,6 +13,7 @@ import GraphView from './views/GraphView'
 import RagDebugView from './views/RagDebugView'
 import CitationView from './views/CitationView'
 import ExplorerView from './views/ExplorerView'
+import WordsView from './views/WordsView'
 import { fetchAyahs, type AyahView } from './api/client'
 
 export function parseReadPath(path: string): string | null {
@@ -77,10 +78,27 @@ function ReferenceForm() {
   )
 }
 
+export const DIRECTORY = [
+  { path: '/search', label: 'Search', note: 'five lexical search modes over the typed engine' },
+  { path: '/research', label: 'Research', note: 'nine lexical instruments over the typed engine' },
+  {
+    path: '/words',
+    label: 'Words & Roots',
+    note: 'morphology, root, lemma, family and five counts',
+  },
+  { path: '/hadith', label: 'Hadith', note: 'fetch by collection and number, or search' },
+  { path: '/tafsir', label: 'Tafsir', note: 'fetch a work by slug, or search across works' },
+  { path: '/scripture', label: 'Scripture', note: 'editions, search, parallel, research' },
+  { path: '/graph', label: 'Graph', note: 'neighbors and paths from the frozen payload' },
+  { path: '/rag-debug', label: 'RAG Debug', note: 'sealed vault — retrieval lands in Phase 8' },
+  { path: '/explorer', label: 'Explorer', note: 'dispatch any request against the local engine' },
+]
+
 export const ROUTES = [
   { path: '/', label: 'Reader', crumb: 'Reader' },
   { path: '/search', label: 'Search', crumb: 'Search' },
   { path: '/research', label: 'Research', crumb: 'Research' },
+  { path: '/words', label: 'Words & Roots', crumb: 'Words & Roots' },
   { path: '/hadith', label: 'Hadith', crumb: 'Hadith' },
   { path: '/tafsir', label: 'Tafsir', crumb: 'Tafsir' },
   { path: '/scripture', label: 'Scripture', crumb: 'Scripture' },
@@ -127,6 +145,8 @@ export default function Router({ path }: { path: string }) {
     content = <RagDebugView />
   } else if (path === '/explorer') {
     content = <ExplorerView />
+  } else if (path === '/words') {
+    content = <WordsView />
   } else if (reference === null) {
     content = (
       <section>
@@ -150,16 +170,7 @@ export default function Router({ path }: { path: string }) {
         <nav aria-label="Workspace directory" className="mt-10">
           <p className="kicker mb-2">Directory</p>
           <ul className="divide-y overflow-hidden rounded-lg border bg-card">
-            {[
-              { path: '/search', label: 'Search', note: 'five lexical search modes over the typed engine' },
-              { path: '/research', label: 'Research', note: 'nine lexical instruments over the typed engine' },
-              { path: '/hadith', label: 'Hadith', note: 'fetch by collection and number, or search' },
-              { path: '/tafsir', label: 'Tafsir', note: 'fetch a work by slug, or search across works' },
-              { path: '/scripture', label: 'Scripture', note: 'editions, search, parallel, research' },
-              { path: '/graph', label: 'Graph', note: 'neighbors and paths from the frozen payload' },
-              { path: '/rag-debug', label: 'RAG Debug', note: 'sealed vault — retrieval lands in Phase 8' },
-              { path: '/explorer', label: 'Explorer', note: 'dispatch any request against the local engine' },
-            ].map((item) => (
+            {DIRECTORY.map((item) => (
               <li key={item.path}>
                 <a
                   href={item.path}
