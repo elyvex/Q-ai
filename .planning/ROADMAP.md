@@ -451,7 +451,7 @@ Below is the consolidated, roadmap-ready Phase 13 definition, followed by the re
 
 ### Plans
 
-**Plans:** 9 plans across 7 waves `[R1]` *(R2 specified 8 plans across 5 waves; see conflict C-4 and the mapping table below.)*
+**Plans:** 14 plans across 12 waves — 9 shipped (13-01…13-09) plus 5 gap-closure (13-10…13-14) `[R1]` *(R2 specified 8 plans across 5 waves; see conflict C-4 and the mapping table below.)*
 
 #### Wave 1 — Design System & App Shell
 
@@ -551,6 +551,21 @@ Below is the consolidated, roadmap-ready Phase 13 definition, followed by the re
   - Reachability matrix turned green.
   - Owner-gate recording, validation map, phase-gate evidence matrix, roadmap and board truth update.
 
+#### Wave 8–12 — Gap closure (shipped-code parity, Nov 2026)
+
+Plans 13-01…13-09 are shipped (git `c0278b3`) and are not rewritten. The five plans below surface backend capabilities the engine already exposes but the web GUI does not yet reach. Each plan depends on the previous one because every new view edits `router.tsx`, `site-header.tsx`, and the reader landing directory. No backend, contract, schema, or toolchain change; no invented data; four navigation surfaces (`ROUTES`, `NAV`, command palette, reader directory) stay in agreement.
+
+- **13-10 — Shared tool ledger, real RAG debug, Explorer preset repair (wave 8).**
+  - `lib/tool-result.ts` + `ToolLedger.tsx` shared renderer; `rag.debug`/`rag.query` runner with route-decision panel and `QAI-RAG-0326` denied list; four unreachable Explorer presets replaced with dispatcher-tool entries plus an allow-list reachability test.
+- **13-11 — Words & Roots view (wave 9).**
+  - `/words` over `quran.morphology`/`quran.root`/`quran.lemma`/`quran.family` plus the five `count/*` instruments, each count printed with its `rules` block and checksum; rail count stays at nine via the Research entry's `also`.
+- **13-12 — Research Tools catalogue (wave 10).**
+  - `/tools` over all 27 callable `POST /api/v1/quran/tool/{name}` tools with typed forms matching the registry structs, UI/CLI/HTTP surface toggle derived from one param object, and `QAI-RAG-0326`/`QAI-ISNAD-0326` denied rows.
+- **13-13 — Deeper Reader (wave 11).**
+  - Three Arabic sizes inside the UI-SPEC §4 band with §15 leadings, three layouts, localStorage prefs/bookmarks, on-demand `tafsir.search`+`hadith.search` related lookup labelled as seeded text-search hits.
+- **13-14 — Citations workbench + read-only Isnad (wave 12).**
+  - `/citations` verdict/hash/URN/re-verify plus labelled local tamper simulation with code-point diff; `/isnad` over `isnad.trace`/`narrator`/`rijal` with the identity mutations listed as denied.
+
 ### Owner gates and deferrals `[R2]`
 
 - **OD-NEW (next free ID, OD-15 if still unused):** ratify the license of each bundled Arabic and UI font. Recorded BLOCKED with the exact command that closes it.
@@ -564,7 +579,7 @@ New product features; backend API changes beyond defect fixes; native mobile she
 
 | Phase | Plans Complete | Status | Completed |
 |---|---|---|---|
-| 13. Web UI Redesign | 0/9 | Ready to execute | - |
+| 13. Web UI Redesign | 5/5 gap plans complete (13-10…13-14); 13-01…13-09 superseded by shipped code | Executed — verify-work pending | - |
 
 R2 proposed `0/8` for its 8-plan structure; the consolidated 9-plan structure yields `0/9`. `[R1, R2]`
 

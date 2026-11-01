@@ -162,5 +162,35 @@ Follow-up cleanup, same constraints:
   `/read/test@0.1.0/2:1` only resolves when that fixture edition is loaded.
 - Command palette lists navigation plus one sample deep link; there is no
   content index endpoint to search yet.
-- Graph and RAG screens show their deliberate empty/sealed states without a
-  running engine — by design, not a regression.
+- RAG, Words, Tools, Citations and Isnad screens render typed empty/error
+  states without a running engine — by design, not a regression.
+
+## 9. Gap-closure pass (2026-11-01, waves 8–12, plans 13-10…13-14)
+
+The inventory of unimplemented reference features from the previous session
+became five executable plans; all five ran sequentially (shared
+`router.tsx` / `site-header.tsx` edits force serialization) and all verify
+green.
+
+| Plan | Route(s) | What it added |
+|---|---|---|
+| 13-10 | `/rag-debug`, `/explorer` | `lib/tool-result.ts` + shared `ToolLedger.tsx`; working `rag.debug`/`rag.query` runner with route-decision panel and `QAI-RAG-0326` denied rows; four 404 presets replaced with dispatcher-tool entries plus an allow-list reachability test |
+| 13-11 | `/words` | Morphology/root/lemma/family lookups with canonical deep links; all five `count/*` instruments, each count printed with its `rules` block and checksum |
+| 13-12 | `/tools` | Catalogue of all 27 callable tools with registry-exact typed forms; UI/CLI/HTTP surface toggle derived from one param object; both denied families as inert rows |
+| 13-13 | (reader) | Three Arabic sizes inside the UI-SPEC §4/§15 bands, three layouts, localStorage prefs/bookmarks, on-demand seeded `tafsir.search` + `hadith.search` related lookup |
+| 13-14 | `/citations`, `/isnad` | Verdict/hash/URN/re-verify plus labelled local tamper simulation (`CitationsWorkbenchView`, distinct from `CitationView`); read-only `isnad.trace`/`narrator`/`rijal` with `QAI-ISNAD-0326` rows |
+
+Validation: `npm run build` passes; `npx vitest run` **20 files / 150
+tests pass** (was 6/19); all 13 routes load in system Chrome via
+`vite preview` with correct `h1` and zero page errors; new screenshots:
+`words-light.png`, `tools-light.png`, `citations-light.png`,
+`isnad-light.png`, refreshed `rag-debug-light.png`. No `crates/` edits, no
+new dependencies, no invented data; denied tools render as disabled rows
+with their policy codes.
+
+Pre-existing failure outside this pass: `cargo test -p application
+--test layer_separation
+spa_non_canonical_components_wear_no_canonical_class` fails because it
+`expect("component exists")` on `web/src/components/WordInspector.tsx`,
+deleted in `f86be81` before these waves. One-line fix (drop the deleted
+path from the array) left undone — `crates/` is off-limits for UI plans.
