@@ -43,3 +43,15 @@ describe('citations route wiring', () => {
     expect(isActive('/', '/citations', ['/citations'])).toBe(true)
   })
 })
+
+describe('isnad route wiring', () => {
+  it('lists /isnad in ROUTES, NAVIGATION and DIRECTORY', () => {
+    expect(ROUTES.some((route) => route.path === '/isnad')).toBe(true)
+    expect(NAVIGATION.some((item) => item.href === '/isnad')).toBe(true)
+    expect(DIRECTORY.some((item) => item.path === '/isnad')).toBe(true)
+  })
+
+  it('lights the Hadith rail entry while /isnad is open', () => {
+    expect(isActive('/hadith', '/isnad', ['/isnad'])).toBe(true)
+  })
+})

@@ -18,6 +18,7 @@ export const NAVIGATION = [
   { name: 'Research Tools', href: '/tools', icon: Terminal },
   { name: 'Citations', href: '/citations', icon: ShieldCheck },
   { name: 'Hadith', href: '/hadith', icon: BookMarked },
+  { name: 'Isnad', href: '/isnad', icon: GitBranch },
   { name: 'Tafsir', href: '/tafsir', icon: BookOpen },
   { name: 'Scripture', href: '/scripture', icon: BookOpen },
   { name: 'Knowledge Graph', href: '/graph', icon: GitBranch },

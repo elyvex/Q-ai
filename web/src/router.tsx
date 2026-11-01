@@ -13,6 +13,7 @@ import GraphView from './views/GraphView'
 import RagDebugView from './views/RagDebugView'
 import CitationView from './views/CitationView'
 import CitationsWorkbenchView from './views/CitationsWorkbenchView'
+import IsnadView from './views/IsnadView'
 import ExplorerView from './views/ExplorerView'
 import WordsView from './views/WordsView'
 import ToolsView from './views/ToolsView'
@@ -99,6 +100,7 @@ export const DIRECTORY = [
     note: 'the server verdict, its corpus hash, and a labelled local tamper simulation',
   },
   { path: '/hadith', label: 'Hadith', note: 'fetch by collection and number, or search' },
+  { path: '/isnad', label: 'Isnad', note: 'trace, narrator and rijal over the narrator graph' },
   { path: '/tafsir', label: 'Tafsir', note: 'fetch a work by slug, or search across works' },
   { path: '/scripture', label: 'Scripture', note: 'editions, search, parallel, research' },
   { path: '/graph', label: 'Graph', note: 'neighbors and paths from the frozen payload' },
@@ -114,6 +116,7 @@ export const ROUTES = [
   { path: '/tools', label: 'Research Tools', crumb: 'Research Tools' },
   { path: '/citations', label: 'Citations', crumb: 'Citations' },
   { path: '/hadith', label: 'Hadith', crumb: 'Hadith' },
+  { path: '/isnad', label: 'Isnad', crumb: 'Isnad' },
   { path: '/tafsir', label: 'Tafsir', crumb: 'Tafsir' },
   { path: '/scripture', label: 'Scripture', crumb: 'Scripture' },
   { path: '/graph', label: 'Graph', crumb: 'Graph' },
@@ -149,6 +152,8 @@ export default function Router({ path }: { path: string }) {
     content = <ResearchView query="" />
   } else if (path === '/hadith') {
     content = <HadithView />
+  } else if (path === '/isnad') {
+    content = <IsnadView />
   } else if (path === '/tafsir') {
     content = <TafsirView />
   } else if (path === '/scripture') {
