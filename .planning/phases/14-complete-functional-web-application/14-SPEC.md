@@ -2,7 +2,7 @@
 
 **Created:** 2026-11-01
 **Ambiguity score:** 0.20 (gate: ≤ 0.20)
-**Requirements:** 14 locked
+**Requirements:** 15 locked
 
 ## Goal
 
@@ -30,9 +30,9 @@ Phase 13 shipped a 13-route Concordance UI (forest-green on warm white, `13-UI-S
    - Acceptance: A tool walks the full lifecycle in order; skipping a step is refused with a typed error; revoking removes it from the callable set.
 
 4. **Source catalog**: curators manage sources through discover → quarantine → license-review → stage → diff → approve → rollback, with trust profiles.
-   - Current: No catalog HTTP routes; no catalog UI.
+   - Current: No catalog HTTP routes; CLI has read-only `source list/show` plus a refused `source import` stub.
    - Target: New HTTP routes for each pipeline state plus a Catalog view with per-state cards, action buttons, diff preview, and per-source trust profiles.
-   - Acceptance: A source moves through every state with audit events; rollback restores the prior version byte-identically; license-gated activation is enforced server-side.
+   - Acceptance: A source moves through every state with audit events; rollback restores the prior version byte-identical; license-gated activation is enforced server-side.
 
 5. **Operations dashboard**: jobs, audit trail, budgets, sessions, and doctor health are inspectable and actionable from the browser.
    - Current: No management HTTP routes; no ops UI.
@@ -88,6 +88,7 @@ Phase 13 shipped a 13-route Concordance UI (forest-green on warm white, `13-UI-S
 
 **In scope:**
 - New HTTP routes + views for ask/agents, tool lifecycle, source catalog, operations (R1–R5)
+- RAG project lifecycle routes + project manager view under the same deny-by-default pattern (R15)
 - Surfacing all unsurfaced read endpoints and tools (R6–R8)
 - CLI reference view + CLI/HTTP equivalents everywhere runnable (R9)
 - Audit minor close-out + layer_separation defect fix (R10–R11)
@@ -106,7 +107,7 @@ Phase 13 shipped a 13-route Concordance UI (forest-green on warm white, `13-UI-S
 ## Constraints
 
 - No fabricated data: every rendered value comes from a typed API response; unavailable backends render named empty/error states, never mocks.
-- Deny-by-default preserved: mutating RAG/isnad tools stay refused (`QAI-RAG-0326`/`QAI-ISNAD-0326`) unless the operator opts in; new mutating routes follow the same policy pattern.
+- Deny-by-default preserved: mutating RAG/isnad tools stay refused (`QAI-RAG-0326`/`QAI-ISNAD-0326`) unless the operator opts in; new mutating routes (R1–R5, R15) follow the same policy pattern.
 - Concordance contract (`13-UI-SPEC.md` as amended): forest-green accent, warm-white ground, hairline structure, mono references, Amiri Arabic metrics — new views reuse `PageHeader`/`EmptyState`/`ErrorNote`/`LoadingLine`/`ToolLedger`.
 - E2E runs against a real cataloged snapshot (interview decision), with system Chrome locally and in GitHub Actions.
 - Axe zero serious/critical + Lighthouse accessibility ≥ 90 per route gate CI (interview decision).
@@ -127,6 +128,12 @@ Phase 13 shipped a 13-route Concordance UI (forest-green on warm white, `13-UI-S
 - [ ] Playwright suite passes locally and in the new CI job (R12)
 - [ ] Axe zero + Lighthouse ≥ 90 gate CI; keyboard-only core flows pass; 390px screenshots current (R13)
 - [ ] Re-audit overall ≥ 22/24 with every control working or disabled-with-reason (R14)
+- [ ] RAG project create → import → query → tombstone completes via HTTP under operator-allow policy; default-deny returns 403 `QAI-RAG-0326`; tombstoned sources excluded from results; every mutation audited (R15)
+
+15. **RAG project lifecycle**: projects are created, imported into, queried, and tombstoned through HTTP routes with a project manager view, under the same deny-by-default pattern as other durable-state writes.
+   - Current: `rag create/import/source_*` exist only as CLI verbs on per-project SQLite dirs and as 403-gated dispatcher names; no project-lifecycle HTTP routes; UI shows inert rows only.
+   - Target: New HTTP routes for project create/import/source-status/source-activate/source-deactivate/source-tombstone honoring the `policy.tool_execution_default` gate (403 `QAI-RAG-0326` by default); a project manager view lists projects with status, runs lifecycle actions with confirm + audit events, and renders inert rows with the policy code + CLI pointer when the server denies.
+   - Acceptance: Create → import → query → tombstone completes via HTTP under operator-allow policy; default-deny returns 403 with the code; tombstoned sources are excluded from query results; every mutation emits an audit event.
 
 ## Implementation Acceptance Criteria (locked 2026-11-01)
 
@@ -182,7 +189,7 @@ Mandatory for every implementation plan in this phase (frontend and backend). A 
 | Boundary Clarity   | 0.80  | 0.70 | ✓      | TUI/native/execution explicitly out                |
 | Constraint Clarity | 0.70  | 0.65 | ✓      | CI env + a11y bars locked; perf budgets assumed    |
 | Acceptance Criteria| 0.80  | 0.70 | ✓      | 14 pass/fail criteria                              |
-| **Ambiguity**      | 0.20  | ≤0.20| ✓      |                                                    |
+| **Ambiguity**      | 0.20  | ≤0.20| ✓      | Unchanged by Update 1 (additive, decided) |
 
 ## Interview Log
 
@@ -195,6 +202,7 @@ Mandatory for every implementation plan in this phase (frontend and backend). A 
 | 2     | Researcher           | E2E fixture data source?                          | Real cataloged snapshot (not test fixture)               |
 | 2     | Simplifier           | Exact a11y bar?                                   | Axe zero serious/critical + Lighthouse ≥ 90 in CI        |
 | Gate  | Seed Closer          | Ambiguity 0.20 — proceed?                         | "Write it" + reference-driven directive (temp-inspire patterns, Concordance preserved, per-route working interfaces, real data only) |
+| Update 1 | Seed Closer       | Revisit backend scope (OD-16/R1–R5)?              | Expand: RAG project ops becomes owned R15 (HTTP lifecycle, QAI-RAG-0326 pattern, inert rows when denied); all 5 prior areas stay |
 
 ---
 
