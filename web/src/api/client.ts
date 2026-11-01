@@ -1,6 +1,7 @@
 // Typed `/api/v1` client (05-06): mirrors the server `Envelope<T>`/`Meta`
 // contract. Used by the reading view now; resolve/citation/tool methods
 // serve plan 05-08.
+import type { ToolResultData } from '../lib/tool-result'
 
 export interface ResearchChecksum {
   algorithm: string
@@ -44,11 +45,25 @@ export interface ApiError {
   error: { code: string; summary: string; remedy?: string; next_command?: string }
 }
 
+/** An HTTP failure that keeps the server's typed `error.code` beside the summary. */
+export class ApiRequestError extends Error {
+  readonly code?: string
+
+  constructor(summary: string, code?: string) {
+    super(summary)
+    this.name = 'ApiRequestError'
+    this.code = code
+  }
+}
+
 async function get<T>(path: string): Promise<Envelope<T>> {
   const response = await fetch(path, { headers: { accept: 'application/json' } })
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as ApiError | null
-    throw new Error(body?.error?.summary ?? `GET ${path}: ${response.status}`)
+    throw new ApiRequestError(
+      body?.error?.summary ?? `GET ${path}: ${response.status}`,
+      body?.error?.code,
+    )
   }
   return (await response.json()) as Envelope<T>
 }
@@ -61,7 +76,10 @@ async function post<T>(path: string, params: unknown): Promise<Envelope<T>> {
   })
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as ApiError | null
-    throw new Error(body?.error?.summary ?? `POST ${path}: ${response.status}`)
+    throw new ApiRequestError(
+      body?.error?.summary ?? `POST ${path}: ${response.status}`,
+      body?.error?.code,
+    )
   }
   return (await response.json()) as Envelope<T>
 }
@@ -82,8 +100,18 @@ export function fetchCitation(id: string): Promise<Envelope<unknown>> {
 }
 
 /** Run any registered tool by canonical name with JSON params. */
-export function runTool(name: string, params: unknown): Promise<Envelope<unknown>> {
-  return post<unknown>(`/api/v1/quran/tool/${encodeURIComponent(name)}`, params)
+export function runTool(name: string, params: unknown): Promise<Envelope<ToolResultData>> {
+  return post<ToolResultData>(`/api/v1/quran/tool/${encodeURIComponent(name)}`, params)
+}
+
+/** Read-only RAG retrieval over a project (`rag.query` through the tool dispatcher). */
+export function ragQuery(project: string, query: string): Promise<Envelope<ToolResultData>> {
+  return runTool('rag.query', { project, query })
+}
+
+/** Read-only RAG retrieval with the route decision (`rag.debug` through the tool dispatcher). */
+export function ragDebug(project: string, query: string): Promise<Envelope<ToolResultData>> {
+  return runTool('rag.debug', { project, query })
 }
 
 // ─── Research methods (05-09): one typed method per surface route ───
