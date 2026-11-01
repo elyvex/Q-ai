@@ -12,6 +12,7 @@ import ScriptureView from './views/ScriptureView'
 import GraphView from './views/GraphView'
 import RagDebugView from './views/RagDebugView'
 import CitationView from './views/CitationView'
+import CitationsWorkbenchView from './views/CitationsWorkbenchView'
 import ExplorerView from './views/ExplorerView'
 import WordsView from './views/WordsView'
 import ToolsView from './views/ToolsView'
@@ -92,6 +93,11 @@ export const DIRECTORY = [
     label: 'Research Tools',
     note: 'every callable tool with its checksum and CLI equivalents',
   },
+  {
+    path: '/citations',
+    label: 'Citations',
+    note: 'the server verdict, its corpus hash, and a labelled local tamper simulation',
+  },
   { path: '/hadith', label: 'Hadith', note: 'fetch by collection and number, or search' },
   { path: '/tafsir', label: 'Tafsir', note: 'fetch a work by slug, or search across works' },
   { path: '/scripture', label: 'Scripture', note: 'editions, search, parallel, research' },
@@ -106,6 +112,7 @@ export const ROUTES = [
   { path: '/research', label: 'Research', crumb: 'Research' },
   { path: '/words', label: 'Words & Roots', crumb: 'Words & Roots' },
   { path: '/tools', label: 'Research Tools', crumb: 'Research Tools' },
+  { path: '/citations', label: 'Citations', crumb: 'Citations' },
   { path: '/hadith', label: 'Hadith', crumb: 'Hadith' },
   { path: '/tafsir', label: 'Tafsir', crumb: 'Tafsir' },
   { path: '/scripture', label: 'Scripture', crumb: 'Scripture' },
@@ -156,6 +163,8 @@ export default function Router({ path }: { path: string }) {
     content = <WordsView />
   } else if (path === '/tools') {
     content = <ToolsView />
+  } else if (path.split('?', 1)[0] === '/citations') {
+    content = <CitationsWorkbenchView initialId={parseCitationId(path) ?? ''} />
   } else if (reference === null) {
     content = (
       <section>

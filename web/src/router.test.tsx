@@ -31,3 +31,15 @@ describe('tools route wiring', () => {
     expect(isActive('/research', '/tools', ['/words', '/tools'])).toBe(true)
   })
 })
+
+describe('citations route wiring', () => {
+  it('lists /citations in ROUTES, NAVIGATION and DIRECTORY', () => {
+    expect(ROUTES.some((route) => route.path === '/citations')).toBe(true)
+    expect(NAVIGATION.some((item) => item.href === '/citations')).toBe(true)
+    expect(DIRECTORY.some((item) => item.path === '/citations')).toBe(true)
+  })
+
+  it('lights the Reader rail entry while /citations is open', () => {
+    expect(isActive('/', '/citations', ['/citations'])).toBe(true)
+  })
+})

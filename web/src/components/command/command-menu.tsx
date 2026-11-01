@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BookOpen, BookMarked, Database, GitBranch, Search, Terminal } from 'lucide-react'
+import { BookOpen, BookMarked, Database, GitBranch, Search, ShieldCheck, Terminal } from 'lucide-react'
 import {
   CommandDialog,
   CommandEmpty,
@@ -16,6 +16,7 @@ export const NAVIGATION = [
   { name: 'Research', href: '/research', icon: Search },
   { name: 'Words & Roots', href: '/words', icon: Search },
   { name: 'Research Tools', href: '/tools', icon: Terminal },
+  { name: 'Citations', href: '/citations', icon: ShieldCheck },
   { name: 'Hadith', href: '/hadith', icon: BookMarked },
   { name: 'Tafsir', href: '/tafsir', icon: BookOpen },
   { name: 'Scripture', href: '/scripture', icon: BookOpen },
