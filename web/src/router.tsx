@@ -14,6 +14,7 @@ import RagDebugView from './views/RagDebugView'
 import CitationView from './views/CitationView'
 import ExplorerView from './views/ExplorerView'
 import WordsView from './views/WordsView'
+import ToolsView from './views/ToolsView'
 import { fetchAyahs, type AyahView } from './api/client'
 
 export function parseReadPath(path: string): string | null {
@@ -86,6 +87,11 @@ export const DIRECTORY = [
     label: 'Words & Roots',
     note: 'morphology, root, lemma, family and five counts',
   },
+  {
+    path: '/tools',
+    label: 'Research Tools',
+    note: 'every callable tool with its checksum and CLI equivalents',
+  },
   { path: '/hadith', label: 'Hadith', note: 'fetch by collection and number, or search' },
   { path: '/tafsir', label: 'Tafsir', note: 'fetch a work by slug, or search across works' },
   { path: '/scripture', label: 'Scripture', note: 'editions, search, parallel, research' },
@@ -99,6 +105,7 @@ export const ROUTES = [
   { path: '/search', label: 'Search', crumb: 'Search' },
   { path: '/research', label: 'Research', crumb: 'Research' },
   { path: '/words', label: 'Words & Roots', crumb: 'Words & Roots' },
+  { path: '/tools', label: 'Research Tools', crumb: 'Research Tools' },
   { path: '/hadith', label: 'Hadith', crumb: 'Hadith' },
   { path: '/tafsir', label: 'Tafsir', crumb: 'Tafsir' },
   { path: '/scripture', label: 'Scripture', crumb: 'Scripture' },
@@ -147,6 +154,8 @@ export default function Router({ path }: { path: string }) {
     content = <ExplorerView />
   } else if (path === '/words') {
     content = <WordsView />
+  } else if (path === '/tools') {
+    content = <ToolsView />
   } else if (reference === null) {
     content = (
       <section>

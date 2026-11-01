@@ -5,7 +5,7 @@ import { useTheme } from 'next-themes'
 export const NAV = [
   { path: '/', label: 'Reader', also: [] as readonly string[] },
   { path: '/search', label: 'Search', also: [] as readonly string[] },
-  { path: '/research', label: 'Research', also: ['/words'] as readonly string[] },
+  { path: '/research', label: 'Research', also: ['/words', '/tools'] as readonly string[] },
   { path: '/hadith', label: 'Hadith', also: [] as readonly string[] },
   { path: '/tafsir', label: 'Tafsir', also: [] as readonly string[] },
   { path: '/scripture', label: 'Scripture', also: [] as readonly string[] },

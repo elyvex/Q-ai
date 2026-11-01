@@ -19,3 +19,15 @@ describe('words route wiring', () => {
     expect(isActive('/', '/citations', ['/citations'])).toBe(true)
   })
 })
+
+describe('tools route wiring', () => {
+  it('lists /tools in ROUTES, NAVIGATION and DIRECTORY', () => {
+    expect(ROUTES.some((route) => route.path === '/tools')).toBe(true)
+    expect(NAVIGATION.some((item) => item.href === '/tools')).toBe(true)
+    expect(DIRECTORY.some((item) => item.path === '/tools')).toBe(true)
+  })
+
+  it('lights the Research rail entry while /tools is open', () => {
+    expect(isActive('/research', '/tools', ['/words', '/tools'])).toBe(true)
+  })
+})

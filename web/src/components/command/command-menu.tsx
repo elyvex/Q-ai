@@ -15,6 +15,7 @@ export const NAVIGATION = [
   { name: 'Search', href: '/search', icon: Search },
   { name: 'Research', href: '/research', icon: Search },
   { name: 'Words & Roots', href: '/words', icon: Search },
+  { name: 'Research Tools', href: '/tools', icon: Terminal },
   { name: 'Hadith', href: '/hadith', icon: BookMarked },
   { name: 'Tafsir', href: '/tafsir', icon: BookOpen },
   { name: 'Scripture', href: '/scripture', icon: BookOpen },
