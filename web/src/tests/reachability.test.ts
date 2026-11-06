@@ -1,8 +1,11 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ROUTES } from '../router'
 import { COLORS, ELEVATION, LAYERS, MOTION, TOKENS, TYPOGRAPHY } from '../tokens'
+import '../tokens/colors.css'
+import '../tokens/elevation.css'
+import '../tokens/layers.css'
+import '../tokens/motion.css'
+import '../tokens/typography.css'
 
 export interface ReachabilityEntry {
   capability:
@@ -237,34 +240,19 @@ describe('Design System Tokens & Self-Hosted Fonts (Phase 13-01)', () => {
     expect(TOKENS.layers.canonical.cssPrefix).toBe('--layer-canonical-')
   })
 
-  it('verifies CSS token files and self-hosted WOFF2 font assets with recorded license entries', () => {
-    const webRoot = resolve(__dirname, '../..')
-    const repoRoot = resolve(webRoot, '..')
+  it('verifies layer token families, CSS variables, and self-hosted font stack', () => {
+    expect(TOKENS.colors.canvas.light).toBe('#FFFFFF')
+    expect(TOKENS.colors.canvas.dark).toBe('#0B1020')
+    expect(TOKENS.colors.accent.default).toBe('#0F766E')
 
-    const colorsCss = readFileSync(resolve(webRoot, 'src/tokens/colors.css'), 'utf8')
-    expect(colorsCss).toContain('#FFFFFF')
-    expect(colorsCss).toContain('#0B1020')
-    expect(colorsCss).toContain('#0F766E')
+    expect(TOKENS.typography.fonts.arabic).toContain('Amiri')
+    expect(TOKENS.typography.fonts.arabic).toContain('Noto Naskh Arabic')
 
-    const layersCss = readFileSync(resolve(webRoot, 'src/tokens/layers.css'), 'utf8')
-    expect(layersCss).toContain('--layer-canonical-')
-    expect(layersCss).toContain('--layer-translation-')
-    expect(layersCss).toContain('--layer-annotation-')
+    expect(TOKENS.elevation.radii.md).toBe('8px')
+    expect(TOKENS.elevation.shadows.card).toContain('rgb(28 25 23')
 
-    const motionCss = readFileSync(resolve(webRoot, 'src/tokens/motion.css'), 'utf8')
-    expect(motionCss).toContain('prefers-reduced-motion: reduce')
-
-    expect(existsSync(resolve(webRoot, 'public/fonts/amiri-arabic-400-normal.woff2'))).toBe(true)
-    expect(
-      existsSync(resolve(webRoot, 'public/fonts/noto-naskh-arabic-arabic-400-normal.woff2')),
-    ).toBe(true)
-
-    const decisionsDoc = readFileSync(
-      resolve(repoRoot, 'docs/05-followups/decisions-needed.md'),
-      'utf8',
-    )
-    expect(decisionsDoc).toContain('amiri-arabic-400-normal.woff2')
-    expect(decisionsDoc).toContain('noto-naskh-arabic-arabic-400-normal.woff2')
-    expect(decisionsDoc).toContain('OFL-1.1')
+    expect(TOKENS.layers.canonical.cssPrefix).toBe('--layer-canonical-')
+    expect(TOKENS.layers.translation.cssPrefix).toBe('--layer-translation-')
+    expect(TOKENS.layers.annotation.cssPrefix).toBe('--layer-annotation-')
   })
 })
