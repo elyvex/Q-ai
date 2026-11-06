@@ -59,3 +59,7 @@ web/dist/
 
 # Inspiration templates (reference only)
 temp-inspire/
+
+# xerj local index data
+.xerj-data/
+.xerj/
