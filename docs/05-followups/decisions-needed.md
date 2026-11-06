@@ -97,6 +97,19 @@
   likewise scan-gated. Closing action: owner names the webfont file and
   records its redistribution license; only then may a `url(*.woff2)`
   `@font-face` land. Agent-uncloseable.
+- **Phase 13 record (2026-11-06, plan 13-01, OD-04 / OD-15):** Self-hosted
+  open-source WOFF2 font files placed in `web/public/fonts/` with license
+  entries recorded for ratification:
+  - **Amiri** (`web/public/fonts/amiri-arabic-400-normal.woff2`,
+    `web/public/fonts/amiri-arabic-700-normal.woff2`) — SIL Open Font License
+    1.1 (`OFL-1.1`), via `@fontsource/amiri` v5.3.0.
+  - **Noto Naskh Arabic** (`web/public/fonts/noto-naskh-arabic-arabic-400-normal.woff2`,
+    `web/public/fonts/noto-naskh-arabic-arabic-700-normal.woff2`) — SIL Open
+    Font License 1.1 (`OFL-1.1`), via `@fontsource/noto-naskh-arabic` v5.3.0.
+  - `web/src/tokens/typography.css` remains free of `@font-face { ... url(...) }`
+    so `crates/application/tests/layer_separation.rs` (`no_bundled_font`) passes
+    until owner ratification (`qai admin ratify-font-license --font amiri --license ofl`).
+    **Status stays 🔴.**
 
 ## OD-05 — Estimate / schedule gap: 82 ed stated vs 131.0 ed summed
 

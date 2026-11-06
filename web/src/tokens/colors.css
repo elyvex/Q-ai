@@ -1,0 +1,78 @@
+/* Design System Color Tokens (Phase 13-01)
+ * Light mode: White canvas (#FFFFFF), warm neutral scale (#F5F5F4 ... #292524),
+ * restrained interactive accent (#0F766E), semantic status colors.
+ * Dark mode: Dark obsidian canvas (#0B1020) with balanced contrast surfaces.
+ * Content surfaces carry zero gradients.
+ */
+
+:root {
+  /* Canvas & surfaces */
+  --color-canvas: #FFFFFF;
+  --surface-canvas: #FFFFFF;
+  --surface-primary: #FFFFFF;
+  --surface-secondary: #F5F5F4;
+  --surface-elevated: #FFFFFF;
+  --surface-gradient: none;
+
+  /* Warm neutral gray scale */
+  --color-neutral-100: #F5F5F4;
+  --color-neutral-200: #E7E5E4;
+  --color-neutral-300: #D6D3D1;
+  --color-neutral-400: #A8A29E;
+  --color-neutral-500: #78716C;
+  --color-neutral-600: #57534E;
+  --color-neutral-700: #44403C;
+  --color-neutral-800: #292524;
+  --color-neutral-900: #1C1917;
+
+  /* Text hierarchy (WCAG 2.2 AA verified on #FFFFFF) */
+  --text-primary: #1C1917;
+  --text-secondary: #44403C;
+  --text-muted: #57534E;
+  --text-subtle: #78716C;
+
+  /* Borders */
+  --border-default: #E7E5E4;
+  --border-strong: #D6D3D1;
+
+  /* Restrained interactive accent (subtle teal) */
+  --color-accent: #0F766E;
+  --color-accent-hover: #115E59;
+  --color-accent-active: #134E4A;
+  --color-accent-subtle: #F0FDFA;
+  --color-accent-fg: #FFFFFF;
+
+  /* Semantic status colors */
+  --color-success: #15803D;
+  --color-success-bg: #F0FDF4;
+  --color-warning: #B45309;
+  --color-warning-bg: #FFFBEB;
+  --color-danger: #B91C1C;
+  --color-danger-bg: #FEF2F2;
+  --color-info: #1D4ED8;
+  --color-info-bg: #EFF6FF;
+}
+
+[data-theme='dark'],
+.dark {
+  --color-canvas: #0B1020;
+  --surface-canvas: #0B1020;
+  --surface-primary: #0B1020;
+  --surface-secondary: #111827;
+  --surface-elevated: #1E293B;
+  --surface-gradient: none;
+
+  --text-primary: #F5F5F4;
+  --text-secondary: #D6D3D1;
+  --text-muted: #A8A29E;
+  --text-subtle: #78716C;
+
+  --border-default: #292524;
+  --border-strong: #44403C;
+
+  --color-accent: #14B8A6;
+  --color-accent-hover: #2DD4BF;
+  --color-accent-active: #0D9488;
+  --color-accent-subtle: #134E4A;
+  --color-accent-fg: #0B1020;
+}

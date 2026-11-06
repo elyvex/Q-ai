@@ -1,0 +1,36 @@
+/* Design System Elevation & Border Tokens (Phase 13-01)
+ * Radii (sm 6px, md 8px, lg 10px, full 9999px), subtle shadows without heavy
+ * blurs (card, popover, modal), and 1px neutral borders.
+ */
+
+:root {
+  /* Border radii */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-full: 9999px;
+
+  /* Border widths & styles */
+  --border-width: 1px;
+  --border-neutral: 1px solid var(--color-neutral-200, #E7E5E4);
+  --border-strong-rule: 1px solid var(--color-neutral-300, #D6D3D1);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+
+  /* Subtle elevation shadows (low blur, restrained opacity) */
+  --shadow-none: none;
+  --shadow-card: 0 1px 2px 0 rgb(28 25 23 / 0.05);
+  --shadow-card-hover: 0 2px 4px -1px rgb(28 25 23 / 0.08), 0 1px 2px -1px rgb(28 25 23 / 0.04);
+  --shadow-popover: 0 4px 8px -2px rgb(28 25 23 / 0.08), 0 2px 4px -2px rgb(28 25 23 / 0.04);
+  --shadow-modal: 0 10px 20px -5px rgb(28 25 23 / 0.12), 0 4px 6px -4px rgb(28 25 23 / 0.06);
+}
+
+[data-theme='dark'],
+.dark {
+  --border-neutral: 1px solid var(--color-neutral-800, #292524);
+  --border-strong-rule: 1px solid var(--color-neutral-700, #44403C);
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.25);
+  --shadow-card-hover: 0 2px 4px -1px rgb(0 0 0 / 0.35);
+  --shadow-popover: 0 4px 8px -2px rgb(0 0 0 / 0.45);
+  --shadow-modal: 0 10px 20px -5px rgb(0 0 0 / 0.6);
+}

@@ -12,10 +12,27 @@
   --layer-canonical-fg: oklch(0.19 0.012 265);
   --layer-canonical-bg: transparent;
   --layer-canonical-accent: oklch(0.49 0.083 192);
+  --layer-canonical-weight: 400;
+  --layer-canonical-border: 2px solid oklch(0.49 0.083 192);
+  --layer-canonical-rule: solid;
+  --layer-canonical-badge-style: solid;
+
   --layer-translation-fg: oklch(0.38 0.012 265);
   --layer-translation-bg: transparent;
+  --layer-translation-accent: oklch(0.51 0.108 312);
+  --layer-translation-weight: 400;
+  --layer-translation-border: 2px solid oklch(0.51 0.108 312 / 0.45);
+  --layer-translation-rule: dashed;
+  --layer-translation-badge-style: outlined;
+
   --layer-annotation-fg: oklch(0.5 0.1 68);
   --layer-annotation-bg: oklch(0.973 0.028 78);
+  --layer-annotation-accent: oklch(0.575 0.108 68);
+  --layer-annotation-weight: 500;
+  --layer-annotation-border: 3px double oklch(0.575 0.108 68);
+  --layer-annotation-rule: double;
+  --layer-annotation-badge-style: pill-dotted;
+
   --layer-font-arabic: 'Amiri', 'Scheherazade New', 'Noto Naskh Arabic', 'Geeza Pro', serif;
 }
 
@@ -23,16 +40,21 @@
   color: var(--layer-canonical-fg);
   background: var(--layer-canonical-bg);
   font-family: var(--layer-font-arabic);
+  font-weight: var(--layer-canonical-weight);
+  unicode-bidi: isolate;
 }
 
 .ayah-translation {
   color: var(--layer-translation-fg);
   background: var(--layer-translation-bg);
+  font-weight: var(--layer-translation-weight);
 }
 
 .ayah-annotation {
   color: var(--layer-annotation-fg);
   background: var(--layer-annotation-bg);
+  font-weight: var(--layer-annotation-weight);
+  border-left: var(--layer-annotation-border);
 }
 
 .layer-canonical {
