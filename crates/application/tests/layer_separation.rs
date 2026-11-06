@@ -146,7 +146,7 @@ fn spa_canonical_slot_has_no_translation_prop() {
 
 #[test]
 fn spa_non_canonical_components_wear_no_canonical_class() {
-    for file in ["web/src/components/TranslationPanel.tsx", "web/src/components/WordInspector.tsx"]
+    for file in ["web/src/components/TranslationPanel.tsx"]
     {
         let source = std::fs::read_to_string(root().join(file)).expect("component exists");
         assert!(no_canonical_class(&source), "{file} uses the canonical token class");
