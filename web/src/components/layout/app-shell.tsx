@@ -2,6 +2,7 @@
 // a quiet colophon. Navigation is horizontal because the product has five
 // destinations — a sidebar would spend a third of a laptop screen on them.
 import { useState } from 'react'
+import { AnimatedBackground } from '@/components/background/AnimatedBackground'
 import { SiteHeader } from '@/components/layout/site-header'
 import { CommandMenu } from '@/components/command/command-menu'
 
@@ -16,6 +17,7 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen flex-col">
+      <AnimatedBackground />
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:border focus:bg-card focus:px-3 focus:py-2 focus:text-sm"

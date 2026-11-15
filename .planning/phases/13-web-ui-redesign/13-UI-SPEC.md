@@ -264,6 +264,15 @@ action.
 gradient drift. One pulse is permitted for an unresolved status dot. The
 interface should feel instant.
 
+**Amendment 2026-11-15 (G-13-1):** the shipped app now mounts one slow,
+low-opacity gradient field behind page content — a single `.gradient-field`
+atom drifting for 24 s, alternate, on a composited transform only. It takes
+its colour from the instrument tokens (`--primary`, `--ring`) at opacity
+≤ 0.15, is `aria-hidden`, never captures pointer events, pauses while the tab
+is hidden, and stops entirely under `prefers-reduced-motion: reduce`. Content
+surfaces still carry zero gradients; no entrance animation, parallax, or
+per-view motion is added. See `13-15-PLAN.md`.
+
 ## 18. Reuse strategy
 
 - Tokens live only in `index.css` (`@theme` + `:root` + `.dark`).

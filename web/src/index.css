@@ -424,6 +424,39 @@
     background: var(--code-bg);
     color: var(--code-fg);
   }
+
+  /* slow gradient field behind content (mounted by the app shell). Colour
+     comes only from the instrument tokens — provenance colours are semantic
+     and must never be decorative. */
+  .gradient-field {
+    background-image:
+      radial-gradient(
+        circle at 20% 20%,
+        color-mix(in oklch, var(--primary) 12%, transparent),
+        transparent 55%
+      ),
+      radial-gradient(
+        circle at 80% 75%,
+        color-mix(in oklch, var(--ring) 10%, transparent),
+        transparent 60%
+      );
+    background-size: 140% 140%;
+    background-position: center;
+    will-change: transform;
+    animation: gradient-drift 24s ease-in-out infinite alternate;
+  }
+}
+
+/* Kept outside @layer: a layered rule must be able to reference it, and a
+   future @layer reorder must not silently drop the animation. Transform only,
+   so the field cannot contribute layout shift. */
+@keyframes gradient-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(0, -1.5%, 0) scale(1.05);
+  }
 }
 
 /* Dark layer overrides — kept UNLAYERED: tokens/themes.css defines :root

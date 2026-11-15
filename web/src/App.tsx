@@ -17,7 +17,7 @@ export default function App() {
 
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-      <div className="min-h-screen bg-background font-sans antialiased">
+      <div className="min-h-screen font-sans antialiased">
         <Router path={path} />
         <Toaster position="bottom-right" richColors />
       </div>

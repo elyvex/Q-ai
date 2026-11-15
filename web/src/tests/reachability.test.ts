@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { ROUTES } from '../router'
-import { COLORS, ELEVATION, LAYERS, MOTION, TOKENS, TYPOGRAPHY } from '../tokens'
-import '../tokens/colors.css'
-import '../tokens/elevation.css'
-import '../tokens/layers.css'
-import '../tokens/motion.css'
-import '../tokens/typography.css'
+
+// vitest runs with cwd at the web package root; import.meta.url is not a
+// file: URL under this transform, so resolve assets from the project root.
+const asset = (relativePath: string) => resolve(process.cwd(), relativePath)
 
 export interface ReachabilityEntry {
   capability:
@@ -197,62 +197,56 @@ describe('Feature-to-Route Reachability Matrix (Phases 1-12)', () => {
   })
 })
 
-describe('Design System Tokens & Self-Hosted Fonts (Phase 13-01)', () => {
-  it('exports light canvas (#FFFFFF), dark obsidian canvas (#0B1020), warm neutrals, and teal accent', () => {
-    expect(COLORS.canvas.light).toBe('#FFFFFF')
-    expect(COLORS.canvas.dark).toBe('#0B1020')
-    expect(COLORS.neutral[100]).toBe('#F5F5F4')
-    expect(COLORS.neutral[200]).toBe('#E7E5E4')
-    expect(COLORS.neutral[300]).toBe('#D6D3D1')
-    expect(COLORS.neutral[400]).toBe('#A8A29E')
-    expect(COLORS.neutral[500]).toBe('#78716C')
-    expect(COLORS.neutral[600]).toBe('#57534E')
-    expect(COLORS.neutral[700]).toBe('#44403C')
-    expect(COLORS.neutral[800]).toBe('#292524')
-    expect(COLORS.neutral[900]).toBe('#1C1917')
-    expect(COLORS.accent.default).toBe('#0F766E')
-    expect(COLORS.status.success).toBe('#15803D')
-    expect(COLORS.status.warning).toBe('#B45309')
-    expect(COLORS.status.danger).toBe('#B91C1C')
-    expect(COLORS.status.info).toBe('#1D4ED8')
+describe('Concordance design contract (single source of truth)', () => {
+  it('pins the light palette anchors in index.css', () => {
+    const css = readFileSync(asset('src/index.css'), 'utf8')
+    expect(css).toContain('--background: oklch(0.99 0.004 90)')
+    expect(css).toContain('--foreground: oklch(0.22 0.012 120)')
+    expect(css).toContain('--primary: oklch(0.42 0.09 145)')
+    expect(css).toContain('--accent: oklch(0.95 0.018 145)')
+    expect(css).toContain('--ring: oklch(0.5 0.1 145)')
   })
 
-  it('exports typography stacks, elevation radii, motion durations, and grayscale-distinct layers', () => {
-    expect(TYPOGRAPHY.fonts.arabic).toContain('Amiri')
-    expect(TYPOGRAPHY.fonts.arabic).toContain('Noto Naskh Arabic')
-    expect(TYPOGRAPHY.fonts.sans).toContain('Inter')
-    expect(TYPOGRAPHY.fonts.mono).toContain('JetBrains Mono')
-    expect(ELEVATION.radii.sm).toBe('6px')
-    expect(ELEVATION.radii.md).toBe('8px')
-    expect(ELEVATION.radii.lg).toBe('10px')
-    expect(ELEVATION.radii.full).toBe('9999px')
-    expect(MOTION.durations.fast).toBe('100ms')
-    expect(MOTION.durations.normal).toBe('150ms')
-    expect(MOTION.durations.slow).toBe('250ms')
-
-    // Distinct grayscale cues (ruleStyle and badgeStyle differ across all 3 layers)
-    const ruleStyles = new Set([
-      LAYERS.canonical.ruleStyle,
-      LAYERS.translation.ruleStyle,
-      LAYERS.annotation.ruleStyle,
-    ])
-    expect(ruleStyles.size).toBe(3)
-    expect(TOKENS.layers.canonical.cssPrefix).toBe('--layer-canonical-')
+  it('keeps the animated field atom and its keyframes', () => {
+    const css = readFileSync(asset('src/index.css'), 'utf8')
+    expect(css).toContain('.gradient-field')
+    expect(css).toContain('@keyframes gradient-drift')
   })
 
-  it('verifies layer token families, CSS variables, and self-hosted font stack', () => {
-    expect(TOKENS.colors.canvas.light).toBe('#FFFFFF')
-    expect(TOKENS.colors.canvas.dark).toBe('#0B1020')
-    expect(TOKENS.colors.accent.default).toBe('#0F766E')
+  it('self-hosts every font family and references no remote origin', () => {
+    const css = readFileSync(asset('src/index.css'), 'utf8')
+    for (const family of [
+      '@fontsource/inter',
+      '@fontsource-variable/newsreader',
+      '@fontsource/jetbrains-mono',
+      '@fontsource/amiri',
+      '@fontsource/noto-naskh-arabic',
+    ]) {
+      expect(css).toContain(family)
+    }
+    const remote = css.match(/(@import|url\()\s*["']?https?:/)
+    expect(remote, 'index.css must not reference a remote origin').toBeNull()
+  })
 
-    expect(TOKENS.typography.fonts.arabic).toContain('Amiri')
-    expect(TOKENS.typography.fonts.arabic).toContain('Noto Naskh Arabic')
+  it('declares all three provenance layer families in layers.css', () => {
+    const layers = readFileSync(asset('src/tokens/layers.css'), 'utf8')
+    expect(layers).toContain('--layer-canonical-')
+    expect(layers).toContain('--layer-translation-')
+    expect(layers).toContain('--layer-annotation-')
+  })
 
-    expect(TOKENS.elevation.radii.md).toBe('8px')
-    expect(TOKENS.elevation.shadows.card).toContain('rgb(28 25 23')
-
-    expect(TOKENS.layers.canonical.cssPrefix).toBe('--layer-canonical-')
-    expect(TOKENS.layers.translation.cssPrefix).toBe('--layer-translation-')
-    expect(TOKENS.layers.annotation.cssPrefix).toBe('--layer-annotation-')
+  it('retires the stale token mirrors so one palette remains', () => {
+    for (const retired of [
+      'src/tokens/index.ts',
+      'src/tokens/colors.css',
+      'src/tokens/elevation.css',
+      'src/tokens/typography.css',
+      'src/tokens/motion.css',
+    ]) {
+      expect(existsSync(asset(retired)), retired).toBe(false)
+    }
+    expect(existsSync(asset('src/tokens/layers.css'))).toBe(true)
+    expect(existsSync(asset('src/tokens/themes.css'))).toBe(true)
   })
 })
+

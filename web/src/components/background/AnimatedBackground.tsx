@@ -68,11 +68,9 @@ export function AnimatedBackground({
         opacity: clampedOpacity,
         animationPlayState: isAnimationActive ? 'running' : 'paused',
         animationDuration: reducedMotion ? '0ms' : '24s',
-        backgroundImage:
-          'radial-gradient(circle at 20% 20%, rgb(15 118 110 / 0.14), transparent 55%), radial-gradient(circle at 80% 75%, rgb(120 113 108 / 0.12), transparent 60%)',
         ...style,
       }}
-      className={cn('fixed inset-0 overflow-hidden select-none', className)}
+      className={cn('gradient-field fixed inset-0 overflow-hidden select-none', className)}
       {...props}
     />
   )
