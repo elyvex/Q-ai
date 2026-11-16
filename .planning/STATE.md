@@ -212,6 +212,7 @@ Resume file: .planning/phases/13-web-ui-redesign/13-UI-SPEC.md
 | 3 | verification_deferred_human | /gsd-verify-work 3 |
 | 3.5 | ~~soak confirmed green 2026-10-13 (630s)~~ | ~~/gsd-verify-work 3.5~~ |
 | 5 | verification_deferred_infrastructure | /gsd-verify-work 5 |
+| 13 | verification_deferred_human | /gsd-verify-work 13 |
 
 ## Quick Tasks Completed
 

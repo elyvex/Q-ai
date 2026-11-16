@@ -607,7 +607,7 @@ New product features; backend API changes beyond defect fixes; native mobile she
 
 | Phase | Plans Complete | Status | Completed |
 |---|---|---|---|
-| 13. Web UI Redesign | 5/5 gap plans complete (13-10…13-14); 13-01…13-09 superseded by shipped code | Executed — verify-work pending | - |
+| 13. Web UI Redesign | 15 plans executed (13-01…13-15) | Executed — automated gates green; 6 human items open (verify-work 13) | - |
 
 R2 proposed `0/8` for its 8-plan structure; the consolidated 9-plan structure yields `0/9`. `[R1, R2]`
 
