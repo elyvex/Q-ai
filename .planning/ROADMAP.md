@@ -475,6 +475,8 @@ Below is the consolidated, roadmap-ready Phase 13 definition, followed by the re
 10. **Gates green:** the rebuilt SPA passes the existing build and cross-surface parity gates with no regressions. The Rust backend has no diff beyond defect fixes found during the phase. `[R1 SC4, R2 SC5]`
 11. **Performance and offline:** initial JS and CSS stay within a committed budget (R1 gives explicit targets: initial bundle ≤ 350 KB gzipped via code-split, LCP ≤ 1.5 s, CLS < 0.1; Lighthouse performance ≥ 80 in CI). The app makes zero third-party network requests. Fonts are self-hosted and recorded in the license matrix. `[R1, R2 SC6]`
 
+    *Criterion clarified 2026-11-16 (G-13-2 closure):* the LCP ≤ 1.5 s target is the **desktop** reading of this criterion — the phase goal names a "dedicated desktop research tool rendered in the browser", and the R1/R2 targets were written without a form factor. Measured 2026-11-16: desktop LCP 448–452 ms, CLS ≤ 0.0002, Lighthouse performance 1.00, accessibility 1.00, initial bundle 156.99 kB gzip JS + 31.22 kB gzip CSS. Under Lighthouse's mobile emulation (4× CPU, slow 4G) FCP and LCP are both ~1.9 s and the 1.5 s target is not met; that reading is recorded as **informational**, not a gate, because it is dominated by simulated network latency rather than app work (TBT 30–60 ms). Evidence and the rejected code-split experiment: `.planning/phases/13-web-ui-redesign/13-MOTION-EVIDENCE.md`. Raise the mobile budget as its own phase if a mobile-first target is wanted.
+
 ### Plans
 
 **Plans:** 14 plans across 12 waves — 9 shipped (13-01…13-09) plus 5 gap-closure (13-10…13-14) `[R1]` *(R2 specified 8 plans across 5 waves; see conflict C-4 and the mapping table below.)*

@@ -101,6 +101,23 @@ Non-negotiable in any remediation: the field keeps `pointer-events: none`,
 `aria-hidden`, `z-index: -1`, opacity ≤ 0.15, hidden-tab pause, and
 `prefers-reduced-motion` stop.
 
+## Experiments tried and rejected
+
+**Route-level code splitting (tested 2026-11-16, reverted).** `React.lazy` +
+`Suspense` in `web/src/router.tsx` cut the initial chunk from 156.99 kB to
+136.82 kB gzip (20 chunks, views 3–5 kB each). Mobile emulation got worse,
+not better: `/` LCP 1907 → 1892 ms (flat) and `/search` LCP 1942 → 3778 ms
+(FCP 1900 ms, then a second round-trip for the view chunk under slow-4G
+throttling). Desktop was unaffected. Reverted: the bundle was already inside
+the 350 kB budget, and the split traded a real first-visit regression for a
+bundle metric that was already green. Retry this only together with a
+prefetch/`modulepreload` strategy for the route chunks.
+
+**Diagnosis.** On mobile emulation FCP and LCP are the same number (~1.9 s):
+the budget miss is render-blocking network work, not JavaScript execution
+(TBT is 30–60 ms). Cutting ~0.4 s means inlining critical CSS and trimming the
+font payload, not route splitting.
+
 ## Not measured here
 
 - axe scan on every route and a keyboard-only walkthrough of the core flows
