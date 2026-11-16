@@ -402,7 +402,17 @@ Plans:
 
 **Out of scope**: unrelated backend behavior changes outside R1–R5; TUI cockpit work (REQ-tui-cli stays separate); native mobile shells; new third-party registries.
 
-**Plans**: TBD
+**Plans**: 16 plans across 7 waves (authored 2026-11-16)
+
+- **Wave 1 — backend routes** (independent slices): 14-01 agent run + trace; 14-02 answer contract; 14-03 tool lifecycle; 14-04 source catalog; 14-05 operations data; 14-06 RAG project lifecycle
+- **Wave 2**: 14-07 the 8 count instruments through the instrument registry
+- **Wave 3**: 14-08 the 10 served REST endpoints as browsable surfaces; 14-09 first-class `subgraph`/`pattern`/`root-family` views; 14-11 `/ask` view + answer rendering
+- **Wave 4**: 14-10 CLI reference + copyable equivalents + 13-UI-REVIEW minors; 14-12 `/studio`, `/catalog`, `/operations`
+- **Wave 5**: 14-13 reference-driven `RuledTable` + reader landing promotion
+- **Wave 6**: 14-14 Playwright suite + CI web job; 14-15 axe/keyboard/responsive bar
+- **Wave 7**: 14-16 gate ledger + requirement-coverage close-out
+
+Planning findings that change what the phase can deliver (recorded in the plans, not silently absorbed): the agent-runtime crates are compile-only placeholders, so 14-01 builds a durable, cancellable tool run rather than an LLM agent; `serve` never wires the RAG backend, so 14-06 adds `ServeRagBackend`; there is no auth middleware in `crates/server` today (loopback-only serving), so the new routes rely on loopback + the policy switch.
 
 ## Progress
 
@@ -426,7 +436,7 @@ Phase 3.5 is an INSERTED gap-closure phase; it runs after Phase 4 and does not g
 | 11. Server & Management | 1/TBD | Complete    | 2026-10-19 |
 | 12. Production Hardening | 1/TBD | Complete    | 2026-10-19 |
 | 13. Web UI Redesign | 14 plans executed | Executed (verify-work pending, UI-REVIEW 22/24) | - |
-| 14. Complete Functional Web Application | 0/TBD | Planned (OD-16 open: UI-only vs backend scope) | - |
+| 14. Complete Functional Web Application | 0/16 | Planned (16 plans, 7 waves; execution not started) | - |
 
 ### Phase 13: Web UI Redesign
 
